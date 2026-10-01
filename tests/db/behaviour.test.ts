@@ -592,16 +592,29 @@ describeDb('next_reference', () => {
 
   it('keeps scopes independent', async () => {
     await inRollbackTransaction(async (client) => {
+      // Measured as a *delta* rather than against a fixed starting value.
+      // Asserting the loan sequence is 1 only held while nothing else in the
+      // suite had issued a loan number; Phase 4's tests do, so the assertion
+      // has to be about independence rather than about the absolute value —
+      // which is what it was always trying to say.
+      const before = await client.query<{ reference: string }>(
+        `select public.next_reference('loan') as reference`,
+      );
+
       await client.query(
         `select public.next_reference('client') from generate_series(1, 3)`,
       );
 
-      const result = await client.query<{ reference: string }>(
+      const after = await client.query<{ reference: string }>(
         `select public.next_reference('loan') as reference`,
       );
 
-      // Advancing clients must not advance loans.
-      expect(parseReference(result.rows[0]!.reference)?.sequence).toBe(1);
+      const first = parseReference(before.rows[0]!.reference)?.sequence;
+      const second = parseReference(after.rows[0]!.reference)?.sequence;
+
+      // Three client references were issued in between. The loan sequence
+      // must have advanced by exactly one.
+      expect(second).toBe((first ?? 0) + 1);
     });
   });
 

@@ -687,3 +687,194 @@ upload succeeds; the previous object stays.
   prunes deliberately with the secret key.
 * "Remove this photograph" is not offered in the interface. Nothing in the
   business needs it, and the capability would exist only to be misused.
+
+## ADR-022 — The database computes the money; TypeScript computes the preview
+
+**Status:** Accepted (Phase 4).
+
+### Context
+
+The loan arithmetic has to exist in two places for two different reasons that
+pull in opposite directions.
+
+A pure, testable domain module is what makes the engine verifiable at all: the
+three confirmed business examples can be driven directly, invariants can be
+asserted, and a property-based sweep can run four hundred cases in
+milliseconds. That argues for TypeScript.
+
+But approval must not accept figures from its caller. `approve_loan` is
+callable by anyone holding `loans:approve`, which is the Manager — and an
+approver who could supply the breakdown could approve a loan at zero interest.
+That argues for SQL.
+
+### Decision
+
+Both, with an explicit hierarchy.
+
+**`public.calculate_loan_breakdown` is authoritative.** It computes what is
+stored, from the principal, rate and term alone. The approval function calls
+it; nothing can hand it numbers.
+
+**`lib/domain/loan.ts` computes the preview.** It drives the figures staff see
+while entering a loan, and it is what the test suite exercises.
+
+The risk — two implementations drifting — is managed by testing them as one
+thing. `tests/db/loan-engine-parity.test.ts` runs three hundred generated loans
+through both and compares them period by period, field by field. The three
+confirmed examples are compared the same way.
+
+### Consequences
+
+* The failure mode this guards against is the worst one available: a borrower
+  quoted one figure at the counter and charged another. If the engines diverge,
+  a test fails instead.
+* The preview is computed in the browser, which is a deliberate exception to
+  "never trust browser arithmetic" and is safe only because **nothing computed
+  there is ever submitted**. The form posts an amount, a term and a frequency.
+* The preview is labelled provisional throughout, because the settings in force
+  at approval may differ from today's — see ADR-023.
+* A future second interest method must be added to both, and the parity test
+  will refuse to pass until it is.
+
+## ADR-023 — Terms are snapshotted at approval, from the settings in force then
+
+**Status:** Accepted (Phase 4).
+
+### Context
+
+A draft is entered on Monday at 15%. On Tuesday the Owner changes the default
+rate to 12%. On Wednesday the loan is approved. At which rate?
+
+The specification requires this be decided explicitly rather than left to
+accident, and either answer is defensible.
+
+### Options
+
+1. **Lock the rate at draft time.** The borrower is charged what they were
+   quoted. But the business then lends at a rate it has already decided to stop
+   offering, with no record of having decided to — and every unapproved draft
+   becomes a standing commitment to an old price.
+2. **Use the settings in force at approval.** Accepted.
+
+### Decision
+
+Commercial terms are snapshotted **at approval**, from the settings read at
+approval, after revalidating the loan against them. The draft carries the shape
+of the proposed loan — client, amount, term, rhythm — and no price.
+
+The reasoning is that the rate quoted at the counter is not binding; the
+approval is. A loan is an agreement made when somebody with authority agrees to
+it.
+
+### Consequences
+
+* A reviewer may approve figures that differ from the ones the Secretary saw.
+  That is the real cost, and it is mitigated rather than hidden: the approval
+  screen re-reads the authoritative figures before asking for confirmation, and
+  every preview is labelled as a preview.
+* Every eligibility rule is likewise re-evaluated at approval — the minimum, the
+  term range, the client's status, the guarantors. A client blacklisted between
+  drafting and approval stops the approval.
+* Draft-time rate locking remains available as an explicit future feature. What
+  it must not be is an accident.
+* The policy that *was* in force is recorded on the loan — the rate, the
+  method, the grace period, the penalty rate, the minimum applied — so a
+  borrower in arrears next year is judged against the terms their loan was
+  issued under.
+
+## ADR-024 — The active-loan limit is a trigger with an advisory lock, not a unique index
+
+**Status:** Accepted (Phase 4).
+
+### Context
+
+Only one active loan per client. The obvious enforcement is a partial unique
+index:
+
+```sql
+create unique index on loans (client_id) where status = 'active';
+```
+
+It is concurrency-safe, cheap, and declarative. But
+`business_settings.max_active_loans_per_client` already exists and is
+configurable.
+
+### The problem with the index
+
+It enforces **exactly one**, and nothing else. The moment anybody raised the
+setting to two, the column would say two and the database would allow one — and
+whoever made the change would get a unique-constraint violation they could not
+explain from reading the settings screen.
+
+The specification is explicit that a configuration setting the database cannot
+honour must not be created. An index would turn an honest setting into a lie.
+
+### Decision
+
+A `BEFORE UPDATE` trigger, `loans_enforce_active_limit`, firing whenever a loan
+becomes `active`:
+
+1. take `pg_advisory_xact_lock` keyed on `client_id`;
+2. count that client's active loans;
+3. refuse if the count has reached the configured limit.
+
+The advisory lock is what makes it correct. Without it, two transactions could
+each count zero and each proceed — the check-then-insert race the specification
+names. The lock is transaction-scoped, so it is held until commit and released
+automatically including on rollback, and it is keyed on the client so loans for
+different borrowers never contend.
+
+### Consequences
+
+* The setting is honoured at whatever value it holds, and a test proves it
+  honours two as well as one.
+* It fires on **any** path to `status = 'active'`, including a direct `UPDATE`,
+  so bypassing `disburse_loan` gains nothing.
+* The limit is also checked at approval, so a reviewer is told why rather than
+  approving a loan that could never be disbursed.
+* A trigger is more expensive than an index and harder to read than a
+  constraint. That is the price of the setting being true.
+* Serialisation is per client, so throughput is unaffected in practice: two
+  counters disbursing to two different borrowers do not block each other.
+
+## ADR-025 — Every lifecycle transition must name a human
+
+**Status:** Accepted (Phase 4). Discovered while writing the tests.
+
+### Context
+
+Each transition stamps its actor from `public.current_profile_id()`, and the
+constraints require that actor to be present: `loans_approved_requires_attribution`
+will not accept an approved loan with no approver.
+
+Writing the test fixtures exposed the consequence. As the table owner — in a
+migration, through the privileged client, or in a test harness — there is no
+session, `current_profile_id()` is NULL, and **every lifecycle transition is
+refused.**
+
+The first instinct was that this was an obstacle, and that the constraint
+should allow a null actor for trusted-path callers.
+
+### Decision
+
+Keep the constraint strict. There is no such thing as a system-performed
+approval.
+
+Approving a loan and releasing money are human acts. A financial record that
+cannot name who performed them is not worth keeping — it looks like a record
+and answers nothing in the dispute it exists for. So the schema refuses to
+create one, and the test fixtures impersonate a real user because the schema
+leaves them no choice, which also makes them a more honest reflection of how
+the application actually drives the lifecycle.
+
+### Consequences
+
+* A supplied actor is **refused** rather than silently overwritten, so a caller
+  that believes it is choosing the actor finds out.
+* No migration or scheduled process can approve or disburse a loan. If a later
+  phase needs an automated transition — `cleared`, when payments show a loan
+  settled — it will need either a service account with a real profile or a
+  deliberate exemption argued on its own merits. Phase 4 takes no position
+  beyond declining to pre-authorise it.
+* The privileged client cannot approve a loan either, which is a feature: a
+  leaked secret key cannot manufacture an approval attributed to nobody.

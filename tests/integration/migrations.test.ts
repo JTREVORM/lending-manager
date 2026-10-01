@@ -296,6 +296,12 @@ describe('column type discipline', () => {
     const CREATION_COLUMN: Readonly<Record<string, string>> = {
       audit_log: 'occurred_at',
       user_roles: 'granted_at',
+      // Phase 4 snapshots record when they were *captured*, which is the fact
+      // that matters about them: the moment the business fixed what it relied
+      // on. `created_at` would be the same instant under a vaguer name.
+      loan_client_snapshots: 'captured_at',
+      loan_guarantor_snapshots: 'captured_at',
+      loan_identity_snapshots: 'captured_at',
     };
 
     /**
@@ -322,6 +328,16 @@ describe('column type discipline', () => {
       'user_roles',
       'role_permissions',
       'client_remarks',
+      // Phase 4. All four are append-only in the same way audit_log is:
+      // UPDATE is refused by a statement-level trigger and the privilege is
+      // not granted. A snapshot that could be edited would not be a snapshot,
+      // and a contractual breakdown that could be edited would not be a
+      // contract — so an `updated_at` on any of them would be a timestamp
+      // that can never advance.
+      'loan_periods',
+      'loan_client_snapshots',
+      'loan_guarantor_snapshots',
+      'loan_identity_snapshots',
     ]);
 
     for (const table of createdTables) {
@@ -556,6 +572,14 @@ describe('types stay in step with the schema', () => {
       'audit_client_remark_added',
       // Called only from the audit triggers above.
       'audit_actor_label',
+
+      // --- Phase 4 ----------------------------------------------------------
+      'loans_assign_loan_number',
+      'loans_guard_transition',
+      'loans_enforce_active_limit',
+      'audit_loan_change',
+      'audit_loan_snapshot_created',
+      'audit_loan_terms_locked',
     ]);
 
     for (const functionName of functionNames) {

@@ -157,8 +157,12 @@ describe('permission matrix', () => {
 
   it('discriminates permission names', () => {
     expect(isPermission('settings:view')).toBe(true);
+    expect(isPermission('loans:approve')).toBe(true);
     expect(isPermission('settings:write')).toBe(false);
-    expect(isPermission('loans:approve')).toBe(false);
+    // A capability a later phase will add. Using a genuinely non-existent one
+    // keeps this assertion meaningful; `loans:approve` used to serve here and
+    // stopped being a negative case the moment Phase 4 declared it.
+    expect(isPermission('payments:post')).toBe(false);
   });
 });
 
@@ -218,6 +222,20 @@ describe('authorization matrix', () => {
     'guarantors:documents': ['manager', 'owner_admin'],
     'guarantors:view_nin': ['manager', 'owner_admin'],
     'guarantors:link': ['manager', 'owner_admin'],
+
+    // --- Phase 4: loans -----------------------------------------------------
+    'loans:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'loans:create': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'loans:update_draft': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'loans:submit': ['secretary_treasurer', 'manager', 'owner_admin'],
+    // The Secretary/Treasurer enters loans and decides nothing.
+    'loans:approve': ['manager', 'owner_admin'],
+    // Owner-only, and this is the phase's main internal control: a Manager
+    // who could both approve and disburse could originate, approve and pay
+    // out a loan alone.
+    'loans:disburse': ['owner_admin'],
+    'loans:cancel': ['owner_admin'],
+    'loans:view_sensitive': ['manager', 'owner_admin'],
   };
 
   it('covers every declared permission', () => {
@@ -324,7 +342,10 @@ describe('rank never substitutes for an explicit grant', () => {
     // Every permission is held by at least one role today, but the mechanism
     // that matters is that `can` reads the table rather than inferring from
     // rank — so an unlisted capability is held by nobody.
-    const unlisted = 'loans:approve' as Permission;
+    // A Phase 5 capability that does not exist yet. It has to be one nothing
+    // declares: the previous placeholder was `loans:approve`, which Phase 4
+    // then granted, quietly turning this into a test of nothing.
+    const unlisted = 'payments:post' as Permission;
     for (const role of ROLE_KEYS) {
       expect(can([role], unlisted), role).toBe(false);
     }

@@ -39,6 +39,14 @@ describeDb('tables', () => {
     'company_settings',
     'guarantor_identities',
     'guarantors',
+    // Phase 4: the loan agreement, its contractual monthly breakdown, and the
+    // three snapshots that make it evidence rather than a view over today's
+    // records.
+    'loan_client_snapshots',
+    'loan_guarantor_snapshots',
+    'loan_identity_snapshots',
+    'loan_periods',
+    'loans',
     // Phase 2: the capability vocabulary and the role-to-capability map.
     'permissions',
     'profiles',
@@ -194,6 +202,25 @@ describeDb('foreign keys', () => {
       'company_settings.updated_by -> profiles (r)',
       'guarantor_identities.guarantor_id -> guarantors (c)',
       'guarantors.created_by -> profiles (n)',
+      // Phase 4. `c` cascades: a loan's breakdown and snapshots are parts of
+      // that loan. `r` restricts: the client and the guarantors a loan was
+      // issued against cannot be removed while it references them, because
+      // the snapshot holds the details and the reference is what lets somebody
+      // follow it back. `n` nulls: lifecycle attribution degrades gracefully,
+      // and the audit trail holds the authoritative record either way.
+      'loan_client_snapshots.client_id -> clients (r)',
+      'loan_client_snapshots.loan_id -> loans (c)',
+      'loan_guarantor_snapshots.guarantor_id -> guarantors (r)',
+      'loan_guarantor_snapshots.loan_id -> loans (c)',
+      'loan_identity_snapshots.loan_id -> loans (c)',
+      'loan_periods.loan_id -> loans (c)',
+      'loans.approved_by -> profiles (n)',
+      'loans.cancelled_by -> profiles (n)',
+      'loans.client_id -> clients (r)',
+      'loans.created_by -> profiles (n)',
+      'loans.disbursed_by -> profiles (n)',
+      'loans.repayment_frequency -> repayment_frequencies (r)',
+      'loans.submitted_by -> profiles (n)',
       'profiles.auth_user_id -> users (r)',
       'reference_sequences.scope -> reference_formats (r)',
       // Phase 2. RESTRICT here too: a capability cannot be deleted out from

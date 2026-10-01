@@ -77,7 +77,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Loans',
     shortLabel: 'Loans',
     icon: Banknote,
-    permission: 'dashboard:view',
+    // Its own capability as of Phase 4, rather than `dashboard:view`. A
+    // borrower's view of their own loans is a later phase.
+    permission: 'loans:view',
     phase: 4,
   },
   {

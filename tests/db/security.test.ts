@@ -95,6 +95,17 @@ describeDb('row level security', () => {
       'guarantors:INSERT',
       'guarantors:SELECT',
       'guarantors:UPDATE',
+      // Phase 4. The snapshots and the contractual breakdown are read-only to
+      // every session: they are written exclusively by `approve_loan`, which
+      // runs as the table owner. So nobody can write a snapshot by hand, and
+      // a stored snapshot is always one the database captured.
+      'loan_client_snapshots:SELECT',
+      'loan_guarantor_snapshots:SELECT',
+      'loan_identity_snapshots:SELECT',
+      'loan_periods:SELECT',
+      'loans:INSERT',
+      'loans:SELECT',
+      'loans:UPDATE',
       'permissions:SELECT',
       'profiles:INSERT',
       'profiles:SELECT',
@@ -136,9 +147,6 @@ describeDb('row level security', () => {
       'audit_log:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
-      // Phase 3. One policy per operation per table, and no DELETE policy
-      // anywhere — a client is archived, a guarantor association is detached,
-      // and a remark is retracted by appending another one.
       'client_guarantors:INSERT',
       'client_guarantors:SELECT',
       'client_guarantors:UPDATE',
@@ -158,6 +166,16 @@ describeDb('row level security', () => {
       'guarantors:INSERT',
       'guarantors:SELECT',
       'guarantors:UPDATE',
+      // Phase 4. SELECT only on the breakdown and the snapshots: they are
+      // written exclusively by `approve_loan`, which runs as the table owner.
+      // No DELETE policy anywhere — a loan is cancelled, never deleted.
+      'loan_client_snapshots:SELECT',
+      'loan_guarantor_snapshots:SELECT',
+      'loan_identity_snapshots:SELECT',
+      'loan_periods:SELECT',
+      'loans:INSERT',
+      'loans:SELECT',
+      'loans:UPDATE',
       'permissions:SELECT',
       'profiles:INSERT',
       'profiles:SELECT',
@@ -231,7 +249,35 @@ describeDb('row level security', () => {
 
     expect(rows.length).toBeGreaterThan(0);
 
+    /**
+     * Policies that delegate instead of restating.
+     *
+     * `loan_periods` is visible exactly when its loan is, and it says so by
+     * testing `exists (select 1 from public.loans ...)`. That sub-select is
+     * itself subject to the SELECT policy on `loans`, so the row is gated by
+     * that policy rather than by a capability named here.
+     *
+     * Delegating is the stronger choice: the alternative is a second copy of
+     * the loans rule — including its borrower self-clause — which could drift
+     * from the original and quietly widen or narrow access. So the assertion
+     * for these tables is that the delegation is actually present, which is a
+     * more specific check than the regex below rather than an exemption from
+     * it.
+     */
+    // PostgreSQL normalises `public.loans` to `loans` when it stores the
+    // expression, so the needle is the normalised form.
+    const DELEGATES_TO: Readonly<Record<string, string>> = {
+      loan_periods: 'FROM loans',
+    };
+
     for (const row of rows) {
+      const delegate = DELEGATES_TO[row.tablename];
+
+      if (delegate !== undefined) {
+        expect(row.qual ?? '', `${row.tablename}.${row.policyname}`).toContain(delegate);
+        continue;
+      }
+
       expect(
         /user_has_permission|current_profile_id|is_active/.test(row.qual ?? ''),
         `${row.tablename}.${row.policyname}`,
@@ -278,6 +324,10 @@ describeDb('privileged functions', () => {
     // so a function gaining it by accident gains the ability to ignore every
     // policy in the system.
     expect(rows.map((row) => row.proname)).toEqual([
+      // Phase 4 lifecycle functions. Each is SECURITY DEFINER because it
+      // writes snapshot tables no session may write, and each checks the
+      // caller's capability inside before doing so.
+      'approve_loan',
       'assert_owner_admin_remains',
       'audit_actor_label',
       'audit_client_change',
@@ -286,9 +336,13 @@ describeDb('privileged functions', () => {
       'audit_client_remark_added',
       'audit_guarantor_change',
       'audit_guarantor_identity_change',
+      'audit_loan_change',
+      'audit_loan_snapshot_created',
+      'audit_loan_terms_locked',
       'audit_profile_change',
       'audit_settings_change',
       'audit_user_role_change',
+      'cancel_loan',
       'client_guarantors_guard_detach',
       'client_remarks_stamp_author',
       'clients_assign_client_number',
@@ -299,9 +353,13 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      'disburse_loan',
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
       'link_client_profile',
+      'loans_assign_loan_number',
+      'loans_enforce_active_limit',
+      'loans_guard_transition',
       'next_reference',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
@@ -315,6 +373,7 @@ describeDb('privileged functions', () => {
       'user_roles_assert_owner_remains',
       'user_roles_guard_assignment',
       'user_roles_set_granted_by',
+      'validate_loan_for_approval',
     ]);
   });
 
@@ -386,15 +445,17 @@ describeDb('privileged functions', () => {
     // reachable only through the server, by `service_role`. See migration
     // 20261002000800 and tests/db/password-change.test.ts.
     expect(rows.map((row) => row.proname)).toEqual([
+      'approve_loan',
+      // Pure arithmetic: a function of its arguments that discloses nothing.
+      // The preview screen calls it so staff see the authoritative figures
+      // rather than the browser's.
+      'calculate_loan_breakdown',
+      'cancel_loan',
       'current_profile_id',
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
-      // Phase 3. Neither is SECURITY DEFINER, so neither can read anything
-      // the caller could not read anyway: `mask_nin` is a pure string
-      // function, and the `storage_path_*` helpers parse a path the caller
-      // already holds. They are granted because the storage policies, which
-      // run as the caller, call them.
+      'disburse_loan',
       'mask_nin',
       'record_security_event',
       'record_sign_in',
@@ -404,6 +465,7 @@ describeDb('privileged functions', () => {
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',
+      'validate_loan_for_approval',
     ]);
   });
 

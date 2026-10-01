@@ -198,3 +198,9 @@ screen.
 The client and guarantor module, its permission matrix, Row Level Security,
 storage rules, duplicate handling, search and audit behaviour are documented in
 [CLIENTS.md](CLIENTS.md).
+
+## Phase 4 — the loan engine
+
+The interest model, the rounding policy, the lifecycle and its state machine,
+the snapshot architecture, the one-active-loan rule and the Phase 5 handoff are
+documented in [LOANS.md](LOANS.md).

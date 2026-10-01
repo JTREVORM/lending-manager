@@ -2,7 +2,7 @@
   "name": "lending-manager",
   "version": "0.1.0",
   "private": true,
-  "description": "Money Lending Management System — Phase 1 foundation",
+  "description": "Money Lending Management System \u2014 Phase 1 foundation",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -31,7 +31,8 @@
     "db:local:setup": "bash scripts/pg-local.sh setup",
     "db:local:teardown": "bash scripts/pg-local.sh teardown",
     "db:local:migrate": "bash scripts/pg-local.sh migrate",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test:run && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test:run && npm run build",
+    "audit:money": "node scripts/audit-financial-arithmetic.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

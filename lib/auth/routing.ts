@@ -40,7 +40,7 @@ const ROUTE_PERMISSIONS: readonly {
   { prefix: ROUTES.settings, permission: 'settings:view' },
   { prefix: ROUTES.clients, permission: 'clients:view' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },
-  { prefix: ROUTES.loans, permission: 'dashboard:view' },
+  { prefix: ROUTES.loans, permission: 'loans:view' },
   { prefix: ROUTES.payments, permission: 'dashboard:view' },
   { prefix: ROUTES.portal, permission: 'portal:view' },
   { prefix: ROUTES.account, permission: 'account:view' },

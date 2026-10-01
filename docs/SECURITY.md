@@ -202,6 +202,49 @@ Client and guarantor management, reviewed before declaring the phase complete.
 | `client_remarks.created_by` made profiles undeletable with a confusing error | `on delete set null` on an append-only table: nulling a column is an UPDATE, which the table refuses. | Changed to `on delete restrict`, which is also the better rule — a remark whose author has been erased is weaker evidence. |
 | Both identity tables lacked `created_at` | Oversight. Caught by the Phase 1 convention test that requires a creation timestamp on every table. | Column added to both. |
 
+## Phase 4 verification
+
+The loan engine, reviewed before declaring the phase complete.
+
+| Attack | Result |
+| --- | --- |
+| A borrower approves their own loan | Refused. `loans:approve` is named in the error. |
+| A borrower reads a draft on their own client record | Refused. The policy admits only non-draft loans. |
+| A borrower reads another client's loan | Refused. |
+| A borrower disburses, cancels or edits their own loan | Refused on all three. |
+| A Secretary/Treasurer approves | Refused, by the function and by the transition trigger independently. |
+| A Secretary/Treasurer approves by direct `UPDATE` | Refused. `loans_approved_requires_totals` also makes it impossible. |
+| A Secretary/Treasurer disburses or cancels | Refused. |
+| A Secretary/Treasurer reads any identity snapshot | Refused. The numbers are not in a table they can read. |
+| A **Manager** disburses | Refused — the phase's central control. A Manager who could both approve and disburse could originate, approve and pay out a loan alone. |
+| A Manager cancels | Refused. Reversing one's own decision is the Owner's. |
+| A forged `approved_by`, `approved_at`, `disbursed_by`, `disbursed_at`, `submitted_by` | All refused, not overwritten. |
+| A caller-supplied loan number, or changing one once issued | Refused, including as `service_role`. |
+| Editing principal, rate, method, term, client, frequency or totals on a live loan | Refused, including as `service_role` — the rules sit above the trusted-path exemption. |
+| Editing or deleting a stored breakdown or snapshot | Refused by statement-level trigger **and** absent privilege, including with a `WHERE` clause matching nothing. |
+| Inserting a forged breakdown row from a session | Refused: `42501`. Only `approve_loan` writes them. |
+| Deleting a loan, as any role | Refused. No DELETE grant exists anywhere in Phase 4. |
+| **Two concurrent disbursements for one client** | Exactly one succeeded; the other named the limit. Holds for four simultaneous attempts, and honours a configured limit of two. |
+| Two concurrent approvals of one loan | Exactly one succeeded. One set of snapshots, one audit event. |
+| A direct `UPDATE` to `status = 'active'` bypassing the function | Refused — the trigger is on the table. |
+| 40 parallel loan numbers | 40 unique, correctly formatted. |
+| Approving after the client was blacklisted or suspended | Refused. Every rule is re-evaluated at approval. |
+| Approving after the guarantor was detached or left incomplete | Refused. |
+| Approving after the minimum rose above the loan | Refused. |
+| A snapshot changing when the client, guarantor or settings change | It does not. Not one figure moved, while the live records demonstrably did. |
+| A NIN reaching the audit trail | It does not. Snapshot events record kind and row count only. |
+| A secret reaching the client bundle | 33 files scanned. Clean, with a positive control. |
+| A float in the loan arithmetic | None. `npm run audit:money` checks the path mechanically and verifies the engine reaches only integer money helpers. |
+
+## Issues found and fixed in Phase 4
+
+| Issue | Root cause | Fix |
+| --- | --- | --- |
+| A decimal comma inflated a loan amount a hundredfold | The principal parser stripped every comma as a thousands separator, so `100000,50` became 10,000,050 shillings — accepted silently, on the most important number in the system. | A comma is accepted only in valid thousands positions (`^\d{1,3}(,\d{3})+$`). Four rejection cases and four acceptance cases added. |
+| No draft could be saved | `total_expected_repayment >= principal_amount` was asserted unconditionally, but a draft has no computed totals. Two further attempts to phrase it by status each broke a different legitimate transition. | Stated by *state of the figures* rather than by status: either nothing is computed, or what is there is consistent — plus a second rule requiring figures from approval onward. |
+| The approval function was blocked by its own immutability guard | "Frozen once the loan leaves draft" conflated what the loan *is* (never changes) with what it *costs* (written once, at approval). | Separated into two rules. The price and the policy snapshot are settable only on the `pending_approval → approved` transition. |
+| A migration left an audit record behind | `20261004000100` ended with an `UPDATE` to state the confirmed settings — which `ALTER TABLE ADD COLUMN ... DEFAULT` had already backfilled, so it changed nothing except firing the settings audit trigger. | The redundant `UPDATE` removed. Caught by the Phase 1 guard asserting a freshly seeded database contains no audit record of its own. |
+
 ## Known gaps, deferred deliberately
 
 | Gap | Phase |
@@ -214,6 +257,8 @@ Client and guarantor management, reviewed before declaring the phase complete.
 | Replaced photographs and documents accumulate | Deliberate, not an oversight. There is no DELETE policy on either bucket, because a bug that deleted the only scan of a client's national ID would be unrecoverable. An operator prunes with the secret key. The cost is storage; the alternative is losing evidence. |
 | A guarantor photograph is readable by any staff member holding `guarantors:view`, for any guarantor | Correct for the size of business this serves, where staff handle whichever client is at the counter. If the business later wants per-branch isolation, the policy is the place to add it. |
 | No rate limiting on client registration or document upload | Before go-live, alongside the Phase 2 gap. Supabase throttles auth; these actions are not throttled. |
+| No automated transition to `cleared` | By design: the edge is declared and nothing performs it, because a loan can only be shown settled once payments can be posted. See ADR-025 on what such an automation would need. |
+| `loans:disburse` and `loans:cancel` are Owner-only, which is a bottleneck in a small office | Deliberate (ADR-024's sibling reasoning, documented in LOANS.md): it is the only thing stopping one person originating, approving and paying out a loan alone. If the business accepts that risk it is a one-line change to the matrix, made knowingly. |
 | No audit-record retention policy | Before go-live. |
 | No audit hash chain or off-site shipping | 2+, if the threat model includes an insider with database access. |
 | No penetration test | Before go-live. |

@@ -107,6 +107,9 @@ export type Database = {
           created_at: string;
           updated_at: string;
           updated_by: string | null;
+          multi_month_min_amount: number;
+          min_guarantors_required: number;
+          default_interest_method: string;
         };
         Insert: {
           id?: number;
@@ -122,6 +125,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           updated_by?: string | null;
+          multi_month_min_amount?: number;
+          min_guarantors_required?: number;
+          default_interest_method?: string;
         };
         Update: {
           id?: number;
@@ -137,6 +143,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           updated_by?: string | null;
+          multi_month_min_amount?: number;
+          min_guarantors_required?: number;
+          default_interest_method?: string;
         };
         Relationships: [
           {
@@ -533,6 +542,274 @@ export type Database = {
         Relationships: [];
       };
 
+      loan_client_snapshots: {
+        Row: {
+          loan_id: string;
+          client_id: string;
+          client_number: string;
+          full_name: string;
+          phone: string;
+          alternative_phone: string | null;
+          sex: string;
+          date_of_birth: string;
+          occupation: string;
+          business_type: string | null;
+          village_area: string;
+          district: string;
+          client_status_at_origination: string;
+          captured_at: string;
+        };
+        Insert: {
+          loan_id: string;
+          client_id: string;
+          client_number: string;
+          full_name: string;
+          phone: string;
+          alternative_phone?: string | null;
+          sex: string;
+          date_of_birth: string;
+          occupation: string;
+          business_type?: string | null;
+          village_area: string;
+          district: string;
+          client_status_at_origination: string;
+          captured_at?: string;
+        };
+        Update: {
+          loan_id?: string;
+          client_id?: string;
+          client_number?: string;
+          full_name?: string;
+          phone?: string;
+          alternative_phone?: string | null;
+          sex?: string;
+          date_of_birth?: string;
+          occupation?: string;
+          business_type?: string | null;
+          village_area?: string;
+          district?: string;
+          client_status_at_origination?: string;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+      loan_guarantor_snapshots: {
+        Row: {
+          id: string;
+          loan_id: string;
+          guarantor_id: string;
+          full_name: string;
+          phone: string;
+          alternative_phone: string | null;
+          sex: string;
+          date_of_birth: string;
+          occupation: string;
+          location: string;
+          district: string | null;
+          relationship_to_client: string;
+          had_photograph: boolean;
+          captured_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          guarantor_id: string;
+          full_name: string;
+          phone: string;
+          alternative_phone?: string | null;
+          sex: string;
+          date_of_birth: string;
+          occupation: string;
+          location: string;
+          district?: string | null;
+          relationship_to_client: string;
+          had_photograph?: boolean;
+          captured_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          guarantor_id?: string;
+          full_name?: string;
+          phone?: string;
+          alternative_phone?: string | null;
+          sex?: string;
+          date_of_birth?: string;
+          occupation?: string;
+          location?: string;
+          district?: string | null;
+          relationship_to_client?: string;
+          had_photograph?: boolean;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+      loan_identity_snapshots: {
+        Row: {
+          id: string;
+          loan_id: string;
+          subject_type: string;
+          subject_id: string;
+          nin: string | null;
+          captured_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          subject_type: string;
+          subject_id: string;
+          nin?: string | null;
+          captured_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          subject_type?: string;
+          subject_id?: string;
+          nin?: string | null;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+      loan_periods: {
+        Row: {
+          id: string;
+          loan_id: string;
+          period_number: number;
+          opening_principal: number;
+          principal_portion: number;
+          interest: number;
+          total_obligation: number;
+          closing_principal: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          period_number: number;
+          opening_principal: number;
+          principal_portion: number;
+          interest: number;
+          total_obligation: number;
+          closing_principal: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          period_number?: number;
+          opening_principal?: number;
+          principal_portion?: number;
+          interest?: number;
+          total_obligation?: number;
+          closing_principal?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      loans: {
+        Row: {
+          id: string;
+          loan_number: string;
+          client_id: string;
+          principal_amount: number;
+          interest_rate_bps: number;
+          interest_method: string;
+          loan_term_months: number;
+          repayment_frequency: string;
+          total_interest: number;
+          total_expected_repayment: number;
+          currency_code: string;
+          min_loan_amount_applied: number;
+          max_loan_amount_applied: number | null;
+          grace_period_days_applied: number;
+          penalty_rate_bps_applied: number;
+          proposed_disbursement_date: string;
+          status: string;
+          submitted_at: string | null;
+          submitted_by: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          disbursed_at: string | null;
+          disbursed_by: string | null;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          cancellation_reason: string | null;
+          review_note: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          /** Assigned by the loans_assign_loan_number trigger; supplying one is refused. */
+          loan_number?: never;
+          client_id: string;
+          principal_amount: number;
+          interest_rate_bps: number;
+          interest_method: string;
+          loan_term_months: number;
+          repayment_frequency: string;
+          total_interest?: number;
+          total_expected_repayment?: number;
+          currency_code?: string;
+          min_loan_amount_applied: number;
+          max_loan_amount_applied?: number | null;
+          grace_period_days_applied: number;
+          penalty_rate_bps_applied: number;
+          proposed_disbursement_date: string;
+          status?: string;
+          submitted_at?: string | null;
+          submitted_by?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          disbursed_at?: string | null;
+          disbursed_by?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancellation_reason?: string | null;
+          review_note?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_number?: string;
+          client_id?: string;
+          principal_amount?: number;
+          interest_rate_bps?: number;
+          interest_method?: string;
+          loan_term_months?: number;
+          repayment_frequency?: string;
+          total_interest?: number;
+          total_expected_repayment?: number;
+          currency_code?: string;
+          min_loan_amount_applied?: number;
+          max_loan_amount_applied?: number | null;
+          grace_period_days_applied?: number;
+          penalty_rate_bps_applied?: number;
+          proposed_disbursement_date?: string;
+          status?: string;
+          submitted_at?: string | null;
+          submitted_by?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          disbursed_at?: string | null;
+          disbursed_by?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancellation_reason?: string | null;
+          review_note?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       permissions: {
         Row: {
           key: string;
@@ -786,6 +1063,33 @@ export type Database = {
         Args: { p_client_id: string; p_profile_id: string };
         Returns: undefined;
       };
+      approve_loan: {
+        Args: { p_loan_id: string };
+        Returns: string;
+      };
+      calculate_loan_breakdown: {
+        Args: {
+          p_principal: number;
+          p_interest_rate_bps: number;
+          p_term_months: number;
+        };
+        Returns: {
+          period_number: number;
+          opening_principal: number;
+          principal_portion: number;
+          interest: number;
+          total_obligation: number;
+          closing_principal: number;
+        }[];
+      };
+      cancel_loan: {
+        Args: { p_loan_id: string; p_reason: string };
+        Returns: string;
+      };
+      disburse_loan: {
+        Args: { p_loan_id: string };
+        Returns: string;
+      };
       mask_nin: {
         Args: { p_nin: string };
         Returns: string;
@@ -829,6 +1133,10 @@ export type Database = {
           p_request_id?: string;
         };
         Returns: number;
+      };
+      validate_loan_for_approval: {
+        Args: { p_loan_id: string };
+        Returns: { failure_code: string; detail: string | null }[];
       };
       user_has_at_least_role: {
         Args: { p_role_key: string };

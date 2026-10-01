@@ -135,6 +135,29 @@ export const PERMISSIONS = [
   'guarantors:view_nin',
   /** Attach a guarantor to a client, or detach one. */
   'guarantors:link',
+
+  // --- Loans ---------------------------------------------------------------
+  // The lifecycle is split across several capabilities rather than one
+  // `loans:manage`, because the separation between *entering* a loan,
+  // *approving* it and *releasing the money* is the main internal control a
+  // lending business of this size has. One capability would collapse all
+  // three into the same person.
+  /** See the loan register and open a loan record. */
+  'loans:view',
+  /** Start a loan draft and enter its details. */
+  'loans:create',
+  /** Change a loan while it is still a draft. */
+  'loans:update_draft',
+  /** Submit a completed draft for approval. */
+  'loans:submit',
+  /** Approve a loan, or return it to draft for correction. */
+  'loans:approve',
+  /** Release the money and activate an approved loan. */
+  'loans:disburse',
+  /** Cancel a loan before it is disbursed. */
+  'loans:cancel',
+  /** Read the identity snapshots captured against a loan. */
+  'loans:view_sensitive',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -195,6 +218,14 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'clients:update',
     'clients:remarks_view',
     'guarantors:view',
+
+    // The business's own description of this role is that they record loan
+    // details and amounts. So: everything up to asking for a decision, and
+    // nothing that makes one.
+    'loans:view',
+    'loans:create',
+    'loans:update_draft',
+    'loans:submit',
   ],
 
   manager: [
@@ -227,6 +258,24 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'guarantors:documents',
     'guarantors:view_nin',
     'guarantors:link',
+
+    // Reviews and approves, and may return a draft for correction.
+    //
+    // Deliberately **not** `loans:disburse`. A Manager also holds
+    // `loans:create`, so granting disbursement as well would let one person
+    // originate a loan, approve it and hand over the cash with nobody else
+    // involved. Withholding it means the money is released by somebody who
+    // did not approve it, which is the whole value of having two roles.
+    //
+    // Also not `loans:cancel`: cancelling an approved loan reverses a
+    // decision, and the person who made it should not be the only one who can
+    // unmake it.
+    'loans:view',
+    'loans:create',
+    'loans:update_draft',
+    'loans:submit',
+    'loans:approve',
+    'loans:view_sensitive',
   ],
 
   owner_admin: [
@@ -260,6 +309,15 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'guarantors:documents',
     'guarantors:view_nin',
     'guarantors:link',
+
+    'loans:view',
+    'loans:create',
+    'loans:update_draft',
+    'loans:submit',
+    'loans:approve',
+    'loans:disburse',
+    'loans:cancel',
+    'loans:view_sensitive',
   ],
 } as const;
 

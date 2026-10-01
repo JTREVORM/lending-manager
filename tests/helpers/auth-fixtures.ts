@@ -106,6 +106,14 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'client_remarks', trigger: 'client_remarks_no_delete' },
     { table: 'clients', trigger: 'clients_guard_privileged_columns' },
     { table: 'clients', trigger: 'audit_client_change' },
+    // Phase 4. The loan snapshots and the contractual breakdown are
+    // append-only in the same way, so clearing them needs the same exemption.
+    { table: 'loan_periods', trigger: 'loan_periods_no_delete' },
+    { table: 'loan_client_snapshots', trigger: 'loan_client_snapshots_no_delete' },
+    { table: 'loan_guarantor_snapshots', trigger: 'loan_guarantor_snapshots_no_delete' },
+    { table: 'loan_identity_snapshots', trigger: 'loan_identity_snapshots_no_delete' },
+    { table: 'loans', trigger: 'loans_guard_transition' },
+    { table: 'loans', trigger: 'audit_loan_change' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -114,6 +122,15 @@ export async function deleteTestUsers(): Promise<void> {
 
   try {
     await query(`delete from public.audit_log`);
+
+    // Phase 4 rows first: `loans.client_id` is `on delete restrict`, so loans
+    // go before the clients they belong to, and the snapshots before the
+    // loans they hang off.
+    await query(`delete from public.loan_periods`);
+    await query(`delete from public.loan_client_snapshots`);
+    await query(`delete from public.loan_guarantor_snapshots`);
+    await query(`delete from public.loan_identity_snapshots`);
+    await query(`delete from public.loans`);
 
     // Phase 3 rows, innermost first. `client_remarks.created_by` is
     // `on delete restrict`, so remarks go before the profiles that wrote
