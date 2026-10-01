@@ -105,6 +105,10 @@ export default tseslint.config(
       // client, which is why each use states its reason.
       'lib/auth/actions.ts',
       'lib/auth/admin-actions.ts',
+      // Phase 3. Linking a client record to a portal login calls a
+      // service_role-only database function, so this module reaches the
+      // privileged client for that one operation and states its reason.
+      'lib/clients/actions.ts',
       'lib/auth/context.ts',
       'lib/auth/guard.ts',
     ],

@@ -516,3 +516,174 @@ doing more.
 - One more operation needs the privileged client. The justification string
   (`'confirm a completed password change'`) is logged, per ADR-005, so every
   privileged use remains accountable.
+
+## ADR-018 — The National Identification Number lives in its own table
+
+**Status:** Accepted (Phase 3).
+
+### Context
+
+The Phase 3 brief lists `nin` among the client fields and separately requires
+that only authorized roles can access it, and that it is masked where full
+display is unnecessary.
+
+Those two requirements are in tension on PostgreSQL. Row Level Security
+decides which *rows* a caller may touch; it has nothing to say about columns.
+Column privileges exist, but they are granted to database roles, and every
+signed-in user of this application is the same database role, `authenticated` —
+the distinction between a Secretary/Treasurer and a Manager is made inside
+policies, not by the role the connection assumes.
+
+So a `nin` column on `clients` could only have been protected by not selecting
+it in the interface. That is not protection. A caller holding a valid token can
+query PostgREST directly, and the Phase 2 rule — hiding controls is not
+security — applies with more force here, because a NIN is reusable identity
+evidence: someone holding one can impersonate its owner to a third party, which
+is not true of a phone number or an occupation.
+
+### Decision
+
+The number and the identity document move to **`client_identities`**, keyed on
+`client_id`, with its own policy requiring `clients:view_nin`.
+`guarantor_identities` does the same for guarantors.
+
+A Secretary/Treasurer passes `clients:view` and reads the directory all day;
+they fail the identity policy, so there is no query, view or export through
+which they reach a NIN. The restriction is a row policy, which is the one
+mechanism that holds.
+
+The identity document path lives in the same table, because it is a scan of
+the same document — protecting one and not the other would be pointless. The
+storage policy for the `id/` folder is gated on the same capability.
+
+### Consequences
+
+* The flat field list in the brief is not reproduced literally. The brief
+  invited this: "use the cleanest schema rather than mechanically copying this
+  list".
+* Registration writes two rows, and the second can fail independently. That is
+  handled rather than hidden: a client with no NIN recorded yet is a normal
+  state, so the failure is reported and the client — who already holds an
+  issued number — is kept.
+* Reading a client's full record takes two queries. The second is skipped
+  entirely for callers without the capability, so the common case is cheaper
+  rather than more expensive.
+* It makes the audit rule tractable too. `audit_log` is readable by
+  `audit:view`, which is broader than `clients:view_nin`, so the triggers
+  record a masked number (`***BCD`) rather than the number. Had the NIN been a
+  column on `clients`, every `client.updated` row would have carried it.
+* A borrower cannot read their own NIN. Deliberate: they already know it, and a
+  portal that never displays one cannot leak one.
+
+## ADR-019 — Phone numbers are not unique; NINs are
+
+**Status:** Accepted (Phase 3).
+
+### Context
+
+The brief asks for duplicate detection, and notes that NIN uniqueness may be
+enforced if the company requires it while "phone numbers may need careful
+treatment if families share numbers".
+
+### Decision
+
+**NIN: a hard unique constraint**, partial so the number stays optional. A NIN
+identifies exactly one person, so two client records sharing one is a duplicate
+or a transcription error — never a legitimate pair. There is no case where
+allowing it serves the business.
+
+**Phone: no constraint.** Families share a handset. A wife borrowing on her own
+account using her husband's number is an ordinary Ugandan case, not a
+duplicate. A unique constraint here would turn a real client away at the
+counter, and the staff member would work around it by inventing a number —
+which is worse than the duplicate, because it destroys the ability to contact
+her.
+
+Instead the collision is made *visible*: the search box matches phone numbers,
+so typing one shows everyone who has it, and whoever is registering can decide.
+
+### Consequences
+
+* Registration can produce two clients with one phone number. That is the
+  intended outcome, and the search makes it apparent.
+* The NIN constraint is what makes "this individual already stands for two
+  other borrowers" visible for guarantors, rather than silently duplicated
+  across three records.
+* A duplicate NIN surfaces as a specific message — "already recorded against
+  another client" — rather than a generic failure, because the recovery is
+  different: find the existing record rather than retype the number.
+
+## ADR-020 — Guarantor associations are a table, and Phase 4 must snapshot them
+
+**Status:** Accepted (Phase 3). Carries an obligation for Phase 4.
+
+### Context
+
+A guarantor could have been a set of columns on `clients`, which would have
+made registration a single form. The brief asks for the decision to be
+documented either way.
+
+### Decision
+
+A separate `guarantors` table with the association in `client_guarantors`,
+because in practice the same person guarantees several borrowers — a trader
+vouches for two relatives and a neighbour.
+
+Three copies of that person would mean three photographs to keep current,
+three NINs to keep unique, and **no way to see that one individual carries
+three obligations** — which is precisely the exposure a lender wants visible.
+The guarantor directory therefore shows how many clients each person currently
+stands for.
+
+`relationship_to_client` lives on the association rather than the guarantor,
+because the same person is a brother to one client and a business partner to
+another.
+
+Detaching deactivates and stamps attribution; reviving a detached association
+is refused outright, so a new one must be made. History stays legible.
+
+### The obligation on Phase 4
+
+A guarantor's details change: they move, they change trade, they change number.
+`client_guarantors` records the **current** association, and nothing in Phase 3
+is suitable as loan evidence on its own.
+
+When Phase 4 issues a loan it must **snapshot** the details it relied on — the
+guarantor's name, NIN, phone and relationship, and the client's own identity
+data — into the loan's rows, rather than referencing `guarantors.id` and
+reading through at display time. Otherwise a guarantor correcting their phone
+number in 2027 silently rewrites what the business will claim it was told in
+2026, and the loan file stops being evidence in a dispute.
+
+Phase 3 deliberately provides no snapshot mechanism. There is nothing yet to
+snapshot into, and an unused one would rot before it was needed.
+
+## ADR-021 — Documents are never deleted, and replaced files accumulate
+
+**Status:** Accepted (Phase 3).
+
+### Context
+
+Replacing a client's photograph could delete the old object. The brief asks
+that a replacement avoid orphaned files "where practical", that the old file
+not be deleted before the new upload succeeds, and that sensitive documents not
+be freely deletable.
+
+### Decision
+
+No DELETE policy on either document bucket, for any role. A replacement
+uploads to a **new random path** and repoints the database only after the
+upload succeeds; the previous object stays.
+
+### Consequences
+
+* There is no moment at which the database names a file that does not exist,
+  and no moment at which the old file is gone before the new one arrives. The
+  two failure modes the brief warns about are both structurally impossible
+  rather than merely handled.
+* Replaced files accumulate. This is the honest cost, and it is the right way
+  round: a bug that deleted the only scan of a client's national ID would be
+  unrecoverable, while an extra object costs a fraction of a cent. An operator
+  prunes deliberately with the secret key.
+* "Remove this photograph" is not offered in the interface. Nothing in the
+  business needs it, and the capability would exist only to be misused.

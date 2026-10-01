@@ -1,5 +1,6 @@
 import {
   Banknote,
+  HeartHandshake,
   LayoutDashboard,
   Receipt,
   ScrollText,
@@ -54,7 +55,21 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Clients',
     shortLabel: 'Clients',
     icon: Users,
-    permission: 'dashboard:view',
+    // Its own capability as of Phase 3, rather than `dashboard:view`. A
+    // borrower reads their own client record through the portal, never
+    // through this directory.
+    permission: 'clients:view',
+    phase: 3,
+  },
+  {
+    href: ROUTES.guarantors,
+    label: 'Guarantors',
+    // Ten characters clips in a bottom-bar cell at 320px. "Backers" is what a
+    // loan officer would say out loud, and the sidebar still carries the full
+    // word where there is room for it.
+    shortLabel: 'Backers',
+    icon: HeartHandshake,
+    permission: 'guarantors:view',
     phase: 3,
   },
   {

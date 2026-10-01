@@ -80,4 +80,30 @@ create table if not exists storage.buckets (
   created_at timestamptz not null default now()
 );
 
+-- Supabase's own `storage.objects`, reduced to the columns a policy can
+-- reason about. Phase 3 writes Row Level Security policies against this table
+-- (migration 20261003000700), and a policy that is never evaluated is a policy
+-- nobody has checked — so the harness needs a real table to evaluate them
+-- against, with RLS enabled exactly as the hosted one has it.
+--
+-- The column list matches the hosted table for the columns used: `bucket_id`,
+-- `name`, `owner`, `metadata`. The rest of Supabase's columns are omitted
+-- because no policy reads them; if one ever does, it will fail here loudly
+-- rather than silently diverge.
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name text,
+  owner uuid,
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint objects_bucket_name_unique unique (bucket_id, name)
+);
+
+alter table storage.objects enable row level security;
+
 grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update, delete on table storage.objects
+  to anon, authenticated, service_role;
+grant select on table storage.buckets to anon, authenticated, service_role;

@@ -192,3 +192,9 @@ arrears, no penalties, no client portal, no reports, no mobile-money
 integration, no PWA. Each unbuilt section renders a placeholder naming its
 phase and what it will do, rather than an empty table implying a working
 screen.
+
+## Phase 3 — clients and guarantors
+
+The client and guarantor module, its permission matrix, Row Level Security,
+storage rules, duplicate handling, search and audit behaviour are documented in
+[CLIENTS.md](CLIENTS.md).

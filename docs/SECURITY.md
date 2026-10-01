@@ -163,6 +163,45 @@ where a visitor was heading, and sign-in ignored it. Found during the running
 application review. Now honoured, sanitised twice — once when rendering the
 form and again in the action, because a hidden field is client-supplied input.
 
+## Phase 3 verification
+
+Client and guarantor management, reviewed before declaring the phase complete.
+
+| Attack | Result |
+| --- | --- |
+| A borrower reads another client's record | Refused. The policy's identity clause grants exactly one row; naming another id returns nothing. |
+| A borrower reads their own National Identification Number | Refused. `client_identities` has no self-clause, deliberately. |
+| A borrower edits their own client record | Refused. They hold no client-editing capability, so the UPDATE policy never opens the row. |
+| A borrower links themselves to another client | Refused twice: the column guard, and `link_client_profile` being `service_role`-only. |
+| A Secretary/Treasurer reads any NIN | Refused. The number is not in a table they can read. |
+| A Secretary/Treasurer changes a status, blacklists, or registers a client | Refused, each by name in the error. |
+| A Manager blacklists or archives a client | Refused. Both are Owner-only. |
+| A Manager calls `link_client_profile` | Refused: `42501`. No session role holds EXECUTE. |
+| Anyone deletes a client, guarantor or remark | Refused. No DELETE grant exists for any role. |
+| Anyone edits or deletes a remark | Refused by statement-level trigger *and* absent privilege. |
+| `service_role` forges or changes a client number | Refused. The rule sits above the trusted-path exemption. |
+| `service_role` repoints `profile_id` by plain UPDATE | Refused, same reason. |
+| A borrower retrieves a guarantor photograph by guessing a path | Refused. The read policy needs `guarantors:view`. |
+| A Secretary/Treasurer opens an identity document | Refused. The `id/` folder needs `clients:view_nin`. |
+| An executable renamed to `.jpg` is uploaded | Refused by magic-byte check. |
+| An SVG declaring itself a PNG | Refused. |
+| A traversal or malformed storage path | Refused by `CHECK` constraint and by policy; the path helpers return NULL, which fails closed. |
+| Two parallel registrations collide on a number | 40 parallel registrations gave 40 distinct gapless numbers. |
+| Two parallel links to one profile both commit | Exactly one succeeded, under advisory lock. |
+| Two clients share a NIN | Exactly one insert succeeded. |
+| A NIN reaches the audit trail | It does not. Masked to `***BCD`; the full number appears in no audit row. |
+| A hostile name or remark renders as markup | It does not. React escapes; no `dangerouslySetInnerHTML` anywhere. |
+| A secret reaches the client bundle | Scanned 30 files for secret keys, service-role JWTs, connection strings and privileged identifiers. Clean, with a positive control to prove the scanner works. |
+
+## Issues found and fixed in Phase 3
+
+| Issue | Root cause | Fix |
+| --- | --- | --- |
+| `/clients` reachable by URL for any staff role | The route-permission map still required `dashboard:view` from when the page was a Phase 2 placeholder, while the menu entry had been given `clients:view`. The menu hid the entry; the route stayed open. | Route map updated for `/clients` and `/guarantors`. `tests/unit/client-routing.test.ts` now asserts the mapping per role and per route; `tests/integration/navigation.test.tsx` already asserted the two maps agree, which is what caught it. |
+| An impossible date of birth was accepted | `Date.parse('1990-02-30')` succeeds — JavaScript rolls the day over to 2 March — so the schema stored a different date than the one submitted. | The parsed date is read back and its components must match the input. Leap-year cases tested both ways. |
+| `client_remarks.created_by` made profiles undeletable with a confusing error | `on delete set null` on an append-only table: nulling a column is an UPDATE, which the table refuses. | Changed to `on delete restrict`, which is also the better rule — a remark whose author has been erased is weaker evidence. |
+| Both identity tables lacked `created_at` | Oversight. Caught by the Phase 1 convention test that requires a creation timestamp on every table. | Column added to both. |
+
 ## Known gaps, deferred deliberately
 
 | Gap | Phase |
@@ -172,6 +211,9 @@ form and again in the action, because a hidden field is client-supplied input.
 | ~~No RLS policies~~ | **Done in Phase 2** for every identity, settings and audit table. `reference_formats` and `reference_sequences` remain default-deny deliberately — nothing reads them from a session. |
 | No rate limiting on user creation or password reset | Before go-live. Supabase Auth throttles sign-in itself; the administrative actions are not throttled. |
 | ~~A user can clear their own forced-password-change flag without changing the password~~ | **Closed.** Migration `20261002000800` drops the function that allowed it and replaces it with one no session role may execute. See [AUTHENTICATION.md](AUTHENTICATION.md#the-forced-password-change). |
+| Replaced photographs and documents accumulate | Deliberate, not an oversight. There is no DELETE policy on either bucket, because a bug that deleted the only scan of a client's national ID would be unrecoverable. An operator prunes with the secret key. The cost is storage; the alternative is losing evidence. |
+| A guarantor photograph is readable by any staff member holding `guarantors:view`, for any guarantor | Correct for the size of business this serves, where staff handle whichever client is at the counter. If the business later wants per-branch isolation, the policy is the place to add it. |
+| No rate limiting on client registration or document upload | Before go-live, alongside the Phase 2 gap. Supabase throttles auth; these actions are not throttled. |
 | No audit-record retention policy | Before go-live. |
 | No audit hash chain or off-site shipping | 2+, if the threat model includes an insider with database access. |
 | No penetration test | Before go-live. |

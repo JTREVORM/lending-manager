@@ -156,6 +156,256 @@ export type Database = {
         ];
       };
 
+      client_guarantors: {
+        Row: {
+          id: string;
+          client_id: string;
+          guarantor_id: string;
+          relationship_to_client: string;
+          active: boolean;
+          detached_at: string | null;
+          detached_by: string | null;
+          detached_reason: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          guarantor_id: string;
+          relationship_to_client: string;
+          active?: boolean;
+          detached_at?: string | null;
+          detached_by?: string | null;
+          detached_reason?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          guarantor_id?: string;
+          relationship_to_client?: string;
+          active?: boolean;
+          detached_at?: string | null;
+          detached_by?: string | null;
+          detached_reason?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      client_identities: {
+        Row: {
+          client_id: string;
+          nin: string | null;
+          id_document_path: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          client_id: string;
+          nin?: string | null;
+          id_document_path?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          client_id?: string;
+          nin?: string | null;
+          id_document_path?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      client_remarks: {
+        Row: {
+          id: string;
+          client_id: string;
+          body: string;
+          category: string;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          retracts_remark_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          body: string;
+          category?: string;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          retracts_remark_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          body?: string;
+          category?: string;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          retracts_remark_id?: string | null;
+        };
+        Relationships: [];
+      };
+      clients: {
+        Row: {
+          id: string;
+          client_number: string;
+          profile_id: string | null;
+          full_name: string;
+          sex: string;
+          date_of_birth: string;
+          phone: string;
+          alternative_phone: string | null;
+          occupation: string;
+          business_type: string | null;
+          village_area: string;
+          district: string;
+          photo_path: string | null;
+          status: string;
+          status_reason: string | null;
+          status_changed_at: string | null;
+          status_changed_by: string | null;
+          notes: string | null;
+          registered_at: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          /** Assigned by the clients_assign_client_number trigger; supplying one is refused. */
+          client_number?: never;
+          profile_id?: string | null;
+          full_name: string;
+          sex: string;
+          date_of_birth: string;
+          phone: string;
+          alternative_phone?: string | null;
+          occupation: string;
+          business_type?: string | null;
+          village_area: string;
+          district: string;
+          photo_path?: string | null;
+          status?: string;
+          status_reason?: string | null;
+          status_changed_at?: string | null;
+          status_changed_by?: string | null;
+          notes?: string | null;
+          registered_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_number?: string;
+          profile_id?: string | null;
+          full_name?: string;
+          sex?: string;
+          date_of_birth?: string;
+          phone?: string;
+          alternative_phone?: string | null;
+          occupation?: string;
+          business_type?: string | null;
+          village_area?: string;
+          district?: string;
+          photo_path?: string | null;
+          status?: string;
+          status_reason?: string | null;
+          status_changed_at?: string | null;
+          status_changed_by?: string | null;
+          notes?: string | null;
+          registered_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
+      guarantor_identities: {
+        Row: {
+          guarantor_id: string;
+          nin: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          guarantor_id: string;
+          nin?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          guarantor_id?: string;
+          nin?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      guarantors: {
+        Row: {
+          id: string;
+          full_name: string;
+          sex: string;
+          date_of_birth: string;
+          phone: string;
+          alternative_phone: string | null;
+          occupation: string;
+          location: string;
+          district: string | null;
+          photo_path: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          full_name: string;
+          sex: string;
+          date_of_birth: string;
+          phone: string;
+          alternative_phone?: string | null;
+          occupation: string;
+          location: string;
+          district?: string | null;
+          photo_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          full_name?: string;
+          sex?: string;
+          date_of_birth?: string;
+          phone?: string;
+          alternative_phone?: string | null;
+          occupation?: string;
+          location?: string;
+          district?: string | null;
+          photo_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
       company_settings: {
         Row: {
           id: number;
@@ -531,6 +781,26 @@ export type Database = {
       user_has_permission: {
         Args: { p_permission_key: string };
         Returns: boolean;
+      };
+      link_client_profile: {
+        Args: { p_client_id: string; p_profile_id: string };
+        Returns: undefined;
+      };
+      mask_nin: {
+        Args: { p_nin: string };
+        Returns: string;
+      };
+      storage_path_client_id: {
+        Args: { p_name: string };
+        Returns: string;
+      };
+      storage_path_guarantor_id: {
+        Args: { p_name: string };
+        Returns: string;
+      };
+      storage_path_kind: {
+        Args: { p_name: string };
+        Returns: string;
       };
       confirm_password_change: {
         Args: { p_auth_user_id: string };

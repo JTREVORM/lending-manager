@@ -188,6 +188,36 @@ describe('authorization matrix', () => {
     'settings:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'settings:update': ['owner_admin'],
     'audit:view': ['owner_admin'],
+
+    // --- Phase 3: clients ---------------------------------------------------
+    // A borrower is absent from every row here, including `clients:view`.
+    // They read their own client record through the identity clause in the
+    // RLS policy, not through a capability — see the note in
+    // lib/permissions/permissions.ts.
+    'clients:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'clients:create': ['manager', 'owner_admin'],
+    'clients:update': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'clients:status': ['manager', 'owner_admin'],
+    // Owner-only: a standing commercial judgement, not an operational state.
+    'clients:blacklist': ['owner_admin'],
+    'clients:archive': ['owner_admin'],
+    'clients:documents': ['manager', 'owner_admin'],
+    // Not held by the Secretary/Treasurer, who reads the directory all day.
+    'clients:view_nin': ['manager', 'owner_admin'],
+    // Owner-only: decides who may sign in and see a client's data.
+    'clients:link_auth': ['owner_admin'],
+    'clients:remarks_view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    // Deliberately not the Secretary/Treasurer: a remark that will later weigh
+    // on a lending decision should carry a Manager's name.
+    'clients:remarks_create': ['manager', 'owner_admin'],
+
+    // --- Phase 3: guarantors ------------------------------------------------
+    'guarantors:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'guarantors:create': ['manager', 'owner_admin'],
+    'guarantors:update': ['manager', 'owner_admin'],
+    'guarantors:documents': ['manager', 'owner_admin'],
+    'guarantors:view_nin': ['manager', 'owner_admin'],
+    'guarantors:link': ['manager', 'owner_admin'],
   };
 
   it('covers every declared permission', () => {

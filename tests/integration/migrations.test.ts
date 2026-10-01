@@ -305,8 +305,24 @@ describe('column type discipline', () => {
      *   user_roles  the primary key is (profile_id, role_key), so there is no
      *               non-key column to change — a role is granted or revoked,
      *               never amended.
+     *   client_remarks
+     *               append-only, like audit_log: UPDATE is refused by a
+     *               statement-level trigger and the privilege is not granted.
+     *               A mistake is corrected by appending a retraction, so an
+     *               `updated_at` column would be a timestamp that can never
+     *               advance — worse than absent, because it would imply the
+     *               row can be edited.
+     *
+     * Note that membership here is asserted in both directions: an excluded
+     * table must *not* carry the column, so this set cannot be used to excuse
+     * a table that simply forgot it.
      */
-    const NO_UPDATED_AT = new Set(['audit_log', 'user_roles', 'role_permissions']);
+    const NO_UPDATED_AT = new Set([
+      'audit_log',
+      'user_roles',
+      'role_permissions',
+      'client_remarks',
+    ]);
 
     for (const table of createdTables) {
       const definition = new RegExp(
@@ -523,6 +539,23 @@ describe('types stay in step with the schema', () => {
       'audit_settings_change',
       // Called only by other SECURITY DEFINER functions, never over the API.
       'assert_owner_admin_remains',
+
+      // --- Phase 3 ----------------------------------------------------------
+      'clients_assign_client_number',
+      'clients_guard_privileged_columns',
+      'clients_stamp_provenance',
+      'guarantors_stamp_provenance',
+      'guarantors_guard_privileged_columns',
+      'client_guarantors_guard_detach',
+      'client_remarks_stamp_author',
+      'audit_client_change',
+      'audit_client_identity_change',
+      'audit_guarantor_change',
+      'audit_guarantor_identity_change',
+      'audit_client_guarantor_change',
+      'audit_client_remark_added',
+      // Called only from the audit triggers above.
+      'audit_actor_label',
     ]);
 
     for (const functionName of functionNames) {

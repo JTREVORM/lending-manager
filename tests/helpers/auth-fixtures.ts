@@ -101,6 +101,11 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'profiles', trigger: 'audit_profile_change' },
     { table: 'profiles', trigger: 'profiles_assert_owner_remains' },
     { table: 'profiles', trigger: 'profiles_guard_privileged_columns' },
+    // Phase 3. `client_remarks` is append-only in the same way `audit_log`
+    // is, so clearing it needs the same documented owner-level exemption.
+    { table: 'client_remarks', trigger: 'client_remarks_no_delete' },
+    { table: 'clients', trigger: 'clients_guard_privileged_columns' },
+    { table: 'clients', trigger: 'audit_client_change' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -109,6 +114,17 @@ export async function deleteTestUsers(): Promise<void> {
 
   try {
     await query(`delete from public.audit_log`);
+
+    // Phase 3 rows, innermost first. `client_remarks.created_by` is
+    // `on delete restrict`, so remarks go before the profiles that wrote
+    // them; clients reference profiles too, through `created_by`.
+    await query(`delete from public.client_remarks`);
+    await query(`delete from public.client_guarantors`);
+    await query(`delete from public.guarantor_identities`);
+    await query(`delete from public.guarantors`);
+    await query(`delete from public.client_identities`);
+    await query(`delete from public.clients`);
+
     await query(
       `delete from public.user_roles where profile_id in (
          select id from public.profiles where phone like $1)`,

@@ -29,7 +29,16 @@ describeDb('tables', () => {
   const EXPECTED_TABLES = [
     'audit_log',
     'business_settings',
+    // Phase 3: the lending-business customer record, its sensitive half, the
+    // guarantors who vouch for them, the association between the two, and the
+    // append-only staff commentary.
+    'client_guarantors',
+    'client_identities',
+    'client_remarks',
+    'clients',
     'company_settings',
+    'guarantor_identities',
+    'guarantors',
     // Phase 2: the capability vocabulary and the role-to-capability map.
     'permissions',
     'profiles',
@@ -164,7 +173,27 @@ describeDb('foreign keys', () => {
       'audit_log.actor_profile_id -> profiles (r)',
       'business_settings.default_repayment_frequency -> repayment_frequencies (r)',
       'business_settings.updated_by -> profiles (r)',
+      // Phase 3. `c` cascades: a client's identity row, remarks and guarantor
+      // associations are parts of that client, not independent records.
+      // `r` restricts: a guarantor with an association cannot be removed, and
+      // neither can the profile that authored a remark — attribution is
+      // evidence. `n` nulls: provenance degrades gracefully, because `created_by`
+      // naming a deleted account is less useful than NULL and the audit trail
+      // holds the authoritative record either way.
+      'client_guarantors.client_id -> clients (c)',
+      'client_guarantors.created_by -> profiles (n)',
+      'client_guarantors.detached_by -> profiles (n)',
+      'client_guarantors.guarantor_id -> guarantors (r)',
+      'client_identities.client_id -> clients (c)',
+      'client_remarks.client_id -> clients (c)',
+      'client_remarks.created_by -> profiles (r)',
+      'client_remarks.retracts_remark_id -> client_remarks (r)',
+      'clients.created_by -> profiles (n)',
+      'clients.profile_id -> profiles (r)',
+      'clients.status_changed_by -> profiles (n)',
       'company_settings.updated_by -> profiles (r)',
+      'guarantor_identities.guarantor_id -> guarantors (c)',
+      'guarantors.created_by -> profiles (n)',
       'profiles.auth_user_id -> users (r)',
       'reference_sequences.scope -> reference_formats (r)',
       // Phase 2. RESTRICT here too: a capability cannot be deleted out from

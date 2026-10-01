@@ -93,6 +93,48 @@ export const PERMISSIONS = [
   // --- Audit ---------------------------------------------------------------
   /** Read the audit trail. */
   'audit:view',
+
+  // --- Clients -------------------------------------------------------------
+  // The spelling is `resource:action` with one colon, which is the format the
+  // `permissions` table constrains. Where the Phase 3 specification suggested
+  // a nested `clients:remarks:view`, the capability is named
+  // `clients:remarks_view` instead; the grant is the same.
+  /** See the client directory, search clients, and open a client record. */
+  'clients:view',
+  /** Register a new client. */
+  'clients:create',
+  /** Change a client's ordinary details. */
+  'clients:update',
+  /** Move a client between active, inactive and suspended. */
+  'clients:status',
+  /** Blacklist a client, or lift a blacklisting. */
+  'clients:blacklist',
+  /** Archive a client record, which replaces deletion. */
+  'clients:archive',
+  /** Upload or replace a client's photograph and identity document. */
+  'clients:documents',
+  /** Read a client's National Identification Number and identity document. */
+  'clients:view_nin',
+  /** Link or unlink a client record and a portal login. */
+  'clients:link_auth',
+  /** Read internal staff remarks on a client. */
+  'clients:remarks_view',
+  /** Add an internal staff remark to a client. */
+  'clients:remarks_create',
+
+  // --- Guarantors ----------------------------------------------------------
+  /** See the guarantor directory and open a guarantor record. */
+  'guarantors:view',
+  /** Register a new guarantor. */
+  'guarantors:create',
+  /** Change a guarantor's details. */
+  'guarantors:update',
+  /** Upload or replace a guarantor's photograph. */
+  'guarantors:documents',
+  /** Read a guarantor's National Identification Number. */
+  'guarantors:view_nin',
+  /** Attach a guarantor to a client, or detach one. */
+  'guarantors:link',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -124,6 +166,13 @@ export function isPermission(value: unknown): value is Permission {
 export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> = {
   // A borrower reaches the portal and their own account. Nothing else. They
   // must never see the staff shell, other clients, or any administration.
+  // A borrower reaches the portal and their own account. Nothing else.
+  //
+  // Note what is *not* here: `clients:view`. A borrower does read their own
+  // client record, but through the identity clause in the RLS policy on
+  // `public.clients`, which is keyed on their profile and grants exactly one
+  // row. `clients:view` means "read the directory" everywhere else in the
+  // system, and granting it here would mean exactly that.
   client: ['portal:view', 'account:view', 'account:update'],
 
   secretary_treasurer: [
@@ -131,6 +180,21 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'account:view',
     'account:update',
     'settings:view',
+
+    // Operational client work: find a client, check their details, correct a
+    // phone number, read the remarks left for them to act on.
+    //
+    // Deliberately absent: `clients:create` (registration mints a client
+    // number and is a Manager act), every status capability,
+    // `clients:view_nin`, `clients:link_auth`, and `clients:remarks_create` —
+    // the specification asks for that last one to be a decision rather than an
+    // inheritance, and the decision is no. A Secretary records payments; a
+    // remark that will later weigh on a lending decision should carry a
+    // Manager's name.
+    'clients:view',
+    'clients:update',
+    'clients:remarks_view',
+    'guarantors:view',
   ],
 
   manager: [
@@ -139,6 +203,30 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'account:update',
     'settings:view',
     'users:view',
+
+    // The Manager runs lending operations, so clients and guarantors are
+    // theirs to register, correct and comment on.
+    //
+    // Two are withheld, both commercial rather than technical decisions.
+    // `clients:blacklist` is the business permanently refusing to lend to
+    // someone — the one status that is a standing judgement rather than an
+    // operational state, and it should carry an Owner's name.
+    // `clients:link_auth` decides who can sign in and see a client's data,
+    // which is the same class of act as creating a staff account.
+    'clients:view',
+    'clients:create',
+    'clients:update',
+    'clients:status',
+    'clients:documents',
+    'clients:view_nin',
+    'clients:remarks_view',
+    'clients:remarks_create',
+    'guarantors:view',
+    'guarantors:create',
+    'guarantors:update',
+    'guarantors:documents',
+    'guarantors:view_nin',
+    'guarantors:link',
   ],
 
   owner_admin: [
@@ -154,6 +242,24 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'users:assign_role',
     'users:reset_password',
     'audit:view',
+
+    'clients:view',
+    'clients:create',
+    'clients:update',
+    'clients:status',
+    'clients:blacklist',
+    'clients:archive',
+    'clients:documents',
+    'clients:view_nin',
+    'clients:link_auth',
+    'clients:remarks_view',
+    'clients:remarks_create',
+    'guarantors:view',
+    'guarantors:create',
+    'guarantors:update',
+    'guarantors:documents',
+    'guarantors:view_nin',
+    'guarantors:link',
   ],
 } as const;
 
