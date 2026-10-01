@@ -1,0 +1,42 @@
+-- ===========================================================================
+-- Local development seed data.
+--
+-- Run automatically by `supabase db reset` AFTER every migration has been
+-- applied. It is NOT applied to staging or production.
+--
+-- ---------------------------------------------------------------------------
+-- This file is intentionally empty of data.
+-- ---------------------------------------------------------------------------
+--
+-- Two reasons, both deliberate:
+--
+-- 1. Everything the application genuinely needs in order to run is seeded by
+--    migration 20261001000800_seed_reference_data.sql — the roles, the
+--    repayment cadences, the reference formats, and the two singleton settings
+--    rows. That is required baseline data, not development convenience, so it
+--    belongs in a migration and must exist in production too.
+--
+-- 2. This is a financial system. Fabricated clients, loans and payments in a
+--    development database are a liability: they are easy to mistake for real
+--    records, they can be copied into a staging environment by accident, and
+--    a demo repayment history teaches staff behaviour the real engine may not
+--    reproduce. Phase 1 has no loan or payment tables anyway.
+--
+-- NEVER put real personal data here — no real names, phone numbers, National
+-- Identification Numbers or financial figures. This file is committed to git.
+--
+-- When Phase 2 adds client registration, fixtures for local development belong
+-- here, clearly fictional and clearly labelled. A sketch of what that looks
+-- like:
+--
+--   insert into public.profiles (full_name, phone, email, status)
+--   values
+--     ('DEMO Aisha Nakato',  '+256700000001', 'demo1@example.test', 'active'),
+--     ('DEMO Joseph Okello', '+256700000002', 'demo2@example.test', 'active')
+--   on conflict (phone) do nothing;
+--
+-- Note the DEMO prefix, the reserved +25670000000x range and the .test domain,
+-- all of which make the records unmistakably synthetic.
+-- ===========================================================================
+
+-- No statements. See above.

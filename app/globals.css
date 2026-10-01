@@ -1,0 +1,238 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   Design tokens
+   ===========================================================================
+   A financial application for non-technical staff, used mostly on phones in
+   bright daylight. The palette is therefore restrained and high-contrast
+   rather than decorative: a deep green as the brand colour (trust, and
+   distinct from the red/amber used for arrears), neutral greys for structure,
+   and semantic colours reserved for state so that "red" always means
+   something is wrong.
+
+   Every colour is a token. A later phase will let the business set its own
+   brand colour from `company_settings.brand_primary_color`, which means
+   overriding `--color-brand-*` in one place rather than hunting hex values
+   through components.
+   =========================================================================== */
+
+@theme {
+  /* Brand — deep green */
+  --color-brand-50: oklch(0.96 0.02 160);
+  --color-brand-100: oklch(0.92 0.04 160);
+  --color-brand-200: oklch(0.85 0.07 160);
+  --color-brand-300: oklch(0.76 0.1 160);
+  --color-brand-400: oklch(0.66 0.12 160);
+  --color-brand-500: oklch(0.56 0.12 160);
+  --color-brand-600: oklch(0.47 0.11 160);
+  --color-brand-700: oklch(0.39 0.09 160);
+  --color-brand-800: oklch(0.31 0.07 160);
+  --color-brand-900: oklch(0.24 0.05 160);
+
+  /* Semantic state */
+  --color-success: oklch(0.55 0.13 150);
+  --color-success-surface: oklch(0.96 0.03 150);
+  --color-warning: oklch(0.65 0.14 75);
+  --color-warning-surface: oklch(0.97 0.04 85);
+  --color-danger: oklch(0.55 0.17 25);
+  --color-danger-surface: oklch(0.96 0.03 25);
+  --color-info: oklch(0.55 0.12 250);
+  --color-info-surface: oklch(0.96 0.03 250);
+
+  /* Typography — system stack. No webfont download on a slow connection. */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* Minimum comfortable touch target. WCAG 2.5.5 asks for 44px; staff use
+     this one-handed at a counter, so it is the floor for every control. */
+  --spacing-touch: 2.75rem; /* 44px */
+}
+
+/* ---------------------------------------------------------------------------
+   Semantic surface tokens, defined for both colour schemes.
+
+   Components reference these rather than picking a grey, so dark mode is a
+   property of the theme instead of a `dark:` variant on every element.
+   --------------------------------------------------------------------------- */
+:root {
+  --color-page: oklch(0.985 0.002 250);
+  --color-surface: oklch(1 0 0);
+  --color-surface-raised: oklch(0.975 0.003 250);
+  --color-border: oklch(0.9 0.004 250);
+  --color-border-strong: oklch(0.82 0.006 250);
+  --color-text: oklch(0.22 0.01 250);
+  --color-text-muted: oklch(0.48 0.012 250);
+  --color-text-inverse: oklch(0.99 0 0);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-page: oklch(0.17 0.008 250);
+    --color-surface: oklch(0.21 0.009 250);
+    --color-surface-raised: oklch(0.25 0.01 250);
+    --color-border: oklch(0.31 0.011 250);
+    --color-border-strong: oklch(0.42 0.013 250);
+    --color-text: oklch(0.95 0.004 250);
+    --color-text-muted: oklch(0.72 0.009 250);
+    --color-text-inverse: oklch(0.17 0.008 250);
+
+    /* Surfaces need more lightness contrast against a dark page than the
+       light-mode tints provide. */
+    --color-success-surface: oklch(0.28 0.05 150);
+    --color-warning-surface: oklch(0.3 0.06 85);
+    --color-danger-surface: oklch(0.29 0.07 25);
+    --color-info-surface: oklch(0.28 0.05 250);
+  }
+}
+
+@theme inline {
+  --color-page: var(--color-page);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-inverse: var(--color-text-inverse);
+}
+
+/* ---------------------------------------------------------------------------
+   Base layer
+   --------------------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    /* Smooth in-page jumps, but respect a reduced-motion preference below. */
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-page);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    /* Long Ugandan names and UGX figures must not force the page sideways on a
+       320px screen. Width is contained structurally; this is the backstop. */
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* A visible focus ring on every keyboard-focused control. Never removed:
+     without it the application is unusable without a mouse. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  /* Mouse users do not get a ring, keyboard users always do. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    /* Prevents a long heading from overflowing a narrow phone screen. */
+    overflow-wrap: break-word;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    line-height: 1.25;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  h3 {
+    font-size: 1.0625rem;
+    line-height: 1.4;
+  }
+
+  @media (min-width: 48rem) {
+    h1 {
+      font-size: 1.875rem;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+    }
+  }
+
+  /* Monetary figures are read in columns and compared against each other, so
+     they need tabular digits to line up. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Skip link: visually hidden until focused, so a keyboard user can jump
+     past the navigation straight to the content.
+
+     Hidden with `clip-path` rather than the older `left: -9999px`. Both keep
+     the link focusable and announced, but a negative offset leaves an element
+     sitting far outside the viewport, which confuses layout tooling and
+     overflow audits. Clipping keeps it at its natural position with zero
+     painted size. */
+  .skip-link {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .skip-link:focus {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    height: auto;
+    /* A keyboard-only control, but it is still a target once revealed. */
+    min-height: var(--spacing-touch);
+    margin: 0;
+    padding: 0.625rem 1rem;
+    overflow: visible;
+    clip-path: none;
+    border: 2px solid var(--color-brand-500);
+    border-radius: 0.5rem;
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-weight: 600;
+  }
+}

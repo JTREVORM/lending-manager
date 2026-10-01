@@ -1,0 +1,520 @@
+/**
+ * Database types for the `public` schema.
+ *
+ * ## How to regenerate
+ *
+ * This file is written in the exact shape the Supabase CLI emits, so it is a
+ * drop-in replacement for generated output:
+ *
+ *   # against the local Supabase stack (requires Docker)
+ *   npm run db:types
+ *
+ *   # against a hosted project
+ *   npx supabase gen types typescript --project-id <ref> --schema public \
+ *     > types/database.types.ts
+ *
+ * **Regenerate after every migration that changes the schema**, and commit the
+ * result in the same pull request as the migration. The CI type check will
+ * fail on code that reads a column this file does not know about, which is the
+ * point: the compiler, not a code review, catches a rename.
+ *
+ * It is maintained by hand for Phase 1 because the project is not yet linked
+ * to a Supabase project and the generator needs a running database. A database
+ * integration test (`tests/db/schema-types.test.ts`) compares this file
+ * against the live schema and fails on drift, so a hand edit cannot quietly
+ * diverge from the migrations.
+ *
+ * ## Type mapping notes
+ *
+ *   - `bigint` columns (money, in whole shillings) appear as `number`.
+ *     PostgREST serialises them as JSON numbers. Values are far below
+ *     `Number.MAX_SAFE_INTEGER`, and `fromDatabaseAmount` in
+ *     lib/domain/money.ts validates each one on the way in regardless.
+ *   - `timestamptz` and `date` appear as `string` (ISO 8601).
+ *   - `inet` appears as `string`.
+ *   - Columns with a database default are optional in `Insert`.
+ */
+
+export type Json =
+  string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type Database = {
+  public: {
+    Tables: {
+      audit_log: {
+        Row: {
+          id: number;
+          occurred_at: string;
+          actor_profile_id: string | null;
+          actor_auth_user_id: string | null;
+          actor_label: string;
+          action: string;
+          entity_type: string;
+          entity_id: string | null;
+          old_values: Json | null;
+          new_values: Json | null;
+          metadata: Json | null;
+          request_id: string | null;
+          ip_address: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          id?: never;
+          occurred_at?: string;
+          actor_profile_id?: string | null;
+          actor_auth_user_id?: string | null;
+          actor_label: string;
+          action: string;
+          entity_type: string;
+          entity_id?: string | null;
+          old_values?: Json | null;
+          new_values?: Json | null;
+          metadata?: Json | null;
+          request_id?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+        };
+        /**
+         * Present for shape compatibility with generated output only. The
+         * table rejects every UPDATE by trigger and by privilege.
+         */
+        Update: {
+          [_ in never]: never;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'audit_log_actor_profile_id_fkey';
+            columns: ['actor_profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      business_settings: {
+        Row: {
+          id: number;
+          min_loan_amount: number;
+          max_loan_amount: number;
+          default_monthly_interest_rate_bps: number;
+          min_loan_term_months: number;
+          max_loan_term_months: number;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          max_active_loans_per_client: number;
+          default_repayment_frequency: string;
+          created_at: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: number;
+          min_loan_amount: number;
+          max_loan_amount: number;
+          default_monthly_interest_rate_bps: number;
+          min_loan_term_months: number;
+          max_loan_term_months: number;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          max_active_loans_per_client?: number;
+          default_repayment_frequency: string;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: number;
+          min_loan_amount?: number;
+          max_loan_amount?: number;
+          default_monthly_interest_rate_bps?: number;
+          min_loan_term_months?: number;
+          max_loan_term_months?: number;
+          grace_period_days?: number;
+          penalty_rate_bps?: number;
+          max_active_loans_per_client?: number;
+          default_repayment_frequency?: string;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'business_settings_default_repayment_frequency_fkey';
+            columns: ['default_repayment_frequency'];
+            isOneToOne: false;
+            referencedRelation: 'repayment_frequencies';
+            referencedColumns: ['key'];
+          },
+          {
+            foreignKeyName: 'business_settings_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      company_settings: {
+        Row: {
+          id: number;
+          company_name: string;
+          legal_name: string | null;
+          registration_number: string | null;
+          tax_identification_number: string | null;
+          phone: string | null;
+          email: string | null;
+          address_line1: string | null;
+          address_line2: string | null;
+          city: string | null;
+          country: string | null;
+          currency_code: string;
+          locale: string;
+          timezone: string;
+          logo_path: string | null;
+          receipt_header: string | null;
+          receipt_footer: string | null;
+          brand_primary_color: string | null;
+          created_at: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: number;
+          company_name: string;
+          legal_name?: string | null;
+          registration_number?: string | null;
+          tax_identification_number?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          address_line1?: string | null;
+          address_line2?: string | null;
+          city?: string | null;
+          country?: string | null;
+          currency_code?: string;
+          locale?: string;
+          timezone?: string;
+          logo_path?: string | null;
+          receipt_header?: string | null;
+          receipt_footer?: string | null;
+          brand_primary_color?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: number;
+          company_name?: string;
+          legal_name?: string | null;
+          registration_number?: string | null;
+          tax_identification_number?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          address_line1?: string | null;
+          address_line2?: string | null;
+          city?: string | null;
+          country?: string | null;
+          currency_code?: string;
+          locale?: string;
+          timezone?: string;
+          logo_path?: string | null;
+          receipt_header?: string | null;
+          receipt_footer?: string | null;
+          brand_primary_color?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'company_settings_updated_by_fkey';
+            columns: ['updated_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      profiles: {
+        Row: {
+          id: string;
+          auth_user_id: string | null;
+          full_name: string;
+          phone: string;
+          email: string | null;
+          status: string;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          auth_user_id?: string | null;
+          full_name: string;
+          phone: string;
+          email?: string | null;
+          status?: string;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          auth_user_id?: string | null;
+          full_name?: string;
+          phone?: string;
+          email?: string | null;
+          status?: string;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      reference_formats: {
+        Row: {
+          scope: string;
+          prefix: string;
+          padding: number;
+          description: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          scope: string;
+          prefix: string;
+          padding?: number;
+          description: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          scope?: string;
+          prefix?: string;
+          padding?: number;
+          description?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      reference_sequences: {
+        Row: {
+          scope: string;
+          period_year: number;
+          last_value: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          scope: string;
+          period_year: number;
+          last_value?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          scope?: string;
+          period_year?: number;
+          last_value?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'reference_sequences_scope_fkey';
+            columns: ['scope'];
+            isOneToOne: false;
+            referencedRelation: 'reference_formats';
+            referencedColumns: ['scope'];
+          },
+        ];
+      };
+
+      repayment_frequencies: {
+        Row: {
+          key: string;
+          label: string;
+          interval_days: number;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          interval_days: number;
+          is_active?: boolean;
+          sort_order: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          label?: string;
+          interval_days?: number;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      roles: {
+        Row: {
+          key: string;
+          label: string;
+          description: string;
+          rank: number;
+          is_staff: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          description: string;
+          rank: number;
+          is_staff: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          label?: string;
+          description?: string;
+          rank?: number;
+          is_staff?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      user_roles: {
+        Row: {
+          profile_id: string;
+          role_key: string;
+          granted_by: string | null;
+          granted_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          role_key: string;
+          granted_by?: string | null;
+          granted_at?: string;
+        };
+        Update: {
+          profile_id?: string;
+          role_key?: string;
+          granted_by?: string | null;
+          granted_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'user_roles_profile_id_fkey';
+            columns: ['profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'user_roles_role_key_fkey';
+            columns: ['role_key'];
+            isOneToOne: false;
+            referencedRelation: 'roles';
+            referencedColumns: ['key'];
+          },
+          {
+            foreignKeyName: 'user_roles_granted_by_fkey';
+            columns: ['granted_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+    };
+
+    Views: {
+      [_ in never]: never;
+    };
+
+    Functions: {
+      current_profile_id: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      current_user_role_keys: {
+        Args: Record<PropertyKey, never>;
+        Returns: string[];
+      };
+      next_reference: {
+        Args: { p_scope: string };
+        Returns: string;
+      };
+      record_audit_event: {
+        Args: {
+          p_action: string;
+          p_entity_type: string;
+          p_entity_id?: string;
+          p_old_values?: Json;
+          p_new_values?: Json;
+          p_metadata?: Json;
+          p_request_id?: string;
+        };
+        Returns: number;
+      };
+      user_has_at_least_role: {
+        Args: { p_role_key: string };
+        Returns: boolean;
+      };
+      user_has_role: {
+        Args: { p_role_key: string };
+        Returns: boolean;
+      };
+    };
+
+    Enums: {
+      [_ in never]: never;
+    };
+
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Convenience aliases
+//
+// Prefer these over reaching into `Database['public']['Tables'][...]` at every
+// call site, so a future schema-wide change touches one place.
+// ---------------------------------------------------------------------------
+
+type PublicSchema = Database['public'];
+
+export type TableName = keyof PublicSchema['Tables'];
+
+/** A row as read from the database. */
+export type Tables<Name extends TableName> = PublicSchema['Tables'][Name]['Row'];
+
+/** The shape accepted by an insert. */
+export type TablesInsert<Name extends TableName> = PublicSchema['Tables'][Name]['Insert'];
+
+/** The shape accepted by an update. */
+export type TablesUpdate<Name extends TableName> = PublicSchema['Tables'][Name]['Update'];
+
+export type FunctionName = keyof PublicSchema['Functions'];
+
+export type FunctionArgs<Name extends FunctionName> =
+  PublicSchema['Functions'][Name]['Args'];
+
+export type FunctionReturns<Name extends FunctionName> =
+  PublicSchema['Functions'][Name]['Returns'];
