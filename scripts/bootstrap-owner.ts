@@ -169,8 +169,8 @@ async function main(): Promise<void> {
       phone: options.phone,
       email: options.email,
       status: 'active',
+      // `password_set_at` is stamped by the database on insert.
       must_change_password: true,
-      password_set_at: new Date().toISOString(),
     })
     .select('id')
     .single();

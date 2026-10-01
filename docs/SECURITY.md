@@ -171,7 +171,7 @@ form and again in the action, because a hidden field is client-supplied input.
 | ~~No route protection~~ | **Done in Phase 2.** Three layers: proxy, server-side route guard, Row Level Security. |
 | ~~No RLS policies~~ | **Done in Phase 2** for every identity, settings and audit table. `reference_formats` and `reference_sequences` remain default-deny deliberately — nothing reads them from a session. |
 | No rate limiting on user creation or password reset | Before go-live. Supabase Auth throttles sign-in itself; the administrative actions are not throttled. |
-| A user can clear their own forced-password-change flag without changing the password | Only by calling `complete_password_change()` directly, which requires already being signed in with the temporary password. It grants no additional access and inconveniences only themselves. Closing it fully would mean routing password changes through the privileged client. |
+| ~~A user can clear their own forced-password-change flag without changing the password~~ | **Closed.** Migration `20261002000800` drops the function that allowed it and replaces it with one no session role may execute. See [AUTHENTICATION.md](AUTHENTICATION.md#the-forced-password-change). |
 | No audit-record retention policy | Before go-live. |
 | No audit hash chain or off-site shipping | 2+, if the threat model includes an insider with database access. |
 | No penetration test | Before go-live. |

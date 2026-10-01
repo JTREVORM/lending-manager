@@ -415,7 +415,10 @@ export async function resetUserPasswordAction(
   // and the column guard confirms the capability.
   const { error: flagError } = await supabase
     .from('profiles')
-    .update({ must_change_password: true, password_set_at: new Date().toISOString() })
+    // `password_set_at` is deliberately not supplied: the database stamps it
+    // from its own clock when the flag is raised, so it cannot be backdated
+    // and cannot drift from the application server's clock.
+    .update({ must_change_password: true })
     .eq('id', target.id);
 
   if (flagError !== null) {

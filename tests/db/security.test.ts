@@ -241,7 +241,7 @@ describeDb('privileged functions', () => {
       'audit_profile_change',
       'audit_settings_change',
       'audit_user_role_change',
-      'complete_password_change',
+      'confirm_password_change',
       'current_profile_id',
       'current_user_max_rank',
       'current_user_permissions',
@@ -249,6 +249,7 @@ describeDb('privileged functions', () => {
       'next_reference',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
+      'profiles_stamp_password_set_at',
       'record_audit_event',
       'record_security_event',
       'record_sign_in',
@@ -319,8 +320,16 @@ describeDb('privileged functions', () => {
     // `next_reference` and `record_audit_event` are deliberately absent:
     // nothing in this phase issues a reference, and audit rows are written by
     // triggers precisely so the actor cannot be supplied by a caller.
+    //
+    // `confirm_password_change` is absent for a stronger reason, and that
+    // absence is load-bearing. Its predecessor was on this list, and being on
+    // this list was the bypass: a user issued a temporary password could clear
+    // the forced-change requirement over PostgREST without changing anything.
+    // Clearing that flag is only safe once Supabase Auth has accepted a new
+    // password, which the database cannot observe — so the function is
+    // reachable only through the server, by `service_role`. See migration
+    // 20261002000800 and tests/db/password-change.test.ts.
     expect(rows.map((row) => row.proname)).toEqual([
-      'complete_password_change',
       'current_profile_id',
       'current_user_max_rank',
       'current_user_permissions',

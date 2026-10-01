@@ -103,6 +103,7 @@ export default tseslint.config(
       // and a Client Component importing one gets a network call rather than
       // the module. They are the sanctioned place to reach the privileged
       // client, which is why each use states its reason.
+      'lib/auth/actions.ts',
       'lib/auth/admin-actions.ts',
       'lib/auth/context.ts',
       'lib/auth/guard.ts',

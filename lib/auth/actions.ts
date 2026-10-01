@@ -16,14 +16,12 @@ import { ROUTES } from '@/config/app';
 import { getAuthContext } from '@/lib/auth/context';
 import { landingPathFor } from '@/lib/auth/routing';
 import { IdentityError, authEmailForIdentifier } from '@/lib/auth/identity';
+import { performPasswordChange } from '@/lib/auth/password-change';
 import { safeNextPath } from '@/lib/auth/routing';
 import { logger, maskPhone } from '@/lib/logger';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import {
-  changePasswordSchema,
-  signInSchema,
-  updateOwnDetailsSchema,
-} from '@/lib/validation/auth';
+import { signInSchema, updateOwnDetailsSchema } from '@/lib/validation/auth';
 import { parseSafely } from '@/lib/validation/validate';
 import type { FieldErrors } from '@/lib/errors';
 
@@ -186,65 +184,91 @@ export async function changePasswordAction(
     return { ok: false, message: 'Please sign in again.' };
   }
 
-  const parsed = parseSafely(changePasswordSchema, {
-    currentPassword: formData.get('currentPassword'),
-    newPassword: formData.get('newPassword'),
-    confirmPassword: formData.get('confirmPassword'),
-  });
-
-  if (!parsed.success) {
-    return {
-      ok: false,
-      message: 'Please check the highlighted fields.',
-      fieldErrors: parsed.error.fieldErrors,
-    };
-  }
-
+  const context = result.context;
   const supabase = await createSupabaseServerClient();
 
-  const { error: reauthError } = await supabase.auth.signInWithPassword({
-    email: authEmailForIdentifier(result.context.phone),
-    password: parsed.data.currentPassword,
-  });
+  // The ordering lives in performPasswordChange, which is driven directly by
+  // tests/unit/password-change.test.ts. This function supplies the plumbing.
+  const outcome = await performPasswordChange(
+    {
+      currentPassword: formData.get('currentPassword'),
+      newPassword: formData.get('newPassword'),
+      confirmPassword: formData.get('confirmPassword'),
+    },
+    {
+      async verifyCurrentPassword(password) {
+        // Re-authenticating is the proof. `updateUser` does not require the
+        // current password, so without this anyone reaching an unlocked
+        // browser could take the account over permanently.
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmailForIdentifier(context.phone),
+          password,
+        });
+        return error === null;
+      },
 
-  if (reauthError !== null) {
-    return {
-      ok: false,
-      message: 'Your current password is not correct.',
-      fieldErrors: { currentPassword: ['That is not your current password.'] },
-    };
-  }
+      async updatePassword(password) {
+        const { error } = await supabase.auth.updateUser({ password });
 
-  const { error: updateError } = await supabase.auth.updateUser({
-    password: parsed.data.newPassword,
-  });
+        if (error !== null) {
+          logger.warn('Password update refused by Supabase Auth.', {
+            code: error.code ?? 'unknown',
+          });
+        }
 
-  if (updateError !== null) {
-    logger.warn('Password update refused by Supabase Auth.', {
-      code: updateError.code ?? 'unknown',
+        return { ok: error === null };
+      },
+
+      async confirmChange() {
+        // The privileged client, because `confirm_password_change` is callable
+        // only by `service_role`. That is the whole point: a browser session
+        // has no way to clear the forced-change flag, so this step cannot be
+        // reached without the server having first done everything above it.
+        try {
+          const admin = createSupabaseAdminClient('confirm a completed password change');
+
+          const { error } = await admin.rpc('confirm_password_change', {
+            p_auth_user_id: context.authUserId,
+          });
+
+          if (error !== null) {
+            logger.error('Could not clear the password-change requirement.', {
+              code: error.code,
+              profileId: context.profileId,
+            });
+            return { ok: false };
+          }
+
+          return { ok: true };
+        } catch (error) {
+          // Most likely SUPABASE_SECRET_KEY is not configured. The password
+          // has already changed, so this is reported rather than swallowed —
+          // see the message in performPasswordChange.
+          logger.error('The password-change confirmation path is unavailable.', {
+            error,
+            profileId: context.profileId,
+          });
+          return { ok: false };
+        }
+      },
+
+      async recordChange() {
+        await recordSecurityEvent('auth.password_changed');
+      },
+    },
+  );
+
+  if (outcome.auditFailed === true) {
+    logger.error('A password change completed but was not recorded in the audit log.', {
+      profileId: context.profileId,
     });
-    return {
-      ok: false,
-      // Supabase's own message can name its password policy, which is useful,
-      // but it is not echoed verbatim in case it carries anything else.
-      message: 'That password was not accepted. Try a longer one.',
-      fieldErrors: { newPassword: ['That password was not accepted.'] },
-    };
   }
 
-  // Only now, with Supabase having confirmed the change, is the forced-change
-  // flag cleared. The function acts on the calling user's own row only.
-  const { error: clearError } = await supabase.rpc('complete_password_change');
-
-  if (clearError !== null) {
-    logger.warn('Could not clear the password-change requirement.', {
-      code: clearError.code,
-    });
-  }
-
-  await recordSecurityEvent('auth.password_changed');
-
-  return { ok: true, message: 'Your password has been changed.' };
+  return {
+    ok: outcome.ok,
+    message: outcome.message,
+    ...(outcome.fieldErrors === undefined ? {} : { fieldErrors: outcome.fieldErrors }),
+  };
 }
 
 /** Update one's own name and contact email. Never role or status. */

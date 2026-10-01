@@ -532,9 +532,9 @@ export type Database = {
         Args: { p_permission_key: string };
         Returns: boolean;
       };
-      complete_password_change: {
-        Args: Record<PropertyKey, never>;
-        Returns: undefined;
+      confirm_password_change: {
+        Args: { p_auth_user_id: string };
+        Returns: string;
       };
       record_sign_in: {
         Args: Record<PropertyKey, never>;

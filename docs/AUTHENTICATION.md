@@ -120,10 +120,41 @@ set. While it is set, the route guard sends the user to the change-password
 screen and refuses everywhere else — because until it is changed, somebody
 other than the account holder knows the password.
 
-The flag cannot be cleared by editing the profile. Only
-`public.complete_password_change()` clears it, it acts on the calling user's
-own row, and the application calls it only after Supabase has confirmed the
-password actually changed.
+The flag cannot be cleared by editing the profile — by anyone, including the
+privileged client. The only thing that clears it is
+`public.confirm_password_change(auth_user_id)`, and **no session role holds
+EXECUTE on it**: not `anon`, not `authenticated`. Only `service_role` can call
+it, which exists only behind the server.
+
+That grant is the whole of the defence, and it is deliberate. An earlier design
+granted the equivalent function to `authenticated`, which meant a user holding
+an administrator-issued temporary password could call it over PostgREST and
+clear the requirement while continuing to use the password their administrator
+also knew. The interface was never involved, so no amount of care in the
+interface could have prevented it.
+
+The database cannot check whether a password actually changed — it has no
+visibility into Supabase Auth — so it enforces the strongest thing it can
+(*only a trusted server path may clear this at all*) and the ordering is
+enforced in `lib/auth/password-change.ts`:
+
+| Step | | Failing here means |
+| --- | --- | --- |
+| 1 | Validate the new password | Nothing was attempted; Supabase was never called. |
+| 2 | Re-authenticate with the current password | The caller does not know it. Nothing changed. |
+| 3 | `supabase.auth.updateUser({ password })` | Supabase refused it. The flag is untouched. |
+| 4 | `confirm_password_change()` via the privileged client | The password **did** change; the user is told so, and told to contact their administrator. |
+| 5 | Record `auth.password_changed` | The change stands. The audit failure is logged, not shown. |
+
+Step 4 is unreachable unless 2 returned true and 3 succeeded. That ordering is
+the property under test, and `tests/unit/password-change.test.ts` asserts it
+against a recorded call list rather than inferring it from a return value —
+including that `confirm` runs exactly once, and never at all when 2 or 3 fail.
+
+`password_set_at` is stamped by the database from its own clock, on insert and
+on every transition of the flag. A value supplied by a caller is either
+overwritten or rejected, so it cannot be backdated to make a stale password
+look fresh.
 
 ## Creating the first Owner
 
@@ -253,8 +284,8 @@ active after being suspended. `profiles_guard_privileged_columns` closes that:
 | --- | --- |
 | `auth_user_id` | Nobody, through any session path. Re-pointing it would let one profile adopt another person's login. |
 | `status` | `users:disable` only. |
-| `must_change_password` | Set by `users:reset_password`; cleared only by `complete_password_change()`. |
-| `password_set_at` | The password reset path only. |
+| `must_change_password` | Raised by `users:reset_password`. Cleared only by `confirm_password_change()`, which only `service_role` may call — so a browser session cannot clear it by any route. |
+| `password_set_at` | The database, from its own clock. Any supplied value is overwritten or rejected. |
 | `last_sign_in_at` | `record_sign_in()` only. |
 
 ## Preventing privilege escalation

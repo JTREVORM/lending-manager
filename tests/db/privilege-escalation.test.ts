@@ -324,28 +324,43 @@ describeDb('privilege escalation', () => {
       );
 
       expect(direct.ok).toBe(false);
-      expect(direct.message).toMatch(/changing the password/i);
+      expect(direct.message).toMatch(/confirming a completed password change/i);
     });
 
-    it('allows clearing it through the sanctioned function', async () => {
+    it('refuses clearing it through the confirmation function too', async () => {
       const subject = await createTestUser('client');
       await query(
         `update public.profiles set must_change_password = true where id = $1`,
         [subject.profileId],
       );
 
-      // One transaction, so the read observes the function's effect. `asUser`
-      // rolls back after each call, which would hide it.
+      // This is the bypass that migration 20261002000800 closed. The old
+      // `complete_password_change()` was granted to `authenticated` and took
+      // no arguments, so a user holding an administrator-issued temporary
+      // password could clear the requirement over PostgREST while continuing
+      // to use the password their administrator also knew.
+      //
+      // One transaction, so a successful clear would be observable rather than
+      // rolled back out of sight.
       const viaFunction = await asUserScript(subject, [
-        { sql: `select public.complete_password_change()` },
+        {
+          sql: `select public.confirm_password_change($1)`,
+          params: [subject.authUserId],
+        },
         {
           sql: `select must_change_password from public.profiles where id = $1`,
           params: [subject.profileId],
         },
       ]);
 
-      expect(viaFunction.ok).toBe(true);
-      expect(viaFunction.rows[0]?.must_change_password).toBe(false);
+      expect(viaFunction.ok).toBe(false);
+
+      // Read outside the aborted transaction: the flag is untouched.
+      const row = await queryOne<{ must_change_password: boolean }>(
+        `select must_change_password from public.profiles where id = $1`,
+        [subject.profileId],
+      );
+      expect(row.must_change_password).toBe(true);
     });
 
     it('refuses forging a sign-in time', async () => {
@@ -430,7 +445,7 @@ describeDb('privilege escalation', () => {
         `select public.user_has_permission('users:create')`,
         `select public.next_reference('client')`,
         `select public.record_security_event('auth.signed_in', null)`,
-        `select public.complete_password_change()`,
+        `select public.confirm_password_change('00000000-0000-4000-8000-000000000000')`,
       ]) {
         const result = await asAnon(sql);
         expect(result.ok, sql).toBe(false);
@@ -444,14 +459,21 @@ describeDb('privilege escalation', () => {
       expect(result.ok).toBe(false);
     });
 
-    it('scopes complete_password_change to the caller, with no argument to forge', async () => {
-      const result = await asUser(client, `select public.complete_password_change($1)`, [
-        owner.profileId,
-      ]);
+    it('refuses an authenticated user the password-change confirmation', async () => {
+      // `confirm_password_change` does take an argument, unlike the function
+      // it replaced — so the defence cannot be the signature. It is the grant:
+      // no session role holds EXECUTE, only `service_role`, which exists only
+      // behind the server. Neither one's own identity nor another's gets in.
+      for (const target of [client.authUserId, owner.authUserId]) {
+        const result = await asUser(client, `select public.confirm_password_change($1)`, [
+          target,
+        ]);
 
-      // No such overload exists: the function takes no arguments precisely so
-      // one user cannot act on another's row.
-      expect(result.ok).toBe(false);
+        expect(result.ok, target).toBe(false);
+        expect(result.code, 'expected a privilege error, not a logic error').toBe(
+          '42501',
+        );
+      }
     });
   });
 

@@ -425,3 +425,94 @@ authenticated user can therefore record only true statements about themselves.
 
 `record_audit_event()` remains revoked from every session role, so no caller
 can write an arbitrary audit row.
+
+## ADR-017 — Clearing a forced password change is a server-only operation
+
+**Status:** Accepted — supersedes the Phase 2 design in migration
+`20261002000200`.
+
+### Context
+
+Phase 2 shipped `public.complete_password_change()`: a `SECURITY DEFINER`
+function taking no arguments, granted to `authenticated`, clearing
+`must_change_password` for whoever called it. The reasoning at the time was
+that the signature made it safe — it could only ever act on the caller's own
+row, so nobody could clear anyone else's flag.
+
+That reasoning was about the wrong threat. The flag does not protect the
+account from other users; it protects it from the administrator who issued the
+temporary password. While it is set, two people know the password. A user who
+wanted to keep it that way — out of convenience, not malice — could call the
+function directly over PostgREST, clear the requirement, and carry on using a
+password their administrator also knew, indefinitely. The application's own
+change-password screen was never involved, so no amount of care in the
+application could prevent it.
+
+The hard constraint is that the database cannot verify the premise. Whether a
+password actually changed is a fact inside Supabase Auth, in a schema the
+application must not reach into. So the condition the function needs to check
+is one it cannot check.
+
+### Options considered
+
+1. **Keep the grant, compare `auth.users.updated_at` against
+   `password_set_at`.** Rejected. It depends on a GoTrue implementation detail
+   that could change in a minor release, and the failure mode is the wrong way
+   round: a false negative locks a user permanently on the change-password
+   screen with no way out. That is worse than the gap it closes.
+2. **Keep the grant, require the current password as an argument.** Rejected
+   outright — it would mean a plaintext password crossing into the database, in
+   a statement parameter that appears in `pg_stat_activity` and in any query
+   log. Exactly what "no passwords in the database" exists to prevent.
+3. **Revoke the grant; clear the flag from the server after Supabase confirms
+   the change.** Accepted.
+
+### Decision
+
+The function is **dropped**, not merely un-granted — a function nobody may call
+is still a function somebody may re-grant by accident, and the name was by then
+a liability. Its replacement, `confirm_password_change(p_auth_user_id uuid)`,
+is callable only by `service_role`:
+
+```sql
+revoke all on function public.confirm_password_change(uuid)
+  from public, anon, authenticated;
+```
+
+Naming each role matters: Supabase's `ALTER DEFAULT PRIVILEGES` grants to
+`anon` and `authenticated` survive a `REVOKE … FROM PUBLIC`, so revoking from
+`PUBLIC` alone would have left the function anon-callable. A database test
+asserts the grant for each role by name.
+
+Two further rules were **hoisted above the trusted-path exemption** in
+`profiles_guard_privileged_columns`, so they bind every caller including
+`service_role` and the table owner:
+
+- `must_change_password` cannot go from true to false by an `UPDATE` at all. It
+  clears only inside `confirm_password_change`, which announces itself with a
+  transaction-local `set_config` marker.
+- `password_set_at` is written by the database from its own clock, and a value
+  supplied by any caller is overwritten or rejected.
+
+The second is why the privileged client is not simply trusted to do the right
+thing. The server holds the secret key; a bug in server code, or that key
+leaking, should not be enough to clear the requirement without a password
+having changed. The guard means the only way through is the one function, and
+the only thing that function does is clear the flag — it cannot be talked into
+doing more.
+
+### Consequences
+
+- The ordering constraint moves into application code, where it is testable
+  but not structurally enforced. That is mitigated by extracting it into
+  `lib/auth/password-change.ts` behind an injected interface, so every
+  path — wrong current password, Supabase refusing, confirmation failing — is
+  driven directly in tests and "the flag was not cleared" is asserted against
+  a recorded call list.
+- The change-password screen now requires `SUPABASE_SECRET_KEY` to be
+  configured. If it is missing, a user's password changes and the flag does
+  not clear; they are told exactly that, rather than being told the change
+  failed, which would send them back to a password that no longer works.
+- One more operation needs the privileged client. The justification string
+  (`'confirm a completed password change'`) is logged, per ADR-005, so every
+  privileged use remains accountable.

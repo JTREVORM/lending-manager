@@ -493,11 +493,27 @@ describe('types stay in step with the schema', () => {
       ].map((match) => match[1]!),
     );
 
+    // A function a later migration drops is no longer in the schema, so the
+    // generated types correctly omit it — and the migration that created it
+    // stays as it was, because an applied migration is history.
+    //
+    // `executableSql` is the migrations concatenated in order, so a drop is
+    // always seen after the create it removes. Were the order reversed, the
+    // re-create would be the current state and excluding it here would hide a
+    // genuine omission; nothing in the project does that, and an out-of-order
+    // pair would fail against the live database long before this test.
+    for (const match of executableSql.matchAll(
+      /drop\s+function\s+(?:if\s+exists\s+)?public\.(\w+)\s*\(/gi,
+    )) {
+      functionNames.delete(match[1]!);
+    }
+
     // Trigger functions are not callable over the API and are not generated.
     const TRIGGER_FUNCTIONS = new Set([
       'set_updated_at',
       'reject_mutation',
       'profiles_guard_privileged_columns',
+      'profiles_stamp_password_set_at',
       'profiles_assert_owner_remains',
       'user_roles_guard_assignment',
       'user_roles_set_granted_by',
