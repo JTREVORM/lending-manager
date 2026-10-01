@@ -1,0 +1,43 @@
+'use client';
+
+import { LogOut } from 'lucide-react';
+import { useTransition } from 'react';
+
+import { signOutAction } from '@/lib/auth/actions';
+import { cn } from '@/lib/utils/cn';
+
+/**
+ * Sign out.
+ *
+ * A form posting to a Server Action rather than a link, because signing out
+ * changes state: a GET that ends a session can be triggered by any page that
+ * embeds the URL as an image, which is an irritating way to be logged out.
+ */
+export function SignOutButton({ className }: { readonly className?: string }) {
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <form
+      action={() => {
+        startTransition(() => {
+          void signOutAction();
+        });
+      }}
+    >
+      <button
+        type="submit"
+        disabled={pending}
+        aria-busy={pending || undefined}
+        className={cn(
+          'min-h-touch text-text-muted hover:bg-surface-raised hover:text-text',
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+          'disabled:cursor-not-allowed disabled:opacity-60',
+          className,
+        )}
+      >
+        <LogOut aria-hidden="true" className="size-5 shrink-0" />
+        <span className="truncate">{pending ? 'Signing out' : 'Sign out'}</span>
+      </button>
+    </form>
+  );
+}

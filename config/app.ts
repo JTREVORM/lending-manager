@@ -59,11 +59,24 @@ export const CURRENT_PHASE = 1 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
+  /** Public. The only route an anonymous visitor may reach. */
+  login: '/login',
+
+  /** Staff shell. */
   dashboard: '/',
   clients: '/clients',
   loans: '/loans',
   payments: '/payments',
   settings: '/settings',
+  users: '/users',
+  audit: '/audit',
+
+  /** Every signed-in user, whatever their role. */
+  account: '/account',
+  changePassword: '/account/password',
+
+  /** Borrowers. */
+  portal: '/portal',
 } as const;
 
 export type RouteKey = keyof typeof ROUTES;

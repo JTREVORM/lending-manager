@@ -1,30 +1,36 @@
-import { Database, FileSearch, ShieldCheck } from 'lucide-react';
+import { Database, FileSearch, ShieldCheck, UserCog } from 'lucide-react';
+import Link from 'next/link';
 
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
-import { APP_NAME, CURRENT_PHASE } from '@/config/app';
+import { CURRENT_PHASE, ROUTES } from '@/config/app';
+import { contextCan } from '@/lib/auth/context';
+import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getAppEnvironment, inspectPublicEnv } from '@/lib/env.public';
+import { ROLES, effectiveRole } from '@/lib/permissions';
 
 export const metadata = { title: 'Dashboard' };
 
 /**
- * Placeholder dashboard.
+ * The staff dashboard.
  *
- * Phase 1 has no loans, clients or payments to report on, so this page does
- * not pretend otherwise — there are no zeroed metric tiles implying a working
- * system with no data. Instead it reports on the one thing that genuinely
- * exists: the state of the foundation. That makes it useful during setup
- * (is Supabase configured? did the migrations run?) and it tells the business
- * plainly what has and has not been built.
- *
- * Phase 5 replaces this with the real operational dashboard.
+ * Still deliberately not a metrics screen: there are no loans or payments to
+ * report on, and zeroed tiles would imply a working system with no data rather
+ * than a system that does not do that yet. What it does show is role-aware —
+ * what this person can do, and what the foundation underneath them looks like.
  */
 export default async function DashboardPage() {
+  const context = await guardPermission(ROUTES.dashboard, 'dashboard:view');
+
   const { branding, source, fallbackReason } = await getCompanyBranding();
   const envStatus = inspectPublicEnv();
   const environment = getAppEnvironment();
+
+  const role = effectiveRole(context.roles);
+  const roleLabel = role === null ? 'No role' : ROLES[role].label;
+  const mayAdministerUsers = contextCan(context, 'users:view');
 
   return (
     <div className="space-y-5">
@@ -37,20 +43,17 @@ export default async function DashboardPage() {
           </Badge>
         </div>
         <p className="text-text-muted text-sm">
-          {branding.companyName} — foundation and configuration status.
+          Signed in as {context.fullName} · {roleLabel}
         </p>
       </header>
 
       {!envStatus.ok ? (
         <Alert tone="warning" title="Supabase is not configured">
           <p>
-            The application cannot reach the database. Copy{' '}
-            <code className="font-mono text-xs">.env.example</code> to{' '}
+            Copy <code className="font-mono text-xs">.env.example</code> to{' '}
             <code className="font-mono text-xs">.env.local</code> and fill in the values,
-            then restart the development server.
+            then restart the server.
           </p>
-          {/* Variable names and validation messages only — never a value, so
-              this is safe to render even though the page is server-side. */}
           <ul className="mt-2 list-disc space-y-0.5 pl-5">
             {envStatus.problems.map((problem) => (
               <li key={problem} className="font-mono text-xs">
@@ -64,13 +67,45 @@ export default async function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader
+            title="What you can do"
+            description="Your role decides which sections you can open."
+          />
+          <ul className="space-y-1.5 text-sm">
+            {context.permissions.length === 0 ? (
+              <li className="text-text-muted">No capabilities assigned.</li>
+            ) : (
+              [...context.permissions].sort().map((permission) => (
+                <li key={permission} className="flex items-center gap-2">
+                  <ShieldCheck
+                    aria-hidden="true"
+                    className="text-brand-600 size-3.5 shrink-0"
+                  />
+                  <code className="font-mono text-xs">{permission}</code>
+                </li>
+              ))
+            )}
+          </ul>
+
+          {mayAdministerUsers ? (
+            <Link
+              href={ROUTES.users}
+              className="text-brand-700 dark:text-brand-300 mt-3 inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+            >
+              <UserCog aria-hidden="true" className="size-4" />
+              Go to users
+            </Link>
+          ) : null}
+        </Card>
+
+        <Card>
+          <CardHeader
             title="Company identity"
-            description="Read from the database, never hard-coded in the interface."
+            description="Read from the database, never hard-coded."
           />
           <dl className="space-y-2.5 text-sm">
             <div className="flex items-start justify-between gap-3">
               <dt className="text-text-muted">Name</dt>
-              <dd className="min-w-0 truncate text-right font-medium">
+              <dd className="min-w-0 text-right font-medium break-words">
                 {branding.companyName}
               </dd>
             </div>
@@ -97,67 +132,50 @@ export default async function DashboardPage() {
               {fallbackReason}
             </p>
           ) : null}
-
-          <p className="text-text-muted mt-3 text-xs">
-            The company name is temporary while registration is in progress. Changing it
-            is a single database update — no code change.
-          </p>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="What Phase 1 delivers"
-            description="The foundation the lending modules are built on."
-          />
-          <ul className="space-y-2.5 text-sm">
-            {[
-              {
-                icon: Database,
-                label: 'Database foundation',
-                detail:
-                  'Profiles, roles, settings, reference numbering and the audit trail, with constraints enforced in PostgreSQL.',
-              },
-              {
-                icon: ShieldCheck,
-                label: 'Security foundation',
-                detail:
-                  'Row Level Security enabled and default-deny on every table. Policies are defined in Phase 2.',
-              },
-              {
-                icon: FileSearch,
-                label: 'Domain foundation',
-                detail:
-                  'Integer shilling arithmetic, basis-point rates and Africa/Kampala date handling, all unit-tested.',
-              },
-            ].map(({ icon: Icon, label, detail }) => (
-              <li key={label} className="flex gap-2.5">
-                <Icon
-                  aria-hidden="true"
-                  className="text-brand-600 mt-0.5 size-4 shrink-0"
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium">{label}</span>
-                  <span className="text-text-muted block text-xs">{detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
         </Card>
       </div>
 
       <Card>
         <CardHeader
-          title="Not built yet"
-          description="Deliberately deferred. Each section explains what it will do."
+          title="What is built so far"
+          description="Phases 1 and 2. Lending functionality comes next."
         />
-        <p className="text-text-muted text-sm">
-          Client registration, guarantors, loan origination, the reducing-balance interest
-          engine, repayment schedules, payment capture, arrears, penalties, the client
-          portal and reporting all belong to later phases. Opening Clients, Loans,
-          Payments or Settings shows what is planned for each.
-        </p>
+        <ul className="space-y-2.5 text-sm">
+          {[
+            {
+              icon: Database,
+              label: 'Database foundation',
+              detail:
+                'Profiles, roles, settings, reference numbering and the audit trail, with constraints enforced in PostgreSQL.',
+            },
+            {
+              icon: ShieldCheck,
+              label: 'Authentication and authorization',
+              detail:
+                'Sign-in by phone, capability-based permissions, and Row Level Security enforcing them at the database.',
+            },
+            {
+              icon: FileSearch,
+              label: 'Domain foundation',
+              detail:
+                'Integer shilling arithmetic, basis-point rates and Africa/Kampala date handling, all unit-tested.',
+            },
+          ].map(({ icon: Icon, label, detail }) => (
+            <li key={label} className="flex gap-2.5">
+              <Icon
+                aria-hidden="true"
+                className="text-brand-600 mt-0.5 size-4 shrink-0"
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">{label}</span>
+                <span className="text-text-muted block text-xs">{detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
         <p className="text-text-muted mt-3 text-xs">
-          {APP_NAME} · Phase {CURRENT_PHASE}
+          Client registration, guarantors, loans, repayment schedules, payments, arrears,
+          penalties and reporting belong to later phases.
         </p>
       </Card>
     </div>

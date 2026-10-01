@@ -246,6 +246,9 @@ export type Database = {
           email: string | null;
           status: string;
           archived_at: string | null;
+          must_change_password: boolean;
+          password_set_at: string | null;
+          last_sign_in_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -257,6 +260,9 @@ export type Database = {
           email?: string | null;
           status?: string;
           archived_at?: string | null;
+          must_change_password?: boolean;
+          password_set_at?: string | null;
+          last_sign_in_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -268,10 +274,69 @@ export type Database = {
           email?: string | null;
           status?: string;
           archived_at?: string | null;
+          must_change_password?: boolean;
+          password_set_at?: string | null;
+          last_sign_in_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [];
+      };
+
+      permissions: {
+        Row: {
+          key: string;
+          description: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          description: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          description?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      role_permissions: {
+        Row: {
+          role_key: string;
+          permission_key: string;
+          created_at: string;
+        };
+        Insert: {
+          role_key: string;
+          permission_key: string;
+          created_at?: string;
+        };
+        Update: {
+          role_key?: string;
+          permission_key?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'role_permissions_role_key_fkey';
+            columns: ['role_key'];
+            isOneToOne: false;
+            referencedRelation: 'roles';
+            referencedColumns: ['key'];
+          },
+          {
+            foreignKeyName: 'role_permissions_permission_key_fkey';
+            columns: ['permission_key'];
+            isOneToOne: false;
+            referencedRelation: 'permissions';
+            referencedColumns: ['key'];
+          },
+        ];
       };
 
       reference_formats: {
@@ -454,6 +519,30 @@ export type Database = {
       current_user_role_keys: {
         Args: Record<PropertyKey, never>;
         Returns: string[];
+      };
+      current_user_permissions: {
+        Args: Record<PropertyKey, never>;
+        Returns: string[];
+      };
+      current_user_max_rank: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      user_has_permission: {
+        Args: { p_permission_key: string };
+        Returns: boolean;
+      };
+      complete_password_change: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
+      record_sign_in: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
+      record_security_event: {
+        Args: { p_action: string; p_metadata?: Json };
+        Returns: number;
       };
       next_reference: {
         Args: { p_scope: string };

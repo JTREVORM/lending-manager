@@ -7,13 +7,19 @@
  * token if needed, and hand the new value to both the server and the browser.
  * That is this function's entire job.
  *
- * ## What it deliberately does NOT do
+ * ## The first of three layers
  *
- * It does not redirect anonymous visitors, and it does not protect any route.
- * Route protection is Phase 2, and implementing it here before the
- * authentication flows exist would mean a half-built guard — the worst kind,
- * because it looks like protection. Phase 2 adds the redirect, and the real
- * boundary stays Row Level Security in the database.
+ * Phase 2 adds a redirect here: a request with no session that is heading for
+ * a protected path is sent to the sign-in page before any page code runs. That
+ * is cheap — it reads the token and nothing else — and it is what prevents a
+ * flash of application chrome before a redirect.
+ *
+ * It is deliberately NOT where authorization is decided. The token says who
+ * signed in; it does not say whether that account is still active or what it
+ * may do now. Those questions are answered per request against the database in
+ * `lib/auth/context.ts`, and backstopped by Row Level Security. A proxy that
+ * tried to answer them would be making a database call on every asset request
+ * and would still be guessing from a token that may be an hour old.
  *
  * ## Cache headers
  *
@@ -27,11 +33,36 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { ROUTES } from '@/config/app';
+import { isPublicPath } from '@/lib/auth/routing';
 import { getPublicEnv } from '@/lib/env.public';
 import type { Database } from '@/types/database.types';
 
+/**
+ * Header carrying the request path through to Server Components.
+ *
+ * A layout does not receive the pathname, and the route guard needs it in
+ * order to look up which capability the route requires. Forwarding it here
+ * means the guard runs automatically for every page under the authenticated
+ * layout, rather than depending on each page remembering to call it — which is
+ * precisely the omission that leaves a route reachable while its menu entry is
+ * hidden.
+ *
+ * It is set from `request.nextUrl.pathname`, which is the framework's own
+ * parsed value, not from anything the client sends. Any inbound header of the
+ * same name is overwritten below.
+ */
+export const PATHNAME_HEADER = 'x-lending-pathname';
+
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  let response = NextResponse.next({ request });
+  // Overwrite rather than append: a client that sent this header must not be
+  // able to make the guard evaluate a different route's requirements.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(PATHNAME_HEADER, request.nextUrl.pathname);
+
+  const forwarded = { headers: requestHeaders } as const;
+
+  let response = NextResponse.next({ request: forwarded });
 
   const env = getPublicEnv();
 
@@ -50,7 +81,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
             request.cookies.set(name, value);
           }
 
-          response = NextResponse.next({ request });
+          response = NextResponse.next({ request: forwarded });
 
           for (const { name, value, options } of cookiesToSet) {
             response.cookies.set(name, value, options);
@@ -72,10 +103,65 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   // `getClaims()` verifies the JWT signature against the project's published
   // keys on every call. `getSession()` does not, so it must never be trusted
   // on the server — a cookie is attacker-controlled input.
-  await supabase.auth.getClaims();
+  const { data: claims } = await supabase.auth.getClaims();
+
+  const hasSession = typeof claims?.claims.sub === 'string';
+  const pathname = request.nextUrl.pathname;
+
+  // Anonymous visitor heading somewhere protected. Redirecting here, rather
+  // than from a page, means no protected markup is ever generated.
+  if (!hasSession && !isPublicPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = ROUTES.login;
+    url.search = '';
+
+    // Where they were going, so sign-in can return them there. Only a path
+    // from this site is kept — an absolute URL here would make the sign-in
+    // page an open redirect, which is a convenient way to make a phishing
+    // link look like it came from the lender.
+    if (pathname !== ROUTES.dashboard) {
+      url.searchParams.set('next', pathname);
+    }
+
+    return redirectPreservingCookies(url, response);
+  }
+
+  // Signed in and heading for the sign-in page. Send them into the
+  // application; `landingPathFor` cannot be used here because it needs the
+  // profile, so the root route decides and redirects onward.
+  if (hasSession && isPublicPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = ROUTES.dashboard;
+    url.search = '';
+
+    return redirectPreservingCookies(url, response);
+  }
 
   // The response object must be returned as-is. Constructing a different
   // response without copying these cookies across would desynchronise the
   // browser and the server and sign users out at random.
   return response;
+}
+
+/**
+ * Redirect while keeping whatever the session refresh just wrote.
+ *
+ * A bare `NextResponse.redirect` would discard the refreshed cookies and the
+ * cache headers that came with them, which signs users out at random and —
+ * worse — drops the headers that stop an intermediary caching one visitor's
+ * `Set-Cookie` and serving it to another.
+ */
+function redirectPreservingCookies(url: URL, source: NextResponse): NextResponse {
+  const redirect = NextResponse.redirect(url);
+
+  for (const cookie of source.cookies.getAll()) {
+    redirect.cookies.set(cookie);
+  }
+
+  for (const header of ['cache-control', 'expires', 'pragma']) {
+    const value = source.headers.get(header);
+    if (value !== null) redirect.headers.set(header, value);
+  }
+
+  return redirect;
 }

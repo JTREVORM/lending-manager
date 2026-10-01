@@ -30,10 +30,13 @@ describeDb('tables', () => {
     'audit_log',
     'business_settings',
     'company_settings',
+    // Phase 2: the capability vocabulary and the role-to-capability map.
+    'permissions',
     'profiles',
     'reference_formats',
     'reference_sequences',
     'repayment_frequencies',
+    'role_permissions',
     'roles',
     'user_roles',
   ];
@@ -164,6 +167,11 @@ describeDb('foreign keys', () => {
       'company_settings.updated_by -> profiles (r)',
       'profiles.auth_user_id -> users (r)',
       'reference_sequences.scope -> reference_formats (r)',
+      // Phase 2. RESTRICT here too: a capability cannot be deleted out from
+      // under a role that grants it, and a role cannot vanish while granting
+      // capabilities.
+      'role_permissions.permission_key -> permissions (r)',
+      'role_permissions.role_key -> roles (r)',
       'user_roles.granted_by -> profiles (r)',
       'user_roles.profile_id -> profiles (r)',
       'user_roles.role_key -> roles (r)',
@@ -185,20 +193,46 @@ describeDb('foreign keys', () => {
     expect(row.foreign_table).toBe('users');
   });
 
-  it('stores no password or credential column, since Supabase Auth owns them', async () => {
-    const rows = await query<{ table_name: string; column_name: string }>(
-      `select table_name, column_name
+  it('stores no credential value, since Supabase Auth owns them', async () => {
+    // Phase 2 adds `must_change_password` (boolean) and `password_set_at`
+    // (timestamptz), which are account metadata rather than credentials.
+    // Matching on the type as well as the name keeps the check sharp: a
+    // credential would have to be stored as text or bytea, so anything of
+    // that shape with a credential-like name is a real finding.
+    const rows = await query<{
+      table_name: string;
+      column_name: string;
+      data_type: string;
+    }>(
+      `select table_name, column_name, data_type
          from information_schema.columns
         where table_schema = 'public'
+          and data_type in ('text', 'character varying', 'character', 'bytea')
           and (
             column_name like '%password%'
             or column_name like '%secret%'
             or column_name like '%token%'
             or column_name like '%credential%'
+            or column_name like '%hash%'
           )`,
     );
 
     expect(rows).toEqual([]);
+  });
+
+  it('stores the password-related columns only as metadata, never as values', async () => {
+    const rows = await query<{ column_name: string; data_type: string }>(
+      `select column_name, data_type
+         from information_schema.columns
+        where table_schema = 'public'
+          and column_name like '%password%'
+        order by column_name`,
+    );
+
+    expect(rows).toEqual([
+      { column_name: 'must_change_password', data_type: 'boolean' },
+      { column_name: 'password_set_at', data_type: 'timestamp with time zone' },
+    ]);
   });
 });
 
@@ -398,15 +432,38 @@ describeDb('seeded reference data matches the application constants', () => {
 
   it('seeds no people and no financial history', async () => {
     // Nothing that could be mistaken for production data.
-    const row = await queryOne<{ profiles: string; assignments: string; audit: string }>(
+    //
+    // The audit trail is deliberately not counted here. It is append-only by
+    // design, so entries other test files generate cannot be cleared between
+    // them — asserting it were empty would make this test depend on execution
+    // order rather than on the seed. That the seed writes no audit records is
+    // asserted instead from the migration SQL, in
+    // tests/integration/migrations.test.ts.
+    // Fixtures from other files in this suite are excluded by their reserved
+    // +2567000 phone prefix, so this asserts what the SEED does rather than
+    // depending on which test ran last.
+    const row = await queryOne<{ profiles: string; assignments: string }>(
       `select
-         (select count(*) from public.profiles)::text as profiles,
-         (select count(*) from public.user_roles)::text as assignments,
-         (select count(*) from public.audit_log)::text as audit`,
+         (select count(*) from public.profiles
+           where phone not like '+2567000%')::text as profiles,
+         (select count(*) from public.user_roles ur
+           join public.profiles p on p.id = ur.profile_id
+          where p.phone not like '+2567000%')::text as assignments`,
     );
 
     expect(row.profiles).toBe('0');
     expect(row.assignments).toBe('0');
-    expect(row.audit).toBe('0');
+  });
+
+  it('seeds no audit record of its own', async () => {
+    // Every audit row in a freshly seeded database would have to come from the
+    // seed itself. Scoped to the settings and role actions the seed could
+    // plausibly produce, so test fixtures elsewhere do not affect it.
+    const row = await queryOne<{ count: string }>(
+      `select count(*)::text as count from public.audit_log
+        where action in ('settings.updated', 'user.role_granted')`,
+    );
+
+    expect(row.count).toBe('0');
   });
 });

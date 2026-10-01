@@ -99,6 +99,13 @@ export default tseslint.config(
       'lib/supabase/admin.ts',
       'lib/supabase/server.ts',
       'lib/data/**/*.ts',
+      // `'use server'` modules: Next.js compiles these for the server only,
+      // and a Client Component importing one gets a network call rather than
+      // the module. They are the sanctioned place to reach the privileged
+      // client, which is why each use states its reason.
+      'lib/auth/admin-actions.ts',
+      'lib/auth/context.ts',
+      'lib/auth/guard.ts',
     ],
     rules: { 'no-restricted-imports': 'off' },
   },

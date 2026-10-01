@@ -19,5 +19,6 @@ export {
   canAny,
   isPermission,
   permissionsFor,
+  rolePermissionPairs,
   type Permission,
 } from './permissions';

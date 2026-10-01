@@ -2,11 +2,12 @@
 
 Loan, repayment and client management for a Ugandan money lending business.
 
-> **Phase 1 — foundation.** This repository currently contains the database
-> schema, security model, domain layer and application shell. It does **not**
-> contain client registration, loans, repayment schedules, payments, arrears,
-> penalties, the client portal or reporting. Those are later phases, and each
-> unbuilt section of the interface says so.
+> **Phases 1 and 2 complete.** This repository contains the database schema,
+> the security model, the domain layer, the application shell, and
+> authentication, user management, roles and permissions. It does **not**
+> contain client registration, guarantors, loans, repayment schedules,
+> payments, arrears, penalties, the full client portal or reporting. Those are
+> later phases, and each unbuilt section of the interface says so.
 
 > **The company name is temporary.** Registration is in progress, so the
 > system runs under the working title above. It lives in
@@ -111,6 +112,7 @@ posture and what is deferred to Phase 2.
 | `npm run test:coverage` | Coverage report. |
 | `npm run verify` | typecheck → lint → format:check → test:run → build. |
 | `npm run check:env` | Validate environment configuration; exits non-zero on failure. |
+| `npm run bootstrap:owner` | Create the first Owner/Administrator. Refuses if one exists. |
 | `npm run db:types` | Regenerate `types/database.types.ts`. |
 | `npm run db:local:setup` / `:migrate` / `:teardown` | Throwaway local cluster. |
 
@@ -123,11 +125,15 @@ Every later phase must keep these passing.
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
 | Format | `npm run format:check` | clean |
-| Unit tests | `npm run test:run` | 250 passed |
-| Integration tests | *(included in `test:run`)* | 64 passed |
-| Database tests | `npm run test:db` | 84 passed |
+| Unit tests | `npm run test:run` | 334 passed |
+| Integration tests | *(included in `test:run`)* | 93 passed |
+| Database tests | `npm run test:db` | 176 passed |
 | Production build | `npm run build` | succeeds |
-| **Total** | | **398 tests, 0 failed, 0 skipped** |
+| **Total** | | **603 tests, 0 failed, 0 skipped** |
+
+Phase 1 ended at 398. Phase 2 adds 205 and changes no Phase 1 behaviour; the
+Phase 1 tests that were updated are the ones asserting facts Phase 2
+deliberately changed, each noted in the Phase 2 report.
 
 Database tests skip with an explanation when `DATABASE_URL` is unset. A skipped
 suite is not a passing one — run it before accepting a schema change.
@@ -153,6 +159,7 @@ docs/          Architecture, database, decisions, security
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layering, stack, configuration, clients, UI, testing. |
 | [docs/DATABASE.md](docs/DATABASE.md) | Schema, relationships, constraints, RLS, functions, migrations. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are the way they are (ADR-001 … ADR-012). |
+| [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) | Sign-in, sessions, roles, permissions, user management, RLS. |
 | [docs/SECURITY.md](docs/SECURITY.md) | Posture, review results, known gaps. |
 
 Three decisions worth knowing before writing any code here:
@@ -163,10 +170,24 @@ Three decisions worth knowing before writing any code here:
   timezone to decide what day it is. See ADR-004.
 - **Nothing is deleted.** Identity records are archived; financial records are
   reversed with a compensating entry. See ADR-006.
+- **Row Level Security is the boundary.** Application checks decide what
+  renders; the database decides what is allowed. Every policy routes through
+  `current_profile_id()`, which is why disabling an account takes effect
+  immediately. See ADR-015.
 
 ## Phase 1 scope
 
-**Built.** Database schema with constraints and RLS; roles and assignments;
+**Built in Phase 2.** Sign-in by phone number with a derived authentication
+identity; session management and sign-out; three-layer route protection;
+capability-based permissions mirrored into the database and enforced by Row
+Level Security; user administration (create, search, filter, view, assign and
+revoke roles, activate/deactivate, reset password); the self-service account
+and change-password screens; a forced password change for administrator-issued
+passwords; the client portal shell; a read-only audit viewer; automatic audit
+of every identity change; privilege-escalation and last-Owner protections; and
+the Owner bootstrap script.
+
+**Built in Phase 1.** Database schema with constraints and RLS; roles and assignments;
 company and business settings; concurrency-safe reference numbering; the
 append-only audit foundation; private storage buckets; UGX integer money and
 basis-point rates; Kampala-aware date handling; Ugandan phone normalisation;
@@ -174,8 +195,7 @@ validation schemas; error taxonomy; redacting logger; Supabase client
 architecture; environment management; the responsive, accessible application
 shell; and the three-project test suite.
 
-**Deferred.** Authentication flows, the full permission matrix, client and
-guarantor registration, loan origination, the reducing-balance interest engine,
+**Deferred.** Client and guarantor registration, loan origination, the reducing-balance interest engine,
 repayment schedules, payment capture, arrears, grace-period and penalty
 processing, the client portal, reports, MTN and Airtel integration, SMS,
 WhatsApp, PWA, and native applications.

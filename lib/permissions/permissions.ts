@@ -1,49 +1,98 @@
 /**
- * Permission checking — the *shape* of authorization, not the full matrix.
+ * The permission matrix.
  *
- * ## Scope in Phase 1
+ * ## Capabilities, not role-name comparisons
  *
- * The complete permission matrix belongs to Phase 2, and inventing it now
- * would mean guessing at rules the business has not yet stated. What this file
- * establishes is the mechanism that matrix will plug into:
+ * Authorization is expressed as named capabilities (`users:create`), never as
+ * `role === 'owner_admin'` scattered through components. That matters for a
+ * reason beyond tidiness: when the business later decides a Manager may reset
+ * passwords, the change is one line in this table, not a hunt through every
+ * screen and endpoint for role checks that happened to encode the old rule.
  *
- *   - permissions are named `resource:action` strings, not booleans scattered
- *     across components;
- *   - `can()` is the single entry point, so there is exactly one place to
- *     audit and one place for Phase 2 to extend;
- *   - the grants below cover only the surfaces Phase 1 actually has.
+ * ## Grants are explicit, never derived from rank
  *
- * Anything not listed is denied. That is deliberate: a permission the matrix
- * has not yet been taught about must fail closed.
+ * `ROLE_RANK` exists, and it is deliberately **not** used to decide
+ * permissions. A Manager outranks a Secretary/Treasurer, but a Manager does
+ * not therefore receive every capability a future Owner-only feature adds.
+ * Each role's grants are listed by hand, so a new permission defaults to being
+ * held by nobody until somebody decides who should have it.
  *
- * ## This is not the security boundary
+ * Rank is used for two narrow things, both documented where they happen:
+ * ordering roles in the interface, and the rule that an administrator may not
+ * assign a role outranking their own.
  *
- * These checks run in application code and are a usability layer — they decide
- * whether a button renders and whether a Server Action proceeds. A determined
- * caller can skip them entirely by talking to the Supabase REST API with their
- * own token. **Row Level Security is the real boundary**, and Phase 2 must
- * express every rule here as an RLS policy as well. A check that exists only
- * in TypeScript is not enforcement.
+ * ## Multiple roles are additive
+ *
+ * A profile may hold several roles. The effective permission set is the
+ * **union** of every held role's grants; there are no deny rules, so adding a
+ * role can only ever widen access. `can()` returns true if any held role
+ * grants the capability.
+ *
+ * ## This is one of two enforcement layers, not the boundary
+ *
+ * These checks decide whether a control renders and whether a Server Action
+ * proceeds. A caller holding a valid token can skip all of it by calling the
+ * Supabase REST API directly, so **Row Level Security is the real boundary**.
+ *
+ * Every grant here is mirrored into `public.role_permissions` by migration
+ * `20261002000100`, and RLS policies are written against
+ * `public.user_has_permission(...)`. A database test asserts the two
+ * representations are identical, so this file and the policies cannot drift
+ * apart.
  */
 
 import { ROLE_KEYS, type RoleKey } from './roles';
 
 /**
- * Named permissions, as `resource:action`.
+ * Named capabilities, as `resource:action`.
  *
- * Phase 1 covers only what Phase 1 ships: the application shell and the
- * read-only settings surface. Phase 2 extends this union with the client,
- * guarantor, loan, payment, penalty and report permissions.
+ * The colon separator is the Phase 1 convention and is kept deliberately —
+ * `resource:action` reads unambiguously because resources never contain a
+ * colon, whereas a dot is also how nested fields are written elsewhere in the
+ * codebase.
+ *
+ * Permissions for unbuilt lending functionality are **not** declared here.
+ * A permission nothing enforces is a false assurance, and the matrix is
+ * cheaper to extend than to audit.
  */
 export const PERMISSIONS = [
-  /** See the authenticated application shell and the placeholder dashboard. */
+  // --- Application shell ---------------------------------------------------
+  /** Reach the authenticated staff shell and its dashboard. */
   'dashboard:view',
+
+  // --- Own account ---------------------------------------------------------
+  /** View one's own profile and account details. */
+  'account:view',
+  /** Change one's own non-privileged details (name, contact email). */
+  'account:update',
+
+  // --- Client portal -------------------------------------------------------
+  /** Reach the client portal. Borrowers only. */
+  'portal:view',
+
+  // --- User administration -------------------------------------------------
+  /** See the staff directory and individual user records. */
+  'users:view',
+  /** Create a staff account and its linked authentication identity. */
+  'users:create',
+  /** Change another user's name or contact details. */
+  'users:update',
+  /** Activate, suspend or archive another user's account. */
+  'users:disable',
+  /** Grant or revoke role assignments. */
+  'users:assign_role',
+  /** Set another user's password to a temporary value. */
+  'users:reset_password',
+
+  // --- Settings ------------------------------------------------------------
   /** Read company and business settings. */
-  'settings:read',
+  'settings:view',
   /** Change company or business settings. */
-  'settings:write',
+  'settings:update',
+
+  // --- Audit ---------------------------------------------------------------
   /** Read the audit trail. */
-  'audit:read',
+  'audit:view',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -53,26 +102,59 @@ export function isPermission(value: unknown): value is Permission {
 }
 
 /**
- * Grants per role, for the Phase 1 permissions only.
+ * Grants per role.
  *
- * Every role is listed explicitly — including `client` with an empty set —
+ * Every role is listed explicitly — including an empty set, were one empty —
  * so that adding a role to `ROLE_KEYS` without deciding its grants is a type
- * error rather than a silent denial. A test asserts the keys stay in step.
+ * error rather than a silent denial.
  *
- * TODO(phase-2): extend with the client, guarantor, loan, payment, penalty and
- * report permissions once the business has confirmed the matrix, and mirror
- * each rule in a Row Level Security policy.
+ * ### Why the Manager's set stops where it does
+ *
+ * A Manager supervises lending operations and needs to see who works here, so
+ * they hold `users:view`. They deliberately do **not** hold `users:create`,
+ * `users:assign_role`, `users:disable` or `users:reset_password`: those are
+ * the capabilities that would let a Manager promote themselves, manufacture an
+ * Owner account, or lock the Owner out. Concentrating account administration
+ * in one role is the point of having the role.
+ *
+ * `settings:update` and `audit:view` are Owner-only for the same reason — the
+ * first changes the rates money is lent at, the second is the record of who
+ * changed them.
  */
 export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> = {
-  // A borrower reaches the client portal, not the staff shell. The portal's
-  // own permissions arrive with it in a later phase.
-  client: [],
+  // A borrower reaches the portal and their own account. Nothing else. They
+  // must never see the staff shell, other clients, or any administration.
+  client: ['portal:view', 'account:view', 'account:update'],
 
-  secretary_treasurer: ['dashboard:view', 'settings:read'],
+  secretary_treasurer: [
+    'dashboard:view',
+    'account:view',
+    'account:update',
+    'settings:view',
+  ],
 
-  manager: ['dashboard:view', 'settings:read'],
+  manager: [
+    'dashboard:view',
+    'account:view',
+    'account:update',
+    'settings:view',
+    'users:view',
+  ],
 
-  owner_admin: ['dashboard:view', 'settings:read', 'settings:write', 'audit:read'],
+  owner_admin: [
+    'dashboard:view',
+    'account:view',
+    'account:update',
+    'settings:view',
+    'settings:update',
+    'users:view',
+    'users:create',
+    'users:update',
+    'users:disable',
+    'users:assign_role',
+    'users:reset_password',
+    'audit:view',
+  ],
 } as const;
 
 /**
@@ -121,5 +203,25 @@ const missingRoles = ROLE_KEYS.filter((role) => ROLE_PERMISSIONS[role] === undef
 if (missingRoles.length > 0) {
   throw new Error(
     `ROLE_PERMISSIONS is missing an entry for: ${missingRoles.join(', ')}. Every role must declare its grants, even if empty.`,
+  );
+}
+
+/**
+ * Flattened `(role, permission)` pairs, sorted deterministically.
+ *
+ * This is the shape seeded into `public.role_permissions`, and the shape a
+ * database test compares against. Keeping the projection here means the
+ * migration and the test read from one definition.
+ */
+export function rolePermissionPairs(): readonly {
+  role: RoleKey;
+  permission: Permission;
+}[] {
+  return ROLE_KEYS.flatMap((role) =>
+    [...ROLE_PERMISSIONS[role]].sort().map((permission) => ({ role, permission })),
+  ).sort((a, b) =>
+    a.role === b.role
+      ? a.permission.localeCompare(b.permission)
+      : a.role.localeCompare(b.role),
   );
 }

@@ -5,26 +5,37 @@ import { usePathname } from 'next/navigation';
 
 import { ROUTES } from '@/config/app';
 import { cn } from '@/lib/utils/cn';
-import { NAV_ITEMS, type NavItem } from './nav-items';
+import type { Permission } from '@/lib/permissions';
+import { visibleNavItems, type NavItem } from './nav-items';
+
+export interface PrimaryNavProps {
+  readonly variant: 'sidebar' | 'bottom-bar';
+  readonly items: readonly NavItem[];
+  /** The viewer's capabilities, resolved server-side and passed down. */
+  readonly permissions: readonly Permission[];
+}
 
 /**
- * The primary navigation, rendered either as the desktop sidebar list or the
- * mobile bottom bar.
+ * The primary navigation, as a sidebar list or a bottom bar.
  *
- * This is a Client Component and it imports `NAV_ITEMS` itself rather than
- * receiving them as a prop. That is deliberate and not merely tidier: each nav
- * item carries a Lucide icon, which is a React component, and a component
- * cannot be serialised across the server/client boundary. Passing the items
- * down from the server shell would fail at build time with "Functions cannot
- * be passed directly to Client Components". Only the `variant` string crosses.
+ * `items` and `permissions` are plain serialisable data passed from the
+ * server, which is what lets a Client Component render a server-resolved
+ * session. The icons live in the item definitions, which are imported here
+ * rather than passed as props — a React component cannot cross the
+ * server/client boundary.
+ *
+ * Filtering here hides entries the viewer cannot use. It is not the
+ * protection: the same capability is enforced by the route guard and by Row
+ * Level Security, and both would refuse a hand-typed URL.
  */
-export function PrimaryNav({ variant }: { readonly variant: 'sidebar' | 'bottom-bar' }) {
+export function PrimaryNav({ variant, items, permissions }: PrimaryNavProps) {
   const pathname = usePathname();
+  const visible = visibleNavItems(items, permissions);
 
   if (variant === 'bottom-bar') {
     return (
       <>
-        {NAV_ITEMS.map((item) => (
+        {visible.map((item) => (
           <BottomBarLink key={item.href} item={item} pathname={pathname} />
         ))}
       </>
@@ -33,7 +44,7 @@ export function PrimaryNav({ variant }: { readonly variant: 'sidebar' | 'bottom-
 
   return (
     <ul className="flex flex-1 flex-col gap-1">
-      {NAV_ITEMS.map((item) => (
+      {visible.map((item) => (
         <li key={item.href}>
           <SidebarLink item={item} pathname={pathname} />
         </li>
@@ -47,9 +58,7 @@ export function PrimaryNav({ variant }: { readonly variant: 'sidebar' | 'bottom-
  *
  * The dashboard lives at `/`, so a prefix match would make it active on every
  * page; it matches exactly. Every other section matches its own subtree, so a
- * client detail page keeps Clients highlighted.
- *
- * Exported for direct testing.
+ * detail page keeps its parent highlighted.
  */
 export function isNavItemActive(href: string, pathname: string): boolean {
   if (href === ROUTES.dashboard) return pathname === ROUTES.dashboard;
@@ -69,17 +78,11 @@ function SidebarLink({
   return (
     <Link
       href={item.href}
-      // What actually tells a screen-reader user where they are. The highlight
-      // is the visual equivalent of the same fact, set from one source.
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'min-h-touch flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
         isActive
-          ? // The dark-mode tint is derived from brand-500 rather than
-            // brand-900: against a dark surface the darker shade is almost
-            // invisible, so the current page would be signalled by text colour
-            // alone.
-            'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
+          ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
           : 'text-text-muted hover:bg-surface-raised hover:text-text',
       )}
     >
@@ -104,13 +107,13 @@ function BottomBarLink({
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'min-h-touch flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5',
+        'min-h-touch flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5',
         'text-[0.6875rem] font-medium transition-colors',
         isActive ? 'text-brand-600' : 'text-text-muted hover:text-text',
       )}
     >
       <Icon aria-hidden="true" className="size-5 shrink-0" />
-      <span className="truncate">{item.shortLabel}</span>
+      <span className="w-full truncate text-center">{item.shortLabel}</span>
     </Link>
   );
 }

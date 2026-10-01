@@ -121,14 +121,57 @@ ships.
 Logs mask phone numbers and emails and describe money by order of magnitude
 rather than by value.
 
+## Phase 2 verification
+
+| Check | Result |
+| --- | --- |
+| Anonymous access to any table | Denied at the grant level — `anon` holds no privilege anywhere. |
+| Client reading staff records | Returns zero rows. Driven as the `authenticated` role against a real database. |
+| Staff promoting themselves | Refused by trigger. Including an Owner — nobody edits their own role assignments. |
+| Manager becoming Owner | Refused twice over: the capability check, and independently the rank rule. |
+| Deleting audit history | Refused for every role, by trigger and by revoked privilege. |
+| Removing the last Owner | Refused, including under two genuinely concurrent committing transactions. |
+| Disabling a user actually stopping access | Verified with the same token before and after, for all three inactive statuses. |
+| Secrets in the client bundle | Clean: `sb_secret_`, `SUPABASE_SECRET_KEY`, `DATABASE_URL`, `service_role` all absent from `.next/static/`. |
+| Direct API calls bypassing the interface | Every escalation test runs as the `authenticated` database role, not through the application. |
+| Forging a role assignment | `granted_by` is overwritten with the acting profile. |
+| Account enumeration | One message for every sign-in failure, including a malformed number. |
+| Open redirect on sign-in | `next` accepts only a plain in-site path; absolute, protocol-relative, `javascript:` and backslash forms are discarded. Verified against the running application. |
+| Route protection | Every protected route returns 307 to sign-in for an anonymous request. No protected page returns 200, so there is no content flash. |
+| Function `search_path` | All 21 `SECURITY DEFINER` functions pin `search_path = ''`. |
+| Functions executable by `anon` | None. |
+| Security headers after the auth changes | Unchanged, plus `Cache-Control: private, no-store` on authenticated responses. |
+
+## Issues found and fixed in Phase 2
+
+**Trigger functions were executable by `anon`.** `set_updated_at` and
+`reject_mutation` kept PostgreSQL's default grant to `PUBLIC`. Not exploitable
+— PostgreSQL refuses to call a function returning `trigger` outside a trigger
+context — but revoked anyway in migration `20261002000700`, so that the answer
+to "which functions can an anonymous visitor execute?" is an unqualified
+"none". An audit that has to reason about why two entries are harmless will
+eventually wave through a third that is not.
+
+**`record_sign_in()` was blocked by its own guard.** The column guard refuses
+any change to `last_sign_in_at` from a session, and `SECURITY DEFINER` does not
+clear `auth.uid()`, so the sanctioned writer would have been refused. Found
+while writing the migration; the guard now honours the transaction-local marker
+the function sets.
+
+**The `next` parameter was captured and never honoured.** The proxy recorded
+where a visitor was heading, and sign-in ignored it. Found during the running
+application review. Now honoured, sanitised twice — once when rendering the
+form and again in the action, because a hidden field is client-supplied input.
+
 ## Known gaps, deferred deliberately
 
 | Gap | Phase |
 | --- | --- |
 | No Content-Security-Policy | 2. A nonce-based CSP must be wired through the proxy; adding one now would break the auth flows that do not exist yet. |
-| No rate limiting | 2, with the sign-in endpoints that need it. |
-| No route protection | 2. The proxy refreshes sessions and deliberately does not redirect — a half-built guard is worse than none, because it looks like protection. |
-| No RLS policies on nine of the eleven surfaces | 2, by design. See ADR-011. |
+| ~~No route protection~~ | **Done in Phase 2.** Three layers: proxy, server-side route guard, Row Level Security. |
+| ~~No RLS policies~~ | **Done in Phase 2** for every identity, settings and audit table. `reference_formats` and `reference_sequences` remain default-deny deliberately — nothing reads them from a session. |
+| No rate limiting on user creation or password reset | Before go-live. Supabase Auth throttles sign-in itself; the administrative actions are not throttled. |
+| A user can clear their own forced-password-change flag without changing the password | Only by calling `complete_password_change()` directly, which requires already being signed in with the temporary password. It grants no additional access and inconveniences only themselves. Closing it fully would mean routing password changes through the privileged client. |
 | No audit-record retention policy | Before go-live. |
 | No audit hash chain or off-site shipping | 2+, if the threat model includes an insider with database access. |
 | No penetration test | Before go-live. |

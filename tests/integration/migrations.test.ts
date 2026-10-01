@@ -127,7 +127,10 @@ describe('row level security', () => {
   it('uses USING (true) only on the non-sensitive lookup tables', () => {
     // A permissive policy on financial or personal data would defeat the
     // entire security model, so each one is enumerated deliberately.
-    const PERMITTED = new Set(['roles']);
+    // All three are vocabulary: role names, capability names, and which role
+    // grants which. None holds personal or financial data, and none says
+    // anything about a particular person.
+    const PERMITTED = new Set(['roles', 'permissions', 'role_permissions']);
 
     const policies = [
       ...executableSql.matchAll(
@@ -145,26 +148,75 @@ describe('row level security', () => {
     }
   });
 
-  it('creates no policy at all on the tables holding personal or financial data', () => {
-    // Default-deny for Phase 1: these are opened by Phase 2, with policies
-    // written against the role helpers.
-    const MUST_HAVE_NO_POLICY = [
+  it('gates every policy on personal or financial data behind a capability', () => {
+    // Phase 1 left these default-deny. Phase 2 opens them, and the rule is
+    // that each policy must be conditional on a capability or on the caller's
+    // own identity — never simply on being signed in.
+    //
+    // Routing through `user_has_permission` / `current_profile_id` is also what
+    // makes disabling an account take effect at once: both resolve only active
+    // profiles, so a still-valid token stops granting anything.
+    const SENSITIVE = [
       'profiles',
       'user_roles',
       'company_settings',
       'business_settings',
       'audit_log',
-      'reference_formats',
-      'reference_sequences',
+      'repayment_frequencies',
     ];
 
-    for (const table of MUST_HAVE_NO_POLICY) {
+    const policies = [
+      ...executableSql.matchAll(
+        /create\s+policy\s+(\w+)\s+on\s+public\.(\w+)([\s\S]*?);/gi,
+      ),
+    ];
+
+    let checked = 0;
+
+    for (const [, policyName, table, body] of policies) {
+      if (!SENSITIVE.includes(table!)) continue;
+      checked += 1;
+
+      expect(
+        /user_has_permission|current_profile_id|is_active/.test(body ?? ''),
+        `policy ${String(policyName)} on public.${String(table)} is not gated on a capability or on the caller's own identity`,
+      ).toBe(true);
+    }
+
+    // Guards against the matcher silently finding nothing and passing.
+    expect(checked).toBeGreaterThan(5);
+  });
+
+  it('leaves the reference tables default-deny, with no policy at all', () => {
+    // Nothing reads these from a session: references are issued by
+    // next_reference(), which runs as service_role. Opening them would reveal
+    // how many clients and loans exist.
+    for (const table of ['reference_formats', 'reference_sequences']) {
       expect(
         executableSql,
-        `public.${table} has a policy, but Phase 1 is default-deny for it`,
+        `public.${table} has a policy, but nothing should read it from a session`,
       ).not.toMatch(
         new RegExp(`create\\s+policy\\s+\\w+\\s+on\\s+public\\.${table}`, 'i'),
       );
+    }
+  });
+
+  it('writes no policy that would let a user grant themselves a capability', () => {
+    // The permission matrix is migration-managed. A user who could write it
+    // could grant themselves anything, so neither table may have a write
+    // policy of any kind.
+    for (const table of ['permissions', 'role_permissions']) {
+      for (const command of ['insert', 'update', 'delete']) {
+        expect(
+          executableSql,
+          `public.${table} has an ${command.toUpperCase()} policy`,
+        ).not.toMatch(
+          new RegExp(
+            `create\\s+policy\\s+\\w+\\s+on\\s+public\\.${table}\\s+for\\s+${command}`,
+            'i',
+          ),
+        );
+      }
     }
   });
 
@@ -254,7 +306,7 @@ describe('column type discipline', () => {
      *               non-key column to change — a role is granted or revoked,
      *               never amended.
      */
-    const NO_UPDATED_AT = new Set(['audit_log', 'user_roles']);
+    const NO_UPDATED_AT = new Set(['audit_log', 'user_roles', 'role_permissions']);
 
     for (const table of createdTables) {
       const definition = new RegExp(
@@ -411,6 +463,9 @@ describe('seed data', () => {
         'reference_formats',
         'company_settings',
         'business_settings',
+        // Phase 2: the capability vocabulary and the role-to-capability map.
+        'permissions',
+        'role_permissions',
       ]).toContain(table);
     }
   });
@@ -439,7 +494,20 @@ describe('types stay in step with the schema', () => {
     );
 
     // Trigger functions are not callable over the API and are not generated.
-    const TRIGGER_FUNCTIONS = new Set(['set_updated_at', 'reject_mutation']);
+    const TRIGGER_FUNCTIONS = new Set([
+      'set_updated_at',
+      'reject_mutation',
+      'profiles_guard_privileged_columns',
+      'profiles_assert_owner_remains',
+      'user_roles_guard_assignment',
+      'user_roles_set_granted_by',
+      'user_roles_assert_owner_remains',
+      'audit_profile_change',
+      'audit_user_role_change',
+      'audit_settings_change',
+      // Called only by other SECURITY DEFINER functions, never over the API.
+      'assert_owner_admin_remains',
+    ]);
 
     for (const functionName of functionNames) {
       if (TRIGGER_FUNCTIONS.has(functionName)) continue;

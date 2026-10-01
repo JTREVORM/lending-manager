@@ -311,3 +311,117 @@ response carrying a `Set-Cookie`.
 Relatedly, `lib/data/company.ts` calls `unstable_rethrow()` before its own error
 handling: Next.js signals control flow by throwing, and swallowing one of those
 would break routing or mislabel a route's rendering mode.
+
+---
+
+## ADR-013 — The authentication identity is derived from the phone number
+
+**Decision.** Supabase Auth's email for every account is computed from the
+canonical phone number: `+256772123456` → `256772123456@phone.lending.invalid`.
+Sign-in is by phone number. `profiles.email` is contact information and is
+never an authentication identity.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| Look the phone number up and sign in with the account's real email | Needs a read of `profiles` before anyone is authenticated. Exposing that to `anon` is an account-enumeration oracle that also hands out email addresses; doing it with the secret key puts a privileged credential on the hot login path and makes the application unable to sign anyone in without it. |
+| Require every account to have a real email | Wrong for the business. Most borrowers do not have one, and inventing addresses for them is the same problem with extra steps. |
+
+**Why `.invalid`.** RFC 2606 reserves it permanently, so these addresses can
+never be resolved, can never receive mail, and can never collide with an
+address somebody owns. They are identifiers, not mailboxes.
+
+**Consequences.**
+
+- No pre-authentication database read, so no enumeration oracle and no secret
+  on the login path.
+- Uniqueness is inherited from `profiles.phone`, which is already `UNIQUE`.
+- **Supabase can never email a password reset**, so recovery is
+  administrator-assisted: an Owner issues a temporary password and the account
+  is forced to change it. That suits a business with no email infrastructure,
+  and it is why `must_change_password` exists.
+
+**If the business later wants email sign-in**, the route is to make the auth
+email the real address for those accounts and accept both identifier forms.
+Phone sign-in for those users would then need the lookup this decision avoids,
+so it is a trade to make deliberately rather than drift into.
+
+---
+
+## ADR-014 — The permission matrix lives in the database as well as in TypeScript
+
+**Decision.** `public.permissions` and `public.role_permissions` hold the same
+matrix as `lib/permissions/permissions.ts`. Policies are written against
+`public.user_has_permission(...)`.
+
+**Reasoning.** Row Level Security is the real boundary, so a policy has to be
+able to ask "may this user do X" — and the only way to do that inside a policy
+is to have the matrix in the database.
+
+Writing policies in terms of role names instead was rejected: it states the
+same rule twice in two vocabularies (`owner_admin` in SQL, `users:create` in
+TypeScript), which drift the first time somebody changes one and not the other.
+
+**Consequences.** One vocabulary, two representations, kept in step by
+`tests/db/permissions.test.ts`, which compares the rows against
+`rolePermissionPairs()` and fails on any difference. Adding a grant in one
+place without the other breaks the build.
+
+Neither table is writable by any application role. A user who could insert into
+`role_permissions` could grant themselves every capability in the system.
+
+---
+
+## ADR-015 — Disabling an account is enforced by `current_profile_id()`, not by a revocation column
+
+**Decision.** Every Row Level Security policy routes through
+`public.current_profile_id()`, which resolves only profiles whose status is
+`active`. There is no `sessions_valid_from` column and no token blocklist.
+
+**Reasoning.** A JWT stays cryptographically valid until it expires, so a
+system that only checks the signature keeps a disabled user working for up to
+an hour. That is unacceptable when the reason for disabling them may be that
+they are no longer trusted with client money.
+
+Routing every policy through a status-aware function means the check happens on
+**every statement**, with no new machinery: the identity lookup and the status
+check are the same query. A disabled user's own profile row becomes invisible
+to them, so they cannot even restore themselves.
+
+**Why not a `sessions_valid_from` column.** It would duplicate a guarantee that
+already holds completely, and the brief is right that an unused security column
+is worse than none — it invites the belief that something is protected by a
+mechanism nobody exercises.
+
+**Consequences.** `auth.uid()` must never appear directly in a policy; using it
+would bypass the status check. `tests/integration/migrations.test.ts` asserts
+every policy on sensitive data is gated on `user_has_permission` or
+`current_profile_id`, and `tests/db/rls-identity.test.ts` drives the
+suspended-user case with the same token before and after.
+
+---
+
+## ADR-016 — Identity changes are audited by database triggers
+
+**Decision.** `profiles`, `user_roles` and the settings singletons write their
+own audit records from `AFTER` triggers. Application code does not call an
+audit function after doing its work.
+
+**Reasoning.** The obvious design has two failures that matter in a financial
+system: an action can change data and then fail before auditing it, and an
+action can simply forget. Either way the trail disagrees with the data, and a
+trail that might be incomplete cannot answer "who did this".
+
+A trigger records what actually happened to the row, in the same transaction.
+If the change rolls back so does its record; if it commits, the record
+committed with it. It also means an administrator who bypasses the interface
+entirely — direct REST calls, `psql` — is audited identically.
+
+**Consequences.** Session events (sign-in, sign-out, password change) are not
+row changes and need their own path: `public.record_security_event()`, whose
+action vocabulary is closed and whose actor is derived from the session. An
+authenticated user can therefore record only true statements about themselves.
+
+`record_audit_event()` remains revoked from every session role, so no caller
+can write an arbitrary audit row.

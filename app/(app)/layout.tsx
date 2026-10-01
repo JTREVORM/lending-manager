@@ -1,32 +1,35 @@
+import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
 import { AppShell } from '@/components/layout/app-shell';
+import { ROUTES } from '@/config/app';
+import { guardPage } from '@/lib/auth/guard';
+import { PATHNAME_HEADER } from '@/lib/supabase/proxy';
 
 /**
- * Layout for the staff-facing application.
+ * Layout for the authenticated application.
  *
- * The `(app)` route group exists so that Phase 2 can add sign-in, sign-up and
- * the client portal as sibling groups with their own layouts, without this
- * one's navigation appearing on a public page.
+ * ## Never prerendered or cached
  *
- * This layout does NOT check authentication. That is Phase 2, and the real
- * boundary is Row Level Security in the database regardless — a layout check
- * is a usability affordance, not a security control.
- */
-/**
- * Never prerender or cache anything in the authenticated area.
- *
- * Every page here depends on the viewer's session: the shell reads
- * `company_settings` through a request-scoped Supabase client, and Phase 2
- * adds per-user and per-role data. A statically generated or shared-cache
- * response would serve one person's view to another, which in a lending
- * system means showing a client somebody else's balance.
- *
- * This also makes the rendering mode explicit rather than inferred, so adding
- * a page here cannot accidentally opt into prerendering.
+ * Every page here depends on the viewer's session and role. A statically
+ * generated or shared-cache response would serve one person's view to another,
+ * which in a lending system means showing a client somebody else's balance.
  */
 export const dynamic = 'force-dynamic';
 
-export default function AppLayout({ children }: { readonly children: ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+/**
+ * Every page in this group is guarded here, before any of its markup is
+ * produced — so there is no flash of content a caller should not see, and no
+ * page can be left unprotected by forgetting to add a check to it.
+ *
+ * The pathname arrives as a header set by the proxy from the framework's own
+ * parsed URL; see `PATHNAME_HEADER`.
+ */
+export default async function AppLayout({ children }: { readonly children: ReactNode }) {
+  const requestHeaders = await headers();
+  const pathname = requestHeaders.get(PATHNAME_HEADER) ?? ROUTES.dashboard;
+
+  const context = await guardPage(pathname);
+
+  return <AppShell context={context}>{children}</AppShell>;
 }

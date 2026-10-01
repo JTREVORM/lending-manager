@@ -105,6 +105,11 @@ export async function expectError(
   }
 }
 
+/** A raw pooled client, for the impersonation helpers. */
+export async function getClient(): Promise<PoolClient> {
+  return getPool().connect();
+}
+
 export async function closePool(): Promise<void> {
   if (pool !== undefined) {
     await pool.end();

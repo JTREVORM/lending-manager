@@ -24,6 +24,8 @@ import {
   isRoleKey,
   isStaff,
   permissionsFor,
+  rolePermissionPairs,
+  type Permission,
   type RoleKey,
 } from '@/lib/permissions';
 
@@ -136,54 +138,220 @@ describe('permission matrix', () => {
     }
   });
 
-  it('gives the owner_admin everything Phase 1 defines', () => {
-    expect([...ROLE_PERMISSIONS.owner_admin].sort()).toEqual([...PERMISSIONS].sort());
+  it('names every permission as resource:action', () => {
+    for (const permission of PERMISSIONS) {
+      expect(permission).toMatch(/^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$/);
+    }
   });
 
-  it('restricts settings writes and the audit trail to the owner_admin', () => {
-    expect(can(['owner_admin'], 'settings:write')).toBe(true);
-    expect(can(['manager'], 'settings:write')).toBe(false);
-    expect(can(['secretary_treasurer'], 'settings:write')).toBe(false);
-
-    expect(can(['owner_admin'], 'audit:read')).toBe(true);
-    expect(can(['manager'], 'audit:read')).toBe(false);
+  it('lists no permission twice', () => {
+    expect(new Set(PERMISSIONS).size).toBe(PERMISSIONS.length);
   });
 
-  it('gives a client no staff permissions', () => {
-    // A borrower reaches the client portal, not the staff shell.
-    expect(ROLE_PERMISSIONS.client).toHaveLength(0);
-    expect(can(['client'], 'dashboard:view')).toBe(false);
+  it('grants no role the same permission twice', () => {
+    for (const key of ROLE_KEYS) {
+      const granted = ROLE_PERMISSIONS[key];
+      expect(new Set(granted).size, key).toBe(granted.length);
+    }
+  });
+
+  it('discriminates permission names', () => {
+    expect(isPermission('settings:view')).toBe(true);
+    expect(isPermission('settings:write')).toBe(false);
+    expect(isPermission('loans:approve')).toBe(false);
+  });
+});
+
+/**
+ * The authorization matrix.
+ *
+ * This is the table the business agreed, asserted cell by cell. It is written
+ * exhaustively rather than as a handful of spot checks because a permission
+ * silently appearing in the wrong row is the kind of mistake that reads as
+ * correct and is caught only by stating the whole grid.
+ *
+ * `tests/db/rls-identity.test.ts` asserts the same matrix at the database
+ * level, where it is actually enforced.
+ */
+describe('authorization matrix', () => {
+  const MATRIX: Readonly<Record<Permission, readonly RoleKey[]>> = {
+    'dashboard:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'account:view': ['client', 'secretary_treasurer', 'manager', 'owner_admin'],
+    'account:update': ['client', 'secretary_treasurer', 'manager', 'owner_admin'],
+    'portal:view': ['client'],
+    'users:view': ['manager', 'owner_admin'],
+    'users:create': ['owner_admin'],
+    'users:update': ['owner_admin'],
+    'users:disable': ['owner_admin'],
+    'users:assign_role': ['owner_admin'],
+    'users:reset_password': ['owner_admin'],
+    'settings:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'settings:update': ['owner_admin'],
+    'audit:view': ['owner_admin'],
+  };
+
+  it('covers every declared permission', () => {
+    // A permission added without a row here is an untested capability.
+    expect(Object.keys(MATRIX).sort()).toEqual([...PERMISSIONS].sort());
+  });
+
+  it.each(PERMISSIONS)('grants %s to exactly the intended roles', (permission) => {
+    const expected = MATRIX[permission];
+
+    for (const role of ROLE_KEYS) {
+      expect(can([role], permission), `${role} / ${permission}`).toBe(
+        expected.includes(role),
+      );
+    }
+  });
+
+  it('keeps a borrower out of every staff surface', () => {
+    // The single most important row: a client must never reach staff data.
+    for (const permission of [
+      'dashboard:view',
+      'users:view',
+      'users:create',
+      'users:assign_role',
+      'settings:view',
+      'settings:update',
+      'audit:view',
+    ] as const) {
+      expect(can(['client'], permission), permission).toBe(false);
+    }
+  });
+
+  it('keeps a Secretary/Treasurer out of user administration entirely', () => {
+    for (const permission of [
+      'users:view',
+      'users:create',
+      'users:update',
+      'users:disable',
+      'users:assign_role',
+      'users:reset_password',
+      'settings:update',
+      'audit:view',
+    ] as const) {
+      expect(can(['secretary_treasurer'], permission), permission).toBe(false);
+    }
+  });
+
+  it('lets a Manager see staff but administer none of them', () => {
+    // The Manager's boundary is the one most likely to be widened by accident,
+    // because "manager" sounds like it should include administration.
+    expect(can(['manager'], 'users:view')).toBe(true);
+
+    for (const permission of [
+      'users:create',
+      'users:update',
+      'users:disable',
+      'users:assign_role',
+      'users:reset_password',
+    ] as const) {
+      expect(can(['manager'], permission), permission).toBe(false);
+    }
+  });
+
+  it('keeps settings changes and the audit trail with the Owner alone', () => {
+    for (const role of ['client', 'secretary_treasurer', 'manager'] as const) {
+      expect(can([role], 'settings:update'), role).toBe(false);
+      expect(can([role], 'audit:view'), role).toBe(false);
+    }
+
+    expect(can(['owner_admin'], 'settings:update')).toBe(true);
+    expect(can(['owner_admin'], 'audit:view')).toBe(true);
+  });
+
+  it('gives the Owner every staff capability, and deliberately not the borrower one', () => {
+    // `portal:view` is the client portal. An Owner administers the business
+    // and does not hold it — which is the clearest demonstration that grants
+    // are read from the matrix rather than inferred from rank.
+    const borrowerOnly: readonly Permission[] = ['portal:view'];
+
+    for (const permission of PERMISSIONS) {
+      expect(can(['owner_admin'], permission), permission).toBe(
+        !borrowerOnly.includes(permission),
+      );
+    }
+  });
+});
+
+describe('rank never substitutes for an explicit grant', () => {
+  it("does not give a higher-ranked role a lower one's exclusive permission", () => {
+    // `portal:view` belongs to the lowest-ranked role. An Owner outranks a
+    // client and still must not hold it — proof that grants are read from the
+    // matrix and not derived from ordering.
+    expect(ROLE_RANK.owner_admin).toBeGreaterThan(ROLE_RANK.client);
+    expect(can(['owner_admin'], 'portal:view')).toBe(false);
+    expect(can(['manager'], 'portal:view')).toBe(false);
+  });
+
+  it('does not give a Manager an Owner-only permission despite outranking others', () => {
+    expect(ROLE_RANK.manager).toBeGreaterThan(ROLE_RANK.secretary_treasurer);
+    expect(can(['manager'], 'users:assign_role')).toBe(false);
+  });
+
+  it('would not grant a newly added permission to anyone by default', () => {
+    // Every permission is held by at least one role today, but the mechanism
+    // that matters is that `can` reads the table rather than inferring from
+    // rank — so an unlisted capability is held by nobody.
+    const unlisted = 'loans:approve' as Permission;
+    for (const role of ROLE_KEYS) {
+      expect(can([role], unlisted), role).toBe(false);
+    }
+  });
+});
+
+describe('combining roles', () => {
+  it('unions the grants of every role held', () => {
+    // The documented rule: permissions are additive and there are no deny
+    // rules, so holding an extra role can only ever widen access.
+    const granted = permissionsFor(['secretary_treasurer', 'owner_admin']);
+
+    expect(granted).toContain('settings:update');
+    expect(granted).toContain('dashboard:view');
+    expect(new Set(granted).size).toBe(granted.length);
+  });
+
+  it('gives a combination exactly the union, never more', () => {
+    const combined = new Set(permissionsFor(['client', 'manager']));
+    const expected = new Set([...ROLE_PERMISSIONS.client, ...ROLE_PERMISSIONS.manager]);
+
+    expect([...combined].sort()).toEqual([...expected].sort());
+  });
+
+  it('does not let a second role unlock an Owner-only capability', () => {
+    expect(can(['manager', 'secretary_treasurer'], 'users:assign_role')).toBe(false);
+    expect(can(['client', 'manager'], 'audit:view')).toBe(false);
+  });
+
+  it('evaluates canAll and canAny', () => {
+    expect(canAll(['owner_admin'], ['settings:view', 'settings:update'])).toBe(true);
+    expect(canAll(['manager'], ['settings:view', 'settings:update'])).toBe(false);
+    expect(canAny(['manager'], ['settings:view', 'settings:update'])).toBe(true);
+    expect(canAny(['client'], ['settings:view', 'settings:update'])).toBe(false);
   });
 
   it('fails closed for no roles and for an unknown role', () => {
     expect(can([], 'dashboard:view')).toBe(false);
     expect(can(['not_a_role' as RoleKey], 'dashboard:view')).toBe(false);
+    expect(permissionsFor([])).toEqual([]);
   });
+});
 
-  it('unions permissions across multiple roles', () => {
-    const granted = permissionsFor(['secretary_treasurer', 'owner_admin']);
-    expect(granted).toContain('settings:write');
-    expect(granted).toContain('dashboard:view');
-    // Deduplicated: both roles grant dashboard:view.
-    expect(new Set(granted).size).toBe(granted.length);
-  });
+describe('rolePermissionPairs', () => {
+  it('flattens the matrix to the shape seeded into the database', () => {
+    const pairs = rolePermissionPairs();
 
-  it('evaluates canAll and canAny', () => {
-    expect(canAll(['owner_admin'], ['settings:read', 'settings:write'])).toBe(true);
-    expect(canAll(['manager'], ['settings:read', 'settings:write'])).toBe(false);
-    expect(canAny(['manager'], ['settings:read', 'settings:write'])).toBe(true);
-    expect(canAny(['client'], ['settings:read', 'settings:write'])).toBe(false);
-  });
+    const total = ROLE_KEYS.reduce((sum, role) => sum + ROLE_PERMISSIONS[role].length, 0);
+    expect(pairs).toHaveLength(total);
 
-  it('discriminates permission names', () => {
-    expect(isPermission('settings:read')).toBe(true);
-    expect(isPermission('loans:approve')).toBe(false);
-  });
-
-  it('names every permission as resource:action', () => {
-    for (const permission of PERMISSIONS) {
-      expect(permission).toMatch(/^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$/);
+    for (const { role, permission } of pairs) {
+      expect(ROLE_PERMISSIONS[role]).toContain(permission);
     }
+  });
+
+  it('is deterministic, so the database comparison is stable', () => {
+    expect(rolePermissionPairs()).toEqual(rolePermissionPairs());
   });
 });
 

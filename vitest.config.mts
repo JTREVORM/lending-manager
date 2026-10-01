@@ -50,8 +50,12 @@ export default defineConfig({
           name: 'db',
           environment: 'node',
           include: ['tests/db/**/*.test.ts'],
-          // Schema assertions query the catalogue repeatedly; a single worker
-          // keeps the reference-sequence concurrency test deterministic.
+          // Rebuilds the database from the migrations first, so every run
+          // starts identical and re-proves that the migrations apply to an
+          // empty database.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          // Schema assertions query the catalogue repeatedly, and the
+          // concurrency tests depend on controlling who else is writing.
           fileParallelism: false,
           testTimeout: 30_000,
         },
