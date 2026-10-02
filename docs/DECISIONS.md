@@ -991,3 +991,286 @@ any existing agreement means, which is the line being drawn.
   administrators, which is why the retire-and-add path is tested alongside the
   refusals: a guard that left no way to stop offering a cadence would have
   been a worse answer than the problem.
+
+## ADR-028 — A reversal is a status, not a deletion and not a contra entry
+
+**Status:** accepted (Phase 6)
+
+### Context
+
+Money gets recorded against the wrong loan, or twice, or for the wrong amount.
+The business needs a way to withdraw a payment that was never really made.
+
+There are three shapes for that:
+
+1. **Delete the payment.** Tempting because the balance comes out right with no
+   extra concepts. It also destroys the only evidence that a receipt was ever
+   issued — in exactly the dispute the record exists for — and it makes the
+   register impossible to reconcile against a cash drawer.
+2. **Post a negative contra payment.** Standard double-entry practice, and it
+   keeps the original row untouched. But every balance query then has to sum
+   signed amounts, "the amount of this payment" stops being a single number a
+   receipt can print, and the invariant that an allocation's components sum to
+   the payment amount becomes ambiguous for every reader of the table.
+3. **Mark the payment reversed.**
+
+### Decision
+
+**A payment carries a `status` of `posted` or `reversed`, and a reversal moves
+it from the first to the second.** Nothing is deleted and nothing is negated.
+
+* The row survives with its amount, its method, its reference, its receipt
+  figures and its staff attribution unchanged. `loan_payments` refuses DELETE
+  through a statement-level trigger, as does `payment_allocations`.
+* **Every allocation is preserved.** They are the record of where the money
+  went, not a cache of where it is now.
+* The balance views count only `status = 'posted'`, so a reversal changes every
+  derived figure the instant it commits.
+* The reversal is stamped with who did it, when, and why — a reason of at least
+  ten characters, because this is the only record of why a borrower's payment
+  was withdrawn.
+* A payment can be reversed once. The guard trigger refuses the second attempt
+  before it looks at anything else, so a double reversal cannot credit the
+  loan twice.
+* A reversal cannot itself be reversed. If the borrower did pay, that is a new
+  payment, with its own receipt and its own attribution.
+
+Reversing is `payments:reverse`, which only the Owner holds.
+
+### Why the allocations are not re-allocated
+
+A reversal leaves honest gaps. Reverse the first of two payments and the
+second payment's allocations still sit on the later collections it covered,
+while the earlier ones are uncovered again. The coverage view shows exactly
+that, because it is what happened: the second payment was applied when the
+first still stood.
+
+Re-allocating would mean rewriting history to make it tidier, and it would
+break the one thing a borrower's receipt is for — proving which collections
+*that* payment covered.
+
+### Consequences
+
+* "What does this loan owe" and "what has this loan ever been paid" are
+  different questions with different answers, and both are answerable.
+* The register lists reversed payments, struck through and labelled. A
+  reviewer can see every withdrawal; a register that hid them would conceal
+  the one event most worth seeing.
+* A reversed receipt stays reachable and is marked `REVERSED`. A borrower
+  holding the printed slip can still find the record it refers to.
+* Reversing the payment that settled a loan reopens the loan, validated
+  against the derived ledger rather than against a session's claim — see
+  ADR-032.
+
+## ADR-029 — A receipt's balances are a historical snapshot, never the live balance
+
+**Status:** accepted (Phase 6)
+
+### Context
+
+`loan_payments` stores `outstanding_before` and `outstanding_after`, which
+looks like exactly the kind of stale mutable balance column the specification
+forbids and ADR-026 argued against for the schedule.
+
+It is not one, and the distinction matters enough to write down because the
+first draft of `reverse_payment` got it wrong.
+
+### Decision
+
+**Those two columns are a record of what the receipt said at the counter, and
+nothing reads them to answer "what is owed."**
+
+* The live balance is derived, every time, by `loan_balances` and
+  `public.loan_outstanding()` from the contract and the allocations of posted
+  payments. There is no cached figure that could disagree with the ledger.
+* The receipt figures are frozen at posting, by the posting function, from
+  figures it derived itself inside the same locked transaction. A `CHECK`
+  constraint enforces `outstanding_after = outstanding_before - amount`, so a
+  receipt cannot be internally inconsistent.
+* They are immutable. The guard trigger refuses any change to either, on a
+  reversal as much as otherwise.
+
+Re-deriving them for display from the loan's *current* balance would silently
+rewrite history: every later payment would change what an earlier receipt
+said, and a borrower holding a printed slip would find the system disagreeing
+with it.
+
+### The mistake this prevents
+
+`reverse_payment` has to check that removing a payment moves the balance by
+exactly that payment's amount. The obvious reconciliation is against the
+receipt — `outstanding_after + amount` — and it is wrong whenever a later
+payment exists: reversing the first of two payments compares against a figure
+two payments out of date, and the reversal is refused for no reason.
+
+The function now captures `public.loan_outstanding()` immediately before the
+update and asserts the live balance moved by the payment's amount.
+`tests/db/payment-reversal.test.ts` keeps that honest with a two-payment case.
+
+### Consequences
+
+* A receipt is evidence of a moment. A balance is a fact about now. The schema
+  makes it impossible to confuse the two by accident, because the historical
+  figures are immutable and the live ones have nowhere to be stored.
+* A reversed receipt still shows its original figures, with a line saying they
+  are what the receipt said when it was issued.
+
+## ADR-030 — Idempotency is a server-minted key, not a duplicate heuristic
+
+**Status:** accepted (Phase 6)
+
+### Context
+
+A collection officer on a weak connection taps "Record", sees nothing happen,
+and taps again. Two UGX 4,000 payments appear. Or the form is resubmitted from
+the browser's history, or the action retries after a dropped response.
+
+Two genuinely identical cash payments from the same borrower on the same day
+are also completely normal — a morning collection and an afternoon one.
+
+So the system has to tell a retried submission apart from a real second
+payment, and no amount of inspecting amount, loan and timestamp can do it: the
+two cases look the same.
+
+### Decision
+
+**Every payment carries a `uuid` idempotency key, minted on the server when the
+form is rendered, unique across `loan_payments`.**
+
+* `post_payment` takes an advisory lock on the key, then looks for an existing
+  payment with it. If one exists, it returns that payment — the money is not
+  recorded twice and the caller gets the same receipt.
+* The key is NOT NULL and the column is UNIQUE. An optional key would make the
+  protection something a caller could forget, which is the same as not having
+  it.
+* It is minted with `node:crypto`'s `randomUUID` in a server component, never
+  in the browser and never supplied by a client, so a caller cannot replay
+  someone else's key or craft collisions.
+* Two genuine payments are two form renders, so they carry two keys and both
+  post. This is the behaviour the business needs.
+
+Mobile Money additionally has a network reference, and
+`loan_payments_unique_external_reference` makes `(payment_method,
+external_reference)` unique among posted payments: the network's own identifier
+cannot be recorded against two payments. Cash has no such identifier, which is
+precisely why the idempotency key exists.
+
+### Consequences
+
+* The disabled submit button is a courtesy, not the guarantee. The guarantee is
+  in the database.
+* `tests/db/payment-concurrency.test.ts` fires the same key at the function
+  concurrently and asserts exactly one payment exists afterwards, with one set
+  of allocations.
+* A retried reversal is a separate question, handled by the double-reversal
+  guard in ADR-028 rather than by a key.
+
+## ADR-031 — Within an installment, interest is covered before principal
+
+**Status:** accepted (Phase 6)
+
+### Context
+
+A payment is applied to the oldest unpaid collection first — that part is not
+in question; any other order would let a borrower leave the earliest
+obligation unpaid indefinitely while covering later ones.
+
+But each collection has a scheduled principal part and a scheduled interest
+part, and a payment that covers only some of it has to split. Two candidate
+rules:
+
+1. **Pro-rata.** Split the payment in the same ratio as the collection's own
+   principal and interest. Feels even-handed.
+2. **Interest first.** Cover the collection's interest, then its principal.
+
+### Decision
+
+**Interest first, within each collection.**
+
+The deciding argument is arithmetic rather than policy. Pro-rata needs a
+division — `take × interest ÷ expected` — which needs a rounding rule, which
+needs a remainder policy, and which has to produce the same answer in
+PostgreSQL and in TypeScript on every input or the preview a staff member
+confirms will disagree with the ledger.
+
+Interest first needs no division at all:
+
+```
+take      = min(remaining_of_collection, unallocated)
+interest  = min(remaining_interest_of_collection, take)
+principal = take - interest
+```
+
+Every component is a `min()` of two integers, so `principal + interest = take`
+holds exactly, with nothing to round and no remainder to place. The rule is
+expressible identically in SQL (`least`) and in TypeScript (`Math.min`), which
+is what `tests/db/payment-parity.test.ts` checks payment by payment across
+thirty randomly paid-off loans.
+
+It is also the conventional order in lending, and it is the order that does not
+flatter the borrower's principal balance: principal falls only once the
+interest it accrued has been covered.
+
+### Consequences
+
+* The allocation of any payment is fully determined by integer arithmetic. No
+  float appears anywhere on the path, which `npm run audit:money` enforces
+  mechanically.
+* `loan_balances` can report principal paid and interest paid exactly, and
+  `principal_paid + principal_remaining = contractual_principal` holds as an
+  invariant rather than approximately.
+* A part-paid collection may have its interest fully covered and its principal
+  untouched. That is visible in the coverage view and on the receipt, and it is
+  the honest description of what the money was applied to.
+
+## ADR-032 — Clearance is a fact about the ledger, not a flag somebody sets
+
+**Status:** accepted (Phase 6)
+
+### Context
+
+A loan that has been paid off should stop appearing as active. The easy
+implementation is a `cleared` status that the posting path sets when it
+believes the balance reached zero, and clears again on a reversal.
+
+The failure mode is a status that contradicts the ledger: a loan marked
+cleared while it still owes money, or marked active with nothing outstanding.
+Both are reachable if the transition trusts whoever performed it — a buggy
+code path, a direct UPDATE, a leaked secret key.
+
+### Decision
+
+**`loans_guard_transition` validates both transitions against
+`public.loan_outstanding()`, computed at the moment of the transition.**
+
+* `active → cleared` is refused unless the derived outstanding balance is
+  exactly zero.
+* `cleared → active` is refused unless it is greater than zero.
+* Both rules bind **every** caller, including the table owner and
+  `service_role`. There is no trusted path that may set the status without the
+  ledger agreeing, because a status nothing can verify is not worth having.
+* The transition also requires a capability — `payments:create` to clear,
+  `payments:reverse` to reopen — and stamps `cleared_at` and `cleared_by` from
+  the database's own view of the actor, never from a parameter.
+
+So clearance is not a claim the application makes. It is a claim the database
+re-derives and either confirms or refuses.
+
+### Why not a trigger that sets the status itself
+
+Considered, and rejected because it would hide a real decision. Settling a loan
+is an outcome of a payment somebody took and is accountable for, and
+`post_payment` performs it explicitly, inside the same transaction, after it
+has reconciled. A trigger firing on an `UPDATE` to some other table would make
+the clearing of a borrower's loan a side effect nobody signed.
+
+### Consequences
+
+* The status can never contradict the balance, which makes `loans.status` safe
+  to filter on without re-deriving the ledger.
+* A reversal that moves the balance above zero reopens the loan automatically,
+  through the same validated path, and `cleared_at` is cleared with it.
+* The audit trail distinguishes `loan.reopened` from `loan.disbursed`. Phase 4's
+  `audit_loan_change` mapped every transition into `active` to "disbursed",
+  which after Phase 6 would have recorded a false claim that the business paid
+  money out a second time. Migration `20261006000800` replaces that function.

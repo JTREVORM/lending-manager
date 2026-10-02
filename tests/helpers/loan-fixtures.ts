@@ -255,6 +255,11 @@ export async function deleteTestLoans(): Promise<void> {
   const GUARDS: readonly { readonly table: string; readonly trigger: string }[] = [
     // Phase 5. Listed first because the installments reference `loan_periods`,
     // so they have to go before it.
+    // Phase 6. The payment ledger is append-only, and its allocations
+    // reference `loan_installments` with `on delete restrict` — financial
+    // history must not cascade away — so the ledger goes before the schedule.
+    { table: 'payment_allocations', trigger: 'payment_allocations_no_delete' },
+    { table: 'loan_payments', trigger: 'loan_payments_no_delete' },
     { table: 'loan_installments', trigger: 'loan_installments_no_delete' },
     { table: 'loan_schedules', trigger: 'loan_schedules_no_delete' },
     { table: 'loan_periods', trigger: 'loan_periods_no_delete' },
@@ -271,6 +276,8 @@ export async function deleteTestLoans(): Promise<void> {
   }
 
   try {
+    await query(`delete from public.payment_allocations`);
+    await query(`delete from public.loan_payments`);
     await query(`delete from public.loan_installments`);
     await query(`delete from public.loan_schedules`);
     await query(`delete from public.loan_periods`);

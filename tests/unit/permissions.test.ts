@@ -241,6 +241,13 @@ describe('authorization matrix', () => {
     // collection schedules; the borrower reaches their own through the
     // ownership clause in the policy rather than through a capability.
     'schedules:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+
+    // Phase 6. Posting and reversing are separate, and reversal is the
+    // Owner's alone: the person who records a payment must not be the person
+    // who can withdraw the record.
+    'payments:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'payments:create': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'payments:reverse': ['owner_admin'],
   };
 
   it('covers every declared permission', () => {

@@ -42,6 +42,17 @@ const FINANCIAL_FILES = [
   'components/loans/loan-breakdown-table.tsx',
   'components/loans/repayment-schedule-table.tsx',
   'components/loans/schedule-summary.tsx',
+  // Phase 6. The payment ledger: allocation, the data layer that reads it back,
+  // and every screen that shows a borrower a figure.
+  'lib/domain/payment.ts',
+  'lib/validation/payment.ts',
+  'lib/data/payments.ts',
+  'lib/payments/actions.ts',
+  'components/payments/payment-form.tsx',
+  'components/payments/payment-receipt.tsx',
+  'components/payments/payment-register.tsx',
+  'components/payments/loan-balance-summary.tsx',
+  'components/payments/portal-payment-history.tsx',
 ];
 
 const UNSAFE = [
@@ -82,6 +93,14 @@ const ACKNOWLEDGED = [
     reason:
       'how many collection dates fit in the term — a count of days, not an amount. ' +
       'Every amount in this file goes through divideEvenly, which is BigInt.',
+  },
+  {
+    path: 'components/payments/loan-balance-summary.tsx',
+    snippet: 'Math.round((totalPaid / totalExpectedRepayment) * 100)',
+    reason:
+      'a progress percentage for display, not an amount. Rounding it is correct, ' +
+      'and no figure derived from it is ever stored, compared or quoted — the ' +
+      'money beside it is formatted from the exact integers.',
   },
 ];
 
@@ -133,7 +152,11 @@ for (const file of migrations) scan(file);
 // Both engines: the Phase 4 loan calculation and the Phase 5 schedule
 // allocation. Each must reach the money layer only through helpers this audit
 // has cleared as integer or BigInt throughout.
-for (const enginePath of ['lib/domain/loan.ts', 'lib/domain/repayment-schedule.ts']) {
+for (const enginePath of [
+  'lib/domain/loan.ts',
+  'lib/domain/repayment-schedule.ts',
+  'lib/domain/payment.ts',
+]) {
   const engine = readFileSync(enginePath, 'utf8');
   const importBlock = /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/domain\/money'/.exec(
     engine,
@@ -198,7 +221,7 @@ if (findings.length > 0) {
 
 const count = FINANCIAL_FILES.length + migrations.length;
 console.log(`  ${String(count)} financial files scanned, no hazard found`);
-console.log('  both engines reach only integer/BigInt money helpers');
+console.log('  all three engines reach only integer/BigInt money helpers');
 console.log(
   `  ${String(ACKNOWLEDGED.length)} acknowledged non-money exemption(s), each verified present`,
 );

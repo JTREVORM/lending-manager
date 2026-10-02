@@ -111,6 +111,67 @@ export const positiveUgxAmountSchema = ugxAmountSchema.min(
 );
 
 /**
+ * A monetary amount as a human types it, in whole shillings.
+ *
+ * Shared rather than copied, because the comma rule below is subtle enough
+ * that two implementations would eventually disagree — and the amount of a
+ * loan and the amount of a payment are equally load-bearing.
+ *
+ * ## The comma rule, which is the whole point
+ *
+ * Spaces are always formatting. Commas are **conditionally** formatting, and
+ * the distinction is not cosmetic: stripping every comma turns `100000,50` —
+ * a decimal comma, which much of the world writes — into 10,000,050
+ * shillings. A hundredfold error, accepted silently, on the single most
+ * important number on the screen. So a comma is accepted only where a
+ * thousands separator belongs: groups of exactly three digits, from the right.
+ *
+ * Fractional input is **rejected rather than rounded**. Someone typing
+ * `4000.50` has either mistyped or is thinking in a currency that is not UGX,
+ * and quietly turning it into `4001` would hide which.
+ */
+export const ugxAmountFromText = (messages: {
+  /** Shown when the field is empty. */
+  readonly empty: string;
+  /** Shown when the text is not a whole number of shillings. */
+  readonly malformed: string;
+  /** Shown when the value is zero or negative. */
+  readonly nonPositive: string;
+}) =>
+  z.union([z.string(), z.number()]).transform((value, ctx) => {
+    const text = typeof value === 'number' ? String(value) : value.trim();
+
+    if (text === '') {
+      ctx.addIssue({ code: 'custom', message: messages.empty });
+      return z.NEVER;
+    }
+
+    const spaceless = text.replace(/\s/g, '');
+
+    const grouped = /^\d{1,3}(,\d{3})+$/.test(spaceless);
+    const plain = /^\d+$/.test(spaceless);
+
+    if (!grouped && !plain) {
+      ctx.addIssue({ code: 'custom', message: messages.malformed });
+      return z.NEVER;
+    }
+
+    const amount = Number(spaceless.replace(/,/g, ''));
+
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      ctx.addIssue({ code: 'custom', message: messages.nonPositive });
+      return z.NEVER;
+    }
+
+    if (amount > MAX_UGX_AMOUNT) {
+      ctx.addIssue({ code: 'custom', message: 'That amount is implausibly large.' });
+      return z.NEVER;
+    }
+
+    return amount;
+  });
+
+/**
  * A rate in integer basis points. 15% is `1500`.
  *
  * Forms should collect a percentage and convert with

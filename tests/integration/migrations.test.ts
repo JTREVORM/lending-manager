@@ -348,6 +348,13 @@ describe('column type discipline', () => {
       // never rewrite it — Phase 7 records arrears separately.
       'loan_schedules',
       'loan_installments',
+      // Phase 6. The payment ledger. `loan_payments` does take one permitted
+      // UPDATE — the reversal stamp — but it is not an *edit*: nothing already
+      // recorded changes, and the reversal carries its own
+      // `reversed_at`, which is a more precise timestamp than a generic
+      // `updated_at` would be. Allocations take no UPDATE at all.
+      'loan_payments',
+      'payment_allocations',
     ]);
 
     for (const table of createdTables) {
@@ -526,6 +533,43 @@ describe('types stay in step with the schema', () => {
     }
   });
 
+  it('declares every created view in types/database.types.ts', () => {
+    // Phase 6 introduced the first views. They carry money, so the generated
+    // types matter as much as a table's: a view the types do not know about is
+    // one the data layer reaches with `any`-shaped rows.
+    const types = readFileSync(join(process.cwd(), 'types', 'database.types.ts'), 'utf8');
+
+    const createdViews = [
+      ...executableSql.matchAll(/create\s+view\s+public\.(\w+)/gi),
+    ].map((match) => match[1]!);
+
+    expect(createdViews.length).toBeGreaterThan(0);
+
+    for (const view of createdViews) {
+      expect(types, `types/database.types.ts is missing the view ${view}`).toMatch(
+        new RegExp(`^\\s{6}${view}:\\s*\\{`, 'm'),
+      );
+    }
+  });
+
+  it('sets security_invoker on every view it creates', () => {
+    // The migration-level half of the database assertion in
+    // `tests/db/security.test.ts`. A view without it runs as its owner and
+    // bypasses every policy on the tables beneath it, so the words have to be
+    // in the migration as well as the catalogue.
+    const statements = [
+      ...executableSql.matchAll(/create\s+view\s+public\.(\w+)([\s\S]*?)\sas\s/gi),
+    ];
+
+    expect(statements.length).toBeGreaterThan(0);
+
+    for (const [, name, preamble] of statements) {
+      expect(preamble ?? '', `view ${String(name)} must set security_invoker`).toMatch(
+        /security_invoker\s*=\s*true/i,
+      );
+    }
+  });
+
   it('declares every function in types/database.types.ts', () => {
     const types = readFileSync(join(process.cwd(), 'types', 'database.types.ts'), 'utf8');
 
@@ -594,6 +638,13 @@ describe('types stay in step with the schema', () => {
       // --- Phase 5 ----------------------------------------------------------
       'repayment_frequencies_guard_identity',
       'audit_loan_schedule_generated',
+      // --- Phase 6 ----------------------------------------------------------
+      'loan_payments_assign_number',
+      'loan_payments_guard_mutation',
+      'audit_payment_change',
+      'audit_payment_allocated',
+      'audit_loan_clearance',
+
       // Not a trigger function, and the one deliberate entry here that is not.
       // `generate_loan_schedule` is revoked from `authenticated` entirely: the
       // only legitimate caller is `disburse_loan`, which runs as the table

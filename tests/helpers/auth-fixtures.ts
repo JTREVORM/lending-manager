@@ -108,6 +108,11 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'clients', trigger: 'audit_client_change' },
     // Phase 5. The collection schedule is append-only in the same way, and
     // the installments reference `loan_periods`, so they are cleared first.
+    // Phase 6. The payment ledger is append-only, and its allocations
+    // reference `loan_installments` with `on delete restrict` — financial
+    // history must not cascade away — so the ledger goes before the schedule.
+    { table: 'payment_allocations', trigger: 'payment_allocations_no_delete' },
+    { table: 'loan_payments', trigger: 'loan_payments_no_delete' },
     { table: 'loan_installments', trigger: 'loan_installments_no_delete' },
     { table: 'loan_schedules', trigger: 'loan_schedules_no_delete' },
     // Phase 4. The loan snapshots and the contractual breakdown are
@@ -130,6 +135,8 @@ export async function deleteTestUsers(): Promise<void> {
     // Phase 4 rows first: `loans.client_id` is `on delete restrict`, so loans
     // go before the clients they belong to, and the snapshots before the
     // loans they hang off.
+    await query(`delete from public.payment_allocations`);
+    await query(`delete from public.loan_payments`);
     await query(`delete from public.loan_installments`);
     await query(`delete from public.loan_schedules`);
     await query(`delete from public.loan_periods`);

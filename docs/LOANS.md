@@ -697,6 +697,213 @@ Three things for Phase 6 to hold to:
 3. **Arrears never rewrite the plan** (Phase 7). Monday's UGX 4,000 row stays
    UGX 4,000 whatever happens on Tuesday. See ADR-026.
 
+# Phase 6 — payments, balances, receipts and reversals
+
+Phase 5 produced the collection plan: immutable rows saying what is due and
+when. Phase 6 records what the borrower actually hands over, works out what
+that covers, and answers "what is still owed" — without touching the plan.
+
+## The payment model
+
+Two tables, both append-only.
+
+| Table | Holds |
+| --- | --- |
+| `loan_payments` | one row per payment received: amount, method, reference, who took it, when, the receipt figures, its status |
+| `payment_allocations` | one row per collection a payment was applied to, with the principal and interest components |
+
+A payment is posted by `public.post_payment(loan, amount, method, reference,
+idempotency_key, notes)`, which does all of this in one transaction:
+
+1. locks the loan row and the idempotency key;
+2. returns the existing payment if that key has already been used (ADR-030);
+3. re-derives the loan's position from the schedule and the existing
+   allocations — never from anything the caller supplied;
+4. validates the amount against the minimum and the outstanding cap;
+5. inserts the payment, then its allocations in one `insert ... select`;
+6. reconciles: allocations sum to the amount, no collection is over-covered,
+   outstanding has not gone negative;
+7. clears the loan if nothing remains outstanding.
+
+`received_at` is database time. A clock the client controls would decide which
+collections a payment covers.
+
+### Payment methods
+
+`cash`, `mtn_mobile_money`, `airtel_money`. Phase 6 records the method; it does
+not talk to either network — MTN and Airtel integration is a later phase.
+
+A Mobile Money payment **requires** a transaction reference, and
+`(payment_method, external_reference)` is unique among posted payments, so the
+network's own identifier cannot be recorded against two payments. A cash
+payment **must not** carry one: cash has no network reference, and inventing a
+field for it would invite a staff member to type the receipt number into it.
+Cash duplicate protection is the idempotency key instead.
+
+### Status
+
+`posted` or `reversed`. There is no `pending`: this phase records money already
+in hand. See ADR-028.
+
+## Allocation
+
+**Oldest collection first, interest before principal within each collection.**
+
+```
+for each collection, by due date then installment number:
+    take      = min(what the collection still needs, what is unallocated)
+    interest  = min(the collection's uncovered interest, take)
+    principal = take - interest
+```
+
+Every component is a `min()` of two integers, so `principal + interest = take`
+exactly — no division, no rounding, no remainder to place. ADR-031 explains why
+this was chosen over pro-rata; `tests/db/payment-parity.test.ts` proves the SQL
+and the TypeScript agree payment by payment.
+
+### The minimum payment
+
+**The remaining amount of the earliest uncovered collection.** A smaller
+payment is refused, with a message naming the figure.
+
+The rule exists so that part-payments cannot accumulate into a mess where no
+collection is ever settled. It is also the figure the payment form prefills,
+because it is usually what the borrower has come to pay.
+
+### Overpayment
+
+A payment may cover several collections, including future ones: UGX 10,000
+against three UGX 4,000 collections covers the first two and 2,000 of the
+third. That is what a borrower paying ahead means.
+
+**A payment is capped at the outstanding balance.** More than that is refused
+rather than held as a credit. Phase 6 creates no client credit balances: a
+balance nobody has decided the rules for is worse than a refusal the staff
+member can act on immediately.
+
+### Clearance
+
+When the last shilling is covered the loan moves `active → cleared`, stamped
+with who took the final payment. The transition is validated against the
+derived ledger and refused if anything remains outstanding — including for
+`service_role`. See ADR-032.
+
+Reversing a payment on a cleared loan reopens it, through the same validated
+path.
+
+## Balances
+
+Three views, all `security_invoker`, so a reader sees only loans their own
+policies let them see.
+
+| View | Answers |
+| --- | --- |
+| `loan_installment_coverage` | per collection: expected, covered, remaining |
+| `loan_balances` | per loan: total paid, outstanding, principal and interest paid and remaining, payment counts, whether it reconciles |
+| `payment_collection_totals` | per day and method: what was collected |
+
+Everything is derived on read from the contract and the allocations of
+**posted** payments. There is no stored balance column, so:
+
+* a reversal changes every figure the instant it commits, with no cache to
+  invalidate;
+* nothing can disagree with the ledger;
+* `outstanding` cannot go negative — it is `scheduled_total - total_paid`, and
+  `post_payment` refuses any amount that would overshoot.
+
+Money columns are `bigint` throughout. `sum(bigint)` returns `numeric` in
+PostgreSQL, so every aggregate is cast back; `tests/db/schema.test.ts` checks
+the view columns' types for exactly this reason.
+
+`loan_balances.reconciles` reports whether the figures satisfied every
+invariant when they were read. It should be unreachable — the posting function
+reconciles before it commits — which is why the screen surfaces it loudly if it
+ever appears, and tells staff not to quote the figure.
+
+## Receipts
+
+A payment's number (`PAY260001`, from the Phase 1 reference sequence) **is** its
+receipt number. There is no second numbering: two identifiers for one event
+would eventually disagree.
+
+`outstanding_before` and `outstanding_after` are frozen onto the payment at
+posting, with a `CHECK` enforcing `after = before - amount`. They are a record
+of what the receipt said at the counter, not a balance anybody reads to answer
+what is owed. ADR-029 explains the distinction, and the bug it prevents.
+
+Immutable after posting: amount, method, reference, loan, the receipt figures,
+`received_at`, `recorded_by`, the idempotency key, and every allocation. The
+only permitted change is `posted → reversed`, and even that is refused unless
+the database can name the actor.
+
+A reversed receipt is marked `REVERSED`, shows the reason and the date, and
+still shows every original figure.
+
+## Reversal
+
+`public.reverse_payment(payment, reason)`:
+
+* requires `payments:reverse` — the Owner alone;
+* refuses a payment already reversed;
+* requires a reason of at least ten characters;
+* captures the live outstanding balance, flips the status, then asserts the
+  balance rose by exactly the payment's amount;
+* reopens the loan if it had been cleared.
+
+The payment, its amount, its receipt figures and all of its allocations are
+preserved. Nothing is deleted, and no negative entry is posted. See ADR-028.
+
+## Permissions
+
+| Capability | Client | Secretary/Treasurer | Manager | Owner/Admin |
+| --- | --- | --- | --- | --- |
+| `payments:view` | — | ✓ | ✓ | ✓ |
+| `payments:create` | — | ✓ | ✓ | ✓ |
+| `payments:reverse` | — | — | — | ✓ |
+
+A borrower sees their **own** payments through the portal, by row ownership
+rather than by capability — the same mechanism Phase 3 used for their profile.
+
+There is no capability to edit a payment, to edit an allocation, or to delete
+either, for any role. Owner included. Those operations do not exist in the
+schema, so no grant could reach them.
+
+## Row Level Security
+
+| Table | `authenticated` privileges | Policy |
+| --- | --- | --- |
+| `loan_payments` | SELECT only | the loan is visible **and** (`payments:view` or the borrower is you) |
+| `payment_allocations` | SELECT only | delegated entirely to the payment |
+
+Writes go through the two `SECURITY DEFINER` functions, which check the
+capability themselves. `authenticated` holds no INSERT, UPDATE or DELETE on
+either table, so there is no direct-write path to close.
+
+The views are `security_invoker`, which means they are read under the reader's
+own policies rather than their owner's. Without that a view would quietly
+bypass every policy on its base tables. `tests/db/schema.test.ts` asserts the
+flag is set on all three, and that none of them is readable by `anon`.
+
+## Phase 7 handoff
+
+Phase 7 adds missed-payment carry-forward, arrears, the three-day grace period
+and the 50% penalty. What Phase 6 deliberately leaves to it:
+
+1. **No arrears anywhere.** `loan_balances.unpaid_scheduled_due` is the sum of
+   scheduled amounts dated today or earlier that remain uncovered, and the
+   screens call it "due now". Whether that is *arrears* depends on a grace
+   period and carries a penalty; naming it arrears now would be a judgement
+   about a borrower on no basis.
+2. **No doubled next payment, no overdue state, no penalties.** The schedule
+   stays as agreed and the minimum payment rule is purely "the earliest
+   uncovered collection".
+3. **The schedule is still untouched.** Arrears will be a separate fact about
+   what happened to the plan, computed from the plan and the allocations —
+   neither of which Phase 7 needs to rewrite.
+4. **Penalties will be their own obligations**, not edits to installment
+   amounts. The allocation engine takes a list of obligations; a penalty is
+   another obligation in that list.
+
 ## Test commands
 
 ```bash

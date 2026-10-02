@@ -499,12 +499,20 @@ describeDb('loan row level security', () => {
       // The snapshots and the breakdown are read-only to every session: they
       // are written exclusively by `approve_loan`, which runs as the table
       // owner. The Phase 5 schedule tables are read-only for the same reason,
-      // written only by `generate_loan_schedule`. DELETE appears nowhere.
+      // written only by `generate_loan_schedule`. The Phase 6 ledger likewise,
+      // written only by `post_payment` and `reverse_payment`. DELETE appears
+      // nowhere.
       expect(rows.map((row) => `${row.table_name}:${row.privilege_type}`)).toEqual([
+        // Phase 6 adds derived balance views under this prefix. They carry no
+        // policy of their own — a view cannot — and reach the loan through
+        // `security_invoker`, so their access is the loans policy's.
+        'loan_balances:SELECT',
         'loan_client_snapshots:SELECT',
         'loan_guarantor_snapshots:SELECT',
         'loan_identity_snapshots:SELECT',
+        'loan_installment_coverage:SELECT',
         'loan_installments:SELECT',
+        'loan_payments:SELECT',
         'loan_periods:SELECT',
         'loan_schedules:SELECT',
         'loans:INSERT',
@@ -568,10 +576,11 @@ describeDb('loan row level security', () => {
         'loan_client_snapshots:SELECT',
         'loan_guarantor_snapshots:SELECT',
         'loan_identity_snapshots:SELECT',
-        // Phase 5 adds two more loan tables to this prefix. SELECT only:
-        // the collection schedule has no write policy and no write grant,
-        // because only generate_loan_schedule writes it.
+        // Phase 5 adds two more loan tables to this prefix, and Phase 6 a
+        // third. SELECT only: none of them has a write policy or a write
+        // grant, because only the trusted functions write them.
         'loan_installments:SELECT',
+        'loan_payments:SELECT',
         'loan_periods:SELECT',
         'loan_schedules:SELECT',
         'loans:INSERT',

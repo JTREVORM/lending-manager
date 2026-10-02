@@ -172,6 +172,24 @@ export const PERMISSIONS = [
   // granted by mistake.
   /** See the repayment collection schedule generated for a loan. */
   'schedules:view',
+
+  // Phase 6. Recording a payment and *un*recording one are deliberately
+  // separate capabilities, and reversal is the Owner's alone — the direct
+  // analogue of Phase 4 withholding `loans:disburse` from the Manager. A
+  // staff member who could both post and reverse could pocket a cash payment,
+  // hand over a receipt and withdraw the record afterwards, leaving a trail
+  // they wrote themselves.
+  //
+  // There is no `payments:view_receipt`: a receipt is a rendering of a
+  // payment, so anybody who can read the payment already reads every figure
+  // on it. And no edit or delete capability, because financial history is
+  // corrected by reversing, never by rewriting.
+  /** See the payment register, a payment record and its receipt. */
+  'payments:view',
+  /** Record a payment received from a borrower. */
+  'payments:create',
+  /** Reverse a payment recorded in error. */
+  'payments:reverse',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -244,6 +262,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // The Secretary/Treasurer collects the money, so the schedule is the
     // document they work from daily.
     'schedules:view',
+
+    // Records what comes over the counter. Cannot unrecord it.
+    'payments:view',
+    'payments:create',
   ],
 
   manager: [
@@ -296,6 +318,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view_sensitive',
 
     'schedules:view',
+
+    // The same as the Secretary/Treasurer. A Manager approves loans; that
+    // does not extend to withdrawing a payment a borrower holds a receipt for.
+    'payments:view',
+    'payments:create',
   ],
 
   owner_admin: [
@@ -340,6 +367,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view_sensitive',
 
     'schedules:view',
+
+    'payments:view',
+    'payments:create',
+    'payments:reverse',
   ],
 } as const;
 

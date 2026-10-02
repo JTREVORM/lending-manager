@@ -713,6 +713,75 @@ export type Database = {
         };
         Relationships: [];
       };
+      loan_payments: {
+        Row: {
+          id: string;
+          payment_number: string;
+          loan_id: string;
+          client_id: string;
+          amount: number;
+          payment_method: string;
+          external_reference: string | null;
+          idempotency_key: string;
+          status: string;
+          received_at: string;
+          recorded_by: string;
+          outstanding_before: number;
+          outstanding_after: number;
+          client_name_at_payment: string;
+          recorded_by_label: string;
+          notes: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversal_reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          payment_number?: string;
+          loan_id: string;
+          client_id: string;
+          amount: number;
+          payment_method: string;
+          external_reference?: string | null;
+          idempotency_key: string;
+          status?: string;
+          received_at?: string;
+          recorded_by: string;
+          outstanding_before: number;
+          outstanding_after: number;
+          client_name_at_payment: string;
+          recorded_by_label: string;
+          notes?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          payment_number?: string;
+          loan_id?: string;
+          client_id?: string;
+          amount?: number;
+          payment_method?: string;
+          external_reference?: string | null;
+          idempotency_key?: string;
+          status?: string;
+          received_at?: string;
+          recorded_by?: string;
+          outstanding_before?: number;
+          outstanding_after?: number;
+          client_name_at_payment?: string;
+          recorded_by_label?: string;
+          notes?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       loan_periods: {
         Row: {
           id: string;
@@ -885,6 +954,39 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_allocations: {
+        Row: {
+          id: string;
+          payment_id: string;
+          installment_id: string;
+          loan_id: string;
+          allocated_amount: number;
+          allocated_principal: number;
+          allocated_interest: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          payment_id: string;
+          installment_id: string;
+          loan_id: string;
+          allocated_amount: number;
+          allocated_principal: number;
+          allocated_interest: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          payment_id?: string;
+          installment_id?: string;
+          loan_id?: string;
+          allocated_amount?: number;
+          allocated_principal?: number;
+          allocated_interest?: number;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1112,8 +1214,67 @@ export type Database = {
       };
     };
 
+    /**
+     * Phase 6. Balances are derived rather than stored, so they live in views.
+     *
+     * Every one sets `security_invoker = true`, so reading a view applies the
+     * caller's Row Level Security on the underlying tables. `Row` only: a view
+     * here is read-only to every session.
+     */
     Views: {
-      [_ in never]: never;
+      loan_installment_coverage: {
+        Row: {
+          installment_id: string;
+          loan_id: string;
+          loan_period_id: string;
+          loan_period_number: number;
+          installment_number: number;
+          due_date: string;
+          expected_amount: number;
+          scheduled_principal: number;
+          scheduled_interest: number;
+          allocated_amount: number;
+          allocated_principal: number;
+          allocated_interest: number;
+          remaining_amount: number;
+          remaining_principal: number;
+          remaining_interest: number;
+        };
+        Relationships: [];
+      };
+      loan_balances: {
+        Row: {
+          loan_id: string;
+          loan_number: string;
+          client_id: string;
+          status: string;
+          contractual_principal: number;
+          contractual_interest: number;
+          total_expected_repayment: number;
+          scheduled_total: number;
+          total_paid: number;
+          principal_paid: number;
+          interest_paid: number;
+          outstanding: number;
+          principal_remaining: number;
+          interest_remaining: number;
+          fully_repaid: boolean;
+          posted_payment_total: number;
+          posted_payment_count: number;
+          reversed_payment_count: number;
+          last_payment_at: string | null;
+        };
+        Relationships: [];
+      };
+      payment_collection_totals: {
+        Row: {
+          collection_date: string;
+          payment_method: string;
+          payment_count: number;
+          total_amount: number;
+        };
+        Relationships: [];
+      };
     };
 
     Functions: {
@@ -1168,8 +1329,27 @@ export type Database = {
         Args: { p_loan_id: string };
         Returns: string;
       };
+      loan_outstanding: {
+        Args: { p_loan_id: string };
+        Returns: number;
+      };
       mask_nin: {
         Args: { p_nin: string };
+        Returns: string;
+      };
+      post_payment: {
+        Args: {
+          p_loan_id: string;
+          p_amount: number;
+          p_payment_method: string;
+          p_external_reference: string | null;
+          p_idempotency_key: string;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      reverse_payment: {
+        Args: { p_payment_id: string; p_reason: string };
         Returns: string;
       };
       storage_path_client_id: {

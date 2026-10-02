@@ -2,9 +2,12 @@ import { Construction } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
+import { PortalPaymentHistory } from '@/components/payments/portal-payment-history';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
+import { getCompanyBranding } from '@/lib/data/company';
+import { listClientPayments } from '@/lib/data/payments';
 import { signedDocumentUrl } from '@/lib/storage/documents';
 import { formatRecordedDate } from '@/lib/domain/client';
 import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
@@ -44,6 +47,21 @@ export default async function PortalPage() {
 
   const photoUrl = await signedDocumentUrl('clients', client?.photoPath ?? null);
   const firstName = context.fullName.split(' ')[0] ?? context.fullName;
+
+  // Phase 6. A borrower's own payments, through the ownership clause in the
+  // policy on `loan_payments` — no capability is involved and none could be:
+  // `payments:view` means "read the register" everywhere else.
+  //
+  // The balance is deliberately *not* fetched here. `loan_balances` would
+  // resolve for their own loan, but presenting a single outstanding figure in
+  // the portal invites the borrower to treat it as a settlement quote — and an
+  // early-settlement figure is a commercial decision this phase has not been
+  // asked to make. Their payment history is a statement of fact; a balance
+  // would be an offer. Staff quote balances.
+  const [payments, { branding }] = await Promise.all([
+    client === null ? Promise.resolve([]) : listClientPayments(client.id),
+    getCompanyBranding(),
+  ]);
 
   return (
     <div className="min-w-0 space-y-5">
@@ -106,32 +124,50 @@ export default async function PortalPage() {
         </Card>
       ) : null}
 
-      <Card>
-        <div className="flex gap-3">
-          <span className="bg-info-surface flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <Construction aria-hidden="true" className="text-info size-5" />
-          </span>
-          <div className="min-w-0 space-y-3">
-            <div>
-              <h2 className="text-base">Your loan details are being prepared</h2>
-              <p className="text-text-muted mt-1 text-sm">
-                {client === null
-                  ? 'Your account is set up and you can sign in. Your client record is not linked to this login yet — please speak to our staff.'
-                  : 'Your details are on record, but loan information is not available here yet. Please continue to speak to our staff about your balance and repayments in the meantime.'}
-              </p>
-            </div>
+      {client !== null && payments.length > 0 ? (
+        <section aria-labelledby="my-payments-heading" className="min-w-0 space-y-3">
+          <h2 id="my-payments-heading" className="text-base">
+            Payments you have made
+          </h2>
 
-            <div>
-              <h3 className="text-sm font-semibold">What you will see here</h3>
-              <ul className="text-text-muted mt-1.5 list-disc space-y-1 pl-5 text-sm">
-                <li>Your current loan and how much is left to pay</li>
-                <li>Your repayment schedule and the next amount due</li>
-                <li>Every payment you have made, with its receipt number</li>
-              </ul>
+          <PortalPaymentHistory payments={payments} timeZone={branding.timezone} />
+
+          <p className="text-text-muted text-sm">
+            Quote the receipt number if you ever need to ask about a payment. For your
+            current balance or what is due next, please speak to our staff.
+          </p>
+        </section>
+      ) : (
+        <Card>
+          <div className="flex gap-3">
+            <span className="bg-info-surface flex size-10 shrink-0 items-center justify-center rounded-lg">
+              <Construction aria-hidden="true" className="text-info size-5" />
+            </span>
+            <div className="min-w-0 space-y-3">
+              <div>
+                <h2 className="text-base">
+                  {client === null
+                    ? 'Your account is not linked yet'
+                    : 'No payments recorded yet'}
+                </h2>
+                <p className="text-text-muted mt-1 text-sm">
+                  {client === null
+                    ? 'Your account is set up and you can sign in. Your client record is not linked to this login yet — please speak to our staff.'
+                    : 'Once you make a payment it will appear here with its receipt number. Please speak to our staff about your balance and what is due next.'}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold">What you will see here</h3>
+                <ul className="text-text-muted mt-1.5 list-disc space-y-1 pl-5 text-sm">
+                  <li>Every payment you have made, with its receipt number</li>
+                  <li>How much of each payment went to interest and to principal</li>
+                </ul>
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }

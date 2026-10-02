@@ -61,6 +61,61 @@ const DEFAULT_BRANDING: CompanyBranding = {
   logoPath: COMPANY_DEFAULTS.logoPath,
 };
 
+/** The company fields a printed receipt shows. */
+export interface ReceiptBranding {
+  readonly companyName: string;
+  readonly companyPhone: string | null;
+  readonly receiptHeader: string | null;
+  readonly receiptFooter: string | null;
+  readonly timezone: string;
+}
+
+/**
+ * Company details for a receipt, from the current settings.
+ *
+ * Deliberately **not** snapshotted onto the payment. A receipt reprinted next
+ * year showing this year's phone number is helpful; one showing a disconnected
+ * number is not. The figures that must not move — the amount, the balances,
+ * the borrower's name, the actor — are snapshotted on the payment row itself.
+ *
+ * Never throws, for the same reason `getCompanyBranding` does not: a receipt
+ * must not fail to render because a settings read failed.
+ */
+export async function getReceiptBranding(): Promise<ReceiptBranding> {
+  const fallback: ReceiptBranding = {
+    companyName: COMPANY_DEFAULTS.companyName,
+    companyPhone: null,
+    receiptHeader: null,
+    receiptFooter: null,
+    timezone: COMPANY_DEFAULTS.timezone,
+  };
+
+  try {
+    const supabase = await createSupabaseServerClient();
+
+    const { data, error } = await supabase
+      .from('company_settings')
+      .select('company_name, phone, receipt_header, receipt_footer, timezone')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (error !== null || data === null) {
+      logger.debug('Receipt branding unreadable; using configured defaults.');
+      return fallback;
+    }
+
+    return {
+      companyName: String(data.company_name),
+      companyPhone: data.phone === null ? null : String(data.phone),
+      receiptHeader: data.receipt_header === null ? null : String(data.receipt_header),
+      receiptFooter: data.receipt_footer === null ? null : String(data.receipt_footer),
+      timezone: String(data.timezone),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Company branding, from the database where possible.
  *

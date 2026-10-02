@@ -41,7 +41,11 @@ const ROUTE_PERMISSIONS: readonly {
   { prefix: ROUTES.clients, permission: 'clients:view' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },
   { prefix: ROUTES.loans, permission: 'loans:view' },
-  { prefix: ROUTES.payments, permission: 'dashboard:view' },
+  // Its own capability as of Phase 6, rather than `dashboard:view`. The same
+  // latent defect Phase 3 found on `/clients`: a placeholder route left
+  // guarded by the broad capability stays open after the real screen lands,
+  // and the menu hiding the entry is not protection.
+  { prefix: ROUTES.payments, permission: 'payments:view' },
   { prefix: ROUTES.portal, permission: 'portal:view' },
   { prefix: ROUTES.account, permission: 'account:view' },
   // The dashboard is last: '/' prefixes everything, so it must only match

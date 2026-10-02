@@ -306,6 +306,67 @@ The repayment schedule engine, reviewed before declaring the phase complete.
 | A repayment frequency's meaning could be changed underneath a live loan | Phase 4 froze `loans.repayment_frequency`, but that is a *key*; the days it meant lived in `repayment_frequencies.interval_days`, which was freely editable. Editing `daily` from 1 to 2 would have silently redefined every loan that named it, with nothing in any loan record showing a change. | `key` and `interval_days` made immutable, and deletion refused outright (migration `20261005000200`); the cadence additionally snapshotted onto `loan_schedules` at generation. `label`, `is_active` and `sort_order` stay editable, so a cadence can still be retired. See ADR-027. |
 | A frequency with no loans could be deleted, losing a reference-vocabulary entry | The protection was the foreign keys from `loans` and `business_settings`, which only cover a row something already references. | The statement-level delete guard above covers every row, referenced or not. `tests/db/behaviour.test.ts` was strengthened to assert the referenced case, the unreferenced case and a delete matching nothing. |
 
+## Phase 6 verification
+
+The payment ledger, reviewed before declaring the phase complete.
+
+| Attack | Result |
+| --- | --- |
+| An anonymous visitor reads `loan_payments`, `payment_allocations` or any balance view | Refused. No grant on the tables, no grant on the views, and no rows come back from a count either. |
+| A borrower reads another borrower's payments | Refused, including by dropping the `WHERE` clause: the policy returns only payments on their own loans. |
+| A borrower reads another borrower's allocations, coverage or balance | Refused. The allocation policy delegates entirely to the payment, and the views are `security_invoker`, so they are read under the reader's own policies. |
+| A signed-in user with neither `payments:view` nor a client link reads any payment | Refused. |
+| A **Secretary/Treasurer** posts a payment | Permitted — this is the counter role. |
+| A **Secretary/Treasurer** or **Manager** reverses a payment | Refused. `payments:reverse` is the Owner's alone, checked inside `reverse_payment` rather than by hiding a button. |
+| A borrower posts a payment against their own loan | Refused. Recording money received is a staff act. |
+| A borrower calls `post_payment` or `reverse_payment` directly | Refused. The capability check is in the function, and a borrower holds neither capability. |
+| Any role **edits** a posted payment's amount, method, reference, loan, dates or receipt figures | Impossible before it is refused: `authenticated` holds no UPDATE privilege on `loan_payments` at all, so no session can reach the guard. The guard then refuses the same changes for the table owner and `service_role`. |
+| Any role edits or deletes an allocation | Refused for every role including `service_role`, by statement-level triggers. Financial history does not cascade away: `payment_allocations.installment_id` is `on delete restrict`. |
+| Any role **deletes** a payment | Refused for every role including `service_role`. There is no capability, no grant and no code path; the trigger is the backstop. |
+| An **Owner/Administrator** edits a historical payment or an allocation | Refused. Owner authority is about what the business may decide next, not about rewriting what it already recorded. |
+| `service_role` reverses a payment | Refused — there is no session, so the database cannot name who withdrew the money, and an unattributable reversal is not a reversal. The same rule ADR-025 applied to approvals. |
+| `service_role` sets `status = 'reversed'` by direct UPDATE | Refused. The guard permits only `posted → reversed` **with** a database-stamped actor. |
+| Reversing a payment twice | Refused, checked before anything else, so the balance cannot be credited twice. |
+| Reversing a reversal | Refused. If the borrower did pay, that is a new payment with its own receipt. |
+| A reversal with no reason, or a one-word reason | Refused. The reason is the only record of why a borrower's money was withdrawn; the floor is ten characters. |
+| The same Mobile Money transaction reference recorded twice | Refused by a partial unique index over posted payments. |
+| A cash payment carrying a transaction reference | Refused. Cash has no network reference, and a field for it would invite the receipt number to be typed in. |
+| A Mobile Money payment with no reference | Refused. |
+| **A double-tapped submission** (the same idempotency key, concurrently) | One payment, one set of allocations, one receipt. The second call returns the first payment rather than recording the money twice. |
+| Two genuinely identical cash payments on one day | Both recorded, with separate receipts. Distinguished from a retry by the server-minted key, not by a heuristic on the amount. |
+| **Concurrent payments racing to settle one loan** | Serialised on the loan row. Totals reconcile, no collection is over-covered, outstanding never goes negative, and exactly one clearance event is recorded. |
+| A payment larger than the outstanding balance | Refused, with the balance named. No credit balance is created. |
+| A payment smaller than the earliest uncovered collection | Refused, with the minimum named. |
+| A payment of zero or a negative amount | Refused. |
+| A payment against a draft, pending, approved, cancelled or rejected loan | Refused. Only a disbursed loan has collections to cover. |
+| A caller supplying `received_at`, `recorded_by`, or the receipt balances | Not possible — the function takes none of them and derives all four itself. A client-controlled clock would decide which collections a payment covers. |
+| A caller supplying the allocation | Not possible. The function allocates from figures it re-derives inside the locked transaction; nothing a browser computes is trusted. |
+| Marking a loan `cleared` while it still owes money | Refused for every caller including `service_role`: the transition is validated against the derived ledger. See ADR-032. |
+| Reopening a loan that owes nothing | Refused by the same check. |
+| Setting `cleared_at` or `cleared_by` by hand | Refused. Both are stamped by the database from its own view of the actor. |
+| A balance that disagrees with the ledger | None exist to disagree: there is no stored balance. Every figure is derived on read, and the whole table is asserted reconciled after each concurrency and parity run. |
+| `outstanding` going negative | Impossible by construction, and asserted across the table after every suite. |
+| A view bypassing Row Level Security | None. All three carry `security_invoker`, asserted in `tests/db/schema.test.ts` alongside a check that no view is readable by `anon`. |
+| A view granted more than SELECT | None. Every privilege is revoked from `public`, `anon` and `authenticated` explicitly before SELECT is granted to `authenticated` — see the issue below. |
+| A screen claiming an installment is paid, missed, overdue or in arrears | It does not. Those words are asserted absent from the rendered output of every payment screen; what is due today is called "due now". |
+| A reversal presented as a deletion | It is not. "Delete", "remove" and "void" are asserted absent from the register and the reversal panel, the reversed payment stays listed with its amount struck through, and its receipt stays reachable and marked `REVERSED`. |
+| A borrower's portal hiding a reversed receipt they hold | It does not. The row stays, labelled, with a line telling them to ask. |
+| Staff attribution or internal notes leaking into the portal | They do not. Asserted absent from the rendered borrower view. |
+| A NIN or personal data reaching a payment audit event | It does not. The events record amounts, counts, method and references — never client rows. |
+| A secret reaching the client bundle | 37 client files scanned, 0 hits; the same string appears in 5 server files, and a planted probe is detected. |
+| A float in the payment arithmetic | None. `npm run audit:money` covers all three engines across 31 financial files and verifies each reaches only integer money helpers. |
+
+## Issues found and fixed in Phase 6
+
+| Problem | Root cause | Fix |
+| --- | --- | --- |
+| The three new views were granted **ALL** privileges to `anon` and `authenticated` | Supabase's `ALTER DEFAULT PRIVILEGES` grants every privilege on new objects in `public` to both roles. `grant select` on top of that changes nothing. Not exploitable — `security_invoker` meant the base tables' own privileges denied the read — but the protection was coming from the wrong layer, and an `anon` role with `INSERT` on a view over `loan_payments` is not a posture worth keeping. Caught by the exhaustive privilege guard written in Phase 1. | Explicit `revoke all ... from public, anon, authenticated` on each view before granting SELECT to `authenticated`, plus a new `views` describe block asserting SELECT-only, no `anon`, and `security_invoker` on all three. |
+| Every money column in the views was `numeric`, not `bigint` | `sum(bigint)` returns `numeric` in PostgreSQL, so the widening was invisible in the SQL. A money figure in an arbitrary-precision decimal type is one implicit cast away from a fractional shilling. Caught by the Phase 4 money-type guard. | Every aggregate and derived figure cast back to `bigint`, and the guard extended to cover view columns as well as table columns. |
+| Reversing the **first** of two payments was refused | `reverse_payment` reconciled against the payment's own frozen receipt balance (`outstanding_after + amount`), which is two payments out of date the moment a later payment exists. Exactly the receipt-versus-live-balance confusion ADR-029 exists to prevent, made inside the function that most needed to avoid it. | Capture `public.loan_outstanding()` immediately before the update and assert the live balance rose by the payment's amount. Regression test with two payments added to `tests/db/payment-reversal.test.ts`. |
+| A reopened loan would have been recorded in the audit trail as **disbursed again** | Phase 4's `audit_loan_change` mapped every transition into `active` to `loan.disbursed`. Phase 6 introduced `cleared → active`, so a reversal would have written a false record that the business paid money out a second time. | `audit_loan_change` replaced in migration `20261006000800`: a transition into `active` from `cleared` is `loan.reopened`. The separate clearance trigger that had also duplicated `loan.cleared` was dropped. |
+| `/payments` was reachable with only `dashboard:view` | The route map carried the same defect Phase 3 found on `/clients`: a new route added to the map with the dashboard's capability rather than its own. The page's own data access would still have refused, but the proxy is where this belongs. | Route map and navigation changed to `payments:view`, with the route-map test extended to cover it. |
+| The payment search accepted `2026-13-01` as a date | `paymentSearchSchema` validated dates with a hand-written regex instead of the shared `businessDateSchema`, which calls `isBusinessDate`. A shape check is not a calendar check. | Reuses `businessDateSchema`. The lesson is the one Phase 2 already recorded: there is one date validator, and a second one is a bug waiting. |
+
 ## Reporting
 
 Security issues in this system should go to the Owner/Administrator directly,

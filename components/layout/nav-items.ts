@@ -87,8 +87,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Payments',
     shortLabel: 'Pay',
     icon: Receipt,
-    permission: 'dashboard:view',
-    phase: 5,
+    // Its own capability as of Phase 6. A borrower reaches their own payment
+    // history through the portal, not this entry.
+    permission: 'payments:view',
+    phase: 6,
   },
   {
     href: ROUTES.users,

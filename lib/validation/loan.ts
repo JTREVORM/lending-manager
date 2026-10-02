@@ -29,8 +29,7 @@
 import { z } from 'zod';
 
 import { MAX_SUPPORTED_TERM_MONTHS } from '@/lib/domain/loan';
-import { MAX_UGX_AMOUNT } from '@/lib/domain/money';
-import { uuidSchema } from './common';
+import { ugxAmountFromText, uuidSchema } from './common';
 
 /**
  * A loan principal, in whole shillings.
@@ -39,54 +38,12 @@ import { uuidSchema } from './common';
  * `100000.50` has either mistyped or is thinking in a currency that is not
  * UGX, and quietly turning it into `100001` would hide which.
  */
-export const loanPrincipalSchema = z
-  .union([z.string(), z.number()])
-  .transform((value, ctx) => {
-    const text = typeof value === 'number' ? String(value) : value.trim();
-
-    if (text === '') {
-      ctx.addIssue({ code: 'custom', message: 'Enter the loan amount.' });
-      return z.NEVER;
-    }
-
-    // Spaces are formatting. Commas are *conditionally* formatting, and that
-    // distinction matters more than it looks.
-    //
-    // Stripping every comma would turn `100000,50` — a decimal comma, which
-    // much of the world writes — into 10,000,050 shillings. A hundredfold
-    // error, accepted silently, on the single most important number in the
-    // system. So a comma is accepted only where a thousands separator
-    // belongs: groups of exactly three digits, from the right.
-    const spaceless = text.replace(/\s/g, '');
-
-    const grouped = /^\d{1,3}(,\d{3})+$/.test(spaceless);
-    const plain = /^\d+$/.test(spaceless);
-
-    if (!grouped && !plain) {
-      ctx.addIssue({
-        code: 'custom',
-        message:
-          'Enter a whole number of shillings, for example 600000 or 600,000. Ugandan shillings have no smaller unit.',
-      });
-      return z.NEVER;
-    }
-
-    const cleaned = spaceless.replace(/,/g, '');
-
-    const amount = Number(cleaned);
-
-    if (!Number.isSafeInteger(amount) || amount <= 0) {
-      ctx.addIssue({ code: 'custom', message: 'Enter an amount greater than zero.' });
-      return z.NEVER;
-    }
-
-    if (amount > MAX_UGX_AMOUNT) {
-      ctx.addIssue({ code: 'custom', message: 'That amount is implausibly large.' });
-      return z.NEVER;
-    }
-
-    return amount;
-  });
+export const loanPrincipalSchema = ugxAmountFromText({
+  empty: 'Enter the loan amount.',
+  malformed:
+    'Enter a whole number of shillings, for example 600000 or 600,000. Ugandan shillings have no smaller unit.',
+  nonPositive: 'Enter an amount greater than zero.',
+});
 
 /**
  * A loan term in whole months.

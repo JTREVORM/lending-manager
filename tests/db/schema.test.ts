@@ -48,9 +48,13 @@ describeDb('tables', () => {
     // Phase 5: the collection plan — one generation record per loan, and the
     // scheduled collections that allocate the contractual breakdown.
     'loan_installments',
+    'loan_payments',
     'loan_periods',
     'loan_schedules',
     'loans',
+    // Phase 6: the payment ledger. Balances are derived in views rather than
+    // stored, so there is no balance table here.
+    'payment_allocations',
     // Phase 2: the capability vocabulary and the role-to-capability map.
     'permissions',
     'profiles',
@@ -226,17 +230,36 @@ describeDb('foreign keys', () => {
       // money, and that attribution is evidence rather than provenance.
       'loan_installments.loan_id -> loans (c)',
       'loan_installments.loan_period_id -> loan_periods (c)',
+      // Phase 6. `r` restricts everywhere on the ledger, with no `c` and no
+      // `n`: a payment is financial evidence, so nothing it references may be
+      // deleted out from under it and no attribution may be degraded to NULL.
+      'loan_payments.client_id -> clients (r)',
+      'loan_payments.loan_id -> loans (r)',
+      'loan_payments.recorded_by -> profiles (r)',
+      'loan_payments.reversed_by -> profiles (r)',
       'loan_periods.loan_id -> loans (c)',
       'loan_schedules.generated_by -> profiles (r)',
       'loan_schedules.loan_id -> loans (c)',
       'loan_schedules.repayment_frequency -> repayment_frequencies (r)',
       'loans.approved_by -> profiles (n)',
       'loans.cancelled_by -> profiles (n)',
+      // Phase 6. `r`, not `n`: the loan says who settled it, and that
+      // attribution is evidence rather than provenance.
+      'loans.cleared_by -> profiles (r)',
       'loans.client_id -> clients (r)',
       'loans.created_by -> profiles (n)',
       'loans.disbursed_by -> profiles (n)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
+      // Phase 6. `r` restricts everywhere, with no `c` and no `n`: a payment
+      // is financial evidence, so nothing it references may be deleted out
+      // from under it and no attribution may be degraded to NULL. That is
+      // stricter than the loan's own lifecycle columns, which null gracefully
+      // because the audit trail holds the authoritative record — a payment's
+      // actor is on the receipt a borrower is holding.
+      'payment_allocations.installment_id -> loan_installments (r)',
+      'payment_allocations.loan_id -> loans (r)',
+      'payment_allocations.payment_id -> loan_payments (r)',
       'profiles.auth_user_id -> users (r)',
       'reference_sequences.scope -> reference_formats (r)',
       // Phase 2. RESTRICT here too: a capability cannot be deleted out from

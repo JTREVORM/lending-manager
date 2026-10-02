@@ -216,3 +216,23 @@ sections of [LOANS.md](LOANS.md).
 Two tables are added: `loan_schedules` (one generation record per loan,
 carrying the cadence snapshot) and `loan_installments` (the collections
 themselves). Both are append-only and carry no payment state — see ADR-026.
+
+## Phase 6 — payments, balances, receipts and reversals
+
+The payment model, the allocation order, the minimum-payment and overpayment
+rules, idempotency, balance derivation, clearance, the reversal model, receipt
+semantics, permissions, Row Level Security and the Phase 7 handoff are
+documented in the Phase 6 sections of [LOANS.md](LOANS.md).
+
+Two tables are added — `loan_payments` and `payment_allocations`, both
+append-only — together with three derived views: `loan_installment_coverage`,
+`loan_balances` and `payment_collection_totals`. No balance is stored
+anywhere; every figure is computed on read from the immutable schedule and the
+allocations of posted payments, so a reversal changes every answer at once and
+nothing can disagree with the ledger. See ADR-028 through ADR-032.
+
+The allocation rule exists twice, deliberately: `public.post_payment` is
+authoritative and writes the ledger, while `lib/domain/payment.ts` drives the
+preview a staff member confirms against. `tests/db/payment-parity.test.ts`
+reconciles the two across thirty randomly paid-off loans, the same way
+`schedule-parity` does for Phase 5.

@@ -26,6 +26,10 @@ import {
   termsAreEditable,
 } from '@/lib/domain/loan';
 import { getLoanSchedule, verifyStoredSchedule } from '@/lib/data/schedules';
+import { getLoanPosition, listLoanPayments } from '@/lib/data/payments';
+import { PaymentRegister } from '@/components/payments/payment-register';
+import { LoanBalanceSummary } from '@/components/payments/loan-balance-summary';
+import { getCompanyBranding } from '@/lib/data/company';
 import { businessToday } from '@/lib/domain/datetime';
 import { formatCalendarDate, formatRecordedDate, maskNin } from '@/lib/domain/client';
 import { formatUgx, toUgx } from '@/lib/domain/money';
@@ -72,6 +76,8 @@ export default async function LoanDetailPage({
   const canSeeSensitive = contextCan(context, 'loans:view_sensitive');
 
   const canSeeSchedule = contextCan(context, 'schedules:view');
+  const canSeePayments = contextCan(context, 'payments:view');
+  const today = businessToday();
 
   const [
     periods,
@@ -96,6 +102,15 @@ export default async function LoanDetailPage({
     canSeeSchedule && loan.status !== 'draft' && loan.status !== 'pending_approval'
       ? getLoanSchedule(loanId, loan.totalExpectedRepayment)
       : Promise.resolve(null),
+  ]);
+
+  // Phase 6. A balance exists only once there is a schedule to owe against, so
+  // a draft or an approved loan has none — which is a different thing from
+  // owing zero.
+  const [position, payments, companyBranding] = await Promise.all([
+    canSeePayments ? getLoanPosition(loanId, today) : Promise.resolve(null),
+    canSeePayments ? listLoanPayments(loanId) : Promise.resolve([]),
+    getCompanyBranding(),
   ]);
 
   // The stored schedule, verified before it is shown, on the same reasoning as
@@ -274,6 +289,67 @@ export default async function LoanDetailPage({
           </p>
         ) : null}
       </section>
+
+      {/* --- Balance ------------------------------------------------------ */}
+      {position !== null ? (
+        <section aria-labelledby="balance-heading" className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="balance-heading" className="text-text text-lg font-semibold">
+              Balance
+            </h2>
+
+            {contextCan(context, 'payments:create') &&
+            loan.status === 'active' &&
+            position.outstanding > 0 ? (
+              <Link
+                href={`${ROUTES.payments}/new?loanId=${loan.id}`}
+                className="bg-accent text-accent-foreground focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Record a payment
+              </Link>
+            ) : null}
+          </div>
+
+          <LoanBalanceSummary
+            totalExpectedRepayment={position.totalExpectedRepayment}
+            totalPaid={position.totalPaid}
+            outstanding={position.outstanding}
+            principalPaid={position.principalPaid}
+            principalRemaining={position.principalRemaining}
+            interestPaid={position.interestPaid}
+            interestRemaining={position.interestRemaining}
+            unpaidScheduledDue={position.unpaidScheduledDue}
+            postedPaymentCount={position.postedPaymentCount}
+            reversedPaymentCount={position.reversedPaymentCount}
+            fullyRepaid={position.fullyRepaid}
+            reconciles={position.reconciles}
+            reconciliationProblem={position.reconciliationProblem}
+          />
+        </section>
+      ) : null}
+
+      {/* --- Payments ----------------------------------------------------- */}
+      {canSeePayments && payments.length > 0 ? (
+        <section aria-labelledby="payments-heading" className="min-w-0 space-y-3">
+          <h2 id="payments-heading" className="text-text text-lg font-semibold">
+            Payments received
+          </h2>
+
+          <PaymentRegister
+            payments={payments}
+            page={1}
+            hasMore={false}
+            timeZone={companyBranding.branding.timezone}
+            showFilters={false}
+          />
+
+          <p className="text-text-muted text-sm">
+            What was collected, which is a separate record from the schedule above — that
+            says what is due. A reversed payment stays listed and struck through; it no
+            longer counts toward the balance.
+          </p>
+        </section>
+      ) : null}
 
       {/* --- Collection schedule ------------------------------------------ */}
       {canSeeSchedule && schedule !== null ? (
@@ -455,11 +531,10 @@ export default async function LoanDetailPage({
         />
       </section>
 
-      {/* Payments are a later phase. No placeholder section: an empty
-          "Payments" heading would read as "this loan has had no payments",
-          which is not a statement this system can currently make. The
-          schedule above says what is *due*, and nothing about what was
-          collected. */}
+      {/* Arrears, grace periods and penalties are Phase 7. No placeholder
+          section: an empty "Arrears" heading would read as "this borrower is
+          in arrears of nothing", and whether an unpaid collection *is* arrears
+          is precisely the judgement this phase does not make. */}
     </div>
   );
 }

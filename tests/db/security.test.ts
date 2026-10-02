@@ -99,18 +99,30 @@ describeDb('row level security', () => {
       // every session: they are written exclusively by `approve_loan`, which
       // runs as the table owner. So nobody can write a snapshot by hand, and
       // a stored snapshot is always one the database captured.
+      // Phase 6. The derived balance views: SELECT only, and only to
+      // `authenticated`. Every privilege is named in the REVOKE because
+      // Supabase's ALTER DEFAULT PRIVILEGES grants them all on a new view.
+      'loan_balances:SELECT',
       'loan_client_snapshots:SELECT',
       'loan_guarantor_snapshots:SELECT',
       'loan_identity_snapshots:SELECT',
+      'loan_installment_coverage:SELECT',
       // Phase 5. SELECT and nothing else: the collection schedule is written
       // only by generate_loan_schedule, which runs as the table owner, so no
       // write privilege exists for a session to misuse.
       'loan_installments:SELECT',
+      // Phase 6. The payment ledger, likewise: post_payment and
+      // reverse_payment are the only writers.
+      'loan_payments:SELECT',
       'loan_periods:SELECT',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      // Phase 6. The payment ledger: SELECT only. post_payment and
+      // reverse_payment are the only writers, and they run as the table owner.
+      'payment_allocations:SELECT',
+      'payment_collection_totals:SELECT',
       'permissions:SELECT',
       'profiles:INSERT',
       'profiles:SELECT',
@@ -174,6 +186,11 @@ describeDb('row level security', () => {
       // Phase 4. SELECT only on the breakdown and the snapshots: they are
       // written exclusively by `approve_loan`, which runs as the table owner.
       // No DELETE policy anywhere — a loan is cancelled, never deleted.
+      //
+      // The Phase 6 balance views are deliberately absent: a view cannot
+      // carry a policy, which is exactly why `security_invoker = true`
+      // matters. Their access comes from the base tables' policies, and the
+      // `views` block below asserts every one of them sets it.
       'loan_client_snapshots:SELECT',
       'loan_guarantor_snapshots:SELECT',
       'loan_identity_snapshots:SELECT',
@@ -181,11 +198,15 @@ describeDb('row level security', () => {
       // only by generate_loan_schedule, which runs as the table owner, so no
       // write privilege exists for a session to misuse.
       'loan_installments:SELECT',
+      // Phase 6. The payment ledger, likewise: post_payment and
+      // reverse_payment are the only writers.
+      'loan_payments:SELECT',
       'loan_periods:SELECT',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      'payment_allocations:SELECT',
       'permissions:SELECT',
       'profiles:INSERT',
       'profiles:SELECT',
@@ -284,10 +305,23 @@ describeDb('row level security', () => {
       // than either branch alone.
       loan_installments: /FROM \(?loans l\b/,
       loan_schedules: /FROM \(?loans l\b/,
+      // Phase 6. The payment ledger delegates to the loan; allocations
+      // delegate to the payment.
+      loan_payments: /FROM \(?loans l\b/,
+      // This one delegates *entirely*, with no capability of its own, and
+      // that is load-bearing rather than lax: the balance views aggregate
+      // allocations, so a role that could read a payment but not its
+      // allocations would see a silently under-reported balance. Making the
+      // two visibilities one visibility is the point.
+      payment_allocations: /FROM loan_payments lp\b/,
     };
 
     /** Policies that must also name a capability, on top of delegating. */
-    const ALSO_REQUIRES_CAPABILITY = new Set(['loan_installments', 'loan_schedules']);
+    const ALSO_REQUIRES_CAPABILITY = new Set([
+      'loan_installments',
+      'loan_schedules',
+      'loan_payments',
+    ]);
 
     for (const row of rows) {
       const delegate = DELEGATES_TO[row.tablename];
@@ -337,6 +371,92 @@ describeDb('row level security', () => {
   });
 });
 
+/**
+ * Views, which are a Row Level Security bypass unless told otherwise.
+ *
+ * A PostgreSQL view runs as its **owner** by default, so a view over a
+ * policy-protected table hands every row to anybody who can select from the
+ * view. `security_invoker = true` makes the caller's policies apply instead.
+ *
+ * Phase 6 introduced the first views in this schema — the derived balance
+ * views — and these assertions exist so a later one cannot quietly
+ * reintroduce the bypass.
+ */
+describeDb('views', () => {
+  it('sets security_invoker on every view, so policies still apply', async () => {
+    const rows = await query<{ relname: string; invoker: string | null }>(
+      `select c.relname,
+              (select option_value from pg_options_to_table(c.reloptions)
+                where option_name = 'security_invoker') as invoker
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'v'
+        order by c.relname`,
+    );
+
+    // There are views, so this is a real check rather than a vacuous one.
+    expect(rows.length).toBeGreaterThan(0);
+
+    for (const row of rows) {
+      expect(row.invoker, `${row.relname} must set security_invoker`).toBe('true');
+    }
+  });
+
+  it('creates exactly the expected views, and no more', () => {
+    return query<{ relname: string }>(
+      `select c.relname
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'v'
+        order by c.relname`,
+    ).then((rows) => {
+      expect(rows.map((row) => row.relname)).toEqual([
+        // Phase 6. Balances are derived rather than stored, so a reversal
+        // changes every figure the instant it commits.
+        'loan_balances',
+        'loan_installment_coverage',
+        'payment_collection_totals',
+      ]);
+    });
+  });
+
+  it('grants a view nothing but SELECT, and nothing at all to anon', async () => {
+    // Supabase's ALTER DEFAULT PRIVILEGES grants every privilege on a new
+    // object in `public` to both `anon` and `authenticated`, and
+    // `revoke all from public` does not remove them because they were granted
+    // to the roles by name. Each role has to be named in the REVOKE.
+    //
+    // This assertion is here because the first draft of migration
+    // 20261006000400 omitted it, and a financial view arrived with INSERT,
+    // UPDATE, DELETE and TRUNCATE granted to anonymous visitors.
+    const rows = await query<{
+      grantee: string;
+      table_name: string;
+      privilege_type: string;
+    }>(
+      `select g.grantee, g.table_name, g.privilege_type
+         from information_schema.role_table_grants g
+         join pg_class c on c.relname = g.table_name
+         join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+        where c.relkind = 'v'
+          and g.table_schema = 'public'
+          and g.grantee in ('anon', 'authenticated')
+        order by g.grantee, g.table_name, g.privilege_type`,
+    );
+
+    for (const row of rows) {
+      expect(
+        `${row.grantee}:${row.privilege_type}`,
+        `${row.table_name} grants ${row.privilege_type} to ${row.grantee}`,
+      ).toBe('authenticated:SELECT');
+    }
+
+    // And every view is readable by a signed-in caller, so the revoke did not
+    // go too far.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(3);
+  });
+});
+
 describeDb('privileged functions', () => {
   it('marks exactly the intended functions SECURITY DEFINER', async () => {
     const rows = await query<{ proname: string }>(
@@ -363,11 +483,17 @@ describeDb('privileged functions', () => {
       'audit_client_remark_added',
       'audit_guarantor_change',
       'audit_guarantor_identity_change',
+      // Phase 6 replaced this function rather than adding a second trigger:
+      // it now distinguishes a reopening from a disbursement and records the
+      // balance that justified a clearance.
       'audit_loan_change',
       // Phase 5: one event per generated schedule.
       'audit_loan_schedule_generated',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',
+      // Phase 6: the payment ledger's trail.
+      'audit_payment_allocated',
+      'audit_payment_change',
       'audit_profile_change',
       'audit_settings_change',
       'audit_user_role_change',
@@ -390,10 +516,18 @@ describeDb('privileged functions', () => {
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
       'link_client_profile',
+      // Phase 6. `loan_outstanding` is deliberately NOT here: it is SECURITY
+      // INVOKER, so a session reading a balance sees only what Row Level
+      // Security allows. Making it DEFINER would have turned the balance
+      // views into a bypass.
+      'loan_payments_assign_number',
+      'loan_payments_guard_mutation',
       'loans_assign_loan_number',
       'loans_enforce_active_limit',
       'loans_guard_transition',
       'next_reference',
+      // Phase 6: the two trusted ledger paths.
+      'post_payment',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
@@ -401,6 +535,7 @@ describeDb('privileged functions', () => {
       'record_security_event',
       'record_sign_in',
       'repayment_frequencies_guard_identity',
+      'reverse_payment',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',
@@ -490,9 +625,17 @@ describeDb('privileged functions', () => {
       'current_user_permissions',
       'current_user_role_keys',
       'disburse_loan',
+      // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
+      // what Row Level Security allows it to.
+      'loan_outstanding',
       'mask_nin',
+      // Phase 6. The two trusted ledger paths. Each re-checks the caller's
+      // capability inside, because SECURITY DEFINER means the grant alone
+      // decides nothing.
+      'post_payment',
       'record_security_event',
       'record_sign_in',
+      'reverse_payment',
       'storage_path_client_id',
       'storage_path_guarantor_id',
       'storage_path_kind',
