@@ -799,7 +799,7 @@ policies let them see.
 | View | Answers |
 | --- | --- |
 | `loan_installment_coverage` | per collection: expected, covered, remaining |
-| `loan_balances` | per loan: total paid, outstanding, principal and interest paid and remaining, payment counts, whether it reconciles |
+| `loan_balances` | per loan: total paid, outstanding, principal and interest paid and remaining, payment counts, whether it is fully repaid |
 | `payment_collection_totals` | per day and method: what was collected |
 
 Everything is derived on read from the contract and the allocations of
@@ -815,10 +815,13 @@ Money columns are `bigint` throughout. `sum(bigint)` returns `numeric` in
 PostgreSQL, so every aggregate is cast back; `tests/db/schema.test.ts` checks
 the view columns' types for exactly this reason.
 
-`loan_balances.reconciles` reports whether the figures satisfied every
-invariant when they were read. It should be unreachable — the posting function
-reconciles before it commits — which is why the screen surfaces it loudly if it
-ever appears, and tells staff not to quote the figure.
+`getLoanPosition` re-checks every balance invariant against the figures it has
+just read, and reports a `reconciles` flag with the problem. It should be
+unreachable — the posting function reconciles before it commits — which is why
+the screen surfaces it loudly if it ever appears, and tells staff not to quote
+the figure. Deliberately not a view column: it is a statement about figures a
+reader has in hand, and computing it beside them is what makes it a check
+rather than another derived number to trust.
 
 ## Receipts
 
@@ -889,9 +892,10 @@ flag is set on all three, and that none of them is readable by `anon`.
 Phase 7 adds missed-payment carry-forward, arrears, the three-day grace period
 and the 50% penalty. What Phase 6 deliberately leaves to it:
 
-1. **No arrears anywhere.** `loan_balances.unpaid_scheduled_due` is the sum of
-   scheduled amounts dated today or earlier that remain uncovered, and the
-   screens call it "due now". Whether that is *arrears* depends on a grace
+1. **No arrears anywhere.** The only figure of that shape is
+   `unpaidScheduledDue`, derived from the coverage view against today's
+   business date — the sum of scheduled amounts dated today or earlier that
+   remain uncovered — and the screens call it "due now". Whether that is *arrears* depends on a grace
    period and carries a penalty; naming it arrears now would be a judgement
    about a borrower on no basis.
 2. **No doubled next payment, no overdue state, no penalties.** The schedule
