@@ -236,6 +236,11 @@ describe('authorization matrix', () => {
     'loans:disburse': ['owner_admin'],
     'loans:cancel': ['owner_admin'],
     'loans:view_sensitive': ['manager', 'owner_admin'],
+
+    // Phase 5. Every staff role that reads the loan register also reads the
+    // collection schedules; the borrower reaches their own through the
+    // ownership clause in the policy rather than through a capability.
+    'schedules:view': ['secretary_treasurer', 'manager', 'owner_admin'],
   };
 
   it('covers every declared permission', () => {

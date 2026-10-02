@@ -33,6 +33,15 @@ const FINANCIAL_FILES = [
   'lib/validation/loan.ts',
   'lib/loans/actions.ts',
   'lib/data/loans.ts',
+  // Phase 5. The schedule allocates contractual money across collection
+  // dates, so it is held to the same standard as the engine that produced it.
+  'lib/domain/repayment-schedule.ts',
+  'lib/data/schedules.ts',
+  // The screens that render money. They only format, but a `toFixed` here
+  // would show a borrower a different figure from the one on record.
+  'components/loans/loan-breakdown-table.tsx',
+  'components/loans/repayment-schedule-table.tsx',
+  'components/loans/schedule-summary.tsx',
 ];
 
 const UNSAFE = [
@@ -57,6 +66,25 @@ const PERMITTED_MONEY_IMPORTS = new Set([
   'UgxAmount',
 ]);
 
+/**
+ * Integer arithmetic on **counts and calendar dates**, which the money
+ * patterns above cannot tell apart from arithmetic on amounts.
+ *
+ * Each entry is a specific expression with the reason it is not a money
+ * hazard. The list is verified below: an entry that no longer appears in its
+ * file fails the audit, so an exemption cannot outlive the line it was
+ * written for and quietly cover something new.
+ */
+const ACKNOWLEDGED = [
+  {
+    path: 'lib/domain/repayment-schedule.ts',
+    snippet: 'Math.floor(totalDays / intervalDays)',
+    reason:
+      'how many collection dates fit in the term — a count of days, not an amount. ' +
+      'Every amount in this file goes through divideEvenly, which is BigInt.',
+  },
+];
+
 const findings = [];
 
 function scan(path) {
@@ -75,6 +103,12 @@ function scan(path) {
       return;
     }
 
+    const cleared = ACKNOWLEDGED.some(
+      (entry) => entry.path === path && line.includes(entry.snippet),
+    );
+
+    if (cleared) return;
+
     for (const [pattern, label] of UNSAFE) {
       if (pattern.test(line)) {
         findings.push({ path, line: index + 1, label, text: trimmed.slice(0, 80) });
@@ -86,23 +120,35 @@ function scan(path) {
 for (const file of FINANCIAL_FILES) scan(file);
 
 const migrations = readdirSync('supabase/migrations')
-  .filter((name) => name.startsWith('20261004') && name.endsWith('.sql'))
+  .filter(
+    (name) =>
+      (name.startsWith('20261004') || name.startsWith('20261005')) &&
+      name.endsWith('.sql'),
+  )
   .map((name) => join('supabase/migrations', name));
 
 for (const file of migrations) scan(file);
 
 // --- The money.ts exclusion, verified ---------------------------------------
-const engine = readFileSync('lib/domain/loan.ts', 'utf8');
-const importBlock = /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/domain\/money'/.exec(engine);
+// Both engines: the Phase 4 loan calculation and the Phase 5 schedule
+// allocation. Each must reach the money layer only through helpers this audit
+// has cleared as integer or BigInt throughout.
+for (const enginePath of ['lib/domain/loan.ts', 'lib/domain/repayment-schedule.ts']) {
+  const engine = readFileSync(enginePath, 'utf8');
+  const importBlock = /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/domain\/money'/.exec(
+    engine,
+  );
 
-if (importBlock === null) {
-  findings.push({
-    path: 'lib/domain/loan.ts',
-    line: 0,
-    label: 'no recognisable money import — the audit cannot verify what it uses',
-    text: '',
-  });
-} else {
+  if (importBlock === null) {
+    findings.push({
+      path: enginePath,
+      line: 0,
+      label: 'no recognisable money import — the audit cannot verify what it uses',
+      text: '',
+    });
+    continue;
+  }
+
   const imported = importBlock[1]
     .split(',')
     .map((name) => name.replace(/\btype\b/, '').trim())
@@ -111,12 +157,26 @@ if (importBlock === null) {
   for (const name of imported) {
     if (!PERMITTED_MONEY_IMPORTS.has(name)) {
       findings.push({
-        path: 'lib/domain/loan.ts',
+        path: enginePath,
         line: 0,
         label: `reaches \`${name}\` in the money layer, which this audit has not cleared as integer-only`,
         text: '',
       });
     }
+  }
+}
+
+// --- Every acknowledged exemption still describes a real line --------------
+// Without this an exemption outlives the code it was written for, and the next
+// `Math.floor` on that file passes unexamined.
+for (const entry of ACKNOWLEDGED) {
+  if (!readFileSync(entry.path, 'utf8').includes(entry.snippet)) {
+    findings.push({
+      path: entry.path,
+      line: 0,
+      label: `stale exemption: \`${entry.snippet}\` is no longer in this file`,
+      text: '',
+    });
   }
 }
 
@@ -138,5 +198,8 @@ if (findings.length > 0) {
 
 const count = FINANCIAL_FILES.length + migrations.length;
 console.log(`  ${String(count)} financial files scanned, no hazard found`);
-console.log('  the loan engine reaches only integer/BigInt money helpers');
+console.log('  both engines reach only integer/BigInt money helpers');
+console.log(
+  `  ${String(ACKNOWLEDGED.length)} acknowledged non-money exemption(s), each verified present`,
+);
 console.log('  scanner verified against a positive control');

@@ -671,6 +671,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      loan_installments: {
+        Row: {
+          id: string;
+          loan_id: string;
+          loan_period_id: string;
+          loan_period_number: number;
+          installment_number: number;
+          period_installment_number: number;
+          due_date: string;
+          scheduled_principal: number;
+          scheduled_interest: number;
+          expected_amount: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          loan_period_id: string;
+          loan_period_number: number;
+          installment_number: number;
+          period_installment_number: number;
+          due_date: string;
+          scheduled_principal: number;
+          scheduled_interest: number;
+          expected_amount: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          loan_period_id?: string;
+          loan_period_number?: number;
+          installment_number?: number;
+          period_installment_number?: number;
+          due_date?: string;
+          scheduled_principal?: number;
+          scheduled_interest?: number;
+          expected_amount?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       loan_periods: {
         Row: {
           id: string;
@@ -704,6 +746,42 @@ export type Database = {
           total_obligation?: number;
           closing_principal?: number;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      loan_schedules: {
+        Row: {
+          loan_id: string;
+          repayment_frequency: string;
+          frequency_label: string;
+          interval_days: number;
+          disbursement_date: string;
+          business_timezone: string;
+          generator_version: number;
+          generated_at: string;
+          generated_by: string | null;
+        };
+        Insert: {
+          loan_id: string;
+          repayment_frequency: string;
+          frequency_label: string;
+          interval_days: number;
+          disbursement_date: string;
+          business_timezone: string;
+          generator_version?: number;
+          generated_at?: string;
+          generated_by?: string | null;
+        };
+        Update: {
+          loan_id?: string;
+          repayment_frequency?: string;
+          frequency_label?: string;
+          interval_days?: number;
+          disbursement_date?: string;
+          business_timezone?: string;
+          generator_version?: number;
+          generated_at?: string;
+          generated_by?: string | null;
         };
         Relationships: [];
       };

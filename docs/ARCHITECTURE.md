@@ -204,3 +204,15 @@ storage rules, duplicate handling, search and audit behaviour are documented in
 The interest model, the rounding policy, the lifecycle and its state machine,
 the snapshot architecture, the one-active-loan rule and the Phase 5 handoff are
 documented in [LOANS.md](LOANS.md).
+
+## Phase 5 — the repayment schedule engine
+
+The contract-versus-collection-plan distinction, the date rules (period
+windows, first due date, month-end clamping, leap years, the Kampala timezone
+anchor), the integer allocation and remainder policy, schedule immutability,
+disbursement atomicity and the Phase 6 handoff are documented in the Phase 5
+sections of [LOANS.md](LOANS.md).
+
+Two tables are added: `loan_schedules` (one generation record per loan,
+carrying the cadence snapshot) and `loan_installments` (the collections
+themselves). Both are append-only and carry no payment state — see ADR-026.

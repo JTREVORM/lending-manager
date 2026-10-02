@@ -366,13 +366,114 @@ describeDb('settings constraints', () => {
     expect(error?.code).toBe('23503');
   });
 
-  it('refuses to delete a frequency that business settings reference', async () => {
-    const error = await expectError(
+  it('refuses to delete a repayment frequency, referenced or not', async () => {
+    // Retiring a cadence is `is_active = false`, never a delete.
+    //
+    // Phase 5 strengthened this. It used to rest on the foreign keys from
+    // `business_settings` and `loans`, which protected only a frequency
+    // something already referenced — an unreferenced one could be deleted,
+    // and the vocabulary a historical loan's key is read against would lose
+    // an entry. A statement-level trigger now refuses every delete, so the
+    // guarantee no longer depends on what happens to be referencing the row.
+    const referenced = await expectError(
       `delete from public.repayment_frequencies where key = 'daily'`,
     );
 
-    // Retiring a cadence is `is_active = false`, never a delete.
-    expect(error?.code).toBe('23503');
+    expect(referenced?.code).toBe('P0001');
+    expect(referenced?.message).toMatch(/is_active = false/);
+
+    // An unreferenced cadence: the case the foreign keys never covered.
+    await query(
+      `insert into public.repayment_frequencies (key, label, interval_days, sort_order)
+       values ('every_7_days_probe', 'Weekly probe', 7, 900)`,
+    );
+
+    try {
+      const unreferenced = await expectError(
+        `delete from public.repayment_frequencies where key = 'every_7_days_probe'`,
+      );
+
+      expect(unreferenced?.code).toBe('P0001');
+
+      // And a delete matching nothing at all is refused too, because the
+      // trigger is statement-level: the refusal does not depend on the
+      // caller's WHERE clause finding a row.
+      const nothing = await expectError(
+        `delete from public.repayment_frequencies where key = 'no_such_cadence'`,
+      );
+
+      expect(nothing?.code).toBe('P0001');
+    } finally {
+      await query(
+        `alter table public.repayment_frequencies disable trigger repayment_frequencies_no_delete`,
+      );
+      await query(
+        `delete from public.repayment_frequencies where key = 'every_7_days_probe'`,
+      );
+      await query(
+        `alter table public.repayment_frequencies enable trigger repayment_frequencies_no_delete`,
+      );
+    }
+  });
+
+  it('refuses to change what an existing repayment frequency means', async () => {
+    // `interval_days` is not a setting, it is what the cadence *is*. A loan
+    // stores the key `daily`, so editing `daily` from 1 to 2 would silently
+    // redefine every agreement that ever named it.
+    const interval = await expectError(
+      `update public.repayment_frequencies set interval_days = 2 where key = 'daily'`,
+    );
+
+    expect(interval?.code).toBe('P0001');
+    expect(interval?.message).toMatch(/cannot be changed from 1 to 2 days/);
+
+    const key = await expectError(
+      `update public.repayment_frequencies set key = 'every_day' where key = 'daily'`,
+    );
+
+    expect(key?.code).toBe('P0001');
+
+    // The row is genuinely unchanged, not merely reported as refused.
+    const after = await queryOne<{ interval_days: number; key: string }>(
+      `select key, interval_days from public.repayment_frequencies where key = 'daily'`,
+    );
+
+    expect(after.interval_days).toBe(1);
+    expect(after.key).toBe('daily');
+  });
+
+  it('still allows retiring and relabelling a repayment frequency', async () => {
+    // The other half of the rule. Deactivating hides a cadence from new loans
+    // while existing ones keep working, and a label is presentation. Neither
+    // changes what any existing agreement means, so neither is refused —
+    // without this the guard above would have made the table read-only and
+    // left the business no way to stop offering a cadence.
+    await query(
+      `update public.repayment_frequencies
+          set is_active = false, label = 'Every three days (retired)', sort_order = 99
+        where key = 'every_3_days'`,
+    );
+
+    const retired = await queryOne<{
+      is_active: boolean;
+      label: string;
+      interval_days: number;
+    }>(
+      `select is_active, label, interval_days from public.repayment_frequencies
+        where key = 'every_3_days'`,
+    );
+
+    expect(retired.is_active).toBe(false);
+    expect(retired.label).toBe('Every three days (retired)');
+    // And the meaning is untouched by the retirement.
+    expect(retired.interval_days).toBe(3);
+
+    // Restore, so the shared database is left as it was found.
+    await query(
+      `update public.repayment_frequencies
+          set is_active = true, label = 'Every 3 days', sort_order = 3
+        where key = 'every_3_days'`,
+    );
   });
 
   it('rejects a malformed brand colour and an unsafe logo path', async () => {

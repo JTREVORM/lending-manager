@@ -45,7 +45,11 @@ describeDb('tables', () => {
     'loan_client_snapshots',
     'loan_guarantor_snapshots',
     'loan_identity_snapshots',
+    // Phase 5: the collection plan — one generation record per loan, and the
+    // scheduled collections that allocate the contractual breakdown.
+    'loan_installments',
     'loan_periods',
+    'loan_schedules',
     'loans',
     // Phase 2: the capability vocabulary and the role-to-capability map.
     'permissions',
@@ -213,7 +217,19 @@ describeDb('foreign keys', () => {
       'loan_guarantor_snapshots.guarantor_id -> guarantors (r)',
       'loan_guarantor_snapshots.loan_id -> loans (c)',
       'loan_identity_snapshots.loan_id -> loans (c)',
+      // Phase 5. `c` cascades for the same reason: a collection schedule is
+      // part of its loan, and an installment is part of the contractual month
+      // it collects. `r` restricts on the frequency, so a cadence cannot be
+      // deleted out from under a schedule that names it — and migration
+      // 20261005000200 refuses the delete outright, referenced or not.
+      // `r` on `generated_by`, not `n`: the schedule names who released the
+      // money, and that attribution is evidence rather than provenance.
+      'loan_installments.loan_id -> loans (c)',
+      'loan_installments.loan_period_id -> loan_periods (c)',
       'loan_periods.loan_id -> loans (c)',
+      'loan_schedules.generated_by -> profiles (r)',
+      'loan_schedules.loan_id -> loans (c)',
+      'loan_schedules.repayment_frequency -> repayment_frequencies (r)',
       'loans.approved_by -> profiles (n)',
       'loans.cancelled_by -> profiles (n)',
       'loans.client_id -> clients (r)',

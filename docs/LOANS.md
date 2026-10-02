@@ -461,6 +461,242 @@ Phase 4 adds no balance columns — no `amount_paid`, `remaining_balance` or
 `arrears_balance`. Nothing posts payments yet, so such a column could only hold
 a zero that looks like a fact.
 
+# Phase 5 — the repayment collection schedule
+
+## The contract and the collection plan
+
+This distinction runs through everything below.
+
+| | Holds | Written by | Changes |
+| --- | --- | --- | --- |
+| `loan_periods` | The month-by-month reducing-balance **agreement** | `approve_loan` | Never |
+| `loan_installments` | How each month is actually **collected** | `generate_loan_schedule` | Never |
+
+The schedule *allocates* the contract. It never restates it, and it never
+recalculates interest — interest is contractually fixed at approval, and
+recomputing it daily would be a different loan.
+
+## Tables
+
+| Table | Purpose |
+| --- | --- |
+| `loan_schedules` | One row per loan: the cadence, its interval in days, the disbursement calendar date, the timezone used, the generator version, and who released the money. The primary key on `loan_id` is what makes generation idempotent. |
+| `loan_installments` | Each scheduled collection: its date, which contractual month it gathers from, and the principal and interest it gathers. |
+
+Both are append-only. Neither carries payment state. See ADR-026.
+
+## Generation timing and atomicity
+
+The schedule is generated **inside the disbursement transaction**, by
+`disburse_loan` calling `generate_loan_schedule` after the status update — it
+needs the `disbursed_at` the transition trigger has just stamped.
+
+So there is no such thing as:
+
+* an active loan with no schedule,
+* a partial schedule,
+* a schedule for a failed disbursement.
+
+If generation raises for any reason — a cadence too infrequent for the
+contractual months, a reconciliation failure, a missing timezone — the whole
+transaction rolls back: the loan stays `approved`, no installment survives, and
+the `loan.disbursed` audit entry rolls back with it. There is no misleading
+success left in the trail.
+
+Generation is **idempotent**: a second call finds the schedule already there,
+returns it, and inserts and audits nothing.
+
+## The date rules
+
+### Where the schedule is anchored
+
+`loans.disbursed_at`, converted to the **Africa/Kampala calendar date** using
+`company_settings.timezone`. Never `proposed_disbursement_date`: one is a plan
+that may have slipped, the other is when the borrower took possession of the
+money.
+
+The timezone conversion matters. A disbursement stamped `22:30 UTC` happened at
+`01:30` the next morning in Kampala, and anchoring on the UTC date would shift
+every collection back a day.
+
+### Period windows
+
+Contractual month *n* occupies:
+
+```
+[ D + (n-1) months ,  D + n months )
+```
+
+where `D` is the disbursement calendar date. **Start inclusive, end
+exclusive.** Exclusive is what stops one calendar date belonging to two
+adjacent months and producing two collections on one day — and
+`loan_installments_unique_due_date` is the backstop that would catch it if the
+rule were ever broken.
+
+### Month-end behaviour
+
+Both boundaries are **anchored on `D`**, never stepped from the previous
+boundary, and the month addition **clamps** to the end of the target month:
+
+```
+31 Jan + 1 month → 28 Feb   (29 Feb in a leap year)
+31 Jan + 2 months → 31 Mar  ← anchored, so the 31st returns
+31 Aug + 1 month → 30 Sep
+```
+
+Stepping would give `31 Jan → 28 Feb → 28 Mar`, losing the 31st permanently and
+dragging every later boundary of a long loan earlier. This is exactly what
+PostgreSQL's `date + interval 'n months'` does, which matters because the
+database is the authoritative generator; `addBusinessMonths` in
+`lib/domain/datetime.ts` implements the same rule and
+`tests/db/schedule-parity.test.ts` proves they agree.
+
+### The first collection
+
+**One interval after disbursement**, never on the disbursement date itself:
+
+| Frequency | Disbursed | First due |
+| --- | --- | --- |
+| Daily | 10 Oct | 11 Oct |
+| Every 2 days | 10 Oct | 12 Oct |
+| Every 3 days | 10 Oct | 13 Oct |
+
+### The cadence
+
+Collections fall on `D + k × interval` for k = 1, 2, 3, …, each assigned to the
+one window containing it, stopping strictly before the final boundary.
+
+Building one global cadence and *assigning* it — rather than restarting the
+rhythm inside each month — is what guarantees the dates are strictly
+increasing, never duplicated and never spilled past the contract, without any
+of those needing to be arranged separately.
+
+It also means a month can get a different number of collections than its
+neighbours, which is correct. **Nothing assumes 30-day months**: a 600,000
+three-month daily loan disbursed on 10 October gets 30, 30 and **31**
+collections, not 90.
+
+### No collection, no disbursement
+
+A contractual month that would receive no collection fails generation, and
+therefore fails the disbursement. Unreachable at the three cadences the
+business offers — the shortest calendar month is 28 days — but reachable the
+moment an administrator configures a 40-day rhythm, and the alternative is an
+active loan carrying a month of obligation that nothing ever gathers.
+
+## The money rules
+
+Each window's collections split that month's **own** principal and **own**
+interest:
+
+```
+part(i) = amount / count + (1 if i > count - amount % count else 0)
+```
+
+All integer `bigint` arithmetic — the same rule as
+`divideEvenly(amount, parts, { remainder: 'last' })`, asserted equal in the
+parity test. No floating point anywhere; `npm run audit:money` enforces it.
+
+Any remainder lands on the **final collections of the same month**. A remainder
+never crosses a month boundary, so every contractual month reconciles
+independently to its own obligation — which is the stronger guarantee, because
+a loan total can balance while two months are wrong in opposite directions.
+
+`expected_amount = scheduled_principal + scheduled_interest` on every row, by
+CHECK constraint.
+
+### Worked example
+
+UGX 200,000 over 2 months at 15%, daily, disbursed 10 October:
+
+| | Month 1 | Month 2 |
+| --- | --- | --- |
+| Window | 10 Oct – 10 Nov | 10 Nov – 10 Dec |
+| Collections | 30 (11 Oct – 9 Nov) | 30 (10 Nov – 9 Dec) |
+| Contractual obligation | 130,000 | 115,000 |
+| Principal per collection | 3,333 × 20 then 3,334 × 10 | same |
+| Interest per collection | 1,000 | 500 |
+
+Total collected: 245,000 — the contractual total exactly.
+
+## Frequency snapshot
+
+`repayment_frequencies.key` and `interval_days` are **immutable**, and the
+cadence is also snapshotted onto `loan_schedules` at generation. See ADR-027
+for why both.
+
+## Scheduled completion date
+
+The **final installment's due date**, exposed on the loan detail screen and
+recorded in the `loan.schedule_generated` audit event as
+`scheduled_completion_date`.
+
+Phase 7 builds loan expiry, grace periods and penalties on this. It is derived
+from the schedule rather than approximated as "disbursement plus the term",
+because those differ: a three-month loan disbursed on 10 October has its final
+collection on 7 or 9 January depending on the cadence, not on 10 January, which
+is the exclusive boundary of the third month.
+
+## Permissions
+
+| Capability | client | secretary_treasurer | manager | owner_admin |
+| --- | :-: | :-: | :-: | :-: |
+| `schedules:view` | | ● | ● | ● |
+
+One capability, not a `view` / `view_all` pair: a schedule is visible exactly
+when its loan is, and every staff role that reads schedules already reads the
+whole register, so the two would grant the same thing under different names.
+
+A borrower reads their own schedule through the ownership clause in the policy,
+not through a capability.
+
+There is **no** create, edit or delete capability. The schedule is generated by
+the database and is then contractual history.
+
+## Row Level Security
+
+| Role | `loan_schedules`, `loan_installments` |
+| --- | --- |
+| anon | nothing |
+| client | their own loan's schedule |
+| secretary_treasurer | every schedule they can see the loan for |
+| manager | the same |
+| owner_admin | the same |
+
+Both policies **delegate** to the loans policy —
+`exists (select 1 from public.loans l join public.clients c … )` — rather than
+restating it, so a change to loan visibility cannot leave a stale copy behind.
+
+SELECT is the only grant. There is no write policy and no write privilege for
+any session role, and `generate_loan_schedule` is not granted to
+`authenticated` at all: the only legitimate caller is `disburse_loan`, which
+runs as the table owner.
+
+## Phase 6 handoff
+
+Phase 6 — payments, balances, receipts and reversals — can safely consume:
+
+| Needs | Where |
+| --- | --- |
+| Immutable installment ID | `loan_installments.id` |
+| The loan and, through it, the client | `loan_installments.loan_id` → `loans.client_id` |
+| Due date | `loan_installments.due_date` (a `date`, in business time) |
+| Expected amount | `loan_installments.expected_amount` |
+| Principal and interest components | `scheduled_principal`, `scheduled_interest` |
+| Contractual month | `loan_period_id`, `loan_period_number` |
+| Contractual total | `loans.total_expected_repayment` |
+| Scheduled completion date | the last `due_date` for the loan |
+
+Three things for Phase 6 to hold to:
+
+1. **Never update an installment row.** Payment state belongs in Phase 6's own
+   structures. The triggers will refuse anyway, but the design should not want
+   to.
+2. **The schedule says what is *due*, not what was collected.** Any "paid",
+   "missed" or "outstanding" figure is Phase 6's to derive and own.
+3. **Arrears never rewrite the plan** (Phase 7). Monday's UGX 4,000 row stays
+   UGX 4,000 whatever happens on Tuesday. See ADR-026.
+
 ## Test commands
 
 ```bash

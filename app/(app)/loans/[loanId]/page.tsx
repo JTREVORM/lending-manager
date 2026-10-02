@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { LoanBreakdownTable } from '@/components/loans/loan-breakdown-table';
 import { LoanLifecyclePanel } from '@/components/loans/loan-lifecycle-panel';
 import { LoanStatusBadge } from '@/components/loans/loan-status-badge';
+import { RepaymentScheduleTable } from '@/components/loans/repayment-schedule-table';
+import { ScheduleSummary } from '@/components/loans/schedule-summary';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { ROUTES } from '@/config/app';
@@ -23,6 +25,8 @@ import {
   calculationFromPeriods,
   termsAreEditable,
 } from '@/lib/domain/loan';
+import { getLoanSchedule, verifyStoredSchedule } from '@/lib/data/schedules';
+import { businessToday } from '@/lib/domain/datetime';
 import { formatCalendarDate, formatRecordedDate, maskNin } from '@/lib/domain/client';
 import { formatUgx, toUgx } from '@/lib/domain/money';
 import { formatBps, toBps } from '@/lib/domain/rate';
@@ -67,17 +71,37 @@ export default async function LoanDetailPage({
 
   const canSeeSensitive = contextCan(context, 'loans:view_sensitive');
 
-  const [periods, clientSnapshot, guarantorSnapshots, identitySnapshots, failures] =
-    await Promise.all([
-      getLoanPeriods(loanId),
-      getLoanClientSnapshot(loanId),
-      getLoanGuarantorSnapshots(loanId),
-      canSeeSensitive ? getLoanIdentitySnapshots(loanId) : Promise.resolve([]),
-      // Only worth asking while a decision is outstanding.
-      loan.status === 'draft' || loan.status === 'pending_approval'
-        ? loanApprovalFailures(loanId)
-        : Promise.resolve([]),
-    ]);
+  const canSeeSchedule = contextCan(context, 'schedules:view');
+
+  const [
+    periods,
+    clientSnapshot,
+    guarantorSnapshots,
+    identitySnapshots,
+    failures,
+    schedule,
+  ] = await Promise.all([
+    getLoanPeriods(loanId),
+    getLoanClientSnapshot(loanId),
+    getLoanGuarantorSnapshots(loanId),
+    canSeeSensitive ? getLoanIdentitySnapshots(loanId) : Promise.resolve([]),
+    // Only worth asking while a decision is outstanding.
+    loan.status === 'draft' || loan.status === 'pending_approval'
+      ? loanApprovalFailures(loanId)
+      : Promise.resolve([]),
+    // A schedule exists only once the money has moved, so asking before
+    // disbursement would always come back empty. The policy would refuse a
+    // caller without the capability anyway; not asking keeps the intent
+    // visible here as well.
+    canSeeSchedule && loan.status !== 'draft' && loan.status !== 'pending_approval'
+      ? getLoanSchedule(loanId, loan.totalExpectedRepayment)
+      : Promise.resolve(null),
+  ]);
+
+  // The stored schedule, verified before it is shown, on the same reasoning as
+  // the breakdown below: a corrupt collection plan should announce itself
+  // rather than render as a plausible table of wrong dates and amounts.
+  const scheduleProblem = schedule === null ? null : await verifyStoredSchedule(loanId);
 
   // The stored figures, verified before they are shown.
   let breakdownProblem: string | null = null;
@@ -244,11 +268,70 @@ export default async function LoanDetailPage({
 
         {periods.length > 0 ? (
           <p className="text-text-muted text-sm">
-            This is the contractual monthly breakdown. The individual collection dates are
-            generated in a later phase.
+            This is the contractual monthly breakdown — what falls due in each month of
+            the agreement. The individual collection dates below allocate it; they do not
+            change it.
           </p>
         ) : null}
       </section>
+
+      {/* --- Collection schedule ------------------------------------------ */}
+      {canSeeSchedule && schedule !== null ? (
+        <section aria-labelledby="schedule-heading" className="min-w-0 space-y-3">
+          <h2 id="schedule-heading" className="text-text text-lg font-semibold">
+            Collection schedule
+          </h2>
+
+          {scheduleProblem !== null ? (
+            <Alert tone="danger">
+              <span className="font-medium">
+                This loan&rsquo;s collection schedule is inconsistent and must not be
+                collected against.
+              </span>{' '}
+              {scheduleProblem} Report this to your administrator.
+            </Alert>
+          ) : null}
+
+          <ScheduleSummary
+            installmentCount={schedule.installmentCount}
+            firstDueDate={schedule.firstDueDate}
+            finalDueDate={schedule.finalDueDate}
+            totalScheduledPrincipal={schedule.totalScheduledPrincipal}
+            totalScheduledInterest={schedule.totalScheduledInterest}
+            totalScheduledAmount={schedule.totalScheduledAmount}
+            frequencyLabel={schedule.header.frequencyLabel}
+            intervalDays={schedule.header.intervalDays}
+            disbursementDate={schedule.header.disbursementDate}
+            reconciles={schedule.reconciles}
+          />
+
+          <RepaymentScheduleTable
+            installments={schedule.installments}
+            today={businessToday()}
+          />
+
+          <p className="text-text-muted text-sm">
+            Generated when the loan was disbursed, from the day the money reached the
+            borrower. It is a fixed record and cannot be edited. Payments are not yet
+            recorded against it, so no collection here is marked paid or missed.
+          </p>
+        </section>
+      ) : null}
+
+      {canSeeSchedule && schedule === null && loan.status === 'approved' ? (
+        <section aria-labelledby="schedule-pending-heading" className="min-w-0 space-y-3">
+          <h2 id="schedule-pending-heading" className="text-text text-lg font-semibold">
+            Collection schedule
+          </h2>
+          <Card>
+            <p className="text-text-muted text-sm">
+              No schedule yet. It is generated at disbursement, from the day the money
+              actually reaches the borrower — not from the intended date above, which may
+              still change.
+            </p>
+          </Card>
+        </section>
+      ) : null}
 
       {/* --- Snapshots ---------------------------------------------------- */}
       {clientSnapshot !== null ? (
@@ -372,9 +455,11 @@ export default async function LoanDetailPage({
         />
       </section>
 
-      {/* Repayments are a later phase. No placeholder section: an empty
-          "Repayments" heading would read as "this loan has no repayments",
-          which is not a statement this system can currently make. */}
+      {/* Payments are a later phase. No placeholder section: an empty
+          "Payments" heading would read as "this loan has had no payments",
+          which is not a statement this system can currently make. The
+          schedule above says what is *due*, and nothing about what was
+          collected. */}
     </div>
   );
 }

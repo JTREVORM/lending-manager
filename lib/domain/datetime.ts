@@ -26,8 +26,9 @@
  * The offset is never hard-coded. `Intl.DateTimeFormat` resolves it from the
  * IANA database, so a future rule change is picked up by the platform.
  *
- * Repayment scheduling itself is Phase 3. This module provides the primitives
- * it will be built from.
+ * Repayment scheduling is built on these primitives: `addBusinessMonths`
+ * defines the contractual period boundaries and `addBusinessDays` steps the
+ * collection cadence. See `lib/domain/repayment-schedule.ts`.
  *
  * See docs/DECISIONS.md (ADR-004).
  */
@@ -168,6 +169,91 @@ export function addBusinessDays(date: BusinessDate, days: number): BusinessDate 
   const shifted = new Date(Date.UTC(year, month - 1, day + days));
 
   return toBusinessDate(shifted.toISOString().slice(0, 10));
+}
+
+/**
+ * Days in a calendar month. `month` is 1-based.
+ *
+ * Day 0 of the *next* month is the last day of this one, which gets February
+ * and every leap year right without a rule about years divisible by 400.
+ */
+export function daysInMonth(year: number, month: number): number {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw new DateTimeError(
+      `Expected a 1-based month in a whole year, received ${String(year)}-${String(month)}.`,
+    );
+  }
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Add (or subtract) whole calendar months to a business date, clamping to the
+ * end of the target month.
+ *
+ * ## Why this is not `addBusinessDays(date, 30 * months)`
+ *
+ * "One month" is a calendar fact, not 30 days. A loan disbursed on 31 January
+ * runs to 28 February, and the borrower would rightly object to being told
+ * their first contractual month ended on 2 March.
+ *
+ * ## Clamping
+ *
+ * 31 January plus one month has no 31st to land on, so it lands on the last
+ * day that exists:
+ *
+ * ```
+ * addBusinessMonths('2027-01-31', 1)  // '2027-02-28'
+ * addBusinessMonths('2028-01-31', 1)  // '2028-02-29'  (leap year)
+ * addBusinessMonths('2026-08-31', 1)  // '2026-09-30'
+ * ```
+ *
+ * ## Anchoring, which is the subtle part
+ *
+ * Every boundary is computed from the **original** date, never by stepping one
+ * month at a time from the previous boundary. Those differ:
+ *
+ * ```
+ * // Anchored (this function), as PostgreSQL also does it:
+ * addBusinessMonths('2027-01-31', 1)  // '2027-02-28'
+ * addBusinessMonths('2027-01-31', 2)  // '2027-03-31'   ← the 31st returns
+ *
+ * // Iterated, which this deliberately is not:
+ * //   31 Jan → 28 Feb → 28 Mar       ← the 31st is lost for good
+ * ```
+ *
+ * Iterating would let a single clamp in February drag every later boundary of
+ * a twelve-month loan three days earlier. Anchoring confines each clamp to the
+ * one month that caused it, and it is what `date + interval 'n months'` does
+ * in PostgreSQL — which matters, because the database is the authoritative
+ * generator and the two must agree. `tests/db/schedule-parity.test.ts` proves
+ * they do.
+ */
+export function addBusinessMonths(date: BusinessDate, months: number): BusinessDate {
+  if (!Number.isInteger(months)) {
+    throw new DateTimeError(
+      `Month offset must be a whole number, received ${String(months)}.`,
+    );
+  }
+
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+
+  // Months since year 0, so the arithmetic carries across December without a
+  // special case.
+  const absoluteMonth = year * 12 + (month - 1) + months;
+  const targetYear = Math.floor(absoluteMonth / 12);
+  const targetMonth = absoluteMonth - targetYear * 12 + 1;
+
+  // The clamp. Without it `Date.UTC(2027, 1, 31)` silently rolls forward to
+  // 3 March — a wrong answer that looks like a date.
+  const clampedDay = Math.min(day, daysInMonth(targetYear, targetMonth));
+
+  const parts = [
+    String(targetYear).padStart(4, '0'),
+    String(targetMonth).padStart(2, '0'),
+    String(clampedDay).padStart(2, '0'),
+  ];
+
+  return toBusinessDate(parts.join('-'));
 }
 
 /** Whole days from `from` to `to`. Negative when `to` precedes `from`. */

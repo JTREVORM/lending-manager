@@ -102,7 +102,12 @@ describeDb('row level security', () => {
       'loan_client_snapshots:SELECT',
       'loan_guarantor_snapshots:SELECT',
       'loan_identity_snapshots:SELECT',
+      // Phase 5. SELECT and nothing else: the collection schedule is written
+      // only by generate_loan_schedule, which runs as the table owner, so no
+      // write privilege exists for a session to misuse.
+      'loan_installments:SELECT',
       'loan_periods:SELECT',
+      'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
@@ -172,7 +177,12 @@ describeDb('row level security', () => {
       'loan_client_snapshots:SELECT',
       'loan_guarantor_snapshots:SELECT',
       'loan_identity_snapshots:SELECT',
+      // Phase 5. SELECT and nothing else: the collection schedule is written
+      // only by generate_loan_schedule, which runs as the table owner, so no
+      // write privilege exists for a session to misuse.
+      'loan_installments:SELECT',
       'loan_periods:SELECT',
+      'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
@@ -266,15 +276,32 @@ describeDb('row level security', () => {
      */
     // PostgreSQL normalises `public.loans` to `loans` when it stores the
     // expression, so the needle is the normalised form.
-    const DELEGATES_TO: Readonly<Record<string, string>> = {
-      loan_periods: 'FROM loans',
+    const DELEGATES_TO: Readonly<Record<string, RegExp>> = {
+      loan_periods: /FROM loans\b/,
+      // Phase 5. Both delegate the same way, and both additionally require
+      // `schedules:view` of a staff caller — so for these two the assertion
+      // below checks the delegation *and* the capability, which is stronger
+      // than either branch alone.
+      loan_installments: /FROM \(?loans l\b/,
+      loan_schedules: /FROM \(?loans l\b/,
     };
+
+    /** Policies that must also name a capability, on top of delegating. */
+    const ALSO_REQUIRES_CAPABILITY = new Set(['loan_installments', 'loan_schedules']);
 
     for (const row of rows) {
       const delegate = DELEGATES_TO[row.tablename];
 
       if (delegate !== undefined) {
-        expect(row.qual ?? '', `${row.tablename}.${row.policyname}`).toContain(delegate);
+        expect(row.qual ?? '', `${row.tablename}.${row.policyname}`).toMatch(delegate);
+
+        if (ALSO_REQUIRES_CAPABILITY.has(row.tablename)) {
+          expect(
+            row.qual ?? '',
+            `${row.tablename}.${row.policyname} must also gate on a capability`,
+          ).toContain('user_has_permission');
+        }
+
         continue;
       }
 
@@ -337,6 +364,8 @@ describeDb('privileged functions', () => {
       'audit_guarantor_change',
       'audit_guarantor_identity_change',
       'audit_loan_change',
+      // Phase 5: one event per generated schedule.
+      'audit_loan_schedule_generated',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',
       'audit_profile_change',
@@ -354,6 +383,10 @@ describeDb('privileged functions', () => {
       'current_user_permissions',
       'current_user_role_keys',
       'disburse_loan',
+      // Phase 5. SECURITY DEFINER for the usual reason — it writes tables no
+      // session may write — and additionally with no execute grant at all,
+      // so it is deliberately absent from the grants list below.
+      'generate_loan_schedule',
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
       'link_client_profile',
@@ -367,6 +400,7 @@ describeDb('privileged functions', () => {
       'record_audit_event',
       'record_security_event',
       'record_sign_in',
+      'repayment_frequencies_guard_identity',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',

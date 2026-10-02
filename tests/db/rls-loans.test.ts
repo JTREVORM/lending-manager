@@ -498,12 +498,15 @@ describeDb('loan row level security', () => {
 
       // The snapshots and the breakdown are read-only to every session: they
       // are written exclusively by `approve_loan`, which runs as the table
-      // owner. DELETE appears nowhere.
+      // owner. The Phase 5 schedule tables are read-only for the same reason,
+      // written only by `generate_loan_schedule`. DELETE appears nowhere.
       expect(rows.map((row) => `${row.table_name}:${row.privilege_type}`)).toEqual([
         'loan_client_snapshots:SELECT',
         'loan_guarantor_snapshots:SELECT',
         'loan_identity_snapshots:SELECT',
+        'loan_installments:SELECT',
         'loan_periods:SELECT',
+        'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',
         'loans:UPDATE',
@@ -565,7 +568,12 @@ describeDb('loan row level security', () => {
         'loan_client_snapshots:SELECT',
         'loan_guarantor_snapshots:SELECT',
         'loan_identity_snapshots:SELECT',
+        // Phase 5 adds two more loan tables to this prefix. SELECT only:
+        // the collection schedule has no write policy and no write grant,
+        // because only generate_loan_schedule writes it.
+        'loan_installments:SELECT',
         'loan_periods:SELECT',
+        'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',
         'loans:UPDATE',

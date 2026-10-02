@@ -158,6 +158,20 @@ export const PERMISSIONS = [
   'loans:cancel',
   /** Read the identity snapshots captured against a loan. */
   'loans:view_sensitive',
+
+  // Phase 5. One capability, not a `schedules:view` / `schedules:view_all`
+  // pair: a schedule is visible exactly when its loan is, and every staff
+  // role that reads schedules already reads the whole loan register, so the
+  // two would grant the same thing under different names. A capability that
+  // cannot be told apart from another is a false promise about what the
+  // system enforces. See migration 20261005000100.
+  //
+  // There is no create, edit or delete counterpart. The schedule is generated
+  // by the database inside the disbursement transaction and is then
+  // contractual history; no role may write one, so no capability exists to be
+  // granted by mistake.
+  /** See the repayment collection schedule generated for a loan. */
+  'schedules:view',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -226,6 +240,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:create',
     'loans:update_draft',
     'loans:submit',
+
+    // The Secretary/Treasurer collects the money, so the schedule is the
+    // document they work from daily.
+    'schedules:view',
   ],
 
   manager: [
@@ -276,6 +294,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:submit',
     'loans:approve',
     'loans:view_sensitive',
+
+    'schedules:view',
   ],
 
   owner_admin: [
@@ -318,6 +338,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:disburse',
     'loans:cancel',
     'loans:view_sensitive',
+
+    'schedules:view',
   ],
 } as const;
 

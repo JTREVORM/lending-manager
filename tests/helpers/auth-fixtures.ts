@@ -106,6 +106,10 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'client_remarks', trigger: 'client_remarks_no_delete' },
     { table: 'clients', trigger: 'clients_guard_privileged_columns' },
     { table: 'clients', trigger: 'audit_client_change' },
+    // Phase 5. The collection schedule is append-only in the same way, and
+    // the installments reference `loan_periods`, so they are cleared first.
+    { table: 'loan_installments', trigger: 'loan_installments_no_delete' },
+    { table: 'loan_schedules', trigger: 'loan_schedules_no_delete' },
     // Phase 4. The loan snapshots and the contractual breakdown are
     // append-only in the same way, so clearing them needs the same exemption.
     { table: 'loan_periods', trigger: 'loan_periods_no_delete' },
@@ -126,6 +130,8 @@ export async function deleteTestUsers(): Promise<void> {
     // Phase 4 rows first: `loans.client_id` is `on delete restrict`, so loans
     // go before the clients they belong to, and the snapshots before the
     // loans they hang off.
+    await query(`delete from public.loan_installments`);
+    await query(`delete from public.loan_schedules`);
     await query(`delete from public.loan_periods`);
     await query(`delete from public.loan_client_snapshots`);
     await query(`delete from public.loan_guarantor_snapshots`);

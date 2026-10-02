@@ -302,6 +302,11 @@ describe('column type discipline', () => {
       loan_client_snapshots: 'captured_at',
       loan_guarantor_snapshots: 'captured_at',
       loan_identity_snapshots: 'captured_at',
+      // Phase 5. The row *is* the generation record, so its creation instant
+      // is the moment the schedule was generated. `created_at` alongside
+      // `generated_at` would be two columns holding one value, which is how
+      // they eventually come to disagree.
+      loan_schedules: 'generated_at',
     };
 
     /**
@@ -338,6 +343,11 @@ describe('column type discipline', () => {
       'loan_client_snapshots',
       'loan_guarantor_snapshots',
       'loan_identity_snapshots',
+      // Phase 5, for the same reason. A collection plan that could be edited
+      // in place would not be a plan the borrower agreed to, and arrears must
+      // never rewrite it — Phase 7 records arrears separately.
+      'loan_schedules',
+      'loan_installments',
     ]);
 
     for (const table of createdTables) {
@@ -580,6 +590,19 @@ describe('types stay in step with the schema', () => {
       'audit_loan_change',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',
+
+      // --- Phase 5 ----------------------------------------------------------
+      'repayment_frequencies_guard_identity',
+      'audit_loan_schedule_generated',
+      // Not a trigger function, and the one deliberate entry here that is not.
+      // `generate_loan_schedule` is revoked from `authenticated` entirely: the
+      // only legitimate caller is `disburse_loan`, which runs as the table
+      // owner. So it is genuinely not reachable over the API and must not
+      // appear in the generated types — a client type for it would advertise
+      // a call that is always refused. The grant is asserted in
+      // `tests/db/security.test.ts`, so this exemption cannot hide a function
+      // that later becomes callable.
+      'generate_loan_schedule',
     ]);
 
     for (const functionName of functionNames) {

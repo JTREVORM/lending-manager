@@ -215,6 +215,22 @@ export async function disburseLoan(loanId: string, actors: LoanActors): Promise<
   ]);
 }
 
+/**
+ * Release the money on a loan that is **already** approved.
+ *
+ * `disburseLoan` drives the whole chain from draft, which re-submits an
+ * approved loan and is refused. This is the step on its own, for tests that
+ * needed to do something between approval and disbursement.
+ */
+export async function disburseApprovedLoan(
+  loanId: string,
+  actors: LoanActors,
+): Promise<void> {
+  await runAsCommitted(actors.owner, [
+    { sql: `select public.disburse_loan($1)`, params: [loanId] },
+  ]);
+}
+
 /** Cancel a loan. */
 export async function cancelLoan(
   loanId: string,
@@ -237,6 +253,10 @@ export async function cancelLoan(
  */
 export async function deleteTestLoans(): Promise<void> {
   const GUARDS: readonly { readonly table: string; readonly trigger: string }[] = [
+    // Phase 5. Listed first because the installments reference `loan_periods`,
+    // so they have to go before it.
+    { table: 'loan_installments', trigger: 'loan_installments_no_delete' },
+    { table: 'loan_schedules', trigger: 'loan_schedules_no_delete' },
     { table: 'loan_periods', trigger: 'loan_periods_no_delete' },
     { table: 'loan_client_snapshots', trigger: 'loan_client_snapshots_no_delete' },
     {
@@ -251,6 +271,8 @@ export async function deleteTestLoans(): Promise<void> {
   }
 
   try {
+    await query(`delete from public.loan_installments`);
+    await query(`delete from public.loan_schedules`);
     await query(`delete from public.loan_periods`);
     await query(`delete from public.loan_client_snapshots`);
     await query(`delete from public.loan_guarantor_snapshots`);
@@ -260,5 +282,35 @@ export async function deleteTestLoans(): Promise<void> {
     for (const { table, trigger } of GUARDS) {
       await query(`alter table public.${table} enable trigger ${trigger}`);
     }
+  }
+
+  await deleteProbeFrequencies();
+}
+
+/**
+ * Remove any `*_probe` repayment cadence a test introduced.
+ *
+ * A few tests need a cadence the business does not offer — a 40-day or
+ * 200-day interval — to drive the zero-installment guard and the
+ * disbursement-rollback path. Those rows are test artefacts, and leaving them
+ * behind breaks the seed guard in `schema.test.ts`, which rightly asserts the
+ * reference vocabulary is exactly the three cadences the business offers.
+ *
+ * Deleting one needs the owner-level trigger exemption, because Phase 5 made
+ * repayment frequencies undeletable — see migration 20261005000200. The
+ * `_probe` suffix is what keeps this narrow: it can only ever remove a row a
+ * test created on purpose, never a seeded cadence.
+ */
+export async function deleteProbeFrequencies(): Promise<void> {
+  await query(
+    `alter table public.repayment_frequencies disable trigger repayment_frequencies_no_delete`,
+  );
+
+  try {
+    await query(`delete from public.repayment_frequencies where key like '%\_probe'`);
+  } finally {
+    await query(
+      `alter table public.repayment_frequencies enable trigger repayment_frequencies_no_delete`,
+    );
   }
 }

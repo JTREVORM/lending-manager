@@ -259,9 +259,52 @@ The loan engine, reviewed before declaring the phase complete.
 | No rate limiting on client registration or document upload | Before go-live, alongside the Phase 2 gap. Supabase throttles auth; these actions are not throttled. |
 | No automated transition to `cleared` | By design: the edge is declared and nothing performs it, because a loan can only be shown settled once payments can be posted. See ADR-025 on what such an automation would need. |
 | `loans:disburse` and `loans:cancel` are Owner-only, which is a bottleneck in a small office | Deliberate (ADR-024's sibling reasoning, documented in LOANS.md): it is the only thing stopping one person originating, approving and paying out a loan alone. If the business accepts that risk it is a one-line change to the matrix, made knowingly. |
+| A schedule entered against a mistaken disbursement cannot be corrected in place | Deliberate (ADR-026). The schedule is append-only so that Phase 7 arrears can never rewrite what was agreed. Rescheduling and restructuring belong in an explicit, audited workflow, not an "edit schedule" button. |
+| No collections screen listing what is due across all loans today | Not built. The loan detail page shows each loan's schedule, and a collections round needs payment capture to be useful — that is Phase 6's. The data and indexes for it are in place (`loan_installments_due_date_idx`). |
 | No audit-record retention policy | Before go-live. |
 | No audit hash chain or off-site shipping | 2+, if the threat model includes an insider with database access. |
 | No penetration test | Before go-live. |
+
+## Phase 5 verification
+
+The repayment schedule engine, reviewed before declaring the phase complete.
+
+| Attack | Result |
+| --- | --- |
+| An anonymous visitor reads `loan_installments` or `loan_schedules` | Refused. No grant, and no rows come back from a count either. |
+| A borrower reads another borrower's schedule | Refused, including by dropping the `WHERE` clause: the policy returns only their own loan. |
+| A signed-in user without `schedules:view` and without a client link reads any schedule | Refused. The policy gates staff on the capability and admits a borrower only on their own loan. |
+| A **Secretary/Treasurer** changes a due date or an amount | Refused. They read the schedule all day and can alter nothing in it. |
+| A **Manager** rewrites an amount | Refused. |
+| An **Owner/Administrator** edits or deletes any schedule row | Refused. Owner authority is about what the business may decide, not about rewriting what it already decided. |
+| `service_role` rewrites a due date, an amount, a component or a period link | Refused by statement-level trigger — the leaked-key threat model these triggers exist for. |
+| An `UPDATE` whose `WHERE` clause matches nothing | Refused. Statement-level, so the refusal does not depend on the attacker's predicate finding a row. |
+| Deleting one installment, a whole schedule, or every schedule | Refused for every role including `service_role`. |
+| Any session role inserting an installment | Refused. No INSERT grant and no INSERT policy exist on either table. |
+| Any session role calling `generate_loan_schedule` directly | Refused — no `EXECUTE` grant to `anon` or `authenticated` at all, not even to the Owner. The only caller is `disburse_loan`, which runs as the table owner. |
+| Generating a schedule twice | One schedule, byte-identical rows, one audit event. Idempotent by primary key and by an explicit early return. |
+| **Two, three and four concurrent disbursements of one loan** | Exactly one succeeds. One schedule, one set of installments, one audit event, and no partial rows from the losers. |
+| Four parallel direct calls to the generator | All succeed idempotently; still one schedule, the same row IDs, one audit event. |
+| Forcing a generation failure mid-transaction | The loan stays `approved`, `disbursed_at` stays NULL, no installment survives, and the `loan.disbursed` audit entry rolls back with it. No misleading success in the trail. |
+| An active loan existing without a schedule | None, asserted across the whole table after every concurrency test. |
+| A schedule whose installments disagree with the contract | None, asserted across the whole table. The generator also reconciles per contractual month and loan-wide before it commits. |
+| A contractual month with no collection | Generation fails and the disbursement rolls back, rather than creating a loan nobody can collect. |
+| Changing `interval_days` between approval and disbursement | Refused outright — not merely ignored. A cadence's interval is what it means. See ADR-027. |
+| Deleting a repayment frequency, referenced or not | Refused. Previously only a referenced one was protected by the foreign keys. |
+| Changing business settings after generation | The stored schedule does not move: not one date, not one amount, and the snapshotted cadence label survives a rename. |
+| Changing loan terms or the breakdown a schedule was built from | Refused — Phase 4 immutability re-verified now that a schedule hangs off it. |
+| A payment-state column existing to be faked | None. `amount_paid`, `remaining_balance`, `arrears`, `status` and their variants are asserted absent from both tables. |
+| A screen claiming an installment is paid, missed, overdue or in arrears | It does not. The words are asserted absent from the rendered output. |
+| A NIN reaching a schedule audit event | It does not. The event records count, dates, cadence and total — never the rows. |
+| A secret reaching the client bundle | 233 built files scanned. Clean, with a positive control. |
+| A float in the schedule arithmetic | None. `npm run audit:money` covers both engines and verifies each reaches only integer money helpers. |
+
+## Issues found and fixed in Phase 5
+
+| Problem | Root cause | Fix |
+| --- | --- | --- |
+| A repayment frequency's meaning could be changed underneath a live loan | Phase 4 froze `loans.repayment_frequency`, but that is a *key*; the days it meant lived in `repayment_frequencies.interval_days`, which was freely editable. Editing `daily` from 1 to 2 would have silently redefined every loan that named it, with nothing in any loan record showing a change. | `key` and `interval_days` made immutable, and deletion refused outright (migration `20261005000200`); the cadence additionally snapshotted onto `loan_schedules` at generation. `label`, `is_active` and `sort_order` stay editable, so a cadence can still be retired. See ADR-027. |
+| A frequency with no loans could be deleted, losing a reference-vocabulary entry | The protection was the foreign keys from `loans` and `business_settings`, which only cover a row something already references. | The statement-level delete guard above covers every row, referenced or not. `tests/db/behaviour.test.ts` was strengthened to assert the referenced case, the unreferenced case and a delete matching nothing. |
 
 ## Reporting
 

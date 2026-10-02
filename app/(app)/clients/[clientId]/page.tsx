@@ -248,9 +248,11 @@ export default async function ClientDetailPage({
         </section>
       ) : null}
 
-      {/* Loans are Phase 4. No placeholder section here: an empty "Loans"
-          heading would read as "this client has no loans", which is not a
-          statement this system can currently make. */}
+      {/* A per-client loan list is not built here. The loan register at
+          /loans filters by client, so this would be a second route to the
+          same rows; and an empty "Loans" heading on this page would read as
+          "this client has no loans", which needs a query this page does not
+          make. */}
     </div>
   );
 }

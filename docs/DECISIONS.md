@@ -878,3 +878,116 @@ the application actually drives the lifecycle.
   beyond declining to pre-authorise it.
 * The privileged client cannot approve a loan either, which is a feature: a
   leaked secret key cannot manufacture an approval attributed to nobody.
+
+## ADR-026 — The collection schedule is append-only, and carries no payment state
+
+**Status:** accepted (Phase 5)
+
+### Context
+
+Phase 5 turns each contractual month into actual collection dates. The obvious
+shape for an installment row is the one every tutorial shows: a due date, an
+expected amount, an `amount_paid`, a `remaining_balance` and a `status` moving
+through `upcoming → due → paid → missed`.
+
+Two later phases make that shape wrong.
+
+**Phase 6 posts payments.** If `amount_paid` existed now it would hold zero for
+every installment in the system — a fact about this phase, written in a column
+a reader would take as a fact about a borrower.
+
+**Phase 7 carries arrears forward.** The business rule is that a missed Monday
+of UGX 4,000 means Tuesday operationally requires UGX 8,000. The tempting
+implementation is to update Monday's row, or Tuesday's, or both. Either
+destroys the only record of what was actually agreed to be collected on
+Monday — in precisely the dispute the record exists for.
+
+### Decision
+
+**The schedule is append-only, and holds no payment-derived state at all.**
+
+* `loan_installments` and `loan_schedules` refuse UPDATE and DELETE through
+  statement-level triggers, binding the table owner and `service_role` as well
+  as every session role. No application path exists to amending a schedule.
+* There is no `amount_paid`, `remaining_balance`, `arrears` or `status` column.
+* The only state shown is **derived from the calendar**: `upcoming`,
+  `due_today`, `elapsed`. Nothing more can be said truthfully before payments
+  exist.
+
+`elapsed` is deliberately not called `missed` or `overdue`. Both of those
+assert that no payment arrived, which is a claim about data this phase does not
+have; a borrower who paid on time would be shown as delinquent by a label the
+system has no standing to apply. The screen says "Date passed".
+
+### Why the status is derived rather than stored
+
+A stored `status` column in Phase 5 could only ever hold one value —
+`scheduled` — which carries no information that "the row exists" does not
+already carry. Worse, it would be a mutable column on an immutable table, and
+it would invite Phase 6 to UPDATE it, breaching the append-only guarantee that
+makes the schedule evidence.
+
+This follows ADR-025's reasoning about statuses nothing can set.
+
+### Consequences
+
+* Phase 6 records payment against installments in **its own** structures. An
+  installment row never changes.
+* Phase 7 computes arrears as a separate fact about what happened to the plan,
+  rather than by rewriting the plan.
+* The original schedule remains answerable to the question "what did this
+  borrower agree to pay, and when" for the life of the loan.
+* A schedule genuinely entered in error cannot be corrected in place. That is
+  intended: rescheduling and restructuring are an explicit, audited workflow
+  for a later phase, not an "edit schedule" button.
+
+## ADR-027 — A repayment frequency's interval is its identity, not a setting
+
+**Status:** accepted (Phase 5)
+
+### Context
+
+Phase 4 freezes `loans.repayment_frequency` — the borrower's agreed cadence
+cannot change after the loan leaves draft. But that column stores a *key*,
+`'daily'`, and the days that key means live in
+`repayment_frequencies.interval_days`, which was freely editable.
+
+So the agreement was only half frozen. An administrator editing `daily` from 1
+to 2 would not be adjusting a setting; they would be silently redefining every
+loan that ever named it, and nothing in any loan record would show that
+anything had changed.
+
+Two ways to deal with this: snapshot the interval when a schedule is generated
+and let the table keep changing underneath, or refuse the change.
+
+### Decision
+
+**Both, because they protect different things.**
+
+1. **`key` and `interval_days` are immutable** (migration `20261005000200`).
+   "Daily" means one day. A row claiming to be daily while meaning two is not
+   an edited setting, it is a false record. A cadence the business no longer
+   offers is retired with `is_active = false` — which Phase 1 already provided
+   and documented for exactly this purpose — and a new row is added if a new
+   rhythm is wanted. Deletion is refused outright, referenced or not, so the
+   vocabulary a historical loan's key is read against is append-only.
+
+2. **The cadence is snapshotted onto `loan_schedules`** at generation: key,
+   label and interval. This is what makes an already-generated schedule
+   provably independent of the table, and keeps it readable and explicable
+   after a cadence is retired or relabelled.
+
+`label`, `is_active` and `sort_order` remain editable. Renaming "Every 2 days"
+to "Every second day" changes a presentation string; deactivating hides a
+cadence from new loans while existing ones keep working. Neither alters what
+any existing agreement means, which is the line being drawn.
+
+### Consequences
+
+* The obvious attack — change the interval between approval and disbursement,
+  so the generated schedule contradicts the agreement — is refused at the
+  database rather than merely ignored.
+* Making the table effectively append-only is a real constraint on
+  administrators, which is why the retire-and-add path is tested alongside the
+  refusals: a guard that left no way to stop offering a cadence would have
+  been a worse answer than the problem.

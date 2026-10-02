@@ -594,14 +594,27 @@ describeDb('the loan lifecycle', () => {
       // Simulate a corrupt approval by removing the breakdown with the
       // owner-level exemption, then prove disbursement refuses rather than
       // creating an active loan nobody can collect.
+      //
+      // `loan_installments` is exempted too: it references `loan_periods` with
+      // `on delete cascade`, and its DELETE guard is statement-level, so it
+      // fires on the cascade even though this approved loan has no
+      // installments yet. That the guard fires on an empty cascade is the
+      // behaviour Phase 3 chose deliberately — a refusal that does not depend
+      // on the attacker's WHERE clause matching anything.
       await query(
         `alter table public.loan_periods disable trigger loan_periods_no_delete`,
+      );
+      await query(
+        `alter table public.loan_installments disable trigger loan_installments_no_delete`,
       );
       try {
         await query(`delete from public.loan_periods where loan_id = $1`, [loanId]);
       } finally {
         await query(
           `alter table public.loan_periods enable trigger loan_periods_no_delete`,
+        );
+        await query(
+          `alter table public.loan_installments enable trigger loan_installments_no_delete`,
         );
       }
 
