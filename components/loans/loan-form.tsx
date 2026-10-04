@@ -8,6 +8,7 @@ import { Field } from '@/components/ui/field';
 import { Label } from '@/components/ui/label';
 import { FormSection, FullWidth } from '@/components/clients/form-section';
 import { SelectField } from '@/components/clients/select-field';
+import { Money } from '@/components/ui/money';
 import { LoanBreakdownTable } from './loan-breakdown-table';
 import { createLoanAndRedirect, updateLoanDraftAction } from '@/lib/loans/actions';
 import { calculateLoan, permittedTermMonths } from '@/lib/domain/loan';
@@ -232,8 +233,8 @@ export function LoanForm({
 
         {belowMinimum ? (
           <Alert tone="warning">
-            {formatUgx(toUgx(principal))} is below the current minimum of{' '}
-            {formatUgx(toUgx(settings.minLoanAmount))}.
+            <Money amount={toUgx(principal)} /> is below the current minimum of{' '}
+            <Money amount={toUgx(settings.minLoanAmount)} />.
           </Alert>
         ) : null}
 

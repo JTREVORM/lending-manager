@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import {
   DELINQUENCY_STATE_LABELS,
   type DelinquencyState,
 } from '@/lib/domain/delinquency';
 import type { DelinquentLoanRow } from '@/lib/data/delinquency';
+import { DateValue, PhoneValue } from '@/components/ui/data-value';
 
 /**
  * The overdue list: who is behind, by how much, and since when.
@@ -85,7 +85,7 @@ export function OverdueList({
       {/* --- What the list is counting ---------------------------------- */}
       <Card className="min-w-0">
         <p className="text-text-muted mb-3 text-sm">
-          As at {formatBusinessDate(businessDate as never)}, in the business timezone.
+          As at <DateValue value={businessDate} />, in the business timezone.
         </p>
         <dl className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
           <Count label="Penalty due" value={counts.penalty_due} tone="danger" />
@@ -186,27 +186,31 @@ export function OverdueList({
                       {loan.clientName}
                     </span>
                     <span className="text-text font-semibold tabular-nums">
-                      {formatUgx(loan.totalOutstanding)}
+                      <Money amount={loan.totalOutstanding} />
                     </span>
                   </div>
                   <div className="text-text-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     <span className="font-mono">{loan.loanNumber}</span>
-                    <a
-                      href={`tel:${loan.clientPhone}`}
-                      className="text-accent underline-offset-2 hover:underline"
+                    <span
                       onClick={(event) => {
+                        // The card is itself a link; a tap on the number
+                        // should dial rather than open the loan.
                         event.stopPropagation();
                       }}
                     >
-                      {loan.clientPhone}
-                    </a>
+                      <PhoneValue
+                        value={loan.clientPhone}
+                        linked
+                        className="text-accent"
+                      />
+                    </span>
                     <DelinquencyBadge state={loan.state} />
                   </div>
                   <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                     <div>
                       <dt className="text-text-muted">Due now</dt>
                       <dd className="text-text tabular-nums">
-                        {formatUgx(loan.currentDue)}
+                        <Money amount={loan.currentDue} />
                       </dd>
                     </div>
                     <div>
@@ -272,12 +276,7 @@ export function OverdueList({
                       </span>
                     </th>
                     <td className="text-text-muted py-2 pr-4">
-                      <a
-                        href={`tel:${loan.clientPhone}`}
-                        className="underline-offset-2 hover:underline"
-                      >
-                        {loan.clientPhone}
-                      </a>
+                      <PhoneValue value={loan.clientPhone} linked />
                     </td>
                     <td className="py-2 pr-4">
                       <Link
@@ -288,18 +287,18 @@ export function OverdueList({
                       </Link>
                     </td>
                     <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
-                      {formatUgx(loan.currentDue)}
+                      <Money amount={loan.currentDue} />
                     </td>
                     <td className="text-text py-2 pr-4 text-right tabular-nums">
-                      {formatUgx(loan.totalOutstanding)}
+                      <Money amount={loan.totalOutstanding} />
                       {loan.penaltyRemaining > 0 ? (
                         <span className="text-danger block text-xs">
-                          incl. {formatUgx(loan.penaltyRemaining)} penalty
+                          incl. <Money amount={loan.penaltyRemaining} /> penalty
                         </span>
                       ) : null}
                       {loan.penaltyEligible ? (
                         <span className="text-danger block text-xs">
-                          + {formatUgx(loan.penaltyProjectedAmount)} penalty pending
+                          + <Money amount={loan.penaltyProjectedAmount} /> penalty pending
                         </span>
                       ) : null}
                     </td>
@@ -310,9 +309,11 @@ export function OverdueList({
                       {loan.daysPastDue}
                     </td>
                     <td className="text-text-muted py-2 pr-4">
-                      {loan.scheduledCompletionDate === null
-                        ? '—'
-                        : formatBusinessDate(loan.scheduledCompletionDate)}
+                      {loan.scheduledCompletionDate === null ? (
+                        '—'
+                      ) : (
+                        <DateValue value={loan.scheduledCompletionDate} />
+                      )}
                     </td>
                     <td className="py-2">
                       <DelinquencyBadge state={loan.state} />

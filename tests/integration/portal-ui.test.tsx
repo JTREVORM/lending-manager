@@ -12,6 +12,7 @@ import type {
   StatementPaymentRow,
   StatementScheduleRow,
 } from '@/lib/data/reports';
+import { getByCompositeText } from '../helpers/text';
 
 /**
  * The borrower's portal, after Phase 8.
@@ -496,7 +497,7 @@ describe("a borrower's statement", () => {
       />,
     );
 
-    expect(screen.getByText(/as at 4 Oct 2026/)).toBeInTheDocument();
+    expect(getByCompositeText(/as at 4 Oct 2026/)).toBeInTheDocument();
     expect(
       screen.getByText(/These figures are what our records show today/i),
     ).toBeInTheDocument();

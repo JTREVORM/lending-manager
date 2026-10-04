@@ -117,6 +117,45 @@ export async function getReceiptBranding(): Promise<ReceiptBranding> {
 }
 
 /**
+ * The company's identity, for a borrower.
+ *
+ * Reads `company_identity` rather than `company_settings`: a borrower holds
+ * no `settings:view`, so the full row is invisible to them and the portal
+ * header fell back to the name of the *software* — which is what the
+ * pre-Phase-9 screenshots show. The view exposes the name, locale, timezone
+ * and logo and nothing else. See migration 20261009000100.
+ *
+ * Never throws, for the same reason the staff version does not: a header must
+ * not be able to fail the page.
+ */
+export async function getPortalBranding(): Promise<CompanyBranding> {
+  try {
+    const supabase = await createSupabaseServerClient();
+
+    const { data, error } = await supabase
+      .from('company_identity')
+      .select('company_name, currency_code, locale, timezone, logo_path')
+      .maybeSingle();
+
+    if (error !== null || data === null) {
+      logger.debug('Company identity unreadable; using configured defaults.');
+      return DEFAULT_BRANDING;
+    }
+
+    return {
+      companyName: String(data.company_name),
+      currencyCode: String(data.currency_code),
+      locale: String(data.locale),
+      timezone: String(data.timezone),
+      logoPath: data.logo_path === null ? null : String(data.logo_path),
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    return DEFAULT_BRANDING;
+  }
+}
+
+/**
  * Company branding, from the database where possible.
  *
  * Never throws. A caller rendering a page header must not be able to fail

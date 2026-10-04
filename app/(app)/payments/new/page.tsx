@@ -4,6 +4,7 @@ import { PaymentForm } from '@/components/payments/payment-form';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getLoan, listLoans } from '@/lib/data/loans';
@@ -11,7 +12,7 @@ import { getLoanObligations, getLoanPosition } from '@/lib/data/payments';
 import { getLoanDelinquency } from '@/lib/data/delinquency';
 import { mintIdempotencyKey } from '@/lib/payments/actions';
 import { businessToday } from '@/lib/domain/datetime';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { toUgx } from '@/lib/domain/money';
 
 export const metadata = { title: 'Record a payment' };
 
@@ -236,7 +237,7 @@ export default async function NewPaymentPage({
                     {loan.clientName}
                   </span>
                   <span className="text-text-muted tabular-nums">
-                    {formatUgx(toUgx(loan.totalExpectedRepayment))} contract
+                    <Money amount={toUgx(loan.totalExpectedRepayment)} /> contract
                   </span>
                 </div>
                 <div className="text-text-muted mt-1 flex flex-wrap gap-x-3 text-xs">

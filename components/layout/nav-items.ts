@@ -35,7 +35,42 @@ export interface NavItem {
    * current phase renders a placeholder saying so, rather than a dead screen.
    */
   readonly phase: number;
+  /**
+   * Which part of the job this belongs to. The desktop sidebar renders one
+   * labelled block per group, so eleven flat entries become three short
+   * lists a reader can scan. Capability filtering still decides what appears;
+   * a group with nothing visible in it is not rendered at all.
+   */
+  readonly group: NavGroup;
+  /**
+   * Rank in the phone's bottom bar, lowest first. The bar holds four
+   * destinations and a "More" button; everything else lives behind More.
+   *
+   * Undefined means "never in the bar" — it is reachable from More, and from
+   * the sidebar on a larger screen.
+   */
+  readonly bottomBarRank?: number;
 }
+
+/** The sidebar's three blocks, in the order they are rendered. */
+export const NAV_GROUPS = ['operations', 'insights', 'administration'] as const;
+export type NavGroup = (typeof NAV_GROUPS)[number];
+
+export const NAV_GROUP_LABELS: Readonly<Record<NavGroup, string>> = {
+  operations: 'Operations',
+  insights: 'Insights',
+  administration: 'Administration',
+};
+
+/**
+ * How many destinations the phone's bottom bar holds before "More".
+ *
+ * Four, not ten. The pre-Phase-9 bar tried to fit every entry across 390px and
+ * produced labels reading `H…`, `Cli…`, `B…` — seven of ten unreadable. Four
+ * cells plus More leaves roughly 78px each, which fits "Payments" at the
+ * bar's type size with room to spare.
+ */
+export const BOTTOM_BAR_SLOTS = 4;
 
 /**
  * Staff navigation.
@@ -51,6 +86,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: LayoutDashboard,
     permission: 'dashboard:view',
     phase: 1,
+    group: 'operations',
+    bottomBarRank: 1,
   },
   {
     href: ROUTES.clients,
@@ -62,6 +99,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // through this directory.
     permission: 'clients:view',
     phase: 3,
+    group: 'operations',
+    bottomBarRank: 2,
   },
   {
     href: ROUTES.guarantors,
@@ -73,6 +112,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: HeartHandshake,
     permission: 'guarantors:view',
     phase: 3,
+    group: 'operations',
   },
   {
     href: ROUTES.loans,
@@ -83,6 +123,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // borrower's view of their own loans is a later phase.
     permission: 'loans:view',
     phase: 4,
+    group: 'operations',
+    bottomBarRank: 3,
   },
   {
     href: ROUTES.payments,
@@ -93,6 +135,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // history through the portal, not this entry.
     permission: 'payments:view',
     phase: 6,
+    group: 'operations',
+    bottomBarRank: 4,
   },
   {
     href: ROUTES.overdue,
@@ -103,6 +147,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // never this directory.
     permission: 'delinquency:view',
     phase: 7,
+    group: 'operations',
   },
   {
     href: ROUTES.reports,
@@ -116,6 +161,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // navigation parity test asserts.
     permission: 'reports:view_operational',
     phase: 8,
+    group: 'insights',
   },
   {
     href: ROUTES.users,
@@ -124,6 +170,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: UserCog,
     permission: 'users:view',
     phase: 2,
+    group: 'administration',
   },
   {
     href: ROUTES.audit,
@@ -132,6 +179,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: ScrollText,
     permission: 'audit:view',
     phase: 2,
+    group: 'insights',
   },
   {
     href: ROUTES.settings,
@@ -140,6 +188,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Settings,
     permission: 'settings:view',
     phase: 3,
+    group: 'administration',
   },
   {
     href: ROUTES.account,
@@ -148,6 +197,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: UserCircle,
     permission: 'account:view',
     phase: 2,
+    group: 'administration',
   },
 ];
 
@@ -160,6 +210,8 @@ export const PORTAL_NAV_ITEMS: readonly NavItem[] = [
     icon: Banknote,
     permission: 'portal:view',
     phase: 6,
+    group: 'operations',
+    bottomBarRank: 1,
   },
   {
     href: ROUTES.account,
@@ -168,6 +220,8 @@ export const PORTAL_NAV_ITEMS: readonly NavItem[] = [
     icon: UserCircle,
     permission: 'account:view',
     phase: 2,
+    group: 'administration',
+    bottomBarRank: 2,
   },
 ];
 
@@ -182,4 +236,60 @@ export function visibleNavItems(
   permissions: readonly Permission[],
 ): readonly NavItem[] {
   return items.filter((item) => permissions.includes(item.permission));
+}
+
+/**
+ * The entries the phone's bottom bar shows, and the ones behind "More".
+ *
+ * The bar takes the four highest-ranked destinations this person can reach,
+ * in rank order; everything else they can reach goes to the overflow. Both
+ * lists come from the same capability filter, so a destination cannot appear
+ * in one and be missing from the other, and a role that cannot reach a
+ * destination sees it in neither.
+ *
+ * When the overflow would be empty — the borrower portal, which has two
+ * entries — the bar takes everything and no "More" button is rendered. A
+ * button that opens a list of nothing is worse than no button.
+ */
+export function splitForBottomBar(
+  items: readonly NavItem[],
+  permissions: readonly Permission[],
+): { readonly bar: readonly NavItem[]; readonly overflow: readonly NavItem[] } {
+  const visible = visibleNavItems(items, permissions);
+
+  const ranked = visible
+    .filter((item) => item.bottomBarRank !== undefined)
+    .toSorted((a, b) => (a.bottomBarRank ?? 0) - (b.bottomBarRank ?? 0));
+
+  // Everything else keeps the order it was declared in, which is the order
+  // the sidebar uses — so a person who learns the menu in one place is not
+  // relearning it in the other.
+  const rest = visible.filter((item) => !ranked.includes(item));
+
+  if (visible.length <= BOTTOM_BAR_SLOTS + 1) {
+    return { bar: visible, overflow: [] };
+  }
+
+  const bar = ranked.slice(0, BOTTOM_BAR_SLOTS);
+  const overflow = [...ranked.slice(BOTTOM_BAR_SLOTS), ...rest];
+
+  return { bar, overflow };
+}
+
+/**
+ * The sidebar's blocks: each group with the entries this person can reach.
+ *
+ * A group whose entries are all filtered out is dropped, so a Secretary never
+ * sees an "Administration" heading with nothing under it.
+ */
+export function groupedNavItems(
+  items: readonly NavItem[],
+  permissions: readonly Permission[],
+): readonly { readonly group: NavGroup; readonly items: readonly NavItem[] }[] {
+  const visible = visibleNavItems(items, permissions);
+
+  return NAV_GROUPS.map((group) => ({
+    group,
+    items: visible.filter((item) => item.group === group),
+  })).filter((block) => block.items.length > 0);
 }

@@ -10,8 +10,9 @@ import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { assignableRoles, getUser } from '@/lib/data/users';
 import { formatInstant } from '@/lib/domain/datetime';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import { ROLES } from '@/lib/permissions';
+import { DateValue, PhoneValue } from '@/components/ui/data-value';
+import type { ReactNode } from 'react';
 
 export const metadata = { title: 'User' };
 
@@ -52,7 +53,7 @@ export default async function UserDetailPage({
         <dl className="space-y-2.5 text-sm">
           <Row
             label="Phone (used to sign in)"
-            value={formatUgandanPhoneLocal(user.phone)}
+            value={<PhoneValue value={user.phone} />}
           />
           <Row label="Email" value={user.email ?? 'Not recorded'} />
           <Row
@@ -70,7 +71,7 @@ export default async function UserDetailPage({
               user.lastSignInAt === null ? 'Never' : formatInstant(user.lastSignInAt)
             }
           />
-          <Row label="Added" value={formatInstant(user.createdAt, { withTime: false })} />
+          <Row label="Added" value={<DateValue value={user.createdAt} />} />
         </dl>
       </Card>
 
@@ -86,7 +87,7 @@ export default async function UserDetailPage({
   );
 }
 
-function Row({ label, value }: { readonly label: string; readonly value: string }) {
+function Row({ label, value }: { readonly label: string; readonly value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <dt className="text-text-muted shrink-0">{label}</dt>

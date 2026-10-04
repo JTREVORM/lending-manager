@@ -4,17 +4,18 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
+import { formatInstant } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import { formatBps, toBps } from '@/lib/domain/rate';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import type {
   LoanStatement,
   StatementPaymentRow,
   StatementScheduleRow,
 } from '@/lib/data/reports';
+import { DateValue, PhoneValue } from '@/components/ui/data-value';
 
 /**
  * A loan statement: the agreement, the plan, the payments and the balance.
@@ -85,7 +86,7 @@ export function LoanStatementView({
       primary: true,
       cell: (row) => `Payment ${String(row.installmentNumber)}`,
     },
-    { key: 'due', header: 'Date due', cell: (row) => formatBusinessDate(row.dueDate) },
+    { key: 'due', header: 'Date due', cell: (row) => <DateValue value={row.dueDate} /> },
     {
       key: 'expected',
       header: 'Amount due',
@@ -136,9 +137,7 @@ export function LoanStatementView({
       header: 'Amount',
       numeric: true,
       cell: (row) => (
-        <span className={row.isEffective ? '' : 'line-through'}>
-          {formatUgx(row.amount, { withCurrency: false })}
-        </span>
+        <Money amount={row.amount} variant="bare" struck={!row.isEffective} />
       ),
     },
     {
@@ -186,7 +185,7 @@ export function LoanStatementView({
         <h1 className="text-text text-2xl font-semibold">Loan statement</h1>
         <p className="text-text-muted text-sm">
           Loan <span className="font-mono">{loan.loanNumber}</span> · as at{' '}
-          {formatBusinessDate(businessDate as Parameters<typeof formatBusinessDate>[0])}
+          <DateValue value={businessDate} />
         </p>
       </header>
 
@@ -200,9 +199,11 @@ export function LoanStatementView({
             <span className="font-mono">{loan.clientNumber ?? '—'}</span>
           </Figure>
           <Figure label="Phone">
-            {loan.clientPhoneAtOrigination === null
-              ? '—'
-              : formatUgandanPhoneLocal(loan.clientPhoneAtOrigination)}
+            {loan.clientPhoneAtOrigination === null ? (
+              '—'
+            ) : (
+              <PhoneValue value={loan.clientPhoneAtOrigination} />
+            )}
           </Figure>
           {nameChanged ? <Figure label="Now known as">{loan.clientName}</Figure> : null}
         </dl>
@@ -217,18 +218,26 @@ export function LoanStatementView({
       <Card className="min-w-0">
         <h2 className="text-text text-base font-semibold">The loan</h2>
         <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Figure label="Amount borrowed">{formatUgx(loan.principalAmount)}</Figure>
-          <Figure label="Total interest">{formatUgx(loan.contractualInterest)}</Figure>
-          <Figure label="Total to repay">{formatUgx(loan.totalExpectedRepayment)}</Figure>
+          <Figure label="Amount borrowed">
+            <Money amount={loan.principalAmount} />
+          </Figure>
+          <Figure label="Total interest">
+            <Money amount={loan.contractualInterest} />
+          </Figure>
+          <Figure label="Total to repay">
+            <Money amount={loan.totalExpectedRepayment} />
+          </Figure>
           <Figure label="Date money was given">
             {loan.disbursedAt === null
               ? 'Not yet paid out'
               : formatInstant(loan.disbursedAt, { timeZone, withTime: false })}
           </Figure>
           <Figure label="Loan completion date">
-            {loan.scheduledCompletionDate === null
-              ? '—'
-              : formatBusinessDate(loan.scheduledCompletionDate)}
+            {loan.scheduledCompletionDate === null ? (
+              '—'
+            ) : (
+              <DateValue value={loan.scheduledCompletionDate} />
+            )}
           </Figure>
           <Figure label="Number of payments">{String(loan.installmentCount)}</Figure>
         </dl>
@@ -237,18 +246,26 @@ export function LoanStatementView({
       <Card className="min-w-0">
         <h2 className="text-text text-base font-semibold">Where the loan stands</h2>
         <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Figure label="Amount paid">{formatUgx(loan.totalCollected)}</Figure>
+          <Figure label="Amount paid">
+            <Money amount={loan.totalCollected} />
+          </Figure>
           <Figure label="Outstanding on the loan">
-            {formatUgx(loan.contractualOutstanding)}
+            <Money amount={loan.contractualOutstanding} />
           </Figure>
           <Figure label="Late-payment charge unpaid">
-            {formatUgx(loan.penaltyRemaining)}
+            <Money amount={loan.penaltyRemaining} />
           </Figure>
           <Figure label="Outstanding balance">
-            <strong>{formatUgx(loan.totalOutstanding)}</strong>
+            <strong>
+              <Money amount={loan.totalOutstanding} />
+            </strong>
           </Figure>
-          <Figure label="Past unpaid amount">{formatUgx(loan.arrearsAmount)}</Figure>
-          <Figure label="Current amount due">{formatUgx(loan.currentDue)}</Figure>
+          <Figure label="Past unpaid amount">
+            <Money amount={loan.arrearsAmount} />
+          </Figure>
+          <Figure label="Current amount due">
+            <Money amount={loan.currentDue} />
+          </Figure>
         </dl>
 
         <p className="text-text-muted mt-3 text-xs">
@@ -261,14 +278,14 @@ export function LoanStatementView({
       {penalty !== null ? (
         <Alert tone="warning" title="Late-payment charge">
           <p>
-            A charge of {formatUgx(penalty.penaltyAmount)} applies from{' '}
-            {formatBusinessDate(penalty.effectiveDate)}. It is{' '}
+            A charge of <Money amount={penalty.penaltyAmount} /> applies from{' '}
+            <DateValue value={penalty.effectiveDate} />. It is{' '}
             {/* Through the shared basis-point formatter, never a division by
                 100 in a component. The rate is stored in basis points exactly
                 so that no screen performs percentage arithmetic of its own. */}
             {formatBps(toBps(penalty.penaltyRateBps))} of the{' '}
-            {formatUgx(penalty.basisAmount)} that was still owed when the grace period
-            ended on {formatBusinessDate(penalty.graceEndDate)}.{' '}
+            <Money amount={penalty.basisAmount} /> that was still owed when the grace
+            period ended on <DateValue value={penalty.graceEndDate} />.{' '}
             {penalty.penaltyRemaining === 0
               ? 'It has been paid in full.'
               : `${formatUgx(penalty.penaltyRemaining)} of it is still to pay.`}

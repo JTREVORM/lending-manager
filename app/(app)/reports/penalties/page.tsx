@@ -11,11 +11,12 @@ import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getPenaltyReport, type PenaltyReportRow } from '@/lib/data/reports';
-import { formatBusinessDate } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { formatBps, toBps } from '@/lib/domain/rate';
 import { MAX_EXPORT_ROWS } from '@/lib/domain/reporting';
 import { singleParam, type ParamRecord } from '@/lib/reports/filters';
+import { DateValue } from '@/components/ui/data-value';
+import { Money } from '@/components/ui/money';
 
 export const metadata = { title: 'Late-payment charges' };
 
@@ -120,12 +121,12 @@ export default async function PenaltyReportPage({
       key: 'finalDue',
       header: 'Final collection',
       hideOnMobile: true,
-      cell: (row) => formatBusinessDate(row.finalDueDate),
+      cell: (row) => <DateValue value={row.finalDueDate} />,
     },
     {
       key: 'effective',
       header: 'Applies from',
-      cell: (row) => formatBusinessDate(row.effectiveDate),
+      cell: (row) => <DateValue value={row.effectiveDate} />,
     },
   ];
 
@@ -164,18 +165,18 @@ export default async function PenaltyReportPage({
         />
         <StatCard
           label="Charged"
-          value={formatUgx(totals.assessed)}
+          value={<Money amount={totals.assessed} />}
           metric="penalty_assessed"
         />
         <StatCard
           label="Collected"
-          value={formatUgx(totals.collected)}
+          value={<Money amount={totals.collected} />}
           metric="penalty_collected"
           tone="success"
         />
         <StatCard
           label="Unpaid"
-          value={formatUgx(totals.outstanding)}
+          value={<Money amount={totals.outstanding} />}
           metric="penalty_outstanding"
           tone={totals.outstanding > 0 ? 'warning' : 'neutral'}
         />

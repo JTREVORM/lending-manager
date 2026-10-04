@@ -1,6 +1,7 @@
 import { formatUgx } from '@/lib/domain/money';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import type { PortfolioSummary } from '@/lib/data/dashboard';
+import { Money } from '@/components/ui/money';
 
 /**
  * The executive summary: what the business has lent, and what it has received.
@@ -39,20 +40,20 @@ export function ExecutiveCards({ summary }: { readonly summary: PortfolioSummary
       <StatGrid>
         <StatCard
           label="Principal disbursed"
-          value={formatUgx(summary.principalDisbursed)}
+          value={<Money amount={summary.principalDisbursed} />}
           secondary={`${String(summary.loansActive + summary.loansCleared)} ${summary.loansActive + summary.loansCleared === 1 ? 'loan' : 'loans'} paid out`}
           metric="principal_disbursed"
         />
         <StatCard
           label="Total collected"
-          value={formatUgx(summary.totalCollected)}
+          value={<Money amount={summary.totalCollected} />}
           secondary="Reversed payments excluded"
           metric="total_collected"
           tone="success"
         />
         <StatCard
           label="Outstanding portfolio"
-          value={formatUgx(summary.totalOutstanding)}
+          value={<Money amount={summary.totalOutstanding} />}
           metric="total_outstanding"
         />
         <StatCard
@@ -67,24 +68,24 @@ export function ExecutiveCards({ summary }: { readonly summary: PortfolioSummary
       <StatGrid>
         <StatCard
           label="Principal collected"
-          value={formatUgx(summary.principalCollected)}
+          value={<Money amount={summary.principalCollected} />}
           secondary={`${formatUgx(summary.principalOutstanding)} still owed`}
           metric="principal_collected"
         />
         <StatCard
           label="Interest charged"
-          value={formatUgx(summary.contractualInterest)}
+          value={<Money amount={summary.contractualInterest} />}
           metric="contractual_interest"
         />
         <StatCard
           label="Interest collected"
-          value={formatUgx(summary.interestCollected)}
+          value={<Money amount={summary.interestCollected} />}
           secondary={`${formatUgx(summary.interestOutstanding)} still owed`}
           metric="interest_collected"
         />
         <StatCard
           label="Penalty collected"
-          value={formatUgx(summary.penaltyCollected)}
+          value={<Money amount={summary.penaltyCollected} />}
           secondary={`${formatUgx(summary.penaltyAssessed)} charged`}
           metric="penalty_collected"
         />

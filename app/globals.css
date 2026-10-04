@@ -29,6 +29,27 @@
   --color-brand-800: oklch(0.31 0.07 160);
   --color-brand-900: oklch(0.24 0.05 160);
 
+  /* ---------------------------------------------------------------------
+     Accent — the interactive colour.
+
+     A deliberate alias of the brand green rather than a second hue. Every
+     control that *does* something (a primary action, a link, a selected
+     option, a focus ring) reaches for `accent`; `brand` names the company's
+     colour. Today they are the same value, and when the business sets its own
+     brand colour from `company_settings.brand_primary_color` they can part
+     company without every interactive element following the logo.
+
+     Phase 9 note: these three tokens were referenced 117 times across the
+     application before they existed. Tailwind emits nothing for an undefined
+     token and reports no error, so `bg-accent` on the "New loan" button
+     produced a button with no background — which is exactly why the
+     pre-Phase-9 screenshots show page actions as bare text on six screens,
+     and why the selected payment method had no visible state. Defining them
+     here fixes all 117 at once. The values themselves live with the other
+     theme-varying colours in `:root` below, because the accent has to change
+     between light and dark.
+     --------------------------------------------------------------------- */
+
   /* Semantic state */
   --color-success: oklch(0.55 0.13 150);
   --color-success-surface: oklch(0.96 0.03 150);
@@ -58,6 +79,9 @@
    property of the theme instead of a `dark:` variant on every element.
    --------------------------------------------------------------------------- */
 :root {
+  --color-accent: oklch(0.47 0.11 160);
+  --color-accent-contrast: oklch(1 0 0);
+  --color-accent-surface: oklch(0.96 0.02 160);
   --color-page: oklch(0.985 0.002 250);
   --color-surface: oklch(1 0 0);
   --color-surface-raised: oklch(0.975 0.003 250);
@@ -79,6 +103,13 @@
     --color-text-muted: oklch(0.72 0.009 250);
     --color-text-inverse: oklch(0.17 0.008 250);
 
+    /* The accent has to lift off a dark page, so it brightens rather than
+       staying at its light-mode value — which would fail contrast on both the
+       page and the surface. Its contrast colour inverts with it. */
+    --color-accent: oklch(0.72 0.12 160);
+    --color-accent-contrast: oklch(0.17 0.008 250);
+    --color-accent-surface: oklch(0.28 0.05 160);
+
     /* Surfaces need more lightness contrast against a dark page than the
        light-mode tints provide. */
     --color-success-surface: oklch(0.28 0.05 150);
@@ -89,6 +120,9 @@
 }
 
 @theme inline {
+  --color-accent: var(--color-accent);
+  --color-accent-contrast: var(--color-accent-contrast);
+  --color-accent-surface: var(--color-accent-surface);
   --color-page: var(--color-page);
   --color-surface: var(--color-surface);
   --color-surface-raised: var(--color-surface-raised);
@@ -194,6 +228,17 @@
 }
 
 @layer components {
+  /* A table whose header stays put while its body scrolls.
+
+     The sticky element has to be each `<th>`, not the `<thead>`: a sticky
+     thead is ignored by most browsers. `DataTable` sets the attribute; the
+     rule lives here so no caller has to remember the trick. */
+  table[data-sticky-header] thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
   /* Skip link: visually hidden until focused, so a keyboard user can jump
      past the navigation straight to the content.
 

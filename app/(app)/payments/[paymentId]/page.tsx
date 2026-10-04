@@ -5,6 +5,7 @@ import { PaymentReceipt } from '@/components/payments/payment-receipt';
 import { PaymentReversalPanel } from '@/components/payments/payment-reversal-panel';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -12,8 +13,8 @@ import { getReceiptBranding } from '@/lib/data/company';
 import { getPayment, getPaymentAllocations } from '@/lib/data/payments';
 import { getLoan } from '@/lib/data/loans';
 import { formatInstant } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/domain/payment';
+import { DateValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Payment' };
 
@@ -60,7 +61,7 @@ export default async function PaymentDetailPage({
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-text text-2xl font-semibold break-words">
-              {formatUgx(payment.amount)}
+              <Money amount={payment.amount} />
             </h1>
             <p className="text-text-muted font-mono">{payment.paymentNumber}</p>
           </div>
@@ -100,7 +101,7 @@ export default async function PaymentDetailPage({
             </Detail>
             <Detail label="Amount">
               <span className="font-semibold tabular-nums">
-                {formatUgx(payment.amount)}
+                <Money amount={payment.amount} />
               </span>
             </Detail>
             <Detail label="Method">{PAYMENT_METHOD_LABELS[payment.paymentMethod]}</Detail>
@@ -110,7 +111,11 @@ export default async function PaymentDetailPage({
               </Detail>
             )}
             <Detail label="Received">
-              {formatInstant(payment.receivedAt, { timeZone: branding.timezone })}
+              <DateValue
+                value={payment.receivedAt}
+                variant="datetime"
+                timeZone={branding.timezone}
+              />
             </Detail>
             <Detail label="Recorded by">{payment.recordedByLabel}</Detail>
             <Detail label="Borrower name on the receipt">
@@ -187,13 +192,13 @@ export default async function PaymentDetailPage({
                       {entry.installmentNumber}
                     </th>
                     <td className="text-text py-2 pr-4 text-right tabular-nums">
-                      {formatUgx(entry.allocatedPrincipal)}
+                      <Money amount={entry.allocatedPrincipal} />
                     </td>
                     <td className="text-text py-2 pr-4 text-right tabular-nums">
-                      {formatUgx(entry.allocatedInterest)}
+                      <Money amount={entry.allocatedInterest} />
                     </td>
                     <td className="text-text py-2 text-right font-medium tabular-nums">
-                      {formatUgx(entry.allocatedAmount)}
+                      <Money amount={entry.allocatedAmount} />
                     </td>
                   </tr>
                 ))}

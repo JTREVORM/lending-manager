@@ -6,12 +6,12 @@ import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import { MAX_EXPORT_ROWS } from '@/lib/domain/reporting';
 import { REMARK_CATEGORY_LABELS, isRemarkCategory } from '@/lib/domain/client';
 import type { ArrearsReport, ArrearsReportRow } from '@/lib/data/reports';
+import { DateValue, PhoneValue } from '@/components/ui/data-value';
+import { Money } from '@/components/ui/money';
 
 /**
  * The arrears report.
@@ -67,7 +67,7 @@ export function ArrearsReportView({
       key: 'phone',
       header: 'Phone',
       cell: (row) =>
-        row.clientPhone === null ? '—' : formatUgandanPhoneLocal(row.clientPhone),
+        row.clientPhone === null ? '—' : <PhoneValue value={row.clientPhone} />,
     },
     {
       key: 'loan',
@@ -122,16 +122,22 @@ export function ArrearsReportView({
       header: 'Oldest missed',
       hideOnMobile: true,
       cell: (row) =>
-        row.oldestPastDueDate === null ? '—' : formatBusinessDate(row.oldestPastDueDate),
+        row.oldestPastDueDate === null ? (
+          '—'
+        ) : (
+          <DateValue value={row.oldestPastDueDate} />
+        ),
     },
     {
       key: 'completion',
       header: 'Completion',
       hideOnMobile: true,
       cell: (row) =>
-        row.scheduledCompletionDate === null
-          ? '—'
-          : formatBusinessDate(row.scheduledCompletionDate),
+        row.scheduledCompletionDate === null ? (
+          '—'
+        ) : (
+          <DateValue value={row.scheduledCompletionDate} />
+        ),
     },
     {
       key: 'status',
@@ -165,7 +171,11 @@ export function ArrearsReportView({
                       ? REMARK_CATEGORY_LABELS[row.latestRemark.category]
                       : row.latestRemark.category}{' '}
                     · {row.latestRemark.createdByLabel} ·{' '}
-                    {formatInstant(row.latestRemark.createdAt, { timeZone })}
+                    <DateValue
+                      value={row.latestRemark.createdAt}
+                      variant="datetime"
+                      timeZone={timeZone}
+                    />
                   </span>
                   <Link
                     href={`${ROUTES.clients}/${row.clientId}#remarks`}
@@ -198,17 +208,17 @@ export function ArrearsReportView({
         />
         <StatCard
           label="Arrears"
-          value={formatUgx(totals.arrears)}
+          value={<Money amount={totals.arrears} />}
           metric="arrears_total"
         />
         <StatCard
           label="Outstanding"
-          value={formatUgx(totals.totalOutstanding)}
+          value={<Money amount={totals.totalOutstanding} />}
           metric="total_outstanding"
         />
         <StatCard
           label="Charges unpaid"
-          value={formatUgx(totals.penaltyOutstanding)}
+          value={<Money amount={totals.penaltyOutstanding} />}
           metric="penalty_outstanding"
         />
       </StatGrid>

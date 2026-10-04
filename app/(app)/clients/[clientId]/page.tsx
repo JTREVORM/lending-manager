@@ -25,7 +25,7 @@ import {
   formatRecordedDate,
   maskNin,
 } from '@/lib/domain/client';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
+import { PhoneValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Client' };
 
@@ -141,11 +141,15 @@ export default async function ClientDetailPage({
 
         <Card>
           <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
-            <Detail label="Phone">{formatUgandanPhoneLocal(client.phone)}</Detail>
+            <Detail label="Phone">
+              <PhoneValue value={client.phone} />
+            </Detail>
             <Detail label="Alternative phone">
-              {client.alternativePhone === null
-                ? '—'
-                : formatUgandanPhoneLocal(client.alternativePhone)}
+              {client.alternativePhone === null ? (
+                '—'
+              ) : (
+                <PhoneValue value={client.alternativePhone} />
+              )}
             </Detail>
             <Detail label="Sex">{SEX_LABELS[client.sex]}</Detail>
             <Detail label="Date of birth">

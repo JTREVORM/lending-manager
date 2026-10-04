@@ -7,6 +7,7 @@ import { useTransition } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Money } from '@/components/ui/money';
 import { LoanStatusBadge } from './loan-status-badge';
 import { LOAN_STATUSES, LOAN_STATUS_LABELS } from '@/lib/domain/loan';
 import { formatRecordedDate } from '@/lib/domain/client';
@@ -143,7 +144,7 @@ export function LoanRegister({
                     <div className="min-w-0">
                       <dt className="text-text-muted">Principal</dt>
                       <dd className="text-text tabular-nums">
-                        {formatUgx(toUgx(loan.principalAmount))}
+                        <Money amount={toUgx(loan.principalAmount)} />
                       </dd>
                     </div>
                     <div className="min-w-0">
@@ -222,7 +223,7 @@ export function LoanRegister({
                       </span>
                     </td>
                     <td className="text-text py-3 pr-4 text-right tabular-nums">
-                      {formatUgx(toUgx(loan.principalAmount))}
+                      <Money amount={toUgx(loan.principalAmount)} />
                     </td>
                     <td className="text-text-muted py-3 pr-4">
                       {String(loan.loanTermMonths)} mo

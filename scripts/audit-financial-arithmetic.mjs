@@ -88,6 +88,11 @@ const FINANCIAL_FILES = [
   'components/dashboard/loan-activity.tsx',
   'components/portal/portal-loan-card.tsx',
   'components/clients/client-loan-summary.tsx',
+  // Phase 9. Every sum in the application now passes through this one
+  // component on its way to a screen. It formats and never computes, which
+  // makes it the single highest-leverage place for a `toFixed` to do damage:
+  // one line here would misstate every figure in the system at once.
+  'components/ui/money.tsx',
 ];
 
 const UNSAFE = [

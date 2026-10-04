@@ -10,6 +10,7 @@ import { toBusinessDate } from '@/lib/domain/datetime';
 import { calculateLoan } from '@/lib/domain/loan';
 import { toUgx } from '@/lib/domain/money';
 import { generateRepaymentSchedule } from '@/lib/domain/repayment-schedule';
+import { getByCompositeText } from '../helpers/text';
 
 /**
  * The Phase 5 screens.
@@ -328,8 +329,8 @@ describe('the schedule summary', () => {
   it('breaks the total into principal and interest', () => {
     render(<ScheduleSummary {...PROPS} />);
 
-    expect(screen.getByText(/200,000 principal/)).toBeInTheDocument();
-    expect(screen.getByText(/45,000 interest/)).toBeInTheDocument();
+    expect(getByCompositeText(/200,000 principal/)).toBeInTheDocument();
+    expect(getByCompositeText(/45,000 interest/)).toBeInTheDocument();
   });
 
   it('warns loudly when the totals do not reconcile', () => {

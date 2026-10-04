@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Money } from '@/components/ui/money';
 import {
   approveLoanAction,
   cancelLoanAction,
@@ -18,7 +19,7 @@ import {
   type LoanApprovalFailure,
   type LoanStatus,
 } from '@/lib/domain/loan';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { toUgx } from '@/lib/domain/money';
 import type { ActionResult } from '@/lib/auth/actions';
 
 export interface LoanCapabilities {
@@ -377,13 +378,13 @@ function DisburseForm({
             <div className="flex justify-between gap-3">
               <dt className="text-text-muted">Handing over</dt>
               <dd className="text-text font-semibold tabular-nums">
-                {formatUgx(toUgx(principal))}
+                <Money amount={toUgx(principal)} />
               </dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-text-muted">Total repayable</dt>
               <dd className="text-text tabular-nums">
-                {formatUgx(toUgx(totalExpected))}
+                <Money amount={toUgx(totalExpected)} />
               </dd>
             </div>
             <div className="flex justify-between gap-3">

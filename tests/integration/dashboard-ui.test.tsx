@@ -20,6 +20,7 @@ import type {
   RecentPayment,
   UpcomingCollection,
 } from '@/lib/data/dashboard';
+import { getByCompositeText } from '../helpers/text';
 
 /**
  * The Phase 8 dashboards.
@@ -371,7 +372,9 @@ describe("today's collection sheet", () => {
     render(<CollectionSheet rows={[sheetRow()]} canCollect />);
 
     expect(screen.getAllByText('Nakimuli Zainabu').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('070 000 0001').length).toBeGreaterThan(0);
+    // One phone format across the whole system as of Phase 9: international,
+    // grouped, matching what the column actually stores.
+    expect(screen.getAllByText('+256 700 000 001').length).toBeGreaterThan(0);
     expect(screen.getAllByText('LN-2026-00001').length).toBeGreaterThan(0);
   });
 
@@ -531,8 +534,8 @@ describe('upcoming collections', () => {
 
     expect(screen.getByText('5 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText('6 Oct 2026')).toBeInTheDocument();
-    expect(screen.getByText(/UGX 8,000 · 2 loans/)).toBeInTheDocument();
-    expect(screen.getByText(/UGX 4,000 · 1 loan/)).toBeInTheDocument();
+    expect(getByCompositeText(/UGX 8,000 · 2 loans/)).toBeInTheDocument();
+    expect(getByCompositeText(/UGX 4,000 · 1 loan/)).toBeInTheDocument();
   });
 
   it('says that prepaid collections are not listed', () => {

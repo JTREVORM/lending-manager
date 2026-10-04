@@ -1,9 +1,10 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
+import { Money } from '@/components/ui/money';
 import { formatUgx } from '@/lib/domain/money';
 import { formatBps, toBps } from '@/lib/domain/rate';
 import type { LoanPenalty } from '@/lib/data/delinquency';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * A penalty, with the arithmetic that produced it.
@@ -49,33 +50,40 @@ export function PenaltyCard({
       <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
         <Line label="Charge">
           <span className="text-lg font-semibold tabular-nums">
-            {formatUgx(penalty.penaltyAmount)}
+            <Money amount={penalty.penaltyAmount} />
           </span>
         </Line>
         <Line label="Paid">
-          <span className="tabular-nums">{formatUgx(penalty.allocatedAmount)}</span>
+          <span className="tabular-nums">
+            <Money amount={penalty.allocatedAmount} />
+          </span>
         </Line>
         <Line label="Charged on balance of">
-          <span className="tabular-nums">{formatUgx(penalty.basisAmount)}</span>
+          <span className="tabular-nums">
+            <Money amount={penalty.basisAmount} />
+          </span>
         </Line>
         <Line label="Rate">{formatBps(toBps(penalty.penaltyRateBps))}</Line>
         <Line label="Final collection was due">
-          {formatBusinessDate(penalty.finalDueDate)}
+          <DateValue value={penalty.finalDueDate} />
         </Line>
         <Line label="Grace period">
           {penalty.graceDays === 1 ? '1 day' : `${String(penalty.graceDays)} days`}, to{' '}
-          {formatBusinessDate(penalty.graceEndDate)}
+          <DateValue value={penalty.graceEndDate} />
         </Line>
         <Line label="Charge took effect">
-          {formatBusinessDate(penalty.effectiveDate)}
+          <DateValue value={penalty.effectiveDate} />
         </Line>
-        <Line label="Recorded">{formatInstant(penalty.appliedAt, { timeZone })}</Line>
+        <Line label="Recorded">
+          <DateValue value={penalty.appliedAt} variant="datetime" timeZone={timeZone} />
+        </Line>
       </dl>
 
       <p className="text-text-muted mt-3 text-sm">
-        {formatUgx(penalty.basisAmount)} is what this loan owed when its grace period ran
-        out on {formatBusinessDate(penalty.graceEndDate)} — not what it owes now. The
-        charge was fixed on that date and does not change if the balance falls afterwards.
+        <Money amount={penalty.basisAmount} /> is what this loan owed when its grace
+        period ran out on <DateValue value={penalty.graceEndDate} /> — not what it owes
+        now. The charge was fixed on that date and does not change if the balance falls
+        afterwards.
       </p>
 
       <Alert tone="info" className="mt-3">

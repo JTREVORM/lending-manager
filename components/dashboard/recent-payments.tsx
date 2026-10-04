@@ -3,11 +3,11 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ReportEmpty } from '@/components/reports/report-empty';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatInstant } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import type { RecentPayment } from '@/lib/data/dashboard';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * The last few payments taken.
@@ -53,20 +53,26 @@ export function RecentPayments({
                 <span className="font-mono">{payment.loanNumber}</span>
               </p>
               <p className="text-text-muted text-xs">
-                {formatInstant(payment.receivedAt, { timeZone })} ·{' '}
-                {PAYMENT_METHOD_LABELS[payment.paymentMethod]} · {payment.recordedByLabel}
+                <DateValue
+                  value={payment.receivedAt}
+                  variant="datetime"
+                  timeZone={timeZone}
+                />{' '}
+                · {PAYMENT_METHOD_LABELS[payment.paymentMethod]} ·{' '}
+                {payment.recordedByLabel}
               </p>
             </div>
 
             <div className="shrink-0 text-right">
-              <p
-                className={
-                  payment.isEffective
-                    ? 'text-text tabular-nums'
-                    : 'text-text-muted tabular-nums line-through'
-                }
-              >
-                {formatUgx(payment.amount)}
+              <p>
+                {/* The strike lives on `Money` rather than on this paragraph,
+                    so it travels with the figure. A line through a wrapper is
+                    a line through whatever the wrapper happens to contain. */}
+                <Money
+                  amount={payment.amount}
+                  struck={!payment.isEffective}
+                  tone={payment.isEffective ? 'default' : 'muted'}
+                />
               </p>
               {payment.isEffective ? null : <Badge tone="danger">Reversed</Badge>}
             </div>

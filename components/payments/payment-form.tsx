@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
+import { Money } from '@/components/ui/money';
 import { recordPaymentAction } from '@/lib/payments/actions';
 import {
   allocatePayment,
@@ -18,12 +19,12 @@ import {
   type PaymentMethod,
 } from '@/lib/domain/payment';
 import { formatUgx, toUgx } from '@/lib/domain/money';
-import { formatBusinessDate } from '@/lib/domain/datetime';
 import {
   DELINQUENCY_STATE_LABELS,
   type DelinquencyState,
 } from '@/lib/domain/delinquency';
 import type { PaymentActionResult } from '@/lib/payments/actions';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * Recording a payment at the counter.
@@ -175,26 +176,26 @@ export function PaymentForm({
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Due now</dt>
               <dd className="text-text font-semibold tabular-nums">
-                {formatUgx(toUgx(delinquency?.currentDue ?? unpaidDue))}
+                <Money amount={toUgx(delinquency?.currentDue ?? unpaidDue)} />
               </dd>
               {/* Itemised rather than summarised. "Payment doubled" would be
                   wrong the moment two collections are missed or one is partly
                   covered; the parts stay correct however many there are. */}
               {delinquency !== undefined && delinquency.arrears > 0 ? (
                 <dd className="text-text-muted text-xs">
-                  {formatUgx(toUgx(delinquency.arrears))} previously unpaid plus{' '}
-                  {formatUgx(toUgx(delinquency.dueToday))} due today
+                  <Money amount={toUgx(delinquency.arrears)} /> previously unpaid plus{' '}
+                  <Money amount={toUgx(delinquency.dueToday)} /> due today
                 </dd>
               ) : null}
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Total outstanding</dt>
               <dd className="text-text font-semibold tabular-nums">
-                {formatUgx(toUgx(outstanding))}
+                <Money amount={toUgx(outstanding)} />
               </dd>
               {delinquency !== undefined && delinquency.penaltyRemaining > 0 ? (
                 <dd className="text-text-muted text-xs">
-                  Includes {formatUgx(toUgx(delinquency.penaltyRemaining))} penalty
+                  Includes <Money amount={toUgx(delinquency.penaltyRemaining)} /> penalty
                 </dd>
               ) : null}
             </div>
@@ -208,7 +209,7 @@ export function PaymentForm({
             >
               This loan passed its grace period still owing money, so a charge of{' '}
               <span className="font-semibold">
-                {formatUgx(toUgx(delinquency.penaltyProjectedAmount))}
+                <Money amount={toUgx(delinquency.penaltyProjectedAmount)} />
               </span>{' '}
               applies. It is added to the loan the moment this payment is recorded, so the
               balance on the receipt will be higher than the figure above. Tell the
@@ -331,9 +332,9 @@ export function PaymentForm({
                 .
               </p>
               <p className="text-text-muted mt-1 text-sm tabular-nums">
-                {formatUgx(plan.totalPrincipal)} principal and{' '}
-                {formatUgx(plan.totalInterest)} interest. Balance afterwards{' '}
-                {formatUgx(plan.outstandingAfter)}.
+                <Money amount={plan.totalPrincipal} /> principal and{' '}
+                <Money amount={plan.totalInterest} /> interest. Balance afterwards{' '}
+                <Money amount={plan.outstandingAfter} />.
               </p>
               {plan.clearsLoan ? (
                 <p className="text-success mt-1 text-sm font-medium">
@@ -389,16 +390,18 @@ export function PaymentForm({
             </Confirm>
             <Confirm label="Amount">
               <span className="text-lg font-semibold tabular-nums">
-                {formatUgx(plan.amount)}
+                <Money amount={plan.amount} />
               </span>
             </Confirm>
             <Confirm label="Method">{PAYMENT_METHOD_LABELS[method]}</Confirm>
             <Confirm label="Balance before">
-              <span className="tabular-nums">{formatUgx(plan.outstandingBefore)}</span>
+              <span className="tabular-nums">
+                <Money amount={plan.outstandingBefore} />
+              </span>
             </Confirm>
             <Confirm label="Balance after">
               <span className="font-semibold tabular-nums">
-                {formatUgx(plan.outstandingAfter)}
+                <Money amount={plan.outstandingAfter} />
               </span>
             </Confirm>
           </dl>
@@ -446,21 +449,23 @@ export function PaymentForm({
                         {entry.kind === 'penalty' ? 'Penalty' : entry.sequenceNumber}
                       </th>
                       <td className="text-text-muted px-3 py-2">
-                        {target === undefined
-                          ? '—'
-                          : formatBusinessDate(target.effectiveDate)}
+                        {target === undefined ? (
+                          '—'
+                        ) : (
+                          <DateValue value={target.effectiveDate} />
+                        )}
                       </td>
                       <td className="text-text px-3 py-2 text-right tabular-nums">
-                        {formatUgx(entry.allocatedPrincipal)}
+                        <Money amount={entry.allocatedPrincipal} />
                       </td>
                       <td className="text-text px-3 py-2 text-right tabular-nums">
-                        {formatUgx(entry.allocatedInterest)}
+                        <Money amount={entry.allocatedInterest} />
                       </td>
                       <td className="text-text px-3 py-2 text-right tabular-nums">
-                        {formatUgx(entry.allocatedPenalty)}
+                        <Money amount={entry.allocatedPenalty} />
                       </td>
                       <td className="text-text px-3 py-2 text-right font-medium tabular-nums">
-                        {formatUgx(entry.allocatedAmount)}
+                        <Money amount={entry.allocatedAmount} />
                       </td>
                     </tr>
                   );

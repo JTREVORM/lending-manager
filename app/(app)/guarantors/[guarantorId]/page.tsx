@@ -18,7 +18,7 @@ import {
   formatRecordedDate,
   maskNin,
 } from '@/lib/domain/client';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
+import { PhoneValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Guarantor' };
 
@@ -105,11 +105,15 @@ export default async function GuarantorDetailPage({
             ) : null}
 
             <dl className="grid min-w-0 flex-1 gap-4 sm:grid-cols-2">
-              <Detail label="Phone">{formatUgandanPhoneLocal(guarantor.phone)}</Detail>
+              <Detail label="Phone">
+                <PhoneValue value={guarantor.phone} />
+              </Detail>
               <Detail label="Alternative phone">
-                {guarantor.alternativePhone === null
-                  ? '—'
-                  : formatUgandanPhoneLocal(guarantor.alternativePhone)}
+                {guarantor.alternativePhone === null ? (
+                  '—'
+                ) : (
+                  <PhoneValue value={guarantor.alternativePhone} />
+                )}
               </Detail>
               <Detail label="Sex">{SEX_LABELS[guarantor.sex]}</Detail>
               <Detail label="Date of birth">

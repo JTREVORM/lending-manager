@@ -3,6 +3,7 @@ import { formatUgx } from '@/lib/domain/money';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import { DELINQUENCY_STATE_LABELS } from '@/lib/domain/delinquency';
 import type { PortfolioSummary } from '@/lib/data/dashboard';
+import { Money } from '@/components/ui/money';
 
 /**
  * The loan book: how many loans, what is owed, and who is behind.
@@ -58,13 +59,13 @@ export function PortfolioCards({
         />
         <StatCard
           label="Outstanding portfolio"
-          value={formatUgx(summary.totalOutstanding)}
+          value={<Money amount={summary.totalOutstanding} />}
           secondary={`${formatUgx(summary.contractualOutstanding)} contract · ${formatUgx(summary.penaltyOutstanding)} charges`}
           metric="total_outstanding"
         />
         <StatCard
           label="Arrears"
-          value={formatUgx(summary.arrearsTotal)}
+          value={<Money amount={summary.arrearsTotal} />}
           secondary={`${String(summary.loansWithArrears)} ${summary.loansWithArrears === 1 ? 'loan' : 'loans'} behind`}
           metric="arrears_total"
           tone={summary.arrearsTotal > 0 ? 'warning' : 'neutral'}
@@ -111,14 +112,14 @@ export function PortfolioCards({
       <StatGrid>
         <StatCard
           label="Penalties charged"
-          value={formatUgx(summary.penaltyAssessed)}
+          value={<Money amount={summary.penaltyAssessed} />}
           secondary={`${String(summary.loansPenalised)} ${summary.loansPenalised === 1 ? 'loan' : 'loans'}`}
           metric="penalty_assessed"
           href={canSeeReports ? `${ROUTES.reports}/penalties` : undefined}
         />
         <StatCard
           label="Penalties unpaid"
-          value={formatUgx(summary.penaltyOutstanding)}
+          value={<Money amount={summary.penaltyOutstanding} />}
           metric="penalty_outstanding"
           tone={summary.penaltyOutstanding > 0 ? 'warning' : 'neutral'}
         />

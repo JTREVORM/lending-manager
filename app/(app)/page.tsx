@@ -25,10 +25,11 @@ import {
   listRecentlyPenalised,
   listUpcomingCollections,
 } from '@/lib/data/dashboard';
-import { businessToday, formatBusinessDate } from '@/lib/domain/datetime';
+import { businessToday } from '@/lib/domain/datetime';
 import { addBusinessDays } from '@/lib/domain/datetime';
 import { getAppEnvironment, inspectPublicEnv } from '@/lib/env.public';
 import { ROLES, effectiveRole } from '@/lib/permissions';
+import { DateValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Dashboard' };
 
@@ -132,7 +133,7 @@ export default async function DashboardPage() {
           </Badge>
         </div>
         <p className="text-text-muted text-sm">
-          {formatBusinessDate(today)} · {branding.companyName} · Signed in as{' '}
+          <DateValue value={today} /> · {branding.companyName} · Signed in as{' '}
           {context.fullName}, {roleLabel}
         </p>
       </header>

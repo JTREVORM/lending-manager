@@ -12,6 +12,7 @@ import { UserStatusBadge } from './user-status-badge';
 import { PROFILE_STATUSES } from '@/lib/domain/status';
 import { ROLES, ROLE_KEYS } from '@/lib/permissions';
 import type { DirectoryUser } from '@/lib/data/users';
+import { PhoneValue } from '@/components/ui/data-value';
 
 /**
  * The staff directory.
@@ -128,7 +129,9 @@ export function UserDirectory({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{user.fullName}</p>
-                      <p className="text-text-muted truncate text-sm">{user.phone}</p>
+                      <p className="text-text-muted truncate text-sm">
+                        <PhoneValue value={user.phone} />
+                      </p>
                     </div>
                     <UserStatusBadge status={user.status} />
                   </div>
@@ -185,7 +188,9 @@ export function UserDirectory({
                           </Badge>
                         ) : null}
                       </th>
-                      <td className="text-text-muted px-4 py-3">{user.phone}</td>
+                      <td className="text-text-muted px-4 py-3">
+                        <PhoneValue value={user.phone} />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1.5">
                           {user.roles.map((role) => (

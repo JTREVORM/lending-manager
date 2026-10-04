@@ -1,9 +1,11 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
+import { Money } from '@/components/ui/money';
 import { formatBusinessDate } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import type { LoanDelinquency } from '@/lib/data/delinquency';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * A borrower's own loan position, in the portal.
@@ -64,7 +66,7 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Please pay now</dt>
               <dd className="text-text text-2xl font-semibold tabular-nums">
-                {formatUgx(position.currentDue)}
+                <Money amount={position.currentDue} />
               </dd>
               <dd className="text-text-muted text-xs">
                 {position.arrearsAmount > 0
@@ -76,7 +78,7 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Still to pay on this loan</dt>
               <dd className="text-text text-2xl font-semibold tabular-nums">
-                {formatUgx(position.totalOutstanding)}
+                <Money amount={position.totalOutstanding} />
               </dd>
               <dd className="text-text-muted text-xs">
                 {position.penaltyRemaining > 0
@@ -105,9 +107,11 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
           {position.withinGracePeriod ? (
             <Alert tone="warning" className="mt-4">
               Your final payment date has passed. You have until{' '}
-              {position.graceEndDate === null
-                ? 'the end of your grace period'
-                : formatBusinessDate(position.graceEndDate)}{' '}
+              {position.graceEndDate === null ? (
+                'the end of your grace period'
+              ) : (
+                <DateValue value={position.graceEndDate} />
+              )}{' '}
               to pay the balance in full with no extra charge. After that a late-payment
               charge applies.
             </Alert>
@@ -118,7 +122,7 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
               Your grace period has passed and this loan is still unpaid, so a
               late-payment charge of{' '}
               <span className="font-semibold">
-                {formatUgx(position.penaltyProjectedAmount)}
+                <Money amount={position.penaltyProjectedAmount} />
               </span>{' '}
               applies. It will be added to your balance when you next pay. Please speak to
               our staff.
@@ -127,13 +131,13 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
 
           {position.penaltyApplied && position.penaltyRemaining > 0 ? (
             <Alert tone="danger" className="mt-4">
-              A late-payment charge of {formatUgx(position.penaltyAmount)} was added to
-              this loan
+              A late-payment charge of <Money amount={position.penaltyAmount} /> was added
+              to this loan
               {position.penaltyAppliedEffectiveDate === null
                 ? ''
                 : ` on ${formatBusinessDate(position.penaltyAppliedEffectiveDate)}`}
-              , of which {formatUgx(position.penaltyRemaining)} is still to pay. It is a
-              charge for settling late, not interest.
+              , of which <Money amount={position.penaltyRemaining} /> is still to pay. It
+              is a charge for settling late, not interest.
             </Alert>
           ) : null}
 
@@ -141,17 +145,21 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Next payment to clear</dt>
               <dd className="text-text">
-                {position.oldestUnpaidDueDate === null
-                  ? 'Nothing outstanding'
-                  : formatBusinessDate(position.oldestUnpaidDueDate)}
+                {position.oldestUnpaidDueDate === null ? (
+                  'Nothing outstanding'
+                ) : (
+                  <DateValue value={position.oldestUnpaidDueDate} />
+                )}
               </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Last payment date on this loan</dt>
               <dd className="text-text">
-                {position.scheduledCompletionDate === null
-                  ? 'Unknown'
-                  : formatBusinessDate(position.scheduledCompletionDate)}
+                {position.scheduledCompletionDate === null ? (
+                  'Unknown'
+                ) : (
+                  <DateValue value={position.scheduledCompletionDate} />
+                )}
               </dd>
             </div>
           </dl>

@@ -2,13 +2,14 @@ import Link from 'next/link';
 
 import { PaymentRegister } from '@/components/payments/payment-register';
 import { Card } from '@/components/ui/card';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getCollectionTotals, listPayments } from '@/lib/data/payments';
 import { businessToday } from '@/lib/domain/datetime';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { toUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import { paymentSearchSchema } from '@/lib/validation/payment';
 
@@ -97,7 +98,7 @@ export default async function PaymentsPage({
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Total</dt>
               <dd className="text-text text-xl font-semibold tabular-nums">
-                {formatUgx(toUgx(collectedToday))}
+                <Money amount={toUgx(collectedToday)} />
               </dd>
             </div>
 
@@ -107,7 +108,7 @@ export default async function PaymentsPage({
                   {PAYMENT_METHOD_LABELS[row.paymentMethod]}
                 </dt>
                 <dd className="text-text text-xl font-semibold tabular-nums">
-                  {formatUgx(row.totalAmount)}
+                  <Money amount={row.totalAmount} />
                   <span className="text-text-muted ml-1 text-sm font-normal">
                     ({row.paymentCount})
                   </span>

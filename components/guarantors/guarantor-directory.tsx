@@ -7,8 +7,8 @@ import { useTransition } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import type { GuarantorPage } from '@/lib/data/guarantors';
+import { PhoneValue } from '@/components/ui/data-value';
 
 /**
  * The guarantor directory.
@@ -106,7 +106,7 @@ export function GuarantorDirectory({
                       {guarantor.fullName}
                     </p>
                     <p className="text-text-muted text-sm">
-                      {formatUgandanPhoneLocal(guarantor.phone)}
+                      <PhoneValue value={guarantor.phone} />
                     </p>
                     <p className="text-text-muted text-sm break-words">
                       {guarantor.occupation} · {guarantor.location}

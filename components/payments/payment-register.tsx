@@ -8,9 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatInstant } from '@/lib/domain/datetime';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { toUgx } from '@/lib/domain/money';
 import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
@@ -18,6 +18,7 @@ import {
   type PaymentMethod,
   type PaymentStatus,
 } from '@/lib/domain/payment';
+import { DateValue } from '@/components/ui/data-value';
 
 export interface PaymentRow {
   readonly id: string;
@@ -219,7 +220,13 @@ export function PaymentRegister({
                     <span className="font-mono">{payment.paymentNumber}</span>
                     <span className="font-mono">{payment.loanNumber}</span>
                     <span>{PAYMENT_METHOD_LABELS[payment.paymentMethod]}</span>
-                    <span>{formatInstant(payment.receivedAt, { timeZone })}</span>
+                    <span>
+                      <DateValue
+                        value={payment.receivedAt}
+                        variant="datetime"
+                        timeZone={timeZone}
+                      />
+                    </span>
                     <StatusBadge status={payment.status} />
                   </div>
                 </Link>
@@ -292,7 +299,11 @@ export function PaymentRegister({
                       {PAYMENT_METHOD_LABELS[payment.paymentMethod]}
                     </td>
                     <td className="text-text-muted py-2 pr-4">
-                      {formatInstant(payment.receivedAt, { timeZone })}
+                      <DateValue
+                        value={payment.receivedAt}
+                        variant="datetime"
+                        timeZone={timeZone}
+                      />
                     </td>
                     <td className="py-2 pr-4">
                       <StatusBadge status={payment.status} />
@@ -344,8 +355,8 @@ function Amount({
 }) {
   if (reversed) {
     return (
-      <span className="text-text-muted font-medium tabular-nums line-through">
-        {formatUgx(toUgx(amount))}
+      <span className="font-medium">
+        <Money amount={toUgx(amount)} struck tone="muted" />
         <span className="sr-only"> (reversed, no longer counted)</span>
       </span>
     );
@@ -353,7 +364,7 @@ function Amount({
 
   return (
     <span className="text-text font-semibold tabular-nums">
-      {formatUgx(toUgx(amount))}
+      <Money amount={toUgx(amount)} />
     </span>
   );
 }

@@ -13,8 +13,8 @@ import {
   CLIENT_STATUS_LABELS,
   formatRecordedDate,
 } from '@/lib/domain/client';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import type { ClientPage } from '@/lib/data/clients';
+import { PhoneValue } from '@/components/ui/data-value';
 
 /**
  * The client directory.
@@ -154,7 +154,7 @@ export function ClientDirectory({
                     <div className="min-w-0">
                       <dt className="text-text-muted">Phone</dt>
                       <dd className="text-text truncate">
-                        {formatUgandanPhoneLocal(client.phone)}
+                        <PhoneValue value={client.phone} />
                       </dd>
                     </div>
                     <div className="min-w-0">
@@ -210,7 +210,7 @@ export function ClientDirectory({
                     </td>
                     <td className="text-text py-3 pr-4">{client.fullName}</td>
                     <td className="text-text-muted py-3 pr-4">
-                      {formatUgandanPhoneLocal(client.phone)}
+                      <PhoneValue value={client.phone} />
                     </td>
                     <td className="text-text-muted py-3 pr-4">
                       {client.villageArea}, {client.district}

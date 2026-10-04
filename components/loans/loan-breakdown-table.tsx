@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { Money } from '@/components/ui/money';
+import { toUgx } from '@/lib/domain/money';
 import type { LoanPeriod } from '@/lib/domain/loan';
 
 /**
@@ -93,19 +94,19 @@ export function LoanBreakdownTable({
                   {period.periodNumber}
                 </th>
                 <td className="text-text-muted py-2 pr-4 text-right tabular-nums">
-                  {formatUgx(period.openingPrincipal)}
+                  <Money amount={period.openingPrincipal} />
                 </td>
                 <td className="text-text py-2 pr-4 text-right tabular-nums">
-                  {formatUgx(period.principalPortion)}
+                  <Money amount={period.principalPortion} />
                 </td>
                 <td className="text-text py-2 pr-4 text-right tabular-nums">
-                  {formatUgx(period.interest)}
+                  <Money amount={period.interest} />
                 </td>
                 <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
-                  {formatUgx(period.totalObligation)}
+                  <Money amount={period.totalObligation} />
                 </td>
                 <td className="text-text-muted py-2 text-right tabular-nums">
-                  {formatUgx(period.closingPrincipal)}
+                  <Money amount={period.closingPrincipal} />
                 </td>
               </tr>
             ))}
@@ -117,13 +118,13 @@ export function LoanBreakdownTable({
               </th>
               <td />
               <td className="text-text py-2 pr-4 text-right tabular-nums">
-                {formatUgx(toUgx(principal))}
+                <Money amount={toUgx(principal)} />
               </td>
               <td className="text-text py-2 pr-4 text-right tabular-nums">
-                {formatUgx(toUgx(totalInterest))}
+                <Money amount={toUgx(totalInterest)} />
               </td>
               <td className="text-text py-2 pr-4 text-right tabular-nums">
-                {formatUgx(toUgx(totalExpected))}
+                <Money amount={toUgx(totalExpected)} />
               </td>
               <td />
             </tr>
@@ -135,13 +136,13 @@ export function LoanBreakdownTable({
         <div className="border-border bg-surface min-w-0 rounded-xl border p-3">
           <dt className="text-text-muted text-sm">Principal</dt>
           <dd className="text-text text-lg font-semibold tabular-nums">
-            {formatUgx(toUgx(principal))}
+            <Money amount={toUgx(principal)} />
           </dd>
         </div>
         <div className="border-border bg-surface min-w-0 rounded-xl border p-3">
           <dt className="text-text-muted text-sm">Total interest</dt>
           <dd className="text-text text-lg font-semibold tabular-nums">
-            {formatUgx(toUgx(totalInterest))}
+            <Money amount={toUgx(totalInterest)} />
           </dd>
         </div>
         <div className="border-accent/40 bg-accent/5 min-w-0 rounded-xl border p-3">
@@ -149,7 +150,7 @@ export function LoanBreakdownTable({
             {provisional ? 'Total repayable (preview)' : 'Total repayable'}
           </dt>
           <dd className="text-text text-lg font-semibold tabular-nums">
-            {formatUgx(toUgx(totalExpected))}
+            <Money amount={toUgx(totalExpected)} />
           </dd>
         </div>
       </dl>

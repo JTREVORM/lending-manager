@@ -1,7 +1,6 @@
 import { ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { CURRENT_PHASE } from '@/config/app';
 import type { AuthContext } from '@/lib/auth/context';
 import { getCompanyBranding } from '@/lib/data/company';
 import { ROLES, effectiveRole } from '@/lib/permissions';
@@ -55,16 +54,19 @@ export async function AppShell({
             <ShieldCheck aria-hidden="true" className="size-5 text-white" />
           </span>
           <span className="min-w-0">
+            {/* The company's name and the signed-in person's role. The
+                delivery phase used to sit here; a build label is for a
+                changelog, not for the chrome a cashier looks at all day. */}
             <span className="line-clamp-2 block text-sm leading-snug font-semibold">
               {branding.companyName}
             </span>
-            <span className="text-text-muted block text-xs">Phase {CURRENT_PHASE}</span>
+            <span className="text-text-muted block truncate text-xs">{roleLabel}</span>
           </span>
         </div>
 
         <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
 
-        <div className="border-border mt-2 border-t pt-2">
+        <div className="border-border mt-2 shrink-0 border-t pt-2">
           <p className="truncate px-3 pt-1 text-sm font-medium">{context.fullName}</p>
           <p className="text-text-muted mb-1 truncate px-3 text-xs">{roleLabel}</p>
           <SignOutButton />
@@ -107,7 +109,12 @@ export async function AppShell({
         aria-label="Main navigation"
         className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
       >
-        <PrimaryNav variant="bottom-bar" menu="staff" permissions={context.permissions} />
+        <PrimaryNav
+          variant="bottom-bar"
+          menu="staff"
+          permissions={context.permissions}
+          sheetFooter={<SignOutButton />}
+        />
       </nav>
     </div>
   );

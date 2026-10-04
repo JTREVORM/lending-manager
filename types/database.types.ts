@@ -1268,6 +1268,24 @@ export type Database = {
      */
     Views: {
       /**
+       * Phase 9. The company's own name, locale, timezone, logo and brand
+       * colour — the fields the application shell needs — readable by every
+       * signed-in user, borrowers included. SECURITY DEFINER by design; see
+       * migration 20261009000100.
+       */
+      company_identity: {
+        Row: {
+          company_name: string;
+          currency_code: string;
+          locale: string;
+          timezone: string;
+          logo_path: string | null;
+          brand_primary_color: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
        * Phase 8. One row per recorded payment with its allocation components.
        * `loan_number` and the client columns are nullable because the joins are
        * outer: a financial register must show a payment the caller may read even

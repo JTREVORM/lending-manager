@@ -4,9 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
 import { ReportEmpty } from '@/components/reports/report-empty';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { formatBusinessDate } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import type { PortfolioRow } from '@/lib/data/reports';
 
 /**
@@ -67,7 +67,7 @@ export function ClientLoanSummary({
                 {loan.loanNumber}
               </Link>
               <p className="text-text-muted text-sm">
-                {formatUgx(loan.principalAmount)} borrowed ·{' '}
+                <Money amount={loan.principalAmount} /> borrowed ·{' '}
                 {loan.scheduledCompletionDate === null
                   ? 'not yet paid out'
                   : `ends ${formatBusinessDate(loan.scheduledCompletionDate)}`}
@@ -92,22 +92,26 @@ export function ClientLoanSummary({
           <dl className="mt-3 grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Paid</dt>
-              <dd className="text-text tabular-nums">{formatUgx(loan.totalCollected)}</dd>
+              <dd className="text-text tabular-nums">
+                <Money amount={loan.totalCollected} />
+              </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Outstanding</dt>
               <dd className="text-text tabular-nums">
-                {formatUgx(loan.totalOutstanding)}
+                <Money amount={loan.totalOutstanding} />
               </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Past unpaid</dt>
-              <dd className="text-text tabular-nums">{formatUgx(loan.arrearsAmount)}</dd>
+              <dd className="text-text tabular-nums">
+                <Money amount={loan.arrearsAmount} />
+              </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Charges unpaid</dt>
               <dd className="text-text tabular-nums">
-                {formatUgx(loan.penaltyRemaining)}
+                <Money amount={loan.penaltyRemaining} />
               </dd>
             </div>
           </dl>

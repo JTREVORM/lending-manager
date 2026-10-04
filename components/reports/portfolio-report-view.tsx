@@ -7,10 +7,12 @@ import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
+import { formatInstant } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { MAX_EXPORT_ROWS } from '@/lib/domain/reporting';
 import type { PortfolioReport, PortfolioRow } from '@/lib/data/reports';
+import { DateValue } from '@/components/ui/data-value';
+import { Money } from '@/components/ui/money';
 
 /**
  * The loan portfolio report.
@@ -147,9 +149,11 @@ export function PortfolioReportView({
       header: 'Completion',
       hideOnMobile: true,
       cell: (row) =>
-        row.scheduledCompletionDate === null
-          ? '—'
-          : formatBusinessDate(row.scheduledCompletionDate),
+        row.scheduledCompletionDate === null ? (
+          '—'
+        ) : (
+          <DateValue value={row.scheduledCompletionDate} />
+        ),
     },
     ...extraColumns,
   ];
@@ -171,18 +175,18 @@ export function PortfolioReportView({
         />
         <StatCard
           label="Principal"
-          value={formatUgx(totals.principal)}
+          value={<Money amount={totals.principal} />}
           definition="Total principal of the loans listed. Not restricted to disbursed loans unless the status filter says so."
         />
         <StatCard
           label="Collected"
-          value={formatUgx(totals.collected)}
+          value={<Money amount={totals.collected} />}
           metric="total_collected"
           tone="success"
         />
         <StatCard
           label="Outstanding"
-          value={formatUgx(totals.totalOutstanding)}
+          value={<Money amount={totals.totalOutstanding} />}
           secondary={`${formatUgx(totals.contractualOutstanding)} contract · ${formatUgx(totals.penaltyOutstanding)} charges`}
           metric="total_outstanding"
         />

@@ -1,6 +1,8 @@
 import { Card } from '@/components/ui/card';
-import { formatBusinessDate, type BusinessDate } from '@/lib/domain/datetime';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { Money } from '@/components/ui/money';
+import { type BusinessDate } from '@/lib/domain/datetime';
+import { toUgx } from '@/lib/domain/money';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * The schedule at a glance.
@@ -67,21 +69,21 @@ export function ScheduleSummary({
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">Disbursed</dt>
             <dd className="text-text text-lg font-semibold">
-              {formatBusinessDate(disbursementDate)}
+              <DateValue value={disbursementDate} />
             </dd>
           </div>
 
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">First collection</dt>
             <dd className="text-text text-lg font-semibold">
-              {formatBusinessDate(firstDueDate)}
+              <DateValue value={firstDueDate} />
             </dd>
           </div>
 
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">Final collection</dt>
             <dd className="text-text text-lg font-semibold">
-              {formatBusinessDate(finalDueDate)}
+              <DateValue value={finalDueDate} />
             </dd>
             {/* Named for what a later phase will read it as. Phase 7 builds
                 loan expiry, grace periods and penalties on this date. */}
@@ -91,11 +93,11 @@ export function ScheduleSummary({
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">Total scheduled</dt>
             <dd className="text-text text-lg font-semibold tabular-nums">
-              {formatUgx(toUgx(totalScheduledAmount))}
+              <Money amount={toUgx(totalScheduledAmount)} />
             </dd>
             <dd className="text-text-muted text-xs tabular-nums">
-              {formatUgx(toUgx(totalScheduledPrincipal))} principal +{' '}
-              {formatUgx(toUgx(totalScheduledInterest))} interest
+              <Money amount={toUgx(totalScheduledPrincipal)} /> principal +{' '}
+              <Money amount={toUgx(totalScheduledInterest)} /> interest
             </dd>
           </div>
         </dl>

@@ -13,9 +13,8 @@ import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getClientReport, type ClientReportRow } from '@/lib/data/reports';
 import { CLIENT_STATUS_LABELS, isClientStatus } from '@/lib/domain/client';
-import { businessToday, formatBusinessDate } from '@/lib/domain/datetime';
+import { businessToday } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import {
   CLIENT_STATUS_OPTIONS,
   exportQuery,
@@ -23,6 +22,7 @@ import {
   singleParam,
   type ParamRecord,
 } from '@/lib/reports/filters';
+import { DateValue, PhoneValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Client report' };
 
@@ -85,7 +85,7 @@ export default async function ClientReportPage({
       header: 'Client number',
       cell: (row) => <span className="font-mono">{row.clientNumber}</span>,
     },
-    { key: 'phone', header: 'Phone', cell: (row) => formatUgandanPhoneLocal(row.phone) },
+    { key: 'phone', header: 'Phone', cell: (row) => <PhoneValue value={row.phone} /> },
     {
       key: 'location',
       header: 'Location',
@@ -143,7 +143,7 @@ export default async function ClientReportPage({
           <div className="min-w-0">
             <h1 className="text-text text-2xl font-semibold">Clients</h1>
             <p className="text-text-muted mt-1 text-sm">
-              As at {formatBusinessDate(today)} · {branding.companyName}
+              As at <DateValue value={today} /> · {branding.companyName}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">

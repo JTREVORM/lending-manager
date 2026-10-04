@@ -6,9 +6,9 @@ import { ReportEmpty } from '@/components/reports/report-empty';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
 import { ROUTES } from '@/config/app';
 import { formatUgx } from '@/lib/domain/money';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import { COLLECTION_STATUS_LABELS, type CollectionStatus } from '@/lib/domain/reporting';
 import type { CollectionSheetRow } from '@/lib/data/dashboard';
+import { PhoneValue } from '@/components/ui/data-value';
 
 const STATUS_TONES: Readonly<Record<CollectionStatus, 'warning' | 'info' | 'success'>> = {
   unpaid: 'warning',
@@ -66,7 +66,7 @@ export function CollectionSheet({
     {
       key: 'phone',
       header: 'Phone',
-      cell: (row) => formatUgandanPhoneLocal(row.clientPhone),
+      cell: (row) => <PhoneValue value={row.clientPhone} />,
     },
     {
       key: 'loan',

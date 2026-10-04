@@ -11,6 +11,7 @@ import { PortalPaymentHistory } from '@/components/payments/portal-payment-histo
 import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import type { PaymentObligation } from '@/lib/domain/payment';
+import { getByCompositeText } from '../helpers/text';
 
 /**
  * The Phase 6 screens.
@@ -135,9 +136,9 @@ describe('the payment form', () => {
     expect(screen.getByText(/would cover 3 collections/i)).toBeInTheDocument();
     // Interest-first: 3,000 principal twice plus 1,000 on the third = 7,000
     // principal; 1,000 interest three times = 3,000.
-    expect(screen.getByText(/UGX\s*7,000 principal/)).toBeInTheDocument();
-    expect(screen.getByText(/UGX\s*3,000 interest/)).toBeInTheDocument();
-    expect(screen.getByText(/Balance afterwards UGX\s*2,000/)).toBeInTheDocument();
+    expect(getByCompositeText(/UGX\s*7,000 principal/)).toBeInTheDocument();
+    expect(getByCompositeText(/UGX\s*3,000 interest/)).toBeInTheDocument();
+    expect(getByCompositeText(/Balance afterwards UGX\s*2,000/)).toBeInTheDocument();
   });
 
   it('says plainly when a payment would settle the loan', async () => {
@@ -753,9 +754,9 @@ describe('the loan balance summary', () => {
     expect(screen.getByText(/UGX\s*92,000/)).toBeInTheDocument();
     expect(screen.getByText(/UGX\s*23,000/)).toBeInTheDocument();
     expect(screen.getByText(/UGX\s*11,500/)).toBeInTheDocument();
-    expect(screen.getByText(/20,000 paid/)).toBeInTheDocument();
+    expect(getByCompositeText(/20,000 paid/)).toBeInTheDocument();
     expect(screen.getByText(/80,000/)).toBeInTheDocument();
-    expect(screen.getByText(/3,000 paid/)).toBeInTheDocument();
+    expect(getByCompositeText(/3,000 paid/)).toBeInTheDocument();
     expect(screen.getByText(/12,000/)).toBeInTheDocument();
   });
 

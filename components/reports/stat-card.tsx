@@ -15,7 +15,12 @@ const TONES = {
 
 export interface StatCardProps {
   readonly label: string;
-  readonly value: string;
+  /**
+   * The figure. A node rather than a string so a card can hold a `<Money>`,
+   * which is what keeps `UGX` on the same line as its number — the pre-Phase-9
+   * dashboard wrapped on exactly these cards.
+   */
+  readonly value: ReactNode;
   /** A second line: a count beside a total, or what the figure excludes. */
   readonly secondary?: ReactNode;
   /**

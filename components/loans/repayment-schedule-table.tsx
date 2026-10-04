@@ -1,11 +1,13 @@
 import { Card } from '@/components/ui/card';
-import { formatBusinessDate, type BusinessDate } from '@/lib/domain/datetime';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { Money } from '@/components/ui/money';
+import { type BusinessDate } from '@/lib/domain/datetime';
+import { toUgx } from '@/lib/domain/money';
 import {
   INSTALLMENT_DATE_STATE_LABELS,
   installmentDateState,
   type InstallmentDateState,
 } from '@/lib/domain/repayment-schedule';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * The collection schedule for a loan.
@@ -112,20 +114,20 @@ export function RepaymentScheduleTable({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-text font-medium">
-                  {formatBusinessDate(row.dueDate)}
+                  <DateValue value={row.dueDate} />
                 </span>
                 <span className="text-text font-semibold tabular-nums">
-                  {formatUgx(toUgx(row.expectedAmount))}
+                  <Money amount={toUgx(row.expectedAmount)} />
                 </span>
               </div>
               <div className="text-text-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span>Collection {row.installmentNumber}</span>
                 <span>Month {row.loanPeriodNumber}</span>
                 <span className="tabular-nums">
-                  {formatUgx(toUgx(row.scheduledPrincipal))} principal
+                  <Money amount={toUgx(row.scheduledPrincipal)} /> principal
                 </span>
                 <span className="tabular-nums">
-                  {formatUgx(toUgx(row.scheduledInterest))} interest
+                  <Money amount={toUgx(row.scheduledInterest)} /> interest
                 </span>
                 {provisional ? null : <DateStateBadge state={state} />}
               </div>
@@ -174,19 +176,21 @@ export function RepaymentScheduleTable({
                 <th scope="row" className="text-text-muted py-2 pr-4 font-normal">
                   {row.installmentNumber}
                 </th>
-                <td className="text-text py-2 pr-4">{formatBusinessDate(row.dueDate)}</td>
+                <td className="text-text py-2 pr-4">
+                  <DateValue value={row.dueDate} />
+                </td>
                 <td className="text-text-muted py-2 pr-4">
                   {row.loanPeriodNumber}
                   <span className="sr-only"> of the contract</span>
                 </td>
                 <td className="text-text py-2 pr-4 text-right tabular-nums">
-                  {formatUgx(toUgx(row.scheduledPrincipal))}
+                  <Money amount={toUgx(row.scheduledPrincipal)} />
                 </td>
                 <td className="text-text py-2 pr-4 text-right tabular-nums">
-                  {formatUgx(toUgx(row.scheduledInterest))}
+                  <Money amount={toUgx(row.scheduledInterest)} />
                 </td>
                 <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
-                  {formatUgx(toUgx(row.expectedAmount))}
+                  <Money amount={toUgx(row.expectedAmount)} />
                 </td>
                 {provisional ? null : (
                   <td className="py-2">

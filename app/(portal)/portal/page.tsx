@@ -13,7 +13,7 @@ import { listClientPayments } from '@/lib/data/payments';
 import { listClientLoans } from '@/lib/data/reports';
 import { signedDocumentUrl } from '@/lib/storage/documents';
 import { formatRecordedDate } from '@/lib/domain/client';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
+import { PhoneValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'My account' };
 
@@ -127,7 +127,9 @@ export default async function PortalPage() {
                 </div>
                 <div className="min-w-0">
                   <dt className="text-text-muted text-sm">Phone</dt>
-                  <dd className="break-words">{formatUgandanPhoneLocal(client.phone)}</dd>
+                  <dd className="break-words">
+                    <PhoneValue value={client.phone} />
+                  </dd>
                 </div>
                 <div className="min-w-0">
                   <dt className="text-text-muted text-sm">Occupation</dt>

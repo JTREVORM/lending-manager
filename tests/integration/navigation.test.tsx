@@ -5,8 +5,13 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  BOTTOM_BAR_SLOTS,
+  NAV_GROUPS,
+  NAV_GROUP_LABELS,
   NAV_ITEMS,
   PORTAL_NAV_ITEMS,
+  groupedNavItems,
+  splitForBottomBar,
   visibleNavItems,
 } from '@/components/layout/nav-items';
 import { PhasePlaceholder } from '@/components/layout/phase-placeholder';
@@ -309,5 +314,181 @@ describe('the menu across the server/client boundary', () => {
     expect(props).toContain('menu:');
     expect(props).toContain('permissions:');
     expect(props).not.toContain('NavItem[]');
+  });
+});
+
+/**
+ * The phone bottom bar, redesigned in Phase 9.
+ *
+ * The failure it replaces is in the pre-Phase-9 screenshots: eleven entries
+ * sharing 390px, labels rendering as `H…`, `Cli…`, `B…`, `Lo…`, `Us…`, `A…`,
+ * `Se…`. Seven of ten destinations unreadable. The bar now holds four and
+ * everything else moves to a "More" sheet, so what these tests protect is the
+ * invariant that makes that work: the bar is small, the two lists together
+ * are exactly what the role may reach, and nothing appears in both.
+ */
+describe('the phone bottom bar', () => {
+  const splitFor = (role: RoleKey, items = NAV_ITEMS) =>
+    splitForBottomBar(items, ROLE_PERMISSIONS[role]);
+
+  it('never puts more than four destinations plus More in the bar', () => {
+    for (const role of ['secretary_treasurer', 'manager', 'owner_admin'] as const) {
+      const { bar } = splitFor(role);
+      expect(bar.length, role).toBeLessThanOrEqual(BOTTOM_BAR_SLOTS);
+    }
+  });
+
+  it('loses no destination to the split', () => {
+    // Every entry the role may reach is in exactly one of the two lists. A
+    // destination that fell out of both would be unreachable on a phone while
+    // still appearing on the desktop sidebar.
+    for (const role of [
+      'secretary_treasurer',
+      'manager',
+      'owner_admin',
+      'client',
+    ] as const) {
+      for (const items of [NAV_ITEMS, PORTAL_NAV_ITEMS]) {
+        const { bar, overflow } = splitForBottomBar(items, ROLE_PERMISSIONS[role]);
+        const combined = [...bar, ...overflow].map((item) => item.href).toSorted();
+        const expected = visibleNavItems(items, ROLE_PERMISSIONS[role])
+          .map((item) => item.href)
+          .toSorted();
+
+        expect(combined).toEqual(expected);
+      }
+    }
+  });
+
+  it('puts no destination in both the bar and the sheet', () => {
+    const { bar, overflow } = splitFor('owner_admin');
+    const barHrefs = new Set(bar.map((item) => item.href));
+
+    for (const item of overflow) {
+      expect(barHrefs.has(item.href), item.href).toBe(false);
+    }
+  });
+
+  it('offers a role nothing it cannot reach', () => {
+    // The split runs on the filtered list, so this is really a guard against
+    // a future refactor filtering after the split rather than before it.
+    const { bar, overflow } = splitFor('secretary_treasurer');
+
+    for (const item of [...bar, ...overflow]) {
+      expect(
+        ROLE_PERMISSIONS.secretary_treasurer.includes(item.permission),
+        item.href,
+      ).toBe(true);
+    }
+  });
+
+  it('gives a borrower both portal entries in the bar and no sheet', () => {
+    // Two entries fit. A "More" button that opens an empty list is worse than
+    // no button, so the overflow must be empty rather than merely short.
+    const { bar, overflow } = splitFor('client', PORTAL_NAV_ITEMS);
+
+    expect(bar.map((item) => item.href)).toEqual([ROUTES.portal, ROUTES.account]);
+    expect(overflow).toEqual([]);
+  });
+
+  it('keeps the same four destinations across staff roles', () => {
+    // Dashboard, Clients, Loans and Payments are held by every staff role, so
+    // the bar does not rearrange itself when a manager picks up a secretary's
+    // phone. Consistency is the point of a fixed bar.
+    const expected = [ROUTES.dashboard, ROUTES.clients, ROUTES.loans, ROUTES.payments];
+
+    for (const role of ['secretary_treasurer', 'manager', 'owner_admin'] as const) {
+      expect(
+        splitFor(role).bar.map((item) => item.href),
+        role,
+      ).toEqual(expected);
+    }
+  });
+
+  it('renders the four links and a More button, not eleven links', () => {
+    render(
+      <PrimaryNav
+        variant="bottom-bar"
+        menu="staff"
+        permissions={ROLE_PERMISSIONS.owner_admin}
+      />,
+    );
+
+    expect(screen.getAllByRole('link')).toHaveLength(BOTTOM_BAR_SLOTS);
+    expect(screen.getByRole('button', { name: /More/ })).toBeInTheDocument();
+  });
+
+  it('marks the More button as current when the open page is inside the sheet', () => {
+    // Otherwise a person on the audit trail sees no highlight anywhere and
+    // cannot tell where they are.
+    mockPathname.current = ROUTES.audit;
+
+    render(
+      <PrimaryNav
+        variant="bottom-bar"
+        menu="staff"
+        permissions={ROLE_PERMISSIONS.owner_admin}
+      />,
+    );
+
+    const more = screen.getByRole('button', { name: /More/ });
+    expect(more.className).toContain('text-accent');
+  });
+});
+
+/**
+ * The desktop sidebar's three blocks.
+ */
+describe('the grouped sidebar', () => {
+  it('assigns every entry to a group', () => {
+    for (const item of [...NAV_ITEMS, ...PORTAL_NAV_ITEMS]) {
+      expect(NAV_GROUPS, item.href).toContain(item.group);
+    }
+  });
+
+  it('renders no empty group heading', () => {
+    // A Secretary/Treasurer holds no audit or user capability, so "Insights"
+    // must still appear (they have Reports) while a group that filtered down
+    // to nothing is dropped entirely rather than left as a bare heading.
+    for (const role of ['secretary_treasurer', 'manager', 'owner_admin'] as const) {
+      for (const block of groupedNavItems(NAV_ITEMS, ROLE_PERMISSIONS[role])) {
+        expect(block.items.length, `${role}/${block.group}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('shows a secretary no Administration block beyond their own account', () => {
+    const blocks = groupedNavItems(NAV_ITEMS, ROLE_PERMISSIONS.secretary_treasurer);
+    const administration = blocks.find((block) => block.group === 'administration');
+
+    expect(administration?.items.map((item) => item.href)).not.toContain(ROUTES.users);
+  });
+
+  it('shows every destination the role may reach, grouped', () => {
+    for (const role of ['secretary_treasurer', 'manager', 'owner_admin'] as const) {
+      const grouped = groupedNavItems(NAV_ITEMS, ROLE_PERMISSIONS[role])
+        .flatMap((block) => block.items)
+        .map((item) => item.href)
+        .toSorted();
+      const flat = visibleNavItems(NAV_ITEMS, ROLE_PERMISSIONS[role])
+        .map((item) => item.href)
+        .toSorted();
+
+      expect(grouped, role).toEqual(flat);
+    }
+  });
+
+  it('labels each group it renders', () => {
+    render(
+      <PrimaryNav
+        variant="sidebar"
+        menu="staff"
+        permissions={ROLE_PERMISSIONS.owner_admin}
+      />,
+    );
+
+    for (const label of Object.values(NAV_GROUP_LABELS)) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
   });
 });

@@ -13,6 +13,7 @@ import { toUgx } from '@/lib/domain/money';
 import { DELINQUENCY_STATES } from '@/lib/domain/delinquency';
 import type { LoanDelinquency, DelinquentLoanRow } from '@/lib/data/delinquency';
 import type { PaymentObligation } from '@/lib/domain/payment';
+import { getByCompositeText } from '../helpers/text';
 
 /**
  * The Phase 7 screens.
@@ -313,7 +314,7 @@ describe('the delinquency panel', () => {
   it('dates every figure, so nobody reads a stale panel as today"s', () => {
     render(<DelinquencyPanel position={position()} />);
 
-    expect(screen.getByText(/As at 3 Nov 2026/i)).toBeInTheDocument();
+    expect(getByCompositeText(/As at 3 Nov 2026/i)).toBeInTheDocument();
   });
 
   it('labels each figure for a screen reader', () => {
@@ -477,7 +478,7 @@ describe('the overdue list', () => {
     );
 
     expect(screen.getAllByText('Amina Nakato').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('+256700000001').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('+256 700 000 001').length).toBeGreaterThan(0);
     expect(screen.getAllByText('LN260001').length).toBeGreaterThan(0);
     // Due now, which is the figure a collection officer asks for.
     expect(screen.getAllByText(/UGX\s*100,000/).length).toBeGreaterThan(0);
@@ -530,7 +531,7 @@ describe('the overdue list', () => {
       />,
     );
 
-    expect(screen.getByText(/incl\. UGX\s*50,000 penalty/)).toBeInTheDocument();
+    expect(getByCompositeText(/incl\. UGX\s*50,000 penalty/)).toBeInTheDocument();
   });
 
   it('flags a pending charge as pending', () => {
@@ -557,7 +558,7 @@ describe('the overdue list', () => {
       />,
     );
 
-    expect(screen.getByText(/UGX\s*50,000 penalty pending/)).toBeInTheDocument();
+    expect(getByCompositeText(/UGX\s*50,000 penalty pending/)).toBeInTheDocument();
   });
 
   it('counts the states it is watching', () => {
@@ -573,7 +574,7 @@ describe('the overdue list', () => {
 
     // The labels appear in the summary and again in the filter's options, so
     // the counts are read from the summary list itself.
-    const summary = screen.getByText(/As at 3 Nov 2026/i).closest('div');
+    const summary = getByCompositeText(/As at 3 Nov 2026/i).closest('div');
     expect(summary).not.toBeNull();
 
     const counts = within(summary as HTMLElement);
@@ -598,7 +599,7 @@ describe('the overdue list', () => {
     );
 
     expect(
-      screen.getByText(/As at 3 Nov 2026, in the business timezone/i),
+      getByCompositeText(/As at 3 Nov 2026, in the business timezone/i),
     ).toBeInTheDocument();
   });
 
@@ -934,7 +935,7 @@ describe('the payment form, with delinquency', () => {
 
     expect(screen.getByText('Due now')).toBeInTheDocument();
     expect(
-      screen.getByText(/UGX\s*4,000 previously unpaid plus UGX\s*4,000 due today/),
+      getByCompositeText(/UGX\s*4,000 previously unpaid plus UGX\s*4,000 due today/),
     ).toBeInTheDocument();
     expect(screen.getByText('Total outstanding')).toBeInTheDocument();
     expect(screen.getByText(/This loan is in arrears\./i)).toBeInTheDocument();
@@ -988,7 +989,7 @@ describe('the payment form, with delinquency', () => {
       />,
     );
 
-    expect(screen.getByText(/Includes UGX\s*6,000 penalty/)).toBeInTheDocument();
+    expect(getByCompositeText(/Includes UGX\s*6,000 penalty/)).toBeInTheDocument();
   });
 
   it('falls back to Phase 6"s single figure when delinquency is not readable', () => {

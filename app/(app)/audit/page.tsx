@@ -13,10 +13,10 @@ import {
   listAuditPage,
 } from '@/lib/data/audit';
 import { getCompanyBranding } from '@/lib/data/company';
-import { formatInstant } from '@/lib/domain/datetime';
 import { describeRange } from '@/lib/domain/reporting';
 import { formatBusinessDate } from '@/lib/domain/datetime';
 import { resolveReportRange, singleParam, type ParamRecord } from '@/lib/reports/filters';
+import { DateValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Audit trail' };
 
@@ -150,7 +150,11 @@ export default async function AuditPage({
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <Badge>{entry.entityType.replace(/_/g, ' ')}</Badge>
                     <time dateTime={entry.occurredAt} className="text-text-muted text-xs">
-                      {formatInstant(entry.occurredAt, { timeZone: branding.timezone })}
+                      <DateValue
+                        value={entry.occurredAt}
+                        variant="datetime"
+                        timeZone={branding.timezone}
+                      />
                     </time>
                   </div>
                 </div>

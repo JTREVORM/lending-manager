@@ -1,6 +1,7 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { Money } from '@/components/ui/money';
+import { toUgx } from '@/lib/domain/money';
 
 /**
  * A loan's financial position.
@@ -102,12 +103,12 @@ export function LoanBalanceSummary({
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">Total outstanding</dt>
             <dd className="text-text text-2xl font-semibold tabular-nums">
-              {formatUgx(toUgx(totalOutstanding))}
+              <Money amount={toUgx(totalOutstanding)} />
             </dd>
             {penaltyRemaining > 0 ? (
               <dd className="text-text-muted text-xs">
-                {formatUgx(toUgx(outstanding))} on the contract plus{' '}
-                {formatUgx(toUgx(penaltyRemaining))} penalty
+                <Money amount={toUgx(outstanding)} /> on the contract plus{' '}
+                <Money amount={toUgx(penaltyRemaining)} /> penalty
               </dd>
             ) : (
               <dd className="text-text-muted text-xs">On the contract</dd>
@@ -117,17 +118,17 @@ export function LoanBalanceSummary({
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">Paid</dt>
             <dd className="text-text text-2xl font-semibold tabular-nums">
-              {formatUgx(toUgx(totalPaid))}
+              <Money amount={toUgx(totalPaid)} />
             </dd>
             <dd className="text-text-muted text-xs">
-              {paidPercent}% of {formatUgx(toUgx(totalExpectedRepayment))}
+              {paidPercent}% of <Money amount={toUgx(totalExpectedRepayment)} />
             </dd>
           </div>
 
           <div className="min-w-0">
             <dt className="text-text-muted text-sm">Due now</dt>
             <dd className="text-text text-2xl font-semibold tabular-nums">
-              {formatUgx(toUgx(unpaidScheduledDue))}
+              <Money amount={toUgx(unpaidScheduledDue)} />
             </dd>
             <dd className="text-text-muted text-xs">
               Scheduled on or before today and not yet covered
@@ -153,9 +154,9 @@ export function LoanBalanceSummary({
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Principal</dt>
               <dd className="text-text tabular-nums">
-                {formatUgx(toUgx(principalPaid))} paid,{' '}
+                <Money amount={toUgx(principalPaid)} /> paid,{' '}
                 <span className="font-medium">
-                  {formatUgx(toUgx(principalRemaining))}
+                  <Money amount={toUgx(principalRemaining)} />
                 </span>{' '}
                 remaining
               </dd>
@@ -163,8 +164,10 @@ export function LoanBalanceSummary({
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Interest</dt>
               <dd className="text-text tabular-nums">
-                {formatUgx(toUgx(interestPaid))} paid,{' '}
-                <span className="font-medium">{formatUgx(toUgx(interestRemaining))}</span>{' '}
+                <Money amount={toUgx(interestPaid)} /> paid,{' '}
+                <span className="font-medium">
+                  <Money amount={toUgx(interestRemaining)} />
+                </span>{' '}
                 remaining
               </dd>
             </div>
@@ -172,9 +175,9 @@ export function LoanBalanceSummary({
               <div className="min-w-0">
                 <dt className="text-text-muted text-sm">Penalty</dt>
                 <dd className="text-text tabular-nums">
-                  {formatUgx(toUgx(penaltyPaid))} paid,{' '}
+                  <Money amount={toUgx(penaltyPaid)} /> paid,{' '}
                   <span className="font-medium">
-                    {formatUgx(toUgx(penaltyRemaining))}
+                    <Money amount={toUgx(penaltyRemaining)} />
                   </span>{' '}
                   remaining
                 </dd>

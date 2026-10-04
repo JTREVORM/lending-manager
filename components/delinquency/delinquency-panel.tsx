@@ -1,10 +1,13 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
+import { Money } from '@/components/ui/money';
 import { formatBusinessDate } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { DELINQUENCY_STATE_DESCRIPTIONS } from '@/lib/domain/delinquency';
 import type { LoanDelinquency } from '@/lib/data/delinquency';
+import { DateValue } from '@/components/ui/data-value';
+import type { ReactNode } from 'react';
 
 /**
  * A loan's delinquency position, for staff.
@@ -58,12 +61,14 @@ export function DelinquencyPanel({ position }: { readonly position: LoanDelinque
       {position.penaltyEligible ? (
         <Alert tone="danger" title="A penalty is due on this loan">
           The grace period ended on{' '}
-          {position.graceEndDate === null
-            ? 'its grace deadline'
-            : formatBusinessDate(position.graceEndDate)}{' '}
-          with {formatUgx(position.penaltyBasisAsOfGraceEnd)} unpaid. A charge of{' '}
+          {position.graceEndDate === null ? (
+            'its grace deadline'
+          ) : (
+            <DateValue value={position.graceEndDate} />
+          )}{' '}
+          with <Money amount={position.penaltyBasisAsOfGraceEnd} /> unpaid. A charge of{' '}
           <span className="font-semibold">
-            {formatUgx(position.penaltyProjectedAmount)}
+            <Money amount={position.penaltyProjectedAmount} />
           </span>{' '}
           applies and will be added to this loan the moment any payment is recorded
           against it. It is not included in the balance below yet.
@@ -78,7 +83,7 @@ export function DelinquencyPanel({ position }: { readonly position: LoanDelinque
 
         <p className="text-text-muted mb-4 text-sm">
           {DELINQUENCY_STATE_DESCRIPTIONS[position.state]} As at{' '}
-          {formatBusinessDate(position.businessDate)}.
+          <DateValue value={position.businessDate} />.
         </p>
 
         {/* --- What is being asked for, itemised --------------------------- */}
@@ -132,18 +137,22 @@ export function DelinquencyPanel({ position }: { readonly position: LoanDelinque
           <Figure
             label="Oldest unpaid collection"
             value={
-              position.oldestUnpaidDueDate === null
-                ? 'None'
-                : formatBusinessDate(position.oldestUnpaidDueDate)
+              position.oldestUnpaidDueDate === null ? (
+                'None'
+              ) : (
+                <DateValue value={position.oldestUnpaidDueDate} />
+              )
             }
             hint="What the next payment is applied to first"
           />
           <Figure
             label="Final collection"
             value={
-              position.scheduledCompletionDate === null
-                ? 'Unknown'
-                : formatBusinessDate(position.scheduledCompletionDate)
+              position.scheduledCompletionDate === null ? (
+                'Unknown'
+              ) : (
+                <DateValue value={position.scheduledCompletionDate} />
+              )
             }
             hint={
               position.graceEndDate === null
@@ -158,7 +167,7 @@ export function DelinquencyPanel({ position }: { readonly position: LoanDelinque
           <dl className="grid min-w-0 gap-4 sm:grid-cols-3">
             <Figure
               label="Contract outstanding"
-              value={formatUgx(position.contractualOutstanding)}
+              value={<Money amount={position.contractualOutstanding} />}
               hint="Principal and interest still uncovered"
             />
             <Figure
@@ -176,7 +185,7 @@ export function DelinquencyPanel({ position }: { readonly position: LoanDelinque
             />
             <Figure
               label="Total outstanding"
-              value={formatUgx(position.totalOutstanding)}
+              value={<Money amount={position.totalOutstanding} />}
               hint="Contract plus any unpaid penalty"
               emphasis
             />
@@ -188,9 +197,11 @@ export function DelinquencyPanel({ position }: { readonly position: LoanDelinque
             This loan is past its final collection date and inside its{' '}
             {position.graceDays === 1 ? '1-day' : `${String(position.graceDays)}-day`}{' '}
             grace period, which ends on{' '}
-            {position.graceEndDate === null
-              ? 'its grace deadline'
-              : formatBusinessDate(position.graceEndDate)}
+            {position.graceEndDate === null ? (
+              'its grace deadline'
+            ) : (
+              <DateValue value={position.graceEndDate} />
+            )}
             . Settling in full before then means no penalty.
           </Alert>
         ) : null}
@@ -227,7 +238,7 @@ function Row({
             : 'text-text tabular-nums'
         }
       >
-        {formatUgx(amount as never)}
+        <Money amount={amount} />
       </dd>
     </div>
   );
@@ -240,7 +251,7 @@ function Figure({
   emphasis = false,
 }: {
   readonly label: string;
-  readonly value: string;
+  readonly value: ReactNode;
   readonly hint?: string;
   readonly emphasis?: boolean;
 }) {

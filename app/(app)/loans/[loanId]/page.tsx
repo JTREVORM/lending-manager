@@ -31,13 +31,14 @@ import { PaymentRegister } from '@/components/payments/payment-register';
 import { LoanBalanceSummary } from '@/components/payments/loan-balance-summary';
 import { DelinquencyPanel } from '@/components/delinquency/delinquency-panel';
 import { PenaltyCard } from '@/components/delinquency/penalty-card';
+import { Money } from '@/components/ui/money';
 import { getLoanDelinquency, getLoanPenalty } from '@/lib/data/delinquency';
 import { getCompanyBranding } from '@/lib/data/company';
 import { businessToday } from '@/lib/domain/datetime';
 import { formatCalendarDate, formatRecordedDate, maskNin } from '@/lib/domain/client';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { toUgx } from '@/lib/domain/money';
 import { formatBps, toBps } from '@/lib/domain/rate';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
+import { PhoneValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Loan' };
 
@@ -230,7 +231,7 @@ export default async function LoanDetailPage({
           <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
             <Detail label="Principal">
               <span className="tabular-nums">
-                {formatUgx(toUgx(loan.principalAmount))}
+                <Money amount={toUgx(loan.principalAmount)} />
               </span>
             </Detail>
             <Detail label="Monthly interest rate">
@@ -252,12 +253,12 @@ export default async function LoanDetailPage({
               <>
                 <Detail label="Total interest">
                   <span className="tabular-nums">
-                    {formatUgx(toUgx(loan.totalInterest))}
+                    <Money amount={toUgx(loan.totalInterest)} />
                   </span>
                 </Detail>
                 <Detail label="Total repayable">
                   <span className="font-semibold tabular-nums">
-                    {formatUgx(toUgx(loan.totalExpectedRepayment))}
+                    <Money amount={toUgx(loan.totalExpectedRepayment)} />
                   </span>
                 </Detail>
               </>
@@ -471,7 +472,7 @@ export default async function LoanDetailPage({
                 <span className="font-mono">{clientSnapshot.clientNumber}</span>
               </Detail>
               <Detail label="Phone">
-                {formatUgandanPhoneLocal(clientSnapshot.phone)}
+                <PhoneValue value={clientSnapshot.phone} />
               </Detail>
               <Detail label="Occupation">{clientSnapshot.occupation}</Detail>
               <Detail label="Location">
@@ -523,7 +524,7 @@ export default async function LoanDetailPage({
                 <dl className="mt-2 grid min-w-0 gap-3 text-sm sm:grid-cols-2">
                   <Detail label="Relationship">{guarantor.relationshipToClient}</Detail>
                   <Detail label="Phone">
-                    {formatUgandanPhoneLocal(guarantor.phone)}
+                    <PhoneValue value={guarantor.phone} />
                   </Detail>
                   <Detail label="Occupation">{guarantor.occupation}</Detail>
                   <Detail label="Location">

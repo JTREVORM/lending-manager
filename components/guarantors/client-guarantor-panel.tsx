@@ -11,9 +11,9 @@ import { Field } from '@/components/ui/field';
 import { Label } from '@/components/ui/label';
 import { detachGuarantorAction, linkGuarantorAction } from '@/lib/guarantors/actions';
 import { formatRecordedDate } from '@/lib/domain/client';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import type { ClientGuarantor } from '@/lib/data/guarantors';
 import type { ActionResult } from '@/lib/auth/actions';
+import { PhoneValue } from '@/components/ui/data-value';
 
 /**
  * The guarantors standing for a client.
@@ -63,7 +63,7 @@ export function ClientGuarantorPanel({
                     {link.fullName}
                   </Link>
                   <p className="text-text-muted text-sm">
-                    {link.relationshipToClient} · {formatUgandanPhoneLocal(link.phone)}
+                    {link.relationshipToClient} · <PhoneValue value={link.phone} />
                   </p>
                   <p className="text-text-muted text-sm break-words">
                     {link.occupation} · {link.location}

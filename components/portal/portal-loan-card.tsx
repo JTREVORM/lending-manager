@@ -2,11 +2,11 @@ import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
 import { PortalLoanPosition } from '@/components/delinquency/portal-loan-position';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import type { LoanDelinquency } from '@/lib/data/delinquency';
 import type { PortfolioRow } from '@/lib/data/reports';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * One of a borrower's loans, in the portal.
@@ -46,40 +46,52 @@ export function PortalLoanCard({
           <dl className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Amount borrowed</dt>
-              <dd className="text-text">{formatUgx(loan.principalAmount)}</dd>
+              <dd className="text-text">
+                <Money amount={loan.principalAmount} />
+              </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Total interest</dt>
-              <dd className="text-text">{formatUgx(loan.contractualInterest)}</dd>
+              <dd className="text-text">
+                <Money amount={loan.contractualInterest} />
+              </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Total to repay</dt>
-              <dd className="text-text">{formatUgx(loan.totalExpectedRepayment)}</dd>
+              <dd className="text-text">
+                <Money amount={loan.totalExpectedRepayment} />
+              </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Amount paid so far</dt>
-              <dd className="text-text">{formatUgx(loan.totalCollected)}</dd>
+              <dd className="text-text">
+                <Money amount={loan.totalCollected} />
+              </dd>
             </div>
             {loan.penaltyAssessed > 0 ? (
               <div className="min-w-0">
                 <dt className="text-text-muted text-sm">Late-payment charge</dt>
-                <dd className="text-text">{formatUgx(loan.penaltyAssessed)}</dd>
+                <dd className="text-text">
+                  <Money amount={loan.penaltyAssessed} />
+                </dd>
               </div>
             ) : null}
             {position.oldestUnpaidDueDate === null ? null : (
               <div className="min-w-0">
                 <dt className="text-text-muted text-sm">Next payment date</dt>
                 <dd className="text-text">
-                  {formatBusinessDate(position.oldestUnpaidDueDate)}
+                  <DateValue value={position.oldestUnpaidDueDate} />
                 </dd>
               </div>
             )}
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Loan completion date</dt>
               <dd className="text-text">
-                {loan.scheduledCompletionDate === null
-                  ? '—'
-                  : formatBusinessDate(loan.scheduledCompletionDate)}
+                {loan.scheduledCompletionDate === null ? (
+                  '—'
+                ) : (
+                  <DateValue value={loan.scheduledCompletionDate} />
+                )}
               </dd>
             </div>
           </dl>

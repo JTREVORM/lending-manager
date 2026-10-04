@@ -5,8 +5,8 @@ import { UserStatusBadge } from '@/components/users/user-status-badge';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
-import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
 import { ROLES } from '@/lib/permissions';
+import { PhoneValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'My account' };
 
@@ -33,7 +33,9 @@ export default async function AccountPage() {
         <dl className="space-y-2.5 text-sm">
           <div className="flex items-start justify-between gap-3">
             <dt className="text-text-muted">Phone (used to sign in)</dt>
-            <dd className="font-medium">{formatUgandanPhoneLocal(context.phone)}</dd>
+            <dd className="font-medium">
+              <PhoneValue value={context.phone} />
+            </dd>
           </div>
           <div className="flex items-start justify-between gap-3">
             <dt className="text-text-muted">Role</dt>

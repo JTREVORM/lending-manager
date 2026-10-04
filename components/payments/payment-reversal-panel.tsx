@@ -6,8 +6,9 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
+import { Money } from '@/components/ui/money';
 import { reversePaymentAction } from '@/lib/payments/actions';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { toUgx } from '@/lib/domain/money';
 import type { PaymentActionResult } from '@/lib/payments/actions';
 
 /**
@@ -94,7 +95,7 @@ export function PaymentReversalPanel({
               <li>
                 Loan {loanNumber} will owe{' '}
                 <span className="font-medium tabular-nums">
-                  {formatUgx(toUgx(amount))}
+                  <Money amount={toUgx(amount)} />
                 </span>{' '}
                 more than it does now.
               </li>

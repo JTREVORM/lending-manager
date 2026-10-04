@@ -7,8 +7,9 @@ import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getGracePeriodReport, type PortfolioRow } from '@/lib/data/reports';
-import { businessToday, daysBetween, formatBusinessDate } from '@/lib/domain/datetime';
+import { businessToday, daysBetween } from '@/lib/domain/datetime';
 import { singleParam, type ParamRecord } from '@/lib/reports/filters';
+import { DateValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Grace period' };
 
@@ -49,15 +50,17 @@ export default async function GracePeriodPage({
       key: 'graceEnd',
       header: 'Grace ends',
       cell: (row) =>
-        row.graceEndDate === null ? '—' : formatBusinessDate(row.graceEndDate),
+        row.graceEndDate === null ? '—' : <DateValue value={row.graceEndDate} />,
     },
     {
       key: 'penaltyFrom',
       header: 'Charge applies from',
       cell: (row) =>
-        row.penaltyEffectiveDate === null
-          ? '—'
-          : formatBusinessDate(row.penaltyEffectiveDate),
+        row.penaltyEffectiveDate === null ? (
+          '—'
+        ) : (
+          <DateValue value={row.penaltyEffectiveDate} />
+        ),
     },
     {
       key: 'daysLeft',
@@ -77,7 +80,7 @@ export default async function GracePeriodPage({
           <div className="min-w-0">
             <h1 className="text-text text-2xl font-semibold">Grace period</h1>
             <p className="text-text-muted mt-1 text-sm">
-              As at {formatBusinessDate(today)} · {branding.companyName}
+              As at <DateValue value={today} /> · {branding.companyName}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">

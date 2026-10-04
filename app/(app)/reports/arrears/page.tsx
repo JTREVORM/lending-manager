@@ -9,7 +9,7 @@ import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { ARREARS_STATES, getArrearsReport } from '@/lib/data/reports';
 import { DELINQUENCY_STATE_LABELS } from '@/lib/domain/delinquency';
-import { businessToday, formatBusinessDate } from '@/lib/domain/datetime';
+import { businessToday } from '@/lib/domain/datetime';
 import { OVERDUE_SORTS } from '@/lib/domain/reporting';
 import {
   exportQuery,
@@ -19,6 +19,7 @@ import {
   singleParam,
   type ParamRecord,
 } from '@/lib/reports/filters';
+import { DateValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Arrears report' };
 
@@ -77,7 +78,7 @@ export default async function ArrearsReportPage({
           <div className="min-w-0">
             <h1 className="text-text text-2xl font-semibold">Arrears</h1>
             <p className="text-text-muted mt-1 text-sm">
-              As at {formatBusinessDate(today)} · {branding.companyName}
+              As at <DateValue value={today} /> · {branding.companyName}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">

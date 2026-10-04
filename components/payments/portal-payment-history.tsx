@@ -1,12 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { formatInstant } from '@/lib/domain/datetime';
-import { formatUgx, toUgx } from '@/lib/domain/money';
+import { Money } from '@/components/ui/money';
+import { toUgx } from '@/lib/domain/money';
 import {
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
   type PaymentStatus,
 } from '@/lib/domain/payment';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * A borrower's own payment history, in the portal.
@@ -59,7 +60,7 @@ export function PortalPaymentHistory({
         <dl className="min-w-0">
           <dt className="text-text-muted text-sm">Total you have paid</dt>
           <dd className="text-text text-2xl font-semibold tabular-nums">
-            {formatUgx(toUgx(totalPosted))}
+            <Money amount={toUgx(totalPosted)} />
           </dd>
           <dd className="text-text-muted text-xs">
             Across {payments.filter((p) => p.status === 'posted').length} payment
@@ -79,20 +80,14 @@ export function PortalPaymentHistory({
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="text-text font-medium">
-                  {formatInstant(payment.receivedAt, {
-                    timeZone,
-                    withTime: false,
-                  })}
+                  <DateValue value={payment.receivedAt} timeZone={timeZone} />
                 </span>
-                <span
-                  className={
-                    isReversed
-                      ? 'text-text-muted font-medium tabular-nums line-through'
-                      : 'text-text font-semibold tabular-nums'
-                  }
-                >
-                  {formatUgx(toUgx(payment.amount))}
-                </span>
+                <Money
+                  amount={toUgx(payment.amount)}
+                  struck={isReversed}
+                  tone={isReversed ? 'muted' : 'default'}
+                  weight={isReversed ? 'medium' : 'semibold'}
+                />
               </div>
 
               <div className="text-text-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

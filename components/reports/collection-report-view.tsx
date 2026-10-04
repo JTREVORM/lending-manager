@@ -5,12 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import { MAX_EXPORT_ROWS } from '@/lib/domain/reporting';
 import type { CollectionReport, DayTotals } from '@/lib/data/reports';
+import { DateValue } from '@/components/ui/data-value';
+import type { ReactNode } from 'react';
 
 /**
  * The collection report: the payments, the totals and the breakdowns.
@@ -100,9 +103,7 @@ export function CollectionReportView({
       header: 'Amount',
       numeric: true,
       cell: (row) => (
-        <span className={row.isEffective ? '' : 'line-through'}>
-          {formatUgx(row.amount, { withCurrency: false })}
-        </span>
+        <Money amount={row.amount} variant="bare" struck={!row.isEffective} />
       ),
     },
     {
@@ -148,26 +149,26 @@ export function CollectionReportView({
       <StatGrid>
         <StatCard
           label="Collected"
-          value={formatUgx(totals.collected)}
+          value={<Money amount={totals.collected} />}
           secondary={`${String(totals.paymentCount)} ${totals.paymentCount === 1 ? 'payment' : 'payments'}`}
           metric="total_collected"
           tone="success"
         />
         <StatCard
           label="Cash received"
-          value={formatUgx(totals.byMethod.cash)}
+          value={<Money amount={totals.byMethod.cash} />}
           secondary={`${String(totals.countByMethod.cash)} payments`}
           metric="cash_received"
         />
         <StatCard
           label="MTN received"
-          value={formatUgx(totals.byMethod.mtn_mobile_money)}
+          value={<Money amount={totals.byMethod.mtn_mobile_money} />}
           secondary={`${String(totals.countByMethod.mtn_mobile_money)} payments`}
           metric="mtn_received"
         />
         <StatCard
           label="Airtel received"
-          value={formatUgx(totals.byMethod.airtel_money)}
+          value={<Money amount={totals.byMethod.airtel_money} />}
           secondary={`${String(totals.countByMethod.airtel_money)} payments`}
           metric="airtel_received"
         />
@@ -176,23 +177,23 @@ export function CollectionReportView({
       <StatGrid>
         <StatCard
           label="Principal collected"
-          value={formatUgx(totals.principalCollected)}
+          value={<Money amount={totals.principalCollected} />}
           metric="principal_collected"
         />
         <StatCard
           label="Interest collected"
-          value={formatUgx(totals.interestCollected)}
+          value={<Money amount={totals.interestCollected} />}
           metric="interest_collected"
         />
         <StatCard
           label="Penalty collected"
-          value={formatUgx(totals.penaltyCollected)}
+          value={<Money amount={totals.penaltyCollected} />}
           metric="penalty_collected"
         />
         {totals.reversedCount > 0 ? (
           <StatCard
             label="Reversed"
-            value={formatUgx(totals.reversedAmount)}
+            value={<Money amount={totals.reversedAmount} />}
             secondary={`${String(totals.reversedCount)} withdrawn · ${formatUgx(totals.grossAmount)} recorded, including reversed`}
             definition="Payments recorded in this range and since withdrawn. Excluded from every collection total above."
             tone="danger"
@@ -210,9 +211,7 @@ export function CollectionReportView({
         <Breakdown
           title="By day"
           rows={report.byDay}
-          label={(key) =>
-            formatBusinessDate(key as Parameters<typeof formatBusinessDate>[0])
-          }
+          label={(key) => <DateValue value={key} />}
         />
       ) : null}
 
@@ -282,7 +281,7 @@ function Breakdown({
 }: {
   readonly title: string;
   readonly rows: readonly DayTotals[];
-  readonly label: (key: string) => string;
+  readonly label: (key: string) => ReactNode;
 }) {
   const columns: readonly ReportColumn<DayTotals>[] = [
     { key: 'when', header: title, primary: true, cell: (row) => label(row.key) },

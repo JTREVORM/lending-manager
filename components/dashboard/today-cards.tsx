@@ -1,6 +1,6 @@
-import { formatUgx } from '@/lib/domain/money';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import type { CollectionSummary } from '@/lib/data/dashboard';
+import { Money } from '@/components/ui/money';
 
 /**
  * Today's collection figures.
@@ -38,20 +38,20 @@ export function TodayCards({
       <StatGrid>
         <StatCard
           label="Expected today"
-          value={formatUgx(summary.expectedToday)}
+          value={<Money amount={summary.expectedToday} />}
           secondary={`${String(summary.loansDueToday)} ${summary.loansDueToday === 1 ? 'loan' : 'loans'} · ${String(summary.clientsDueToday)} ${summary.clientsDueToday === 1 ? 'client' : 'clients'}`}
           metric="expected_today"
         />
         <StatCard
           label="Collected today"
-          value={formatUgx(summary.collectedToday)}
+          value={<Money amount={summary.collectedToday} />}
           secondary={`${String(summary.paymentsToday)} ${summary.paymentsToday === 1 ? 'payment' : 'payments'}`}
           metric="collected_today"
           tone={summary.collectedToday > 0 ? 'success' : 'neutral'}
         />
         <StatCard
           label="Still due today"
-          value={formatUgx(summary.remainingToday)}
+          value={<Money amount={summary.remainingToday} />}
           secondary={`${String(summary.loansSettledToday)} of ${String(summary.loansDueToday)} settled`}
           metric="remaining_today"
           tone={summary.remainingToday > 0 ? 'warning' : 'success'}
@@ -59,7 +59,7 @@ export function TodayCards({
         {summary.reversedTodayCount > 0 ? (
           <StatCard
             label="Reversed today"
-            value={formatUgx(summary.reversedTodayAmount)}
+            value={<Money amount={summary.reversedTodayAmount} />}
             secondary={`${String(summary.reversedTodayCount)} withdrawn`}
             metric="reversed_today_amount"
             tone="danger"
@@ -81,17 +81,17 @@ export function TodayCards({
           <StatGrid>
             <StatCard
               label="Cash received"
-              value={formatUgx(summary.cashReceived)}
+              value={<Money amount={summary.cashReceived} />}
               metric="cash_received"
             />
             <StatCard
               label="MTN received"
-              value={formatUgx(summary.mtnReceived)}
+              value={<Money amount={summary.mtnReceived} />}
               metric="mtn_received"
             />
             <StatCard
               label="Airtel received"
-              value={formatUgx(summary.airtelReceived)}
+              value={<Money amount={summary.airtelReceived} />}
               metric="airtel_received"
             />
           </StatGrid>

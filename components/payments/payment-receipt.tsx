@@ -1,8 +1,9 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
+import { Money } from '@/components/ui/money';
 import { formatUgx, toUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/domain/payment';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * A payment receipt.
@@ -99,7 +100,8 @@ export function PaymentReceipt({
     <div className="min-w-0 space-y-3">
       {isReversed ? (
         <Alert tone="danger" title="REVERSED">
-          This payment was reversed on {formatInstant(reversedAt, { timeZone })}. It no
+          This payment was reversed on{' '}
+          <DateValue value={reversedAt} variant="datetime" timeZone={timeZone} />. It no
           longer counts toward the loan balance. The figures below are what this receipt
           said when it was issued.
           {reversalReason === null ? null : (
@@ -128,7 +130,9 @@ export function PaymentReceipt({
           <Line label="Receipt number">
             <span className="font-mono font-semibold">{paymentNumber}</span>
           </Line>
-          <Line label="Date and time">{formatInstant(receivedAt, { timeZone })}</Line>
+          <Line label="Date and time">
+            <DateValue value={receivedAt} variant="datetime" timeZone={timeZone} />
+          </Line>
           <Line label="Borrower">
             <span className="break-words">{clientName}</span>
           </Line>
@@ -153,16 +157,18 @@ export function PaymentReceipt({
         <div className="border-border mt-4 border-t pt-3">
           <dl className="min-w-0 space-y-2 text-sm">
             <Line label="Balance before">
-              <span className="tabular-nums">{formatUgx(toUgx(outstandingBefore))}</span>
+              <span className="tabular-nums">
+                <Money amount={toUgx(outstandingBefore)} />
+              </span>
             </Line>
             <Line label="Amount paid">
               <span className="text-base font-semibold tabular-nums">
-                {formatUgx(toUgx(amount))}
+                <Money amount={toUgx(amount)} />
               </span>
             </Line>
             <Line label="Balance after">
               <span className="font-semibold tabular-nums">
-                {formatUgx(toUgx(outstandingAfter))}
+                <Money amount={toUgx(outstandingAfter)} />
               </span>
             </Line>
           </dl>
@@ -184,26 +190,24 @@ export function PaymentReceipt({
                     {entry.kind === 'penalty' ? (
                       <>
                         Late-payment penalty, from{' '}
-                        {formatBusinessDate(entry.dueDate as never)}
+                        <DateValue value={entry.dueDate as never} />
                       </>
                     ) : (
                       <>
                         #{entry.installmentNumber} due{' '}
-                        {formatBusinessDate(entry.dueDate as never)}
+                        <DateValue value={entry.dueDate as never} />
                       </>
                     )}
                   </span>
                   <span className="text-text tabular-nums">
-                    {formatUgx(toUgx(entry.allocatedAmount))}
+                    <Money amount={toUgx(entry.allocatedAmount)} />
                     {/* A penalty is named as a penalty, never folded into
                         interest. A borrower is entitled to know which part of
                         what they paid was the loan and which was a charge. */}
                     <span className="text-text-muted">
                       {entry.kind === 'penalty'
                         ? ' (penalty)'
-                        : ` (${formatUgx(toUgx(entry.allocatedPrincipal))} + ${formatUgx(
-                            toUgx(entry.allocatedInterest),
-                          )} int.)`}
+                        : ` (${formatUgx(toUgx(entry.allocatedPrincipal))} + ${formatUgx(toUgx(entry.allocatedInterest))} int.)`}
                     </span>
                   </span>
                 </li>

@@ -2,10 +2,10 @@ import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
 import { ReportEmpty } from '@/components/reports/report-empty';
+import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import type { UpcomingCollection } from '@/lib/data/dashboard';
+import { DateValue } from '@/components/ui/data-value';
 
 /**
  * Collections falling due over the next few days.
@@ -52,11 +52,11 @@ export function UpcomingCollections({
             <li key={day} className="min-w-0 py-2 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="text-text text-sm font-medium">
-                  {formatBusinessDate(day as UpcomingCollection['dueDate'])}
+                  <DateValue value={day} />
                 </p>
                 <p className="text-text-muted text-sm tabular-nums">
-                  {formatUgx(total as UpcomingCollection['remainingAmount'])} ·{' '}
-                  {rows.length} {rows.length === 1 ? 'loan' : 'loans'}
+                  <Money amount={total} /> · {rows.length}{' '}
+                  {rows.length === 1 ? 'loan' : 'loans'}
                 </p>
               </div>
               <p className="text-text-muted mt-0.5 min-w-0 text-xs break-words">
