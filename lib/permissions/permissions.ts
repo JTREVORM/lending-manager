@@ -190,6 +190,26 @@ export const PERMISSIONS = [
   'payments:create',
   /** Reverse a payment recorded in error. */
   'payments:reverse',
+
+  // Phase 7. Both read-only, because nothing in delinquency is entered by a
+  // person: arrears are derived from the schedule and the ledger, and the
+  // penalty is calculated by a trusted database function from the loan's own
+  // snapshotted terms.
+  //
+  // There is deliberately no `penalties:create`, `penalties:edit`,
+  // `penalties:delete` or `penalties:waive`. A penalty amount a staff member
+  // could type would not be a penalty — it would be a charge, and the
+  // business rule says 50% of what the borrower owed when the grace period
+  // ran out, which is a figure only the ledger knows.
+  //
+  // They are separate from each other because they answer different questions:
+  // the overdue list is the collections team's working tool, while a penalty
+  // is a charge against a borrower's account and the kind of figure a business
+  // may later want to restrict. Separating them now costs one entry.
+  /** See arrears, missed collections and the overdue list across loans. */
+  'delinquency:view',
+  /** See a loan's expiry penalty: its basis, rate, amount and what remains. */
+  'penalties:view',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -266,6 +286,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // Records what comes over the counter. Cannot unrecord it.
     'payments:view',
     'payments:create',
+
+    // Chasing collections is this role's daily work.
+    'delinquency:view',
+    'penalties:view',
   ],
 
   manager: [
@@ -323,6 +347,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // does not extend to withdrawing a payment a borrower holds a receipt for.
     'payments:view',
     'payments:create',
+
+    'delinquency:view',
+    'penalties:view',
   ],
 
   owner_admin: [
@@ -371,6 +398,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'payments:view',
     'payments:create',
     'payments:reverse',
+
+    'delinquency:view',
+    'penalties:view',
   ],
 } as const;
 

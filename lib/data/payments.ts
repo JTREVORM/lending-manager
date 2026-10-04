@@ -10,7 +10,8 @@ import {
   isPaymentStatus,
   minimumAcceptablePayment,
   unpaidScheduledDue,
-  type InstallmentObligation,
+  type ObligationKind,
+  type PaymentObligation,
   type LoanBalance,
   type PaymentMethod,
   type PaymentStatus,
@@ -70,12 +71,17 @@ export interface PaymentDetail extends PaymentSummary {
 
 export interface PaymentAllocationRow {
   readonly id: string;
-  readonly installmentId: string;
+  readonly kind: ObligationKind;
+  /** The installment's id, or the penalty's. Exactly one target is set. */
+  readonly obligationId: string;
+  /** The collection number. Zero for a penalty, which has no number. */
   readonly installmentNumber: number;
+  /** The collection's due date, or the penalty's effective date. */
   readonly dueDate: BusinessDate;
   readonly allocatedAmount: UgxAmount;
   readonly allocatedPrincipal: UgxAmount;
   readonly allocatedInterest: UgxAmount;
+  readonly allocatedPenalty: UgxAmount;
 }
 
 export interface PaymentPage {
@@ -335,11 +341,16 @@ export async function getPaymentAllocations(
 ): Promise<readonly PaymentAllocationRow[]> {
   const supabase = await createSupabaseServerClient();
 
+  // Phase 7: `!inner` becomes a plain embed, because a penalty allocation has
+  // no installment. An inner join would silently drop exactly the rows a
+  // penalty receipt needs to show.
   const { data, error } = await supabase
     .from('payment_allocations')
     .select(
-      `id, installment_id, allocated_amount, allocated_principal, allocated_interest,
-       loan_installments!inner ( installment_number, due_date )`,
+      `id, installment_id, penalty_id, allocated_amount, allocated_principal,
+       allocated_interest, allocated_penalty,
+       loan_installments ( installment_number, due_date ),
+       loan_penalties ( effective_date )`,
     )
     .eq('payment_id', paymentId);
 
@@ -350,24 +361,41 @@ export async function getPaymentAllocations(
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
 
-  return rows
-    .map((row) => {
-      const installment = relation(row, 'loan_installments');
+  return (
+    rows
+      .map((row) => {
+        const installment = relation(row, 'loan_installments');
+        const penalty = relation(row, 'loan_penalties');
+        const penaltyId = nullableText(row, 'penalty_id');
+        const kind: ObligationKind = penaltyId === null ? 'installment' : 'penalty';
 
-      return {
-        id: textField(row, 'id'),
-        installmentId: textField(row, 'installment_id'),
-        installmentNumber: Number(installment.installment_number ?? 0),
-        // A malformed date throws out of `toBusinessDate`, which on a receipt
-        // would fail the whole page over one row. The epoch is visibly wrong
-        // instead, which is what a reader needs.
-        dueDate: toBusinessDate(nullableText(installment, 'due_date') ?? '1970-01-01'),
-        allocatedAmount: toUgx(Number(row.allocated_amount)),
-        allocatedPrincipal: toUgx(Number(row.allocated_principal)),
-        allocatedInterest: toUgx(Number(row.allocated_interest)),
-      };
-    })
-    .sort((left, right) => left.installmentNumber - right.installmentNumber);
+        return {
+          id: textField(row, 'id'),
+          kind,
+          obligationId: penaltyId ?? textField(row, 'installment_id'),
+          installmentNumber:
+            kind === 'penalty' ? 0 : Number(installment.installment_number ?? 0),
+          // A malformed date throws out of `toBusinessDate`, which on a receipt
+          // would fail the whole page over one row. The epoch is visibly wrong
+          // instead, which is what a reader needs.
+          dueDate: toBusinessDate(
+            (kind === 'penalty'
+              ? nullableText(penalty, 'effective_date')
+              : nullableText(installment, 'due_date')) ?? '1970-01-01',
+          ),
+          allocatedAmount: toUgx(Number(row.allocated_amount)),
+          allocatedPrincipal: toUgx(Number(row.allocated_principal)),
+          allocatedInterest: toUgx(Number(row.allocated_interest)),
+          allocatedPenalty: toUgx(Number(row.allocated_penalty)),
+        };
+      })
+      // Collections in order, then the penalty, which is how the money was
+      // applied and therefore how a receipt should read.
+      .sort((left, right) => {
+        if (left.kind !== right.kind) return left.kind === 'penalty' ? 1 : -1;
+        return left.installmentNumber - right.installmentNumber;
+      })
+  );
 }
 
 /**
@@ -378,35 +406,51 @@ export async function getPaymentAllocations(
  */
 export async function getLoanObligations(
   loanId: string,
-): Promise<readonly InstallmentObligation[]> {
+): Promise<readonly PaymentObligation[]> {
   const supabase = await createSupabaseServerClient();
 
+  // `loan_obligations` rather than `loan_installment_coverage`: it is the same
+  // collections plus any penalty, in the order money is applied to them. The
+  // preview and the minimum-payment rule both need the penalty in the list,
+  // and reading two sources and merging them in TypeScript is exactly how the
+  // two engines would come to disagree.
   const { data, error } = await supabase
-    .from('loan_installment_coverage')
+    .from('loan_obligations')
     .select(
-      `installment_id, installment_number, due_date, expected_amount,
-       scheduled_principal, scheduled_interest,
-       allocated_amount, allocated_principal, allocated_interest`,
+      `obligation_kind, installment_id, penalty_id, sequence_number, effective_date,
+       expected_amount, scheduled_principal, scheduled_interest, scheduled_penalty,
+       allocated_amount, allocated_principal, allocated_interest, allocated_penalty`,
     )
     .eq('loan_id', loanId)
-    .order('installment_number', { ascending: true });
+    .order('effective_date', { ascending: true })
+    .order('obligation_rank', { ascending: true })
+    .order('sequence_number', { ascending: true });
 
   if (error !== null) {
     logger.warn('Could not read loan obligations.', { code: error.code });
     return [];
   }
 
-  return (data ?? []).map((row) => ({
-    installmentId: String(row.installment_id),
-    installmentNumber: Number(row.installment_number),
-    dueDate: toBusinessDate(String(row.due_date)),
-    expectedAmount: toUgx(Number(row.expected_amount)),
-    scheduledPrincipal: toUgx(Number(row.scheduled_principal)),
-    scheduledInterest: toUgx(Number(row.scheduled_interest)),
-    allocatedAmount: toUgx(Number(row.allocated_amount)),
-    allocatedPrincipal: toUgx(Number(row.allocated_principal)),
-    allocatedInterest: toUgx(Number(row.allocated_interest)),
-  }));
+  return (data ?? []).map((row) => {
+    const kind = row.obligation_kind === 'penalty' ? 'penalty' : 'installment';
+
+    return {
+      // Exactly one target is set, which the database guarantees; the
+      // obligation's identity is whichever it is.
+      obligationId: String(kind === 'penalty' ? row.penalty_id : row.installment_id),
+      kind,
+      sequenceNumber: Number(row.sequence_number),
+      effectiveDate: toBusinessDate(String(row.effective_date)),
+      expectedAmount: toUgx(Number(row.expected_amount)),
+      scheduledPrincipal: toUgx(Number(row.scheduled_principal)),
+      scheduledInterest: toUgx(Number(row.scheduled_interest)),
+      scheduledPenalty: toUgx(Number(row.scheduled_penalty)),
+      allocatedAmount: toUgx(Number(row.allocated_amount)),
+      allocatedPrincipal: toUgx(Number(row.allocated_principal)),
+      allocatedInterest: toUgx(Number(row.allocated_interest)),
+      allocatedPenalty: toUgx(Number(row.allocated_penalty)),
+    };
+  });
 }
 
 /**
@@ -428,9 +472,10 @@ export async function getLoanPosition(
       .select(
         `loan_id, loan_number, status, contractual_principal, contractual_interest,
          total_expected_repayment, scheduled_total, total_paid, principal_paid,
-         interest_paid, outstanding, principal_remaining, interest_remaining,
-         fully_repaid, posted_payment_total, posted_payment_count,
-         reversed_payment_count, last_payment_at`,
+         interest_paid, contractual_outstanding, principal_remaining,
+         interest_remaining, penalty_assessed, penalty_paid, penalty_remaining,
+         total_outstanding, total_collected, fully_repaid, posted_payment_total,
+         posted_payment_count, reversed_payment_count, last_payment_at`,
       )
       .eq('loan_id', loanId)
       .maybeSingle(),
@@ -455,11 +500,16 @@ export async function getLoanPosition(
     contractualInterest: toUgx(Number(data.contractual_interest)),
     totalExpectedRepayment: toUgx(Number(data.scheduled_total)),
     totalPaid: toUgx(Number(data.total_paid)),
-    outstanding: toUgx(Number(data.outstanding)),
+    contractualOutstanding: toUgx(Number(data.contractual_outstanding)),
     principalPaid: toUgx(Number(data.principal_paid)),
     principalRemaining: toUgx(Number(data.principal_remaining)),
     interestPaid: toUgx(Number(data.interest_paid)),
     interestRemaining: toUgx(Number(data.interest_remaining)),
+    penaltyAssessed: toUgx(Number(data.penalty_assessed)),
+    penaltyPaid: toUgx(Number(data.penalty_paid)),
+    penaltyRemaining: toUgx(Number(data.penalty_remaining)),
+    totalOutstanding: toUgx(Number(data.total_outstanding)),
+    totalCollected: toUgx(Number(data.total_collected)),
     fullyRepaid: Boolean(data.fully_repaid),
   };
 

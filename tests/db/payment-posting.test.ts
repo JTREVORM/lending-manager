@@ -434,7 +434,9 @@ describeDb('recording payments', () => {
       // Stated over every loan rather than one, so a path that somehow
       // over-allocated would be caught whichever test created it.
       const negative = await query<{ loan_id: string }>(
-        `select loan_id from public.loan_balances where outstanding < 0`,
+        `select loan_id from public.loan_balances
+          where contractual_outstanding < 0 or total_outstanding < 0
+             or penalty_remaining < 0`,
       );
 
       expect(negative).toEqual([]);
@@ -829,7 +831,9 @@ describeDb('recording payments', () => {
       const broken = await query<{ loan_number: string }>(
         `select loan_number from public.loan_balances
           where scheduled_total > 0
-            and total_paid + outstanding <> scheduled_total`,
+            and (total_paid + contractual_outstanding <> scheduled_total
+              or contractual_outstanding + penalty_remaining <> total_outstanding
+              or posted_payment_total <> total_collected)`,
       );
 
       expect(broken).toEqual([]);
@@ -859,7 +863,7 @@ describeDb('recording payments', () => {
     it('matches every cleared loan to a zero balance, and no other', async () => {
       const broken = await query<{ loan_number: string; status: string }>(
         `select loan_number, status from public.loan_balances
-          where (status = 'cleared') <> (scheduled_total > 0 and outstanding = 0)
+          where (status = 'cleared') <> (scheduled_total > 0 and total_outstanding = 0)
             and scheduled_total > 0`,
       );
 

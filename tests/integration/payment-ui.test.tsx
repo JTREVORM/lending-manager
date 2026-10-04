@@ -10,7 +10,7 @@ import { PaymentReversalPanel } from '@/components/payments/payment-reversal-pan
 import { PortalPaymentHistory } from '@/components/payments/portal-payment-history';
 import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
-import type { InstallmentObligation } from '@/lib/domain/payment';
+import type { PaymentObligation } from '@/lib/domain/payment';
 
 /**
  * The Phase 6 screens.
@@ -51,17 +51,20 @@ vi.mock('@/lib/payments/actions', () => ({
 const TIMEZONE = 'Africa/Kampala';
 
 /** Three UGX 4,000 collections — principal 3,000, interest 1,000. */
-function obligations(): readonly InstallmentObligation[] {
+function obligations(): readonly PaymentObligation[] {
   return [1, 2, 3].map((number) => ({
-    installmentId: `inst-${String(number)}`,
-    installmentNumber: number,
-    dueDate: toBusinessDate(`2026-11-0${String(number)}`),
+    obligationId: `inst-${String(number)}`,
+    kind: 'installment' as const,
+    sequenceNumber: number,
+    effectiveDate: toBusinessDate(`2026-11-0${String(number)}`),
     expectedAmount: toUgx(4_000),
     scheduledPrincipal: toUgx(3_000),
     scheduledInterest: toUgx(1_000),
+    scheduledPenalty: toUgx(0),
     allocatedAmount: toUgx(0),
     allocatedPrincipal: toUgx(0),
     allocatedInterest: toUgx(0),
+    allocatedPenalty: toUgx(0),
   }));
 }
 
@@ -683,6 +686,12 @@ describe('the loan balance summary', () => {
     interestPaid: 3_000,
     interestRemaining: 12_000,
     unpaidScheduledDue: 11_500,
+    // Phase 7. No penalty on this loan, which is the ordinary case: the
+    // penalty-bearing variants are asserted separately below.
+    penaltyAssessed: 0,
+    penaltyPaid: 0,
+    penaltyRemaining: 0,
+    totalOutstanding: 92_000,
     postedPaymentCount: 2,
     reversedPaymentCount: 1,
     fullyRepaid: false,

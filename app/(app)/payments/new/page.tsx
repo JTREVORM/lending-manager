@@ -8,6 +8,7 @@ import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getLoan, listLoans } from '@/lib/data/loans';
 import { getLoanObligations, getLoanPosition } from '@/lib/data/payments';
+import { getLoanDelinquency } from '@/lib/data/delinquency';
 import { mintIdempotencyKey } from '@/lib/payments/actions';
 import { businessToday } from '@/lib/domain/datetime';
 import { formatUgx, toUgx } from '@/lib/domain/money';
@@ -56,7 +57,7 @@ export default async function NewPaymentPage({
   if (loanId !== null) {
     const today = businessToday();
 
-    const [position, obligations, loan, idempotencyKey] = await Promise.all([
+    const [position, obligations, loan, idempotencyKey, delinquency] = await Promise.all([
       getLoanPosition(loanId, today),
       getLoanObligations(loanId),
       // Fetched by id, not searched for: the register is paginated, so
@@ -64,6 +65,7 @@ export default async function NewPaymentPage({
       // the business has more than a screenful of active loans.
       getLoan(loanId),
       mintIdempotencyKey(),
+      getLoanDelinquency(loanId),
     ]);
 
     // A missing loan and an unauthorised one look the same here: both come
@@ -97,7 +99,7 @@ export default async function NewPaymentPage({
       );
     }
 
-    if (position.outstanding === 0) {
+    if (position.totalOutstanding === 0) {
       return (
         <div className="min-w-0 space-y-4">
           <BackLink />
@@ -138,10 +140,28 @@ export default async function NewPaymentPage({
           clientName={loan?.clientName ?? ''}
           clientNumber={loan?.clientNumber ?? ''}
           obligations={obligations}
-          outstanding={position.outstanding}
+          outstanding={position.totalOutstanding}
           unpaidDue={position.unpaidScheduledDue}
           minimumPayment={position.minimumPayment}
           idempotencyKey={idempotencyKey}
+          /* Phase 7. The itemised demand, so the figure the staff member asks
+             for is the one the screen justifies: previous unpaid, today, and
+             the total. A pending penalty is flagged here because posting will
+             materialise it, which changes the balance the receipt shows. */
+          delinquency={
+            delinquency === null
+              ? undefined
+              : {
+                  arrears: delinquency.arrearsAmount,
+                  dueToday: delinquency.dueToday,
+                  currentDue: delinquency.currentDue,
+                  contractualOutstanding: delinquency.contractualOutstanding,
+                  penaltyRemaining: delinquency.penaltyRemaining,
+                  penaltyEligible: delinquency.penaltyEligible,
+                  penaltyProjectedAmount: delinquency.penaltyProjectedAmount,
+                  state: delinquency.state,
+                }
+          }
         />
       </div>
     );

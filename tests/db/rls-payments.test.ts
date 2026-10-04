@@ -209,14 +209,14 @@ describeDb('payment row level security', () => {
       // for money they had already paid.
       const theirs = await asUser(
         borrower,
-        `select outstanding::text as outstanding, total_paid::text as total_paid
+        `select total_outstanding::text as outstanding, total_paid::text as total_paid
            from public.loan_balances where loan_id = $1`,
         [ownLoan],
       );
 
       const staff = await asUser(
         scenario.secretary,
-        `select outstanding::text as outstanding, total_paid::text as total_paid
+        `select total_outstanding::text as outstanding, total_paid::text as total_paid
            from public.loan_balances where loan_id = $1`,
         [ownLoan],
       );
@@ -547,7 +547,18 @@ describeDb('payment row level security', () => {
           order by c.relname`,
       );
 
-      expect(rows.length).toBe(3);
+      // Phase 6 added three; Phase 7 adds `loan_penalty_coverage`,
+      // `loan_obligations` and `loan_delinquency`. Named rather than counted,
+      // so a new view cannot be waved through by bumping a number.
+      expect(rows.map((row) => row.relname)).toEqual([
+        'loan_balances',
+        'loan_delinquency',
+        'loan_installment_coverage',
+        'loan_obligations',
+        'loan_penalty_coverage',
+        'payment_collection_totals',
+      ]);
+
       for (const row of rows) {
         expect(row.invoker, row.relname).toBe('true');
       }

@@ -1274,3 +1274,292 @@ the clearing of a borrower's loan a side effect nobody signed.
   `audit_loan_change` mapped every transition into `active` to "disbursed",
   which after Phase 6 would have recorded a false claim that the business paid
   money out a second time. Migration `20261006000800` replaces that function.
+
+## ADR-033 — Arrears are derived on every read, and stored nowhere
+
+**Status:** accepted (Phase 7)
+
+### Context
+
+Phase 7 has to answer "what should this borrower have paid by now, and
+hasn't". The obvious implementation is a set of columns — `arrears_amount`,
+`days_past_due`, `missed_payments`, `delinquency_status` — maintained by a
+nightly job.
+
+Three things are wrong with that, and they are not matters of taste.
+
+1. **It is wrong every morning until the job runs**, and silently wrong
+   forever if the job stops. A loan is in arrears because the calendar moved,
+   not because a process noticed.
+2. **It has to be corrected after every payment and every reversal.** Any path
+   that misses one leaves a borrower shown as delinquent when they are not, or
+   current when they are months behind — and the paths multiply.
+3. **It is editable.** A stored arrears figure is a number somebody can set.
+   That is the single most attackable thing this phase could introduce.
+
+### Decision
+
+**Nothing in Phase 7's delinquency model is stored. Every figure is computed
+when it is read**, from three things that cannot be edited: the immutable
+schedule, the allocations of posted payments, and today's date in the business
+timezone.
+
+`loan_delinquency` is a `security_invoker` view. There is no delinquency
+table, no arrears column, no status column, and
+`tests/db/delinquency.test.ts` asserts the absence across the whole schema.
+
+The figures are defined exactly:
+
+* **past-due arrears** — the uncovered amount of every collection due strictly
+  before today. The *uncovered* amount, so a collection part-covered by an
+  earlier overpayment contributes only what is left of it.
+* **due today** — the uncovered amount of collections due today.
+* **current amount due** — the two added. This is what turns a missed UGX
+  4,000 Monday into UGX 8,000 on Tuesday **with neither scheduled row
+  changing**, which is the whole point: ADR-026 made the schedule evidence,
+  and evidence that gets rewritten when somebody misses a payment is not
+  evidence.
+* **missed collections** and **days past due** are *different measures* and
+  both are reported. Three missed collections on an every-3-days loan are nine
+  days late; calling the count "days" would overstate a borrower's lateness
+  threefold, which on a collections list is the difference between a phone
+  call and a visit.
+
+### The one exception, and why
+
+The **penalty** is materialised as a row. It is a charge rather than an
+observation: the business must be able to show where a figure came from, and
+money has to be able to reach it. See ADR-035.
+
+### Consequences
+
+* There is nothing for any role — Owner and `service_role` included — to edit
+  a borrower into or out of arrears. The only way to change arrears is to pay,
+  or to reverse a payment, both audited financial acts.
+* A loan appears on the overdue list the moment midnight passes in Kampala,
+  with no job, no trigger and no transition.
+* The audit trail records no delinquency events. Arrears are a consequence of
+  time, and a trail that grew by a row per loan per day would bury the events
+  that matter.
+* The cost is a view that recomputes on each read. At this scale — a few
+  hundred collections and a few dozen payments per loan, every aggregate
+  indexed — that is cheaper than the reconciliation a cache would need.
+
+## ADR-034 — One business clock, and a test override no application path can reach
+
+**Status:** accepted (Phase 7)
+
+### Context
+
+Every Phase 7 rule is a comparison against a date: a due date against today, a
+payment's `received_at` against a grace deadline. Two problems follow.
+
+**"Today" is not a universal fact.** At 23:30 UTC on the 9th it is already the
+10th in Kampala. A collection due on the 10th is overdue by one system and
+current by another, depending on the hour somebody happens to look.
+
+**Time-sensitive rules are untestable without control of the clock.** A loan
+disbursed today cannot reach its final collection date, let alone its grace
+deadline. Back-dating `loans.disbursed_at` would mean fighting the immutability
+guards that make a schedule evidence, and would test a state the application
+cannot produce.
+
+### Decision
+
+**One function is the source of now, and everything else derives from it.**
+
+* `public.business_now()` returns the current instant. `business_date()`
+  converts it to a business day using `company_settings.timezone`, and
+  `payment_business_date()` converts a payment's instant the same way.
+* `post_payment` stamps `received_at` from it, `reverse_payment` stamps
+  `reversed_at`, the guard trigger stamps the reversal time, and
+  `ensure_penalty_applied` stamps `applied_at`.
+* Nothing in Phase 7 calls `current_date` or `now()::date`. Those are the
+  server's clock in the server's zone, which is a fact about hosting.
+
+**`business_now()` honours `app.business_now`, but only when `session_user`
+owns the tables.** That is a direct database connection as the schema owner,
+which no application path has: PostgREST reaches PostgreSQL as
+`authenticator` and then switches role, the privileged server client connects
+as `service_role`, and neither can change `session_user` or set a
+configuration parameter from a browser. `set local role authenticated` does
+not change `session_user` either, which is what lets the database tests act as
+a real application role at a chosen instant.
+
+The threat profile is the one `docs/SECURITY.md` already documents for the
+test fixtures' trigger-disabling: somebody who can connect as the table owner
+can do anything to the data, and no in-database design changes that. What
+matters is that nothing a client, a staff member or a leaked publishable key
+can reach moves the business date by one day.
+
+### Two implementation details that are not stylistic
+
+**The gate is a nested `IF`, not `and`.** PostgreSQL does not promise to
+evaluate the operands of `AND` in order, or to skip the second when the first
+is false. Written as `if v_override is not null and is_table_owner_session()`,
+the privilege-gated helper could be called on *every* invocation — which for a
+session role is `permission denied` on a function every delinquency read
+depends on. That is not hypothetical: it is how the bug was found, by a
+borrower being unable to read their own arrears.
+
+**And `business_now()` is `SECURITY DEFINER`**, so the gate is callable
+whatever the caller's privileges. `session_user` is unaffected by
+`SECURITY DEFINER` — only `current_user` changes — so the gate still reports
+the connection's identity, which is what it is for.
+
+### Consequences
+
+* A payment's business date and the business date can never disagree, so the
+  penalty basis boundary is unambiguous.
+* Grace boundaries, month ends, year ends, leap days and the 23:59-UTC case
+  are all testable, and are tested.
+* Changing `company_settings.timezone` moves every delinquency comparison
+  consistently, which `tests/db/delinquency.test.ts` exercises.
+
+## ADR-035 — The penalty is an obligation, charged on a reconstructed basis
+
+**Status:** accepted (Phase 7)
+
+### Context
+
+The business rule: a loan still unpaid three days after its final collection
+date is charged 50% of what it owed when that grace period ran out.
+
+Three questions have to be answered before a line is written. What *is* the
+charge? What is it charged on? And when is it written down?
+
+### Decision
+
+**A penalty is a row in `loan_penalties`, not a column on the loan.**
+
+Columns on `loans` would mean `total_expected_repayment` stopped meaning "what
+this borrower agreed to repay" and started meaning "what they owe us now,
+including a charge added later" — two different questions that a dispute turns
+on. The contract is untouched: principal, contractual interest, the monthly
+periods and every scheduled collection stay exactly as agreed and generated.
+
+The row carries the complete provenance: the final due date it followed, the
+grace period that applied, the balance it was charged on, the rate, the date
+it took effect, and the rule that fired. Anybody can reconstruct the
+arithmetic from the row alone.
+
+**The basis is reconstructed as at the end of the grace period.**
+
+Nothing guarantees a process looked at the loan that day. If the basis were
+read whenever the charge was finally written, a borrower who paid UGX 90,000
+of a UGX 100,000 debt on day six would be charged 50% of 10,000 instead of 50%
+of 100,000 — and the later they paid, the less they would owe. The incentive
+would be exactly backwards.
+
+So `loan_outstanding_as_of(loan, date)` recomputes the contractual balance
+counting only still-posted payments whose **business date** is on or before
+that date. A payment on the penalty's effective date does not count: the
+charge takes effect at the start of that day.
+
+**Reversed payments never count.** A payment made during grace and reversed
+afterwards does not reduce the basis — the money was withdrawn, so it never
+really paid. This is what stops a loan escaping a charge by looking cleared
+for a few days, and it is why `reverse_payment` materialises a penalty on its
+way out.
+
+**Once charged, nothing about it changes.** `loan_penalties` refuses UPDATE and
+DELETE for every caller including `service_role`, and the amount is re-derived
+by a CHECK constraint from the stored basis and rate — so a *forged* penalty
+is impossible rather than merely unauthorized. A unique index makes the
+one-time rule a property of the database: not 50% a day, not 50% a month, and
+never a penalty on a penalty.
+
+### When it is written down, given that there is no scheduled job
+
+Eligibility is **derived continuously**: `loan_delinquency.penalty_eligible` is
+true the moment the business date passes the penalty date, with no process
+involved. Materialisation happens at the only moments it matters:
+
+* `post_payment` calls `ensure_penalty_applied` **before it reads a balance**,
+  so a borrower cannot settle yesterday's figure and escape a charge that was
+  already due. This is the critical path, and §38's requirement.
+* `reverse_payment` calls it afterwards, so a loan whose exemption rested on
+  money that has now been withdrawn does not stay exempt.
+* `apply_eligible_penalties()` exists for a future scheduled job. It is an
+  optimisation, not a dependency: correctness never waits for cron.
+
+A staff read materialises nothing. A SELECT must not write — it may run in a
+read-only transaction, as a borrower, or under a role with no privileges on
+`loan_penalties` — so screens show the projected charge from the view,
+labelled as pending, and the transaction that needs it to exist creates it.
+
+### Consequences
+
+* `loans.total_expected_repayment` still means the agreement. "What is owed"
+  is `loan_total_outstanding`, which is the contract plus unpaid penalties.
+* A penalty is never recorded as interest. `payment_allocations` has a third
+  component and CHECK constraints that refuse a penalty allocation carrying
+  principal or interest, so `principal_paid + principal_remaining =
+  contractual_principal` still holds exactly.
+* A loan cannot clear while a charge stands: `loans_guard_transition` now
+  tests `loan_total_outstanding`, which binds `service_role` too (ADR-032).
+* No role can create, edit, delete or waive a charge. A waiver, if the business
+  ever wants one, is a new audited transaction that leaves the penalty
+  standing — not an edit.
+
+## ADR-036 — Payments reach a penalty through one allocation table, not two
+
+**Status:** accepted (Phase 7)
+
+### Context
+
+Phase 6's `payment_allocations` points at an installment. A penalty is not an
+installment, so money had to reach it some other way.
+
+### Decision
+
+**Generalise the target: exactly one of `installment_id` and `penalty_id` is
+set, never both and never neither.**
+
+The alternative was a second table, `penalty_payment_allocations`, leaving the
+contractual schema untouched. It would have duplicated every piece of
+machinery that makes an allocation trustworthy — the append-only triggers, the
+per-row component CHECKs, the audit trigger, the policy that delegates
+visibility to the payment — and it would have made the most important question
+about a payment ("where did this money go?") a union of two tables that could
+drift apart. Every balance view, every receipt and every reconciliation would
+have to remember both, and the one that forgot would under-report silently.
+
+The cost is a nullable `installment_id`, which is only safe with a strict rule
+about what may then be null. So the rule is explicit, as CHECK constraints:
+
+* exactly one target (`payment_allocations_one_target`);
+* an installment allocation splits into principal and interest and carries no
+  penalty component;
+* a penalty allocation is entirely penalty, with no principal and no interest.
+
+Existing rows satisfy all three unchanged — `allocated_penalty` defaults to
+zero — so no Phase 6 row is rewritten and no receipt changes. The constraints
+are validated against the existing data at migration time rather than added
+`NOT VALID`, which is the point at which a surprise would be cheap to find.
+
+### The allocation order needs no special case
+
+A penalty's effective date is the day after the grace period, which is later
+than every scheduled collection. So ordinary oldest-first — `order by
+effective_date, obligation_rank, sequence_number` over the `loan_obligations`
+view — covers the whole contract before it touches the charge, with no penalty
+branch anywhere in the allocation logic. That is why the penalty is modelled
+with a date at all.
+
+The minimum-payment rule follows for free: stated over obligations rather than
+collections, it is the earliest uncovered collection's remainder while any
+collection is unpaid, and the penalty's remainder once the contract is settled.
+
+### Consequences
+
+* One answer to "where did this payment go", for a receipt and for a
+  reconciliation alike.
+* The interest-first rule (ADR-031) gains a third `min()` term and no
+  division: `interest`, then `penalty`, then principal as the remainder. At
+  most one of the first two is non-zero for any obligation, so the components
+  still sum exactly with nothing to round.
+* `loan_balances` reports `penalty_assessed`, `penalty_paid` and
+  `penalty_remaining` separately from the contractual figures, and
+  `total_collected` — contract and penalty together — is what now reconciles
+  against the payments themselves.

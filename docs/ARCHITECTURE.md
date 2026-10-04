@@ -236,3 +236,45 @@ authoritative and writes the ledger, while `lib/domain/payment.ts` drives the
 preview a staff member confirms against. `tests/db/payment-parity.test.ts`
 reconciles the two across thirty randomly paid-off loans, the same way
 `schedule-parity` does for Phase 5.
+
+## Phase 7 — missed payments, arrears, grace and penalties
+
+Arrears, the carry-forward of missed collections, the two lateness measures,
+expiry and grace, the penalty rule and its basis, the delinquency states, the
+penalty-aware balances and clearance rule, permissions, Row Level Security and
+the Phase 8 handoff are documented in the Phase 7 sections of
+[LOANS.md](LOANS.md).
+
+**One table is added — `loan_penalties`** — and it is the only mutable-looking
+thing in the phase: refused UPDATE and DELETE for every caller, with its amount
+re-derived from its basis and rate by a CHECK constraint and one row per loan
+per penalty type enforced by a unique index. Everything else about delinquency
+is a view: `loan_penalty_coverage`, `loan_obligations`, `loan_delinquency`, and
+a restated `loan_balances`. There is no arrears column, no days-past-due
+column and no delinquency-status column anywhere, so no role — Owner and
+`service_role` included — can edit a borrower into or out of arrears. See
+ADR-033.
+
+`payment_allocations` is generalised rather than duplicated: exactly one of
+`installment_id` and `penalty_id` is set, enforced with the component CHECKs
+that keep a penalty from ever being recorded as principal or interest. Existing
+rows satisfy all of it unchanged, which is why no Phase 6 receipt moves.
+See ADR-036.
+
+**Time has one source.** `public.business_now()` → `business_date()` is what
+every Phase 7 comparison uses; nothing reads `current_date`, the server's
+timezone or a UTC date. It honours an override only on a connection owned by
+the schema owner, which no application path has, which is what makes grace
+boundaries testable without weakening anything. See ADR-034.
+
+The penalty is materialised lazily by `ensure_penalty_applied`, called from
+`post_payment` **before any balance is read** and from `reverse_payment` after
+it reconciles. `apply_eligible_penalties()` is there for a future scheduled
+sweep and is an optimisation, never a dependency: reads never write, and
+correctness never waits for cron. See ADR-035.
+
+The delinquency rules exist twice for the same reason the allocation rules do:
+`lib/domain/delinquency.ts` drives the screens and
+`tests/db/delinquency-parity.test.ts` reconciles it against the database view
+across randomly aged loans, the way `payment-parity` and `schedule-parity` do
+for Phases 6 and 5.

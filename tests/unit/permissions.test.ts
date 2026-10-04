@@ -248,6 +248,14 @@ describe('authorization matrix', () => {
     'payments:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'payments:create': ['secretary_treasurer', 'manager', 'owner_admin'],
     'payments:reverse': ['owner_admin'],
+
+    // Phase 7. Both read-only: nothing in delinquency is entered by a person,
+    // so there is no create, edit, delete or waive capability to place in any
+    // row. A borrower sees their own arrears and their own penalty through the
+    // ownership clauses in the policies, never through a capability, which is
+    // why `client` is absent from both.
+    'delinquency:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'penalties:view': ['secretary_treasurer', 'manager', 'owner_admin'],
   };
 
   it('covers every declared permission', () => {

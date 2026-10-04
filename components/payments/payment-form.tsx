@@ -14,11 +14,15 @@ import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   validatePaymentAmount,
-  type InstallmentObligation,
+  type PaymentObligation,
   type PaymentMethod,
 } from '@/lib/domain/payment';
 import { formatUgx, toUgx } from '@/lib/domain/money';
 import { formatBusinessDate } from '@/lib/domain/datetime';
+import {
+  DELINQUENCY_STATE_LABELS,
+  type DelinquencyState,
+} from '@/lib/domain/delinquency';
 import type { PaymentActionResult } from '@/lib/payments/actions';
 
 /**
@@ -63,17 +67,34 @@ export function PaymentForm({
   unpaidDue,
   minimumPayment,
   idempotencyKey,
+  delinquency,
   onPosted,
 }: {
   readonly loanId: string;
   readonly loanNumber: string;
   readonly clientName: string;
   readonly clientNumber: string;
-  readonly obligations: readonly InstallmentObligation[];
+  readonly obligations: readonly PaymentObligation[];
   readonly outstanding: number;
   readonly unpaidDue: number;
   readonly minimumPayment: number | null;
   readonly idempotencyKey: string;
+  /**
+   * Phase 7. The itemised demand, so the amount the staff member asks for is
+   * the one the screen can justify. Absent when the caller cannot read the
+   * delinquency position, in which case the form falls back to Phase 6's
+   * single "due now" figure.
+   */
+  readonly delinquency?: {
+    readonly arrears: number;
+    readonly dueToday: number;
+    readonly currentDue: number;
+    readonly contractualOutstanding: number;
+    readonly penaltyRemaining: number;
+    readonly penaltyEligible: boolean;
+    readonly penaltyProjectedAmount: number;
+    readonly state: DelinquencyState;
+  };
   readonly onPosted?: (paymentId: string) => void;
 }) {
   const [result, submit, pending] = useActionState<
@@ -152,16 +173,53 @@ export function PaymentForm({
             <div className="min-w-0">
               <dt className="text-text-muted text-sm">Due now</dt>
               <dd className="text-text font-semibold tabular-nums">
-                {formatUgx(toUgx(unpaidDue))}
+                {formatUgx(toUgx(delinquency?.currentDue ?? unpaidDue))}
               </dd>
+              {/* Itemised rather than summarised. "Payment doubled" would be
+                  wrong the moment two collections are missed or one is partly
+                  covered; the parts stay correct however many there are. */}
+              {delinquency !== undefined && delinquency.arrears > 0 ? (
+                <dd className="text-text-muted text-xs">
+                  {formatUgx(toUgx(delinquency.arrears))} previously unpaid plus{' '}
+                  {formatUgx(toUgx(delinquency.dueToday))} due today
+                </dd>
+              ) : null}
             </div>
             <div className="min-w-0">
-              <dt className="text-text-muted text-sm">Outstanding balance</dt>
+              <dt className="text-text-muted text-sm">Total outstanding</dt>
               <dd className="text-text font-semibold tabular-nums">
                 {formatUgx(toUgx(outstanding))}
               </dd>
+              {delinquency !== undefined && delinquency.penaltyRemaining > 0 ? (
+                <dd className="text-text-muted text-xs">
+                  Includes {formatUgx(toUgx(delinquency.penaltyRemaining))} penalty
+                </dd>
+              ) : null}
             </div>
           </dl>
+
+          {delinquency?.penaltyEligible === true ? (
+            <Alert
+              tone="danger"
+              title="A penalty will be added before this payment"
+              className="mb-4"
+            >
+              This loan passed its grace period still owing money, so a charge of{' '}
+              <span className="font-semibold">
+                {formatUgx(toUgx(delinquency.penaltyProjectedAmount))}
+              </span>{' '}
+              applies. It is added to the loan the moment this payment is recorded, so the
+              balance on the receipt will be higher than the figure above. Tell the
+              borrower before taking their money.
+            </Alert>
+          ) : null}
+
+          {delinquency !== undefined &&
+          ['in_arrears', 'grace_period', 'penalty_due'].includes(delinquency.state) ? (
+            <p className="text-text-muted mb-4 text-sm">
+              This loan is {DELINQUENCY_STATE_LABELS[delinquency.state].toLowerCase()}.
+            </p>
+          ) : null}
 
           <div className="space-y-4">
             {/* `type="text"` with a numeric keypad, not `type="number"`: a
@@ -324,8 +382,8 @@ export function PaymentForm({
           <div className="border-border mt-4 min-w-0 overflow-x-auto rounded-lg border">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">
-                How this payment would be applied: collection, due date, principal and
-                interest
+                How this payment would be applied: obligation, date, principal, interest,
+                penalty and the total applied
               </caption>
               <thead>
                 <tr className="border-border text-text-muted border-b">
@@ -342,6 +400,9 @@ export function PaymentForm({
                     Interest
                   </th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">
+                    Penalty
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">
                     Applied
                   </th>
                 </tr>
@@ -349,22 +410,30 @@ export function PaymentForm({
               <tbody>
                 {plan.allocations.map((entry) => {
                   const target = obligations.find(
-                    (row) => row.installmentId === entry.installmentId,
+                    (row) => row.obligationId === entry.obligationId,
                   );
 
                   return (
-                    <tr key={entry.installmentId} className="border-border border-b">
+                    <tr key={entry.obligationId} className="border-border border-b">
                       <th scope="row" className="text-text px-3 py-2 font-normal">
-                        {entry.installmentNumber}
+                        {/* A penalty is named, not numbered: "1" in a column
+                            of collection numbers would read as the first
+                            collection. */}
+                        {entry.kind === 'penalty' ? 'Penalty' : entry.sequenceNumber}
                       </th>
                       <td className="text-text-muted px-3 py-2">
-                        {target === undefined ? '—' : formatBusinessDate(target.dueDate)}
+                        {target === undefined
+                          ? '—'
+                          : formatBusinessDate(target.effectiveDate)}
                       </td>
                       <td className="text-text px-3 py-2 text-right tabular-nums">
                         {formatUgx(entry.allocatedPrincipal)}
                       </td>
                       <td className="text-text px-3 py-2 text-right tabular-nums">
                         {formatUgx(entry.allocatedInterest)}
+                      </td>
+                      <td className="text-text px-3 py-2 text-right tabular-nums">
+                        {formatUgx(entry.allocatedPenalty)}
                       </td>
                       <td className="text-text px-3 py-2 text-right font-medium tabular-nums">
                         {formatUgx(entry.allocatedAmount)}

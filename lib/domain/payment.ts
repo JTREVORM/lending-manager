@@ -137,32 +137,73 @@ export const PAYMENT_FAILURE_CODES = [
 export type PaymentFailureCode = (typeof PAYMENT_FAILURE_CODES)[number];
 
 /**
- * One scheduled collection, with how much of it prior payments have covered.
+ * What a payment can be applied to.
+ *
+ * ## Why this is not called an installment
+ *
+ * Phase 6 had one kind of obligation, a scheduled collection, and named the
+ * type after it. Phase 7 adds a second: the expiry penalty. Rather than
+ * retrofit penalty fields onto a type called `InstallmentObligation` — which
+ * would have left every reader to discover that an "installment" is sometimes
+ * a penalty — the type says what it is, and `kind` says which.
+ *
+ * The shape mirrors the database's `loan_obligations` view field for field, on
+ * purpose: the two engines allocate the same way, and a parity test compares
+ * them row by row. A difference in vocabulary between them would be a place
+ * for a difference in behaviour to hide.
+ *
+ * ## The components
+ *
+ * A collection has a principal part and an interest part and no penalty part.
+ * A penalty is entirely penalty: no principal, no interest. The database
+ * enforces exactly this with CHECK constraints, because a penalty recorded as
+ * interest would misstate what a borrower was charged for.
  *
  * The `allocated*` figures count **posted** payments only. A reversed
  * payment's allocations remain in the database as history but are excluded
  * here, which is exactly how a reversal restores the balance without anything
  * being deleted.
  */
-export interface InstallmentObligation {
-  readonly installmentId: string;
-  readonly installmentNumber: number;
-  readonly dueDate: BusinessDate;
+export const OBLIGATION_KINDS = ['installment', 'penalty'] as const;
+
+export type ObligationKind = (typeof OBLIGATION_KINDS)[number];
+
+export interface PaymentObligation {
+  /** The installment's id, or the penalty's. The allocation target. */
+  readonly obligationId: string;
+  readonly kind: ObligationKind;
+  /**
+   * 1-based within its kind: the collection number, or 1 for the single
+   * penalty. Used to break an ordering tie and to label a message, never to
+   * imply that a penalty is the first of a series.
+   */
+  readonly sequenceNumber: number;
+  /**
+   * When the obligation falls due: a collection's due date, or the penalty's
+   * effective date. The ordering key, and the reason oldest-first needs no
+   * special case for penalties — a penalty's effective date is the day after
+   * the grace period, so it is necessarily later than every collection.
+   */
+  readonly effectiveDate: BusinessDate;
   readonly expectedAmount: UgxAmount;
   readonly scheduledPrincipal: UgxAmount;
   readonly scheduledInterest: UgxAmount;
+  readonly scheduledPenalty: UgxAmount;
   readonly allocatedAmount: UgxAmount;
   readonly allocatedPrincipal: UgxAmount;
   readonly allocatedInterest: UgxAmount;
+  readonly allocatedPenalty: UgxAmount;
 }
 
-/** What one payment contributes to one installment. */
+/** What one payment contributes to one obligation. */
 export interface PlannedAllocation {
-  readonly installmentId: string;
-  readonly installmentNumber: number;
+  readonly obligationId: string;
+  readonly kind: ObligationKind;
+  readonly sequenceNumber: number;
   readonly allocatedAmount: UgxAmount;
   readonly allocatedPrincipal: UgxAmount;
   readonly allocatedInterest: UgxAmount;
+  readonly allocatedPenalty: UgxAmount;
 }
 
 export interface AllocationPlan {
@@ -170,68 +211,118 @@ export interface AllocationPlan {
   readonly amount: UgxAmount;
   readonly totalPrincipal: UgxAmount;
   readonly totalInterest: UgxAmount;
-  /** The loan's outstanding balance before this payment. */
+  readonly totalPenalty: UgxAmount;
+  /** The loan's total outstanding balance before this payment, penalty included. */
   readonly outstandingBefore: UgxAmount;
-  /** After it. Zero means the loan is fully repaid and should clear. */
+  /** After it. Zero means nothing at all is owed and the loan should clear. */
   readonly outstandingAfter: UgxAmount;
-  /** Does this payment settle the loan completely? */
+  /** Does this payment settle the loan completely, penalty included? */
   readonly clearsLoan: boolean;
 }
 
-/** What remains unpaid on an installment. */
-export function remainingAmount(obligation: InstallmentObligation): UgxAmount {
+/** A readable name for an obligation, for a message somebody will act on. */
+export function describeObligation(obligation: {
+  readonly kind: ObligationKind;
+  readonly sequenceNumber: number;
+}): string {
+  return obligation.kind === 'penalty'
+    ? 'the penalty'
+    : `collection ${String(obligation.sequenceNumber)}`;
+}
+
+/** Collections before penalties, where two obligations share a date. */
+function obligationRank(kind: ObligationKind): number {
+  return kind === 'penalty' ? 1 : 0;
+}
+
+/** What remains unpaid on an obligation. */
+export function remainingAmount(obligation: PaymentObligation): UgxAmount {
   return toUgx(obligation.expectedAmount - obligation.allocatedAmount);
 }
 
-export function remainingPrincipal(obligation: InstallmentObligation): UgxAmount {
+export function remainingPrincipal(obligation: PaymentObligation): UgxAmount {
   return toUgx(obligation.scheduledPrincipal - obligation.allocatedPrincipal);
 }
 
-export function remainingInterest(obligation: InstallmentObligation): UgxAmount {
+export function remainingInterest(obligation: PaymentObligation): UgxAmount {
   return toUgx(obligation.scheduledInterest - obligation.allocatedInterest);
+}
+
+export function remainingPenalty(obligation: PaymentObligation): UgxAmount {
+  return toUgx(obligation.scheduledPenalty - obligation.allocatedPenalty);
 }
 
 /**
  * Obligations in the order a payment is applied to them.
  *
- * **Earliest due date first**, and where two collections somehow fell on one
- * date, the lower installment number first. Deterministic, so the same payment
- * against the same state always produces the same allocation — which is what
- * makes the plan shown at the counter the plan that gets written.
+ * **Earliest effective date first**; where two obligations share a date, a
+ * collection before a penalty; and where two collections share a date, the
+ * lower number first. Deterministic, so the same payment against the same
+ * state always produces the same allocation — which is what makes the plan
+ * shown at the counter the plan that gets written.
+ *
+ * The penalty needs no rule of its own. Its effective date is the day after
+ * the grace period, which is after every collection's due date, so ordinary
+ * oldest-first covers the whole contract before it touches the charge.
  *
  * Returns a new array; the input is not mutated.
  */
 export function inAllocationOrder(
-  obligations: readonly InstallmentObligation[],
-): readonly InstallmentObligation[] {
+  obligations: readonly PaymentObligation[],
+): readonly PaymentObligation[] {
   return [...obligations].sort((left, right) => {
-    const byDate = compareBusinessDates(left.dueDate, right.dueDate);
+    const byDate = compareBusinessDates(left.effectiveDate, right.effectiveDate);
     if (byDate !== 0) return byDate;
-    return left.installmentNumber - right.installmentNumber;
+
+    const byKind = obligationRank(left.kind) - obligationRank(right.kind);
+    if (byKind !== 0) return byKind;
+
+    return left.sequenceNumber - right.sequenceNumber;
   });
 }
 
-function assertObligationsSound(obligations: readonly InstallmentObligation[]): void {
+function assertObligationsSound(obligations: readonly PaymentObligation[]): void {
   for (const obligation of obligations) {
-    const label = `installment ${String(obligation.installmentNumber)}`;
+    const label = describeObligation(obligation);
 
     if (
       obligation.expectedAmount !==
-      obligation.scheduledPrincipal + obligation.scheduledInterest
+      obligation.scheduledPrincipal +
+        obligation.scheduledInterest +
+        obligation.scheduledPenalty
     ) {
       throw new PaymentAllocationError(
         'obligations_inconsistent',
-        `${label} expects ${String(obligation.expectedAmount)}, which is not its scheduled principal plus interest.`,
+        `${label} expects ${String(obligation.expectedAmount)}, which is not its scheduled components.`,
       );
     }
 
     if (
       obligation.allocatedAmount !==
-      obligation.allocatedPrincipal + obligation.allocatedInterest
+      obligation.allocatedPrincipal +
+        obligation.allocatedInterest +
+        obligation.allocatedPenalty
     ) {
       throw new PaymentAllocationError(
         'obligations_inconsistent',
-        `${label} has an allocated total that is not its allocated principal plus interest.`,
+        `${label} has an allocated total that is not the sum of its allocated components.`,
+      );
+    }
+
+    // A penalty is neither principal nor contractual interest, and a
+    // collection carries no penalty. Checked here as well as in the database,
+    // because this is the engine that builds what the database stores.
+    if (obligation.kind === 'penalty') {
+      if (obligation.scheduledPrincipal !== 0 || obligation.scheduledInterest !== 0) {
+        throw new PaymentAllocationError(
+          'obligations_inconsistent',
+          `${label} carries a principal or interest component; a penalty is neither.`,
+        );
+      }
+    } else if (obligation.scheduledPenalty !== 0) {
+      throw new PaymentAllocationError(
+        'obligations_inconsistent',
+        `${label} carries a penalty component; a collection has none.`,
       );
     }
 
@@ -240,7 +331,8 @@ function assertObligationsSound(obligations: readonly InstallmentObligation[]): 
     if (
       obligation.allocatedAmount > obligation.expectedAmount ||
       obligation.allocatedPrincipal > obligation.scheduledPrincipal ||
-      obligation.allocatedInterest > obligation.scheduledInterest
+      obligation.allocatedInterest > obligation.scheduledInterest ||
+      obligation.allocatedPenalty > obligation.scheduledPenalty
     ) {
       throw new PaymentAllocationError(
         'obligations_inconsistent',
@@ -257,10 +349,14 @@ function assertObligationsSound(obligations: readonly InstallmentObligation[]): 
   }
 }
 
-/** The loan's outstanding balance: everything scheduled, less everything covered. */
-export function outstandingFrom(
-  obligations: readonly InstallmentObligation[],
-): UgxAmount {
+/**
+ * Everything the borrower owes: every obligation, less everything covered.
+ *
+ * Penalties included — this is the figure a payment is capped at and the one
+ * that must reach zero for a loan to clear. `deriveLoanBalance` separates the
+ * contractual part from the penalty part for the screens that need both.
+ */
+export function outstandingFrom(obligations: readonly PaymentObligation[]): UgxAmount {
   return sumUgx(obligations.map(remainingAmount));
 }
 
@@ -284,9 +380,17 @@ export function outstandingFrom(
  * without being asked for more than they owe. No special case is needed —
  * the outstanding balance is by definition the sum of the remainders, so it
  * can never be smaller than the first of them.
+ *
+ * ## With a penalty
+ *
+ * The rule is unchanged and is stated over obligations rather than
+ * collections, which gives the right answer in both cases without a branch:
+ * while any collection is unpaid the minimum is that collection's remainder,
+ * because a penalty sorts after every collection; once the contract is settled
+ * and only the penalty is left, the minimum is what remains of the penalty.
  */
 export function minimumAcceptablePayment(
-  obligations: readonly InstallmentObligation[],
+  obligations: readonly PaymentObligation[],
 ): UgxAmount | null {
   for (const obligation of inAllocationOrder(obligations)) {
     const remaining = remainingAmount(obligation);
@@ -300,19 +404,23 @@ export function minimumAcceptablePayment(
  * What is due now: scheduled collections dated today or earlier, less what has
  * been covered.
  *
- * Deliberately **not** called arrears. This is a sum of unpaid scheduled
- * amounts whose dates have passed, and nothing more — no grace period, no
- * carry-forward, no penalty. Phase 7 owns the interpretation of an unpaid
- * collection, and borrowing its vocabulary now would mean this phase appeared
- * to make a judgement it has no basis for.
+ * **Scheduled** collections only: a penalty is not part of the schedule, and
+ * folding it in would make this figure impossible to compare against the
+ * contract. `lib/domain/delinquency.ts` is where arrears, due-today and
+ * current-due live, and it reports the penalty beside them rather than inside
+ * them.
  */
 export function unpaidScheduledDue(
-  obligations: readonly InstallmentObligation[],
+  obligations: readonly PaymentObligation[],
   today: BusinessDate,
 ): UgxAmount {
   return sumUgx(
     obligations
-      .filter((obligation) => compareBusinessDates(obligation.dueDate, today) <= 0)
+      .filter(
+        (obligation) =>
+          obligation.kind === 'installment' &&
+          compareBusinessDates(obligation.effectiveDate, today) <= 0,
+      )
       .map(remainingAmount),
   );
 }
@@ -326,7 +434,7 @@ export function unpaidScheduledDue(
  */
 export function validatePaymentAmount(
   amount: number,
-  obligations: readonly InstallmentObligation[],
+  obligations: readonly PaymentObligation[],
 ): { readonly code: PaymentFailureCode; readonly detail: UgxAmount | null } | null {
   if (!Number.isInteger(amount) || amount <= 0) {
     return { code: 'amount_not_positive', detail: null };
@@ -367,7 +475,7 @@ export function describePaymentFailure(
     case 'amount_not_positive':
       return 'Enter a payment amount greater than zero.';
     case 'below_minimum':
-      return `The smallest payment accepted now is ${amount(detail)} — the amount still outstanding on the earliest unpaid collection.`;
+      return `The smallest payment accepted now is ${amount(detail)} — the amount still outstanding on the earliest unpaid obligation.`;
     case 'exceeds_outstanding':
       return `That is more than this loan still owes. The outstanding balance is ${amount(detail)}.`;
     case 'nothing_outstanding':
@@ -411,12 +519,17 @@ export function describePaymentFailure(
  * `remaining − remainingInterest`, which is the remaining principal. That is
  * asserted rather than assumed.
  *
+ * **A penalty takes the whole of what it receives as penalty.** It has no
+ * interest and no principal, so the same three-way split below puts every
+ * shilling in the penalty component with nothing left over. Phase 7 therefore
+ * adds a component rather than a rule: the loop is the Phase 6 loop.
+ *
  * @throws PaymentAllocationError if the amount is refused by
  *   `validatePaymentAmount`, or if the obligations are internally inconsistent.
  */
 export function allocatePayment(input: {
   readonly amount: UgxAmount;
-  readonly obligations: readonly InstallmentObligation[];
+  readonly obligations: readonly PaymentObligation[];
 }): AllocationPlan {
   const { amount, obligations } = input;
 
@@ -444,24 +557,36 @@ export function allocatePayment(input: {
 
     const take = Math.min(remaining, unallocated);
 
-    // Interest first. No division, so no rounding.
+    // Interest first, then penalty, then principal — each a `min()` of two
+    // integers, so no division and no rounding. An obligation is either
+    // contractual or a penalty, never both, so at most one of the first two
+    // terms is non-zero for any obligation:
+    //
+    //   a collection -> penalty is 0, so interest then principal
+    //   a penalty    -> interest is 0, so the whole take is penalty
+    //
+    // Principal is the remainder, which is what keeps a penalty from ever
+    // being recorded as principal.
     const interest = Math.min(remainingInterest(obligation), take);
-    const principal = take - interest;
+    const penalty = Math.min(remainingPenalty(obligation), take - interest);
+    const principal = take - interest - penalty;
 
     /* c8 ignore next 6 -- unreachable by construction; see the note above. */
     if (principal > remainingPrincipal(obligation)) {
       throw new PaymentAllocationError(
         'reconciliation_failed',
-        `Allocating ${String(take)} to installment ${String(obligation.installmentNumber)} would exceed its remaining principal.`,
+        `Allocating ${String(take)} to ${describeObligation(obligation)} would exceed its remaining principal.`,
       );
     }
 
     allocations.push({
-      installmentId: obligation.installmentId,
-      installmentNumber: obligation.installmentNumber,
+      obligationId: obligation.obligationId,
+      kind: obligation.kind,
+      sequenceNumber: obligation.sequenceNumber,
       allocatedAmount: toUgx(take),
       allocatedPrincipal: toUgx(principal),
       allocatedInterest: toUgx(interest),
+      allocatedPenalty: toUgx(penalty),
     });
 
     unallocated -= take;
@@ -481,6 +606,7 @@ export function allocatePayment(input: {
     amount,
     totalPrincipal: sumUgx(allocations.map((entry) => entry.allocatedPrincipal)),
     totalInterest: sumUgx(allocations.map((entry) => entry.allocatedInterest)),
+    totalPenalty: sumUgx(allocations.map((entry) => entry.allocatedPenalty)),
     outstandingBefore,
     outstandingAfter: toUgx(outstandingBefore - amount),
     clearsLoan: outstandingBefore === amount,
@@ -506,7 +632,7 @@ export function allocatePayment(input: {
  */
 export function assertAllocationInvariants(
   plan: AllocationPlan,
-  obligations: readonly InstallmentObligation[],
+  obligations: readonly PaymentObligation[],
 ): void {
   const fail = (message: string): never => {
     throw new PaymentAllocationError(
@@ -537,6 +663,10 @@ export function assertAllocationInvariants(
     (total, entry) => total + entry.allocatedInterest,
     0,
   );
+  const penalty = plan.allocations.reduce(
+    (total, entry) => total + entry.allocatedPenalty,
+    0,
+  );
 
   if (principal !== plan.totalPrincipal) {
     fail('the reported principal total is not the sum of the allocations.');
@@ -546,8 +676,12 @@ export function assertAllocationInvariants(
     fail('the reported interest total is not the sum of the allocations.');
   }
 
-  if (principal + interest !== plan.amount) {
-    fail('the allocated principal and interest do not sum to the payment amount.');
+  if (penalty !== plan.totalPenalty) {
+    fail('the reported penalty total is not the sum of the allocations.');
+  }
+
+  if (principal + interest + penalty !== plan.amount) {
+    fail('the allocated components do not sum to the payment amount.');
   }
 
   if (plan.outstandingAfter !== plan.outstandingBefore - plan.amount) {
@@ -564,38 +698,63 @@ export function assertAllocationInvariants(
     fail('the clearance flag disagrees with the resulting balance.');
   }
 
-  // --- No installment is over-allocated -----------------------------------
+  // --- No obligation is over-allocated ------------------------------------
   const byId = new Map(
-    obligations.map((obligation) => [obligation.installmentId, obligation]),
+    obligations.map((obligation) => [obligation.obligationId, obligation]),
   );
   const seen = new Set<string>();
 
   for (const entry of plan.allocations) {
-    const label = `installment ${String(entry.installmentNumber)}`;
-    const obligation = byId.get(entry.installmentId);
+    const label = describeObligation(entry);
+    const obligation = byId.get(entry.obligationId);
 
     if (obligation === undefined) {
-      fail(`${label} is not one of this loan's collections.`);
+      fail(`${label} is not one of this loan's obligations.`);
       continue;
     }
 
-    // One allocation per installment per payment. Two would still reconcile
-    // on totals while making the per-installment caps harder to reason about.
-    if (seen.has(entry.installmentId)) {
+    if (obligation.kind !== entry.kind) {
+      fail(`${label} is allocated to as the wrong kind of obligation.`);
+    }
+
+    // One allocation per obligation per payment. Two would still reconcile
+    // on totals while making the per-obligation caps harder to reason about.
+    if (seen.has(entry.obligationId)) {
       fail(`${label} is allocated to twice by one payment.`);
     }
-    seen.add(entry.installmentId);
+    seen.add(entry.obligationId);
 
     if (entry.allocatedAmount <= 0) {
       fail(`${label} has a non-positive allocation.`);
     }
 
-    if (entry.allocatedPrincipal < 0 || entry.allocatedInterest < 0) {
+    if (
+      entry.allocatedPrincipal < 0 ||
+      entry.allocatedInterest < 0 ||
+      entry.allocatedPenalty < 0
+    ) {
       fail(`${label} has a negative component.`);
     }
 
-    if (entry.allocatedPrincipal + entry.allocatedInterest !== entry.allocatedAmount) {
+    if (
+      entry.allocatedPrincipal + entry.allocatedInterest + entry.allocatedPenalty !==
+      entry.allocatedAmount
+    ) {
       fail(`${label}'s components do not sum to its allocated amount.`);
+    }
+
+    // A penalty is not interest and not principal. This is the classification
+    // rule the specification is emphatic about, asserted on every allocation.
+    if (entry.kind === 'penalty') {
+      if (entry.allocatedPrincipal !== 0 || entry.allocatedInterest !== 0) {
+        fail('the penalty received principal or interest, which it does not have.');
+      }
+
+      if (entry.allocatedPenalty !== entry.allocatedAmount) {
+        fail('a penalty allocation must be entirely penalty.');
+      }
+    } else if (entry.allocatedPenalty !== 0) {
+      fail(`${label} received a penalty component, which a collection does not have.`);
     }
 
     if (entry.allocatedAmount > remainingAmount(obligation)) {
@@ -611,63 +770,65 @@ export function assertAllocationInvariants(
     if (entry.allocatedInterest > remainingInterest(obligation)) {
       fail(`${label} would receive more interest than it has remaining.`);
     }
+
+    if (entry.allocatedPenalty > remainingPenalty(obligation)) {
+      fail(`${label} would receive more penalty than it has remaining.`);
+    }
   }
 
   // --- Oldest first, and interest before principal ------------------------
   const order = inAllocationOrder(obligations);
   const positionOf = new Map(
-    order.map((obligation, index) => [obligation.installmentId, index]),
+    order.map((obligation, index) => [obligation.obligationId, index]),
   );
 
   let previousPosition = -1;
 
   for (const entry of plan.allocations) {
-    const position = positionOf.get(entry.installmentId) ?? -1;
+    const position = positionOf.get(entry.obligationId) ?? -1;
 
     if (position <= previousPosition) {
-      fail(
-        `installment ${String(entry.installmentNumber)} is allocated to out of due-date order.`,
-      );
+      fail(`${describeObligation(entry)} is allocated to out of date order.`);
     }
 
-    // Every installment skipped over must already have been settled —
-    // otherwise the payment jumped an unpaid earlier collection.
+    // Every obligation skipped over must already have been settled —
+    // otherwise the payment jumped an unpaid earlier one. This is also what
+    // proves the contract is covered before the penalty: the penalty is last
+    // in the order, so reaching it requires everything before it to be full.
     for (let index = previousPosition + 1; index < position; index += 1) {
       const skipped = order[index];
       if (skipped !== undefined && remainingAmount(skipped) > 0) {
-        fail(
-          `installment ${String(skipped.installmentNumber)} was skipped while still unpaid.`,
-        );
+        fail(`${describeObligation(skipped)} was skipped while still unpaid.`);
       }
     }
 
     previousPosition = position;
 
     // Interest-first, stated as a property of the result: principal may only
-    // be touched once this installment's interest is fully covered.
-    const obligation = byId.get(entry.installmentId);
+    // be touched once this collection's interest is fully covered.
+    const obligation = byId.get(entry.obligationId);
 
     if (obligation !== undefined && entry.allocatedPrincipal > 0) {
       const interestAfter = obligation.allocatedInterest + entry.allocatedInterest;
 
       if (interestAfter !== obligation.scheduledInterest) {
         fail(
-          `installment ${String(entry.installmentNumber)} received principal while interest remained unpaid.`,
+          `${describeObligation(entry)} received principal while interest remained unpaid.`,
         );
       }
     }
   }
 
-  // Every allocation but the last must settle its installment completely,
-  // because the payment only moves on once an installment is full.
+  // Every allocation but the last must settle its obligation completely,
+  // because the payment only moves on once an obligation is full.
   for (const [index, entry] of plan.allocations.entries()) {
     const isLast = index === plan.allocations.length - 1;
-    const obligation = byId.get(entry.installmentId);
+    const obligation = byId.get(entry.obligationId);
 
     if (!isLast && obligation !== undefined) {
       if (entry.allocatedAmount !== remainingAmount(obligation)) {
         fail(
-          `installment ${String(entry.installmentNumber)} was left partly unpaid while the payment moved on.`,
+          `${describeObligation(entry)} was left partly unpaid while the payment moved on.`,
         );
       }
     }
@@ -691,16 +852,28 @@ export function assertAllocationInvariants(
  * what the receipt said at the counter. See ADR-029.
  */
 export interface LoanBalance {
+  // --- The contract, as agreed. A penalty never alters any of these. ------
   readonly contractualPrincipal: UgxAmount;
   readonly contractualInterest: UgxAmount;
   readonly totalExpectedRepayment: UgxAmount;
   readonly totalPaid: UgxAmount;
-  readonly outstanding: UgxAmount;
+  readonly contractualOutstanding: UgxAmount;
   readonly principalPaid: UgxAmount;
   readonly principalRemaining: UgxAmount;
   readonly interestPaid: UgxAmount;
   readonly interestRemaining: UgxAmount;
-  /** Is every scheduled collection fully covered? */
+
+  // --- The penalty, separately --------------------------------------------
+  readonly penaltyAssessed: UgxAmount;
+  readonly penaltyPaid: UgxAmount;
+  readonly penaltyRemaining: UgxAmount;
+
+  // --- What the borrower owes, and what was collected ---------------------
+  /** Contractual outstanding plus unpaid penalties. The figure to quote. */
+  readonly totalOutstanding: UgxAmount;
+  /** Contract and penalty money together. What reconciles against payments. */
+  readonly totalCollected: UgxAmount;
+  /** Is everything covered, penalty included? */
   readonly fullyRepaid: boolean;
 }
 
@@ -714,10 +887,14 @@ export interface LoanBalance {
  * it against the loan's own stored totals.
  */
 export function deriveLoanBalance(
-  obligations: readonly InstallmentObligation[],
+  obligations: readonly PaymentObligation[],
 ): LoanBalance {
   assertObligationsSound(obligations);
 
+  // Summing the components rather than filtering by kind, which gives the
+  // same answer with one fewer assumption: a collection's penalty component is
+  // zero and a penalty's principal and interest components are zero, and
+  // `assertObligationsSound` has just refused any input where that is untrue.
   const contractualPrincipal = sumUgx(
     obligations.map((obligation) => obligation.scheduledPrincipal),
   );
@@ -730,21 +907,34 @@ export function deriveLoanBalance(
   const interestPaid = sumUgx(
     obligations.map((obligation) => obligation.allocatedInterest),
   );
+  const penaltyAssessed = sumUgx(
+    obligations.map((obligation) => obligation.scheduledPenalty),
+  );
+  const penaltyPaid = sumUgx(
+    obligations.map((obligation) => obligation.allocatedPenalty),
+  );
 
   const totalExpectedRepayment = toUgx(contractualPrincipal + contractualInterest);
   const totalPaid = toUgx(principalPaid + interestPaid);
+  const contractualOutstanding = toUgx(totalExpectedRepayment - totalPaid);
+  const penaltyRemaining = toUgx(penaltyAssessed - penaltyPaid);
 
   return {
     contractualPrincipal,
     contractualInterest,
     totalExpectedRepayment,
     totalPaid,
-    outstanding: toUgx(totalExpectedRepayment - totalPaid),
+    contractualOutstanding,
     principalPaid,
     principalRemaining: toUgx(contractualPrincipal - principalPaid),
     interestPaid,
     interestRemaining: toUgx(contractualInterest - interestPaid),
-    fullyRepaid: totalPaid === totalExpectedRepayment,
+    penaltyAssessed,
+    penaltyPaid,
+    penaltyRemaining,
+    totalOutstanding: toUgx(contractualOutstanding + penaltyRemaining),
+    totalCollected: toUgx(totalPaid + penaltyPaid),
+    fullyRepaid: contractualOutstanding === 0 && penaltyRemaining === 0,
   };
 }
 
@@ -772,16 +962,45 @@ export function assertBalanceInvariants(
     );
   };
 
-  if (balance.totalPaid + balance.outstanding !== balance.totalExpectedRepayment) {
+  if (
+    balance.totalPaid + balance.contractualOutstanding !==
+    balance.totalExpectedRepayment
+  ) {
     fail('paid plus outstanding is not the contractual total.');
   }
 
-  if (balance.outstanding < 0) {
-    fail(`the outstanding balance is ${String(balance.outstanding)}.`);
+  if (balance.contractualOutstanding < 0) {
+    fail(
+      `the contractual outstanding balance is ${String(balance.contractualOutstanding)}.`,
+    );
   }
 
   if (balance.totalPaid < 0) {
     fail('the total paid is negative.');
+  }
+
+  // --- The penalty reconciles, and does not contaminate the contract ------
+  if (balance.penaltyPaid + balance.penaltyRemaining !== balance.penaltyAssessed) {
+    fail('penalty paid plus penalty remaining is not the penalty assessed.');
+  }
+
+  if (balance.penaltyRemaining < 0) {
+    fail(`the penalty remaining is ${String(balance.penaltyRemaining)}.`);
+  }
+
+  if (balance.penaltyPaid < 0 || balance.penaltyAssessed < 0) {
+    fail('a penalty figure is negative.');
+  }
+
+  if (
+    balance.contractualOutstanding + balance.penaltyRemaining !==
+    balance.totalOutstanding
+  ) {
+    fail('contractual outstanding plus penalty remaining is not the total outstanding.');
+  }
+
+  if (balance.totalPaid + balance.penaltyPaid !== balance.totalCollected) {
+    fail('contractual paid plus penalty paid is not the total collected.');
   }
 
   if (
@@ -803,8 +1022,10 @@ export function assertBalanceInvariants(
     fail('a remaining component is negative.');
   }
 
-  if (balance.fullyRepaid !== (balance.outstanding === 0)) {
-    fail('the fully-repaid flag disagrees with the outstanding balance.');
+  // Penalty included: a loan with a charge outstanding is not fully repaid,
+  // which is what makes the clearance rule in the database checkable here.
+  if (balance.fullyRepaid !== (balance.totalOutstanding === 0)) {
+    fail('the fully-repaid flag disagrees with the total outstanding balance.');
   }
 
   const { storedTotalExpectedRepayment, postedPaymentTotal } = options;
@@ -819,10 +1040,13 @@ export function assertBalanceInvariants(
   }
 
   // The specification's headline reconciliation: no money is allocated that
-  // was not paid, and none is paid that is not allocated.
-  if (postedPaymentTotal !== undefined && postedPaymentTotal !== balance.totalPaid) {
+  // was not paid, and none is paid that is not allocated. Phase 7 compares
+  // against `totalCollected` — contract and penalty together — because a
+  // payment may now satisfy either, and comparing against the contractual
+  // figure alone would report a penalty payment as missing money.
+  if (postedPaymentTotal !== undefined && postedPaymentTotal !== balance.totalCollected) {
     fail(
-      `posted payments total ${String(postedPaymentTotal)} but allocations total ${String(balance.totalPaid)}.`,
+      `posted payments total ${String(postedPaymentTotal)} but allocations total ${String(balance.totalCollected)}.`,
     );
   }
 }
@@ -834,15 +1058,15 @@ export function assertBalanceInvariants(
  * database. Pure: the input is not mutated.
  */
 export function applyPlan(
-  obligations: readonly InstallmentObligation[],
+  obligations: readonly PaymentObligation[],
   plan: AllocationPlan,
-): readonly InstallmentObligation[] {
-  const byInstallment = new Map(
-    plan.allocations.map((entry) => [entry.installmentId, entry]),
+): readonly PaymentObligation[] {
+  const byObligation = new Map(
+    plan.allocations.map((entry) => [entry.obligationId, entry]),
   );
 
   return obligations.map((obligation) => {
-    const entry = byInstallment.get(obligation.installmentId);
+    const entry = byObligation.get(obligation.obligationId);
 
     if (entry === undefined) return obligation;
 
@@ -851,6 +1075,7 @@ export function applyPlan(
       allocatedAmount: toUgx(obligation.allocatedAmount + entry.allocatedAmount),
       allocatedPrincipal: toUgx(obligation.allocatedPrincipal + entry.allocatedPrincipal),
       allocatedInterest: toUgx(obligation.allocatedInterest + entry.allocatedInterest),
+      allocatedPenalty: toUgx(obligation.allocatedPenalty + entry.allocatedPenalty),
     };
   });
 }

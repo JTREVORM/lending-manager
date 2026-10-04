@@ -29,6 +29,9 @@ import { getLoanSchedule, verifyStoredSchedule } from '@/lib/data/schedules';
 import { getLoanPosition, listLoanPayments } from '@/lib/data/payments';
 import { PaymentRegister } from '@/components/payments/payment-register';
 import { LoanBalanceSummary } from '@/components/payments/loan-balance-summary';
+import { DelinquencyPanel } from '@/components/delinquency/delinquency-panel';
+import { PenaltyCard } from '@/components/delinquency/penalty-card';
+import { getLoanDelinquency, getLoanPenalty } from '@/lib/data/delinquency';
 import { getCompanyBranding } from '@/lib/data/company';
 import { businessToday } from '@/lib/domain/datetime';
 import { formatCalendarDate, formatRecordedDate, maskNin } from '@/lib/domain/client';
@@ -107,10 +110,20 @@ export default async function LoanDetailPage({
   // Phase 6. A balance exists only once there is a schedule to owe against, so
   // a draft or an approved loan has none — which is a different thing from
   // owing zero.
-  const [position, payments, companyBranding] = await Promise.all([
+  // Phase 7. The delinquency position and any penalty, both derived in the
+  // database under this reader's own policies. Read behind their own
+  // capabilities rather than the payment one: somebody who may see a balance
+  // is not automatically somebody who may see the collections view.
+  const [position, payments, companyBranding, delinquency, penalty] = await Promise.all([
     canSeePayments ? getLoanPosition(loanId, today) : Promise.resolve(null),
     canSeePayments ? listLoanPayments(loanId) : Promise.resolve([]),
     getCompanyBranding(),
+    contextCan(context, 'delinquency:view')
+      ? getLoanDelinquency(loanId)
+      : Promise.resolve(null),
+    contextCan(context, 'penalties:view')
+      ? getLoanPenalty(loanId)
+      : Promise.resolve(null),
   ]);
 
   // The stored schedule, verified before it is shown, on the same reasoning as
@@ -300,7 +313,7 @@ export default async function LoanDetailPage({
 
             {contextCan(context, 'payments:create') &&
             loan.status === 'active' &&
-            position.outstanding > 0 ? (
+            position.totalOutstanding > 0 ? (
               <Link
                 href={`${ROUTES.payments}/new?loanId=${loan.id}`}
                 className="bg-accent text-accent-foreground focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -313,18 +326,37 @@ export default async function LoanDetailPage({
           <LoanBalanceSummary
             totalExpectedRepayment={position.totalExpectedRepayment}
             totalPaid={position.totalPaid}
-            outstanding={position.outstanding}
+            outstanding={position.contractualOutstanding}
             principalPaid={position.principalPaid}
             principalRemaining={position.principalRemaining}
             interestPaid={position.interestPaid}
             interestRemaining={position.interestRemaining}
             unpaidScheduledDue={position.unpaidScheduledDue}
+            penaltyAssessed={position.penaltyAssessed}
+            penaltyPaid={position.penaltyPaid}
+            penaltyRemaining={position.penaltyRemaining}
+            totalOutstanding={position.totalOutstanding}
             postedPaymentCount={position.postedPaymentCount}
             reversedPaymentCount={position.reversedPaymentCount}
             fullyRepaid={position.fullyRepaid}
             reconciles={position.reconciles}
             reconciliationProblem={position.reconciliationProblem}
           />
+        </section>
+      ) : null}
+
+      {/* --- Collection position (Phase 7) -------------------------------- */}
+      {delinquency !== null && contextCan(context, 'delinquency:view') ? (
+        <section aria-labelledby="delinquency-heading" className="min-w-0 space-y-3">
+          <h2 id="delinquency-heading" className="text-text text-lg font-semibold">
+            Collection position
+          </h2>
+
+          <DelinquencyPanel position={delinquency} />
+
+          {penalty !== null && contextCan(context, 'penalties:view') ? (
+            <PenaltyCard penalty={penalty} timeZone={companyBranding.branding.timezone} />
+          ) : null}
         </section>
       ) : null}
 

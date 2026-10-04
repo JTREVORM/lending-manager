@@ -3,6 +3,8 @@ import { Construction } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
 import { PortalPaymentHistory } from '@/components/payments/portal-payment-history';
+import { PortalLoanPosition } from '@/components/delinquency/portal-loan-position';
+import { listClientDelinquency } from '@/lib/data/delinquency';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
@@ -52,15 +54,16 @@ export default async function PortalPage() {
   // policy on `loan_payments` — no capability is involved and none could be:
   // `payments:view` means "read the register" everywhere else.
   //
-  // The balance is deliberately *not* fetched here. `loan_balances` would
-  // resolve for their own loan, but presenting a single outstanding figure in
-  // the portal invites the borrower to treat it as a settlement quote — and an
-  // early-settlement figure is a commercial decision this phase has not been
-  // asked to make. Their payment history is a statement of fact; a balance
-  // would be an offer. Staff quote balances.
-  const [payments, { branding }] = await Promise.all([
+  // Phase 7 adds the position. Phase 6 deliberately withheld a balance here,
+  // because a single figure in a self-service portal reads as a settlement
+  // quote. That worry is answered by showing the *position* rather than a
+  // number — what was missed, what is due today, what remains, and when the
+  // loan ends — which is information a borrower who is behind needs and
+  // should not have to learn from a phone call.
+  const [payments, { branding }, positions] = await Promise.all([
     client === null ? Promise.resolve([]) : listClientPayments(client.id),
     getCompanyBranding(),
+    client === null ? Promise.resolve([]) : listClientDelinquency(client.id),
   ]);
 
   return (
@@ -122,6 +125,23 @@ export default async function PortalPage() {
             </div>
           </div>
         </Card>
+      ) : null}
+
+      {client !== null && positions.length > 0 ? (
+        <section aria-labelledby="my-loans-heading" className="min-w-0 space-y-3">
+          <h2 id="my-loans-heading" className="text-base">
+            Your loans
+          </h2>
+
+          {positions.map((position) => (
+            <PortalLoanPosition key={position.loanId} position={position} />
+          ))}
+
+          <p className="text-text-muted text-sm">
+            These figures are what our records show today. If anything looks wrong, please
+            speak to our staff — bring your receipts and we will check it with you.
+          </p>
+        </section>
       ) : null}
 
       {client !== null && payments.length > 0 ? (

@@ -508,11 +508,19 @@ describeDb('loan row level security', () => {
         // `security_invoker`, so their access is the loans policy's.
         'loan_balances:SELECT',
         'loan_client_snapshots:SELECT',
+        'loan_delinquency:SELECT',
         'loan_guarantor_snapshots:SELECT',
         'loan_identity_snapshots:SELECT',
         'loan_installment_coverage:SELECT',
         'loan_installments:SELECT',
+        'loan_obligations:SELECT',
         'loan_payments:SELECT',
+        // Phase 7. A penalty is read-only to every session: it is written
+        // exclusively by `ensure_penalty_applied`, which runs as the table
+        // owner. No INSERT, no UPDATE, no DELETE — not for the Owner either,
+        // because a charge a staff member could type would not be a penalty.
+        'loan_penalties:SELECT',
+        'loan_penalty_coverage:SELECT',
         'loan_periods:SELECT',
         'loan_schedules:SELECT',
         'loans:INSERT',
@@ -581,6 +589,8 @@ describeDb('loan row level security', () => {
         // grant, because only the trusted functions write them.
         'loan_installments:SELECT',
         'loan_payments:SELECT',
+        // Phase 7 adds a fourth, on the same terms.
+        'loan_penalties:SELECT',
         'loan_periods:SELECT',
         'loan_schedules:SELECT',
         'loans:INSERT',

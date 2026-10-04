@@ -29,6 +29,16 @@ export interface PostPaymentOptions {
   /** Reuse a key to exercise the idempotent replay path. */
   readonly idempotencyKey?: string;
   readonly notes?: string | null;
+  /**
+   * Phase 7. The business instant to post at, which fixes both the business
+   * date and the payment's own `received_at` — they come from one clock, so a
+   * test cannot accidentally place a payment on a different day from the one
+   * it is reasoning about.
+   *
+   * Honoured only because these tests connect as the table owner. No
+   * application path can set it; see migration `20261007000200`.
+   */
+  readonly businessNow?: string;
 }
 
 export interface PaymentOutcome {
@@ -52,11 +62,22 @@ async function runAsCommitted<T>(
       params?: readonly unknown[],
     ) => Promise<Record<string, unknown>[]>,
   ) => Promise<T>,
+  businessNow?: string,
 ): Promise<T> {
   const client = await getClient();
 
   try {
     await client.query('begin');
+
+    // Set before the role switch, while this is still an owner session: the
+    // override is gated on `session_user`, which `set local role` does not
+    // change, but setting it first keeps the ordering obvious.
+    if (businessNow !== undefined) {
+      await client.query(`select set_config('app.business_now', $1, true)`, [
+        businessNow,
+      ]);
+    }
+
     await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
       user.authUserId,
     ]);
@@ -86,18 +107,25 @@ export async function postPayment(
   actor: Pick<TestUser, 'authUserId'>,
   options: PostPaymentOptions,
 ): Promise<string> {
-  return runAsCommitted(actor, async (exec) => {
-    const rows = await exec(`select public.post_payment($1, $2, $3, $4, $5, $6) as id`, [
-      loanId,
-      options.amount,
-      options.method ?? 'cash',
-      options.externalReference ?? null,
-      options.idempotencyKey ?? randomUUID(),
-      options.notes ?? null,
-    ]);
+  return runAsCommitted(
+    actor,
+    async (exec) => {
+      const rows = await exec(
+        `select public.post_payment($1, $2, $3, $4, $5, $6) as id`,
+        [
+          loanId,
+          options.amount,
+          options.method ?? 'cash',
+          options.externalReference ?? null,
+          options.idempotencyKey ?? randomUUID(),
+          options.notes ?? null,
+        ],
+      );
 
-    return String(rows[0]?.id);
-  });
+      return String(rows[0]?.id);
+    },
+    options.businessNow,
+  );
 }
 
 /** Record a payment, reporting a refusal rather than throwing. */
@@ -123,10 +151,15 @@ export async function reversePayment(
   paymentId: string,
   actor: Pick<TestUser, 'authUserId'>,
   reason = 'recorded in error during testing',
+  businessNow?: string,
 ): Promise<void> {
-  await runAsCommitted(actor, async (exec) => {
-    await exec(`select public.reverse_payment($1, $2)`, [paymentId, reason]);
-  });
+  await runAsCommitted(
+    actor,
+    async (exec) => {
+      await exec(`select public.reverse_payment($1, $2)`, [paymentId, reason]);
+    },
+    businessNow,
+  );
 }
 
 /** Reverse a payment, reporting a refusal rather than throwing. */
@@ -134,9 +167,10 @@ export async function tryReversePayment(
   paymentId: string,
   actor: Pick<TestUser, 'authUserId'>,
   reason = 'recorded in error during testing',
+  businessNow?: string,
 ): Promise<PaymentOutcome> {
   try {
-    await reversePayment(paymentId, actor, reason);
+    await reversePayment(paymentId, actor, reason, businessNow);
     return { ok: true, paymentId, message: '' };
   } catch (error) {
     return {
@@ -152,6 +186,11 @@ export interface LoanLedger {
   readonly scheduledTotal: number;
   readonly totalPaid: number;
   readonly outstanding: number;
+  readonly penaltyAssessed: number;
+  readonly penaltyPaid: number;
+  readonly penaltyRemaining: number;
+  readonly totalOutstanding: number;
+  readonly totalCollected: number;
   readonly principalPaid: number;
   readonly principalRemaining: number;
   readonly interestPaid: number;
@@ -169,7 +208,12 @@ export async function readLedger(loanId: string): Promise<LoanLedger> {
     `select b.status,
             b.scheduled_total::text        as scheduled_total,
             b.total_paid::text             as total_paid,
-            b.outstanding::text            as outstanding,
+            b.contractual_outstanding::text as outstanding,
+            b.penalty_assessed::text       as penalty_assessed,
+            b.penalty_paid::text           as penalty_paid,
+            b.penalty_remaining::text      as penalty_remaining,
+            b.total_outstanding::text      as total_outstanding,
+            b.total_collected::text        as total_collected,
             b.principal_paid::text         as principal_paid,
             b.principal_remaining::text    as principal_remaining,
             b.interest_paid::text          as interest_paid,
@@ -190,6 +234,11 @@ export async function readLedger(loanId: string): Promise<LoanLedger> {
     scheduledTotal: Number(row.scheduled_total),
     totalPaid: Number(row.total_paid),
     outstanding: Number(row.outstanding),
+    penaltyAssessed: Number(row.penalty_assessed),
+    penaltyPaid: Number(row.penalty_paid),
+    penaltyRemaining: Number(row.penalty_remaining),
+    totalOutstanding: Number(row.total_outstanding),
+    totalCollected: Number(row.total_collected),
     principalPaid: Number(row.principal_paid),
     principalRemaining: Number(row.principal_remaining),
     interestPaid: Number(row.interest_paid),
@@ -308,6 +357,9 @@ export async function deleteTestPayments(): Promise<void> {
   const GUARDS: readonly { readonly table: string; readonly trigger: string }[] = [
     { table: 'payment_allocations', trigger: 'payment_allocations_no_delete' },
     { table: 'loan_payments', trigger: 'loan_payments_no_delete' },
+    // Phase 7. Clearing the ledger must also clear the charges it paid, or the
+    // next test's loan inherits a penalty nothing explains.
+    { table: 'loan_penalties', trigger: 'loan_penalties_no_delete' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -317,6 +369,7 @@ export async function deleteTestPayments(): Promise<void> {
   try {
     await query(`delete from public.payment_allocations`);
     await query(`delete from public.loan_payments`);
+    await query(`delete from public.loan_penalties`);
   } finally {
     for (const { table, trigger } of GUARDS) {
       await query(`alter table public.${table} enable trigger ${trigger}`);

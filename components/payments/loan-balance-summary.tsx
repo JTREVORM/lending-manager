@@ -18,12 +18,25 @@ import { formatUgx, toUgx } from '@/lib/domain/money';
  * loudly if it ever appears: a borrower must not be shown a balance nobody can
  * stand behind.
  *
- * ## Why "due now" is not called arrears
+ * ## The contract and the penalty are shown apart
  *
- * `unpaidScheduledDue` is the sum of scheduled amounts dated today or earlier
- * that remain uncovered, and nothing more. Whether that is *arrears* depends
- * on a grace period and carries a penalty, both of which are Phase 7's. Naming
- * it arrears here would be making a judgement about a borrower on no basis.
+ * `outstanding` is what remains on the agreement; `penaltyRemaining` is an
+ * expiry charge, which is neither principal nor contractual interest. Folding
+ * the two together would make `principal + interest` stop adding up to the
+ * contractual total, and would hide from a borrower which part of their debt
+ * is the loan they took and which part is a charge for being late.
+ *
+ * `totalOutstanding` is the pair of them, and it is the figure to quote: it is
+ * what a payment is capped at and what must reach zero before the loan clears.
+ *
+ * ## "Due now" versus arrears
+ *
+ * This panel's "due now" is the sum of scheduled amounts dated today or
+ * earlier that remain uncovered. The delinquency panel beside it is where that
+ * figure is broken into past-due arrears and today's collection, and where
+ * lateness and grace are interpreted. Two panels rather than one, because
+ * "what does this loan owe" and "how far behind is this borrower" are
+ * different questions that staff ask at different moments.
  */
 export function LoanBalanceSummary({
   totalExpectedRepayment,
@@ -34,6 +47,10 @@ export function LoanBalanceSummary({
   interestPaid,
   interestRemaining,
   unpaidScheduledDue,
+  penaltyAssessed,
+  penaltyPaid,
+  penaltyRemaining,
+  totalOutstanding,
   postedPaymentCount,
   reversedPaymentCount,
   fullyRepaid,
@@ -48,6 +65,10 @@ export function LoanBalanceSummary({
   readonly interestPaid: number;
   readonly interestRemaining: number;
   readonly unpaidScheduledDue: number;
+  readonly penaltyAssessed: number;
+  readonly penaltyPaid: number;
+  readonly penaltyRemaining: number;
+  readonly totalOutstanding: number;
   readonly postedPaymentCount: number;
   readonly reversedPaymentCount: number;
   readonly fullyRepaid: boolean;
@@ -71,17 +92,26 @@ export function LoanBalanceSummary({
       {fullyRepaid ? (
         <Alert tone="success">
           <span className="font-medium">Fully repaid.</span> Every scheduled collection
-          has been covered and the loan is settled.
+          {penaltyAssessed > 0 ? ' and the penalty have' : ' has'} been covered and the
+          loan is settled.
         </Alert>
       ) : null}
 
       <Card>
         <dl className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="min-w-0">
-            <dt className="text-text-muted text-sm">Outstanding</dt>
+            <dt className="text-text-muted text-sm">Total outstanding</dt>
             <dd className="text-text text-2xl font-semibold tabular-nums">
-              {formatUgx(toUgx(outstanding))}
+              {formatUgx(toUgx(totalOutstanding))}
             </dd>
+            {penaltyRemaining > 0 ? (
+              <dd className="text-text-muted text-xs">
+                {formatUgx(toUgx(outstanding))} on the contract plus{' '}
+                {formatUgx(toUgx(penaltyRemaining))} penalty
+              </dd>
+            ) : (
+              <dd className="text-text-muted text-xs">On the contract</dd>
+            )}
           </div>
 
           <div className="min-w-0">
@@ -138,6 +168,22 @@ export function LoanBalanceSummary({
                 remaining
               </dd>
             </div>
+            {penaltyAssessed > 0 ? (
+              <div className="min-w-0">
+                <dt className="text-text-muted text-sm">Penalty</dt>
+                <dd className="text-text tabular-nums">
+                  {formatUgx(toUgx(penaltyPaid))} paid,{' '}
+                  <span className="font-medium">
+                    {formatUgx(toUgx(penaltyRemaining))}
+                  </span>{' '}
+                  remaining
+                </dd>
+                <dd className="text-text-muted text-xs">
+                  A charge for late settlement. Not part of the loan&rsquo;s principal or
+                  interest.
+                </dd>
+              </div>
+            ) : null}
           </dl>
         </div>
       </Card>

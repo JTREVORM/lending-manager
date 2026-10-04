@@ -459,7 +459,9 @@ describeDb('payments under concurrency', () => {
     );
 
     const negative = await query<{ loan_id: string }>(
-      `select loan_id from public.loan_balances where outstanding < 0`,
+      `select loan_id from public.loan_balances
+        where contractual_outstanding < 0 or total_outstanding < 0
+           or penalty_remaining < 0`,
     );
 
     const overAllocated = await query<{ installment_id: string }>(
@@ -471,15 +473,16 @@ describeDb('payments under concurrency', () => {
     const mismatched = await query<{ loan_number: string }>(
       `select loan_number from public.loan_balances
         where scheduled_total > 0
-          and (total_paid + outstanding <> scheduled_total
-            or posted_payment_total <> total_paid)`,
+          and (total_paid + contractual_outstanding <> scheduled_total
+            or contractual_outstanding + penalty_remaining <> total_outstanding
+            or posted_payment_total <> total_collected)`,
     );
 
     const wrongStatus = await query<{ loan_number: string; status: string }>(
       `select loan_number, status from public.loan_balances
         where scheduled_total > 0
-          and ((status = 'cleared' and outstanding <> 0)
-            or (status = 'active' and outstanding = 0))`,
+          and ((status = 'cleared' and total_outstanding <> 0)
+            or (status = 'active' and total_outstanding = 0))`,
     );
 
     expect(unallocated).toEqual([]);

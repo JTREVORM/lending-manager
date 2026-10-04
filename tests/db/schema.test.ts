@@ -49,6 +49,10 @@ describeDb('tables', () => {
     // scheduled collections that allocate the contractual breakdown.
     'loan_installments',
     'loan_payments',
+    // Phase 7: the one-time expiry penalty. Arrears are *not* here — they are
+    // derived from the schedule, the ledger and the date, so there is no
+    // delinquency table for anybody to edit a borrower into or out of.
+    'loan_penalties',
     'loan_periods',
     'loan_schedules',
     'loans',
@@ -237,6 +241,12 @@ describeDb('foreign keys', () => {
       'loan_payments.loan_id -> loans (r)',
       'loan_payments.recorded_by -> profiles (r)',
       'loan_payments.reversed_by -> profiles (r)',
+      // Phase 7. A penalty cascades with its loan, because a loan deleted
+      // outright takes its whole financial history with it; its client is
+      // RESTRICT, as the payment's is, because a charge must keep naming the
+      // person it was charged to.
+      'loan_penalties.client_id -> clients (r)',
+      'loan_penalties.loan_id -> loans (c)',
       'loan_periods.loan_id -> loans (c)',
       'loan_schedules.generated_by -> profiles (r)',
       'loan_schedules.loan_id -> loans (c)',
@@ -260,6 +270,7 @@ describeDb('foreign keys', () => {
       'payment_allocations.installment_id -> loan_installments (r)',
       'payment_allocations.loan_id -> loans (r)',
       'payment_allocations.payment_id -> loan_payments (r)',
+      'payment_allocations.penalty_id -> loan_penalties (r)',
       'profiles.auth_user_id -> users (r)',
       'reference_sequences.scope -> reference_formats (r)',
       // Phase 2. RESTRICT here too: a capability cannot be deleted out from

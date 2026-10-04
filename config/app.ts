@@ -55,7 +55,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  * Delivery phase of this codebase. Used by the UI to label functionality that
  * is deliberately not built yet, so staff are never shown a dead control.
  */
-export const CURRENT_PHASE = 6 as const;
+export const CURRENT_PHASE = 7 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
@@ -67,6 +67,7 @@ export const ROUTES = {
   clients: '/clients',
   loans: '/loans',
   payments: '/payments',
+  overdue: '/overdue',
   settings: '/settings',
   users: '/users',
   audit: '/audit',

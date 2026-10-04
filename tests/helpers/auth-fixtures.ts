@@ -113,6 +113,10 @@ export async function deleteTestUsers(): Promise<void> {
     // history must not cascade away — so the ledger goes before the schedule.
     { table: 'payment_allocations', trigger: 'payment_allocations_no_delete' },
     { table: 'loan_payments', trigger: 'loan_payments_no_delete' },
+    // Phase 7. A penalty is append-only too, and `payment_allocations`
+    // references it with `on delete restrict` — a charge's payment history
+    // must not cascade away — so the ledger goes before the penalties.
+    { table: 'loan_penalties', trigger: 'loan_penalties_no_delete' },
     { table: 'loan_installments', trigger: 'loan_installments_no_delete' },
     { table: 'loan_schedules', trigger: 'loan_schedules_no_delete' },
     // Phase 4. The loan snapshots and the contractual breakdown are
@@ -137,6 +141,7 @@ export async function deleteTestUsers(): Promise<void> {
     // loans they hang off.
     await query(`delete from public.payment_allocations`);
     await query(`delete from public.loan_payments`);
+    await query(`delete from public.loan_penalties`);
     await query(`delete from public.loan_installments`);
     await query(`delete from public.loan_schedules`);
     await query(`delete from public.loan_periods`);

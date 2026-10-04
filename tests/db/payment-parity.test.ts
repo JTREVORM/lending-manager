@@ -25,7 +25,7 @@ import {
   deriveLoanBalance,
   minimumAcceptablePayment,
   outstandingFrom,
-  type InstallmentObligation,
+  type PaymentObligation,
 } from '@/lib/domain/payment';
 
 /**
@@ -54,19 +54,22 @@ if (!hasDatabase) {
 }
 
 /** The TypeScript view of a loan's obligations, read from the database. */
-async function obligationsFor(loanId: string): Promise<readonly InstallmentObligation[]> {
+async function obligationsFor(loanId: string): Promise<readonly PaymentObligation[]> {
   const coverage = await readCoverage(loanId);
 
   return coverage.map((row) => ({
-    installmentId: `inst-${String(row.installmentNumber)}`,
-    installmentNumber: row.installmentNumber,
-    dueDate: toBusinessDate(row.dueDate),
+    obligationId: `inst-${String(row.installmentNumber)}`,
+    kind: 'installment' as const,
+    sequenceNumber: row.installmentNumber,
+    effectiveDate: toBusinessDate(row.dueDate),
     expectedAmount: toUgx(row.expectedAmount),
     scheduledPrincipal: toUgx(row.scheduledPrincipal),
     scheduledInterest: toUgx(row.scheduledInterest),
+    scheduledPenalty: toUgx(0),
     allocatedAmount: toUgx(row.allocatedAmount),
     allocatedPrincipal: toUgx(row.allocatedPrincipal),
     allocatedInterest: toUgx(row.allocatedInterest),
+    allocatedPenalty: toUgx(0),
   }));
 }
 
@@ -164,7 +167,7 @@ describeDb('payment engine parity', () => {
           context,
         ).toEqual(
           predicted.allocations.map((entry) => ({
-            n: entry.installmentNumber,
+            n: entry.sequenceNumber,
             amount: entry.allocatedAmount,
             principal: entry.allocatedPrincipal,
             interest: entry.allocatedInterest,
@@ -279,7 +282,7 @@ describeDb('payment engine parity', () => {
       for (const [index, entry] of actual.entries()) {
         const expected = predicted.allocations[index];
         const target = obligations.find(
-          (row) => row.installmentNumber === entry.installmentNumber,
+          (row) => row.sequenceNumber === entry.installmentNumber,
         );
 
         expect(expected, `allocation ${String(index)}`).toBeDefined();
@@ -314,9 +317,9 @@ describeDb('payment engine parity', () => {
     const broken = await query<{ loan_number: string }>(
       `select loan_number from public.loan_balances
         where scheduled_total > 0
-          and (total_paid + outstanding <> scheduled_total
-            or posted_payment_total <> total_paid
-            or outstanding < 0
+          and (total_paid + contractual_outstanding <> scheduled_total
+            or posted_payment_total <> total_collected
+            or contractual_outstanding < 0
             or principal_paid + principal_remaining <> contractual_principal
             or interest_paid + interest_remaining <> contractual_interest)`,
     );

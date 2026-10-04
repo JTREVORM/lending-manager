@@ -44,7 +44,7 @@ import {
   remainingPrincipal,
   unpaidScheduledDue,
   validatePaymentAmount,
-  type InstallmentObligation,
+  type PaymentObligation,
 } from '@/lib/domain/payment';
 import { generateRepaymentSchedule } from '@/lib/domain/repayment-schedule';
 
@@ -63,22 +63,49 @@ function obligation(
   interest: number,
   paidPrincipal = 0,
   paidInterest = 0,
-): InstallmentObligation {
+): PaymentObligation {
   return {
-    installmentId: `inst-${String(installmentNumber)}`,
-    installmentNumber,
-    dueDate: d(dueDate),
+    obligationId: `inst-${String(installmentNumber)}`,
+    kind: 'installment',
+    sequenceNumber: installmentNumber,
+    effectiveDate: d(dueDate),
     expectedAmount: toUgx(principal + interest),
     scheduledPrincipal: toUgx(principal),
     scheduledInterest: toUgx(interest),
+    scheduledPenalty: toUgx(0),
     allocatedAmount: toUgx(paidPrincipal + paidInterest),
     allocatedPrincipal: toUgx(paidPrincipal),
     allocatedInterest: toUgx(paidInterest),
+    allocatedPenalty: toUgx(0),
+  };
+}
+
+/**
+ * A penalty obligation, stated literally.
+ *
+ * Phase 7. `paid` is what earlier posted payments already covered of it. A
+ * penalty has no principal and no interest components at all, which the engine
+ * refuses to let it carry.
+ */
+function penalty(effectiveDate: string, amount: number, paid = 0): PaymentObligation {
+  return {
+    obligationId: 'penalty-1',
+    kind: 'penalty',
+    sequenceNumber: 1,
+    effectiveDate: d(effectiveDate),
+    expectedAmount: toUgx(amount),
+    scheduledPrincipal: toUgx(0),
+    scheduledInterest: toUgx(0),
+    scheduledPenalty: toUgx(amount),
+    allocatedAmount: toUgx(paid),
+    allocatedPrincipal: toUgx(0),
+    allocatedInterest: toUgx(0),
+    allocatedPenalty: toUgx(paid),
   };
 }
 
 /** Three identical UGX 4,000 collections — principal 3,000, interest 1,000. */
-function threeStandardCollections(): readonly InstallmentObligation[] {
+function threeStandardCollections(): readonly PaymentObligation[] {
   return [
     obligation(1, '2026-11-01', 3_000, 1_000),
     obligation(2, '2026-11-02', 3_000, 1_000),
@@ -92,7 +119,7 @@ function contractObligations(
   termMonths: number,
   intervalDays: number,
   disbursed = '2026-10-10',
-): readonly InstallmentObligation[] {
+): readonly PaymentObligation[] {
   const contract = calculateLoan({
     principal: toUgx(principal),
     monthlyInterestRateBps: 1_500,
@@ -106,15 +133,18 @@ function contractObligations(
   });
 
   return schedule.installments.map((row) => ({
-    installmentId: `inst-${String(row.installmentNumber)}`,
-    installmentNumber: row.installmentNumber,
-    dueDate: row.dueDate,
+    obligationId: `inst-${String(row.installmentNumber)}`,
+    kind: 'installment' as const,
+    sequenceNumber: row.installmentNumber,
+    effectiveDate: row.dueDate,
     expectedAmount: row.expectedAmount,
     scheduledPrincipal: row.scheduledPrincipal,
     scheduledInterest: row.scheduledInterest,
+    scheduledPenalty: toUgx(0),
     allocatedAmount: toUgx(0),
     allocatedPrincipal: toUgx(0),
     allocatedInterest: toUgx(0),
+    allocatedPenalty: toUgx(0),
   }));
 }
 
@@ -231,7 +261,7 @@ describe('allocation order', () => {
       obligation(2, '2026-11-02', 3_000, 1_000),
     ];
 
-    expect(inAllocationOrder(shuffled).map((row) => row.installmentNumber)).toEqual([
+    expect(inAllocationOrder(shuffled).map((row) => row.sequenceNumber)).toEqual([
       1, 2, 3,
     ]);
   });
@@ -243,7 +273,7 @@ describe('allocation order', () => {
       obligation(7, '2026-11-01', 1, 0),
     ];
 
-    expect(inAllocationOrder(sameDay).map((row) => row.installmentNumber)).toEqual([
+    expect(inAllocationOrder(sameDay).map((row) => row.sequenceNumber)).toEqual([
       4, 7, 9,
     ]);
   });
@@ -253,7 +283,7 @@ describe('allocation order', () => {
 
     inAllocationOrder(input);
 
-    expect(input.map((row) => row.installmentNumber)).toEqual([3, 1]);
+    expect(input.map((row) => row.sequenceNumber)).toEqual([3, 1]);
   });
 });
 
@@ -400,7 +430,8 @@ describe('specification scenario A — exact collection payment', () => {
     expect(plan.allocations).toHaveLength(1);
     // Interest first: the full 1,000 of interest, then 3,000 of principal.
     expect(plan.allocations[0]).toMatchObject({
-      installmentNumber: 1,
+      kind: 'installment',
+      sequenceNumber: 1,
       allocatedAmount: 4_000,
       allocatedInterest: 1_000,
       allocatedPrincipal: 3_000,
@@ -427,7 +458,7 @@ describe('specification scenario B — UGX 4,000 due, pays UGX 8,000', () => {
     expect(plan.allocations.map((entry) => entry.allocatedAmount)).toEqual([
       4_000, 4_000,
     ]);
-    expect(plan.allocations.map((entry) => entry.installmentNumber)).toEqual([1, 2]);
+    expect(plan.allocations.map((entry) => entry.sequenceNumber)).toEqual([1, 2]);
     // Both fully covered, each interest-first.
     expect(plan.totalInterest).toBe(2_000);
     expect(plan.totalPrincipal).toBe(6_000);
@@ -450,7 +481,7 @@ describe('specification scenario C — UGX 8,000 due, pays UGX 10,000', () => {
     // The third collection takes 2,000: interest 1,000 first, then 1,000 of
     // principal.
     expect(plan.allocations[2]).toMatchObject({
-      installmentNumber: 3,
+      sequenceNumber: 3,
       allocatedInterest: 1_000,
       allocatedPrincipal: 1_000,
     });
@@ -463,7 +494,7 @@ describe('specification scenario C — UGX 8,000 due, pays UGX 10,000', () => {
     // And the future collection keeps its own date and amount — only its
     // coverage changed.
     const after = applyPlan(obligations, plan);
-    expect(after[2]?.dueDate).toBe('2026-11-03');
+    expect(after[2]?.effectiveDate).toBe('2026-11-03');
     expect(after[2]?.expectedAmount).toBe(4_000);
     expect(remainingAmount(after[2]!)).toBe(2_000);
   });
@@ -501,21 +532,21 @@ describe('specification scenario E — reversing the final payment', () => {
     const plan = allocatePayment({ amount: toUgx(10_000), obligations });
     const cleared = applyPlan(obligations, plan);
 
-    expect(deriveLoanBalance(cleared).outstanding).toBe(0);
+    expect(deriveLoanBalance(cleared).contractualOutstanding).toBe(0);
 
     // A reversal removes the payment's allocations from the effective set.
     // Modelled here by dropping back to the pre-payment obligations, which is
     // exactly what excluding a reversed payment's rows achieves.
     const reopened = obligations;
 
-    expect(deriveLoanBalance(reopened).outstanding).toBe(10_000);
+    expect(deriveLoanBalance(reopened).contractualOutstanding).toBe(10_000);
     expect(deriveLoanBalance(reopened).fullyRepaid).toBe(false);
 
     // Every collection is effectively unpaid again, and not one date or
     // amount moved.
     for (const [index, row] of reopened.entries()) {
       expect(remainingAmount(row)).toBe(row.expectedAmount);
-      expect(row.dueDate).toBe(obligations[index]?.dueDate);
+      expect(row.effectiveDate).toBe(obligations[index]?.effectiveDate);
       expect(row.expectedAmount).toBe(obligations[index]?.expectedAmount);
     }
   });
@@ -635,11 +666,11 @@ describe('the interest-first rule', () => {
 
     for (const amount of [floor, floor + 1, 50_000, 123_456, 400_000]) {
       const plan = allocatePayment({ amount: toUgx(amount), obligations });
-      const byId = new Map(obligations.map((row) => [row.installmentId, row]));
+      const byId = new Map(obligations.map((row) => [row.obligationId, row]));
 
       for (const [index, entry] of plan.allocations.entries()) {
         const isLast = index === plan.allocations.length - 1;
-        const target = byId.get(entry.installmentId);
+        const target = byId.get(entry.obligationId);
 
         if (!isLast) {
           expect(entry.allocatedAmount, `${String(amount)} / ${String(index)}`).toBe(
@@ -678,7 +709,7 @@ describe('paying ahead', () => {
 
     // Three rows still, with their original dates and amounts.
     expect(after).toHaveLength(3);
-    expect(after.map((row) => row.dueDate)).toEqual([
+    expect(after.map((row) => row.effectiveDate)).toEqual([
       '2026-11-01',
       '2026-11-02',
       '2026-11-03',
@@ -698,7 +729,7 @@ describe('paying ahead', () => {
     const plan = allocatePayment({ amount: toUgx(tenDays), obligations });
 
     expect(plan.allocations).toHaveLength(10);
-    expect(plan.allocations.map((entry) => entry.installmentNumber)).toEqual([
+    expect(plan.allocations.map((entry) => entry.sequenceNumber)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
   });
@@ -714,7 +745,7 @@ describe('paying ahead', () => {
 
     expect(second.allocations).toHaveLength(1);
     expect(second.allocations[0]).toMatchObject({
-      installmentNumber: 3,
+      sequenceNumber: 3,
       allocatedAmount: 2_000,
       // Collection 3's interest was already covered by the first payment, so
       // this is all principal.
@@ -775,22 +806,25 @@ describe('what allocation refuses', () => {
   });
 
   it('refuses obligations whose components do not add up', () => {
-    const corrupt: InstallmentObligation[] = [
+    const corrupt: PaymentObligation[] = [
       {
-        installmentId: 'inst-1',
-        installmentNumber: 1,
-        dueDate: d('2026-11-01'),
+        obligationId: 'inst-1',
+        kind: 'installment',
+        sequenceNumber: 1,
+        effectiveDate: d('2026-11-01'),
         expectedAmount: toUgx(9_999),
         scheduledPrincipal: toUgx(3_000),
         scheduledInterest: toUgx(1_000),
+        scheduledPenalty: toUgx(0),
         allocatedAmount: toUgx(0),
         allocatedPrincipal: toUgx(0),
         allocatedInterest: toUgx(0),
+        allocatedPenalty: toUgx(0),
       },
     ];
 
     expect(() => allocatePayment({ amount: toUgx(100), obligations: corrupt })).toThrow(
-      /not its scheduled principal plus interest/,
+      /is not its scheduled components/,
     );
   });
 
@@ -803,22 +837,25 @@ describe('what allocation refuses', () => {
   });
 
   it('refuses obligations whose allocated total disagrees with its components', () => {
-    const corrupt: InstallmentObligation[] = [
+    const corrupt: PaymentObligation[] = [
       {
-        installmentId: 'inst-1',
-        installmentNumber: 1,
-        dueDate: d('2026-11-01'),
+        obligationId: 'inst-1',
+        kind: 'installment',
+        sequenceNumber: 1,
+        effectiveDate: d('2026-11-01'),
         expectedAmount: toUgx(4_000),
         scheduledPrincipal: toUgx(3_000),
         scheduledInterest: toUgx(1_000),
+        scheduledPenalty: toUgx(0),
         allocatedAmount: toUgx(500),
         allocatedPrincipal: toUgx(100),
         allocatedInterest: toUgx(100),
+        allocatedPenalty: toUgx(0),
       },
     ];
 
     expect(() => allocatePayment({ amount: toUgx(100), obligations: corrupt })).toThrow(
-      /allocated principal plus interest/,
+      /not the sum of its allocated components/,
     );
   });
 });
@@ -837,11 +874,18 @@ describe('balance derivation', () => {
       contractualInterest: 45_000,
       totalExpectedRepayment: 245_000,
       totalPaid: 0,
-      outstanding: 245_000,
+      contractualOutstanding: 245_000,
       principalPaid: 0,
       principalRemaining: 200_000,
       interestPaid: 0,
       interestRemaining: 45_000,
+      // Phase 7. No penalty on this loan, so the total owed is the contract
+      // and nothing is recorded in the penalty figures.
+      penaltyAssessed: 0,
+      penaltyPaid: 0,
+      penaltyRemaining: 0,
+      totalOutstanding: 245_000,
+      totalCollected: 0,
       fullyRepaid: false,
     });
   });
@@ -860,7 +904,7 @@ describe('balance derivation', () => {
       const balance = deriveLoanBalance(obligations);
 
       expect(balance.totalPaid).toBe(paid);
-      expect(balance.outstanding).toBe(245_000 - paid);
+      expect(balance.contractualOutstanding).toBe(245_000 - paid);
       expect(balance.principalPaid + balance.interestPaid).toBe(paid);
       assertBalanceInvariants(balance, {
         storedTotalExpectedRepayment: 245_000,
@@ -874,7 +918,7 @@ describe('balance derivation', () => {
     const plan = allocatePayment({ amount: toUgx(780_000), obligations });
     const balance = deriveLoanBalance(applyPlan(obligations, plan));
 
-    expect(balance.outstanding).toBe(0);
+    expect(balance.contractualOutstanding).toBe(0);
     expect(balance.principalRemaining).toBe(0);
     expect(balance.interestRemaining).toBe(0);
     expect(balance.principalPaid).toBe(600_000);
@@ -890,7 +934,7 @@ describe('balance derivation', () => {
     for (const amount of [4_000, 8_000, 12_000]) {
       const plan = allocatePayment({ amount: toUgx(amount), obligations });
       expect(
-        deriveLoanBalance(applyPlan(obligations, plan)).outstanding,
+        deriveLoanBalance(applyPlan(obligations, plan)).contractualOutstanding,
       ).toBeGreaterThanOrEqual(0);
     }
   });
@@ -904,9 +948,9 @@ describe('assertBalanceInvariants', () => {
   });
 
   it('catches paid plus outstanding not equalling the total', () => {
-    expect(() => assertBalanceInvariants({ ...sound, outstanding: toUgx(1) })).toThrow(
-      /paid plus outstanding/,
-    );
+    expect(() =>
+      assertBalanceInvariants({ ...sound, contractualOutstanding: toUgx(1) }),
+    ).toThrow(/paid plus outstanding/);
   });
 
   it('catches a negative outstanding balance', () => {
@@ -914,7 +958,7 @@ describe('assertBalanceInvariants', () => {
       assertBalanceInvariants({
         ...sound,
         totalPaid: toUgx(245_001),
-        outstanding: -1 as UgxAmount,
+        contractualOutstanding: -1 as UgxAmount,
         principalPaid: toUgx(200_001),
         principalRemaining: -1 as UgxAmount,
         interestPaid: toUgx(45_000),
@@ -1012,11 +1056,13 @@ describe('assertAllocationInvariants', () => {
       ...sound,
       allocations: [
         {
-          installmentId: 'inst-1',
-          installmentNumber: 1,
+          obligationId: 'inst-1',
+          kind: 'installment' as const,
+          sequenceNumber: 1,
           allocatedAmount: toUgx(10_000),
           allocatedPrincipal: toUgx(9_000),
           allocatedInterest: toUgx(1_000),
+          allocatedPenalty: toUgx(0),
         },
       ],
       totalPrincipal: toUgx(9_000),
@@ -1039,11 +1085,13 @@ describe('assertAllocationInvariants', () => {
       amount: toUgx(2_000),
       allocations: [
         {
-          installmentId: 'inst-1',
-          installmentNumber: 1,
+          obligationId: 'inst-1',
+          kind: 'installment' as const,
+          sequenceNumber: 1,
           allocatedAmount: toUgx(2_000),
           allocatedPrincipal: toUgx(2_000),
           allocatedInterest: toUgx(0),
+          allocatedPenalty: toUgx(0),
         },
       ],
       totalPrincipal: toUgx(2_000),
@@ -1064,11 +1112,13 @@ describe('assertAllocationInvariants', () => {
       amount: toUgx(4_000),
       allocations: [
         {
-          installmentId: 'inst-2',
-          installmentNumber: 2,
+          obligationId: 'inst-2',
+          kind: 'installment' as const,
+          sequenceNumber: 2,
           allocatedAmount: toUgx(4_000),
           allocatedPrincipal: toUgx(3_000),
           allocatedInterest: toUgx(1_000),
+          allocatedPenalty: toUgx(0),
         },
       ],
       totalPrincipal: toUgx(3_000),
@@ -1079,7 +1129,7 @@ describe('assertAllocationInvariants', () => {
     };
 
     expect(() => assertAllocationInvariants(tampered, obligations)).toThrow(
-      /installment 1 was skipped while still unpaid/,
+      /collection 1 was skipped while still unpaid/,
     );
   });
 
@@ -1089,18 +1139,22 @@ describe('assertAllocationInvariants', () => {
       amount: toUgx(5_000),
       allocations: [
         {
-          installmentId: 'inst-1',
-          installmentNumber: 1,
+          obligationId: 'inst-1',
+          kind: 'installment' as const,
+          sequenceNumber: 1,
           allocatedAmount: toUgx(1_000),
           allocatedPrincipal: toUgx(0),
           allocatedInterest: toUgx(1_000),
+          allocatedPenalty: toUgx(0),
         },
         {
-          installmentId: 'inst-2',
-          installmentNumber: 2,
+          obligationId: 'inst-2',
+          kind: 'installment' as const,
+          sequenceNumber: 2,
           allocatedAmount: toUgx(4_000),
           allocatedPrincipal: toUgx(3_000),
           allocatedInterest: toUgx(1_000),
+          allocatedPenalty: toUgx(0),
         },
       ],
       totalPrincipal: toUgx(3_000),
@@ -1140,11 +1194,13 @@ describe('assertAllocationInvariants', () => {
       amount: toUgx(4_000),
       allocations: [
         {
-          installmentId: 'inst-from-elsewhere',
-          installmentNumber: 1,
+          obligationId: 'inst-from-elsewhere',
+          kind: 'installment' as const,
+          sequenceNumber: 1,
           allocatedAmount: toUgx(4_000),
           allocatedPrincipal: toUgx(3_000),
           allocatedInterest: toUgx(1_000),
+          allocatedPenalty: toUgx(0),
         },
       ],
       totalPrincipal: toUgx(3_000),
@@ -1155,17 +1211,19 @@ describe('assertAllocationInvariants', () => {
     };
 
     expect(() => assertAllocationInvariants(tampered, obligations)).toThrow(
-      /not one of this loan's collections/,
+      /not one of this loan's obligations/,
     );
   });
 
   it('catches two allocations to one installment from one payment', () => {
     const half = {
-      installmentId: 'inst-1',
-      installmentNumber: 1,
+      obligationId: 'inst-1',
+      kind: 'installment' as const,
+      sequenceNumber: 1,
       allocatedAmount: toUgx(2_000),
       allocatedPrincipal: toUgx(1_000),
       allocatedInterest: toUgx(1_000),
+      allocatedPenalty: toUgx(0),
     };
 
     const tampered = {
@@ -1185,6 +1243,264 @@ describe('assertAllocationInvariants', () => {
     expect(() => assertAllocationInvariants(tampered, obligations)).toThrow(
       /allocated to twice by one payment/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7: the penalty as an obligation
+// ---------------------------------------------------------------------------
+
+describe('allocating to a penalty', () => {
+  /**
+   * Three UGX 4,000 collections and a UGX 6,000 penalty effective after all
+   * of them — which is where a penalty's effective date always falls, because
+   * it is the day after the grace period that follows the final collection.
+   */
+  function withPenalty(
+    paid: readonly number[] = [0, 0, 0],
+    penaltyPaid = 0,
+  ): readonly PaymentObligation[] {
+    return [
+      obligation(
+        1,
+        '2026-11-01',
+        3_000,
+        1_000,
+        (paid[0] ?? 0) * 0.75,
+        (paid[0] ?? 0) * 0.25,
+      ),
+      obligation(
+        2,
+        '2026-11-02',
+        3_000,
+        1_000,
+        (paid[1] ?? 0) * 0.75,
+        (paid[1] ?? 0) * 0.25,
+      ),
+      obligation(
+        3,
+        '2026-11-03',
+        3_000,
+        1_000,
+        (paid[2] ?? 0) * 0.75,
+        (paid[2] ?? 0) * 0.25,
+      ),
+      penalty('2026-11-08', 6_000, penaltyPaid),
+    ];
+  }
+
+  it('sorts the penalty last, after every collection', () => {
+    const ordered = inAllocationOrder(withPenalty());
+
+    expect(ordered.map((row) => row.obligationId)).toEqual([
+      'inst-1',
+      'inst-2',
+      'inst-3',
+      'penalty-1',
+    ]);
+  });
+
+  it('counts the penalty in what the borrower owes', () => {
+    // 3 x 4,000 + 6,000.
+    expect(outstandingFrom(withPenalty())).toBe(18_000);
+  });
+
+  it('covers the whole contract before it touches the charge', () => {
+    const obligations = withPenalty();
+    const plan = allocatePayment({ amount: toUgx(18_000), obligations });
+
+    expect(plan.allocations.map((entry) => entry.kind)).toEqual([
+      'installment',
+      'installment',
+      'installment',
+      'penalty',
+    ]);
+    // 3,000 principal x 3; 1,000 interest x 3; 6,000 penalty.
+    expect(plan.totalPrincipal).toBe(9_000);
+    expect(plan.totalInterest).toBe(3_000);
+    expect(plan.totalPenalty).toBe(6_000);
+    expect(plan.clearsLoan).toBe(true);
+  });
+
+  it('reaches the penalty only once the contract is settled', () => {
+    const obligations = withPenalty();
+    // 12,000 exactly settles the three collections and no more.
+    const plan = allocatePayment({ amount: toUgx(12_000), obligations });
+
+    expect(plan.allocations).toHaveLength(3);
+    expect(plan.totalPenalty).toBe(0);
+    expect(plan.outstandingAfter).toBe(6_000);
+    expect(plan.clearsLoan).toBe(false);
+  });
+
+  it('takes the whole of a penalty allocation as penalty, never as interest', () => {
+    // The classification rule. A penalty recorded as interest would misstate
+    // what the borrower was charged for, and the engine refuses it.
+    const obligations = withPenalty([4_000, 4_000, 4_000]);
+    const plan = allocatePayment({ amount: toUgx(6_000), obligations });
+
+    expect(plan.allocations).toHaveLength(1);
+    expect(plan.allocations[0]).toMatchObject({
+      kind: 'penalty',
+      allocatedAmount: 6_000,
+      allocatedPenalty: 6_000,
+      allocatedPrincipal: 0,
+      allocatedInterest: 0,
+    });
+    expect(plan.totalInterest).toBe(0);
+    expect(plan.totalPrincipal).toBe(0);
+  });
+
+  it('part-pays a penalty when one payment spills into it', () => {
+    // The only way a penalty is partly covered: a payment large enough to
+    // settle the contract and spill over. The minimum-payment rule means a
+    // payment *aimed* at a penalty must cover what is left of it.
+    const obligations = withPenalty();
+    const plan = allocatePayment({ amount: toUgx(15_000), obligations });
+
+    expect(plan.allocations).toHaveLength(4);
+    expect(plan.allocations[3]).toMatchObject({
+      kind: 'penalty',
+      // 15,000 − 12,000 of contract.
+      allocatedAmount: 3_000,
+      allocatedPenalty: 3_000,
+      allocatedPrincipal: 0,
+      allocatedInterest: 0,
+    });
+    expect(plan.outstandingAfter).toBe(3_000);
+    expect(plan.clearsLoan).toBe(false);
+
+    // And the next payment finishes it, with the minimum now 3,000.
+    const after = applyPlan(obligations, plan);
+    expect(minimumAcceptablePayment(after)).toBe(3_000);
+
+    const second = allocatePayment({ amount: toUgx(3_000), obligations: after });
+    expect(second.allocations[0]).toMatchObject({ allocatedPenalty: 3_000 });
+    expect(second.clearsLoan).toBe(true);
+  });
+
+  it('refuses a payment smaller than what is left of the penalty', () => {
+    // With the contract settled, the penalty is the earliest unpaid
+    // obligation, so the ordinary minimum rule applies to it unchanged.
+    const obligations = withPenalty([4_000, 4_000, 4_000]);
+
+    expect(validatePaymentAmount(2_500, obligations)).toEqual({
+      code: 'below_minimum',
+      detail: 6_000,
+    });
+    expect(() => allocatePayment({ amount: toUgx(2_500), obligations })).toThrow(
+      /smallest payment accepted now is UGX 6,000/,
+    );
+  });
+
+  // =========================================================================
+  it('specification §95 — the minimum is the earliest collection while one is unpaid', () => {
+    expect(minimumAcceptablePayment(withPenalty())).toBe(4_000);
+    // Even when the penalty is larger than any collection.
+    expect(minimumAcceptablePayment(withPenalty([4_000, 0, 0]))).toBe(4_000);
+  });
+
+  it('specification §95 — the minimum becomes the penalty once the contract is paid', () => {
+    expect(minimumAcceptablePayment(withPenalty([4_000, 4_000, 4_000]))).toBe(6_000);
+    // And what is left of it after a part-payment.
+    expect(minimumAcceptablePayment(withPenalty([4_000, 4_000, 4_000], 2_500))).toBe(
+      3_500,
+    );
+  });
+
+  it('specification §96 — the cap includes the penalty', () => {
+    const obligations = withPenalty([4_000, 4_000, 4_000]);
+
+    // 6,000 is the whole remaining obligation and is accepted.
+    expect(validatePaymentAmount(6_000, obligations)).toBeNull();
+    // 6,001 is not, and the message names the figure.
+    expect(validatePaymentAmount(6_001, obligations)).toEqual({
+      code: 'exceeds_outstanding',
+      detail: 6_000,
+    });
+  });
+
+  it('refuses a penalty obligation carrying principal or interest', () => {
+    const corrupt: PaymentObligation[] = [
+      {
+        ...penalty('2026-11-08', 6_000),
+        scheduledPrincipal: toUgx(1_000),
+        scheduledPenalty: toUgx(5_000),
+      },
+    ];
+
+    expect(() => allocatePayment({ amount: toUgx(100), obligations: corrupt })).toThrow(
+      /a penalty is neither/,
+    );
+  });
+
+  it('refuses a collection carrying a penalty component', () => {
+    const corrupt: PaymentObligation[] = [
+      {
+        ...obligation(1, '2026-11-01', 3_000, 1_000),
+        expectedAmount: toUgx(5_000),
+        scheduledPenalty: toUgx(1_000),
+      },
+    ];
+
+    expect(() => allocatePayment({ amount: toUgx(100), obligations: corrupt })).toThrow(
+      /a collection has none/,
+    );
+  });
+
+  it('keeps the penalty out of the contractual balance figures', () => {
+    // §130. The penalty must not contaminate principal or interest totals.
+    const balance = deriveLoanBalance(withPenalty([4_000, 0, 0], 1_000));
+
+    expect(balance.contractualPrincipal).toBe(9_000);
+    expect(balance.contractualInterest).toBe(3_000);
+    expect(balance.totalExpectedRepayment).toBe(12_000);
+    // 3,000 principal + 1,000 interest on the first collection.
+    expect(balance.totalPaid).toBe(4_000);
+    expect(balance.contractualOutstanding).toBe(8_000);
+
+    expect(balance.penaltyAssessed).toBe(6_000);
+    expect(balance.penaltyPaid).toBe(1_000);
+    expect(balance.penaltyRemaining).toBe(5_000);
+
+    // 8,000 + 5,000.
+    expect(balance.totalOutstanding).toBe(13_000);
+    // 4,000 + 1,000: what reconciles against the payments themselves.
+    expect(balance.totalCollected).toBe(5_000);
+    expect(balance.fullyRepaid).toBe(false);
+
+    expect(() =>
+      assertBalanceInvariants(balance, { postedPaymentTotal: 5_000 }),
+    ).not.toThrow();
+  });
+
+  it('is not fully repaid while a penalty stands, however settled the contract', () => {
+    // §131. The clearance rule, stated on the derived balance.
+    const balance = deriveLoanBalance(withPenalty([4_000, 4_000, 4_000]));
+
+    expect(balance.contractualOutstanding).toBe(0);
+    expect(balance.penaltyRemaining).toBe(6_000);
+    expect(balance.totalOutstanding).toBe(6_000);
+    expect(balance.fullyRepaid).toBe(false);
+
+    const settled = deriveLoanBalance(withPenalty([4_000, 4_000, 4_000], 6_000));
+    expect(settled.totalOutstanding).toBe(0);
+    expect(settled.fullyRepaid).toBe(true);
+  });
+
+  it('reconciles the headline totals against the payments', () => {
+    // A payment allocated to a penalty is still money received, so the
+    // reconciliation compares against `totalCollected`. Comparing against the
+    // contractual figure alone would report penalty money as missing.
+    const balance = deriveLoanBalance(withPenalty([4_000, 4_000, 4_000], 6_000));
+
+    expect(() =>
+      assertBalanceInvariants(balance, { postedPaymentTotal: 18_000 }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertBalanceInvariants(balance, { postedPaymentTotal: 12_000 }),
+    ).toThrow(/posted payments total 12000 but allocations total 18000/);
   });
 });
 
@@ -1237,7 +1553,7 @@ describe('generated payment sequences', () => {
         // Never over-allocated, never negative, always reconciled.
         const balance = deriveLoanBalance(obligations);
         expect(balance.totalPaid, context).toBe(paid);
-        expect(balance.outstanding, context).toBe(contractTotal - paid);
+        expect(balance.contractualOutstanding, context).toBe(contractTotal - paid);
         assertBalanceInvariants(balance, {
           storedTotalExpectedRepayment: contractTotal,
           postedPaymentTotal: paid,
@@ -1247,7 +1563,7 @@ describe('generated payment sequences', () => {
       expect(paid).toBe(contractTotal);
 
       const final = deriveLoanBalance(obligations);
-      expect(final.outstanding).toBe(0);
+      expect(final.contractualOutstanding).toBe(0);
       expect(final.principalRemaining).toBe(0);
       expect(final.interestRemaining).toBe(0);
       expect(final.fullyRepaid).toBe(true);

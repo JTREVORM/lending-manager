@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Banknote,
   HeartHandshake,
   LayoutDashboard,
@@ -91,6 +92,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // history through the portal, not this entry.
     permission: 'payments:view',
     phase: 6,
+  },
+  {
+    href: ROUTES.overdue,
+    label: 'Overdue',
+    shortLabel: 'Late',
+    icon: AlertTriangle,
+    // Its own capability. A borrower sees their own arrears in the portal and
+    // never this directory.
+    permission: 'delinquency:view',
+    phase: 7,
   },
   {
     href: ROUTES.users,

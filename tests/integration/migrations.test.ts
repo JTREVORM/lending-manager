@@ -355,6 +355,11 @@ describe('column type discipline', () => {
       // `updated_at` would be. Allocations take no UPDATE at all.
       'loan_payments',
       'payment_allocations',
+      // Phase 7. A penalty is append-only with no permitted UPDATE at all:
+      // the charge, its basis, its rate and its dates are fixed when it is
+      // created, and `applied_at` records when. An `updated_at` would be a
+      // column that can never advance.
+      'loan_penalties',
     ]);
 
     for (const table of createdTables) {
@@ -643,7 +648,9 @@ describe('types stay in step with the schema', () => {
       'loan_payments_guard_mutation',
       'audit_payment_change',
       'audit_payment_allocated',
-      'audit_loan_clearance',
+
+      // --- Phase 7 ----------------------------------------------------------
+      'audit_penalty_applied',
 
       // Not a trigger function, and the one deliberate entry here that is not.
       // `generate_loan_schedule` is revoked from `authenticated` entirely: the
@@ -654,6 +661,25 @@ describe('types stay in step with the schema', () => {
       // `tests/db/security.test.ts`, so this exemption cannot hide a function
       // that later becomes callable.
       'generate_loan_schedule',
+
+      // Phase 7, exempt for exactly the same reason. All three are revoked
+      // from `authenticated`:
+      //
+      //   * `ensure_penalty_applied` and `apply_eligible_penalties` create a
+      //     charge against a borrower. Their only callers are the payment
+      //     functions, which run as the table owner, and a privileged server
+      //     path. A client type for either would advertise a call that is
+      //     always refused — and worse, would suggest the application may
+      //     decide when a penalty applies.
+      //   * `is_table_owner_session` answers a question about the connection
+      //     rather than about the data, and exists only to gate the test
+      //     clock.
+      //
+      // Each grant is asserted in `tests/db/security.test.ts`, so these
+      // exemptions cannot hide a function that later becomes callable.
+      'ensure_penalty_applied',
+      'apply_eligible_penalties',
+      'is_table_owner_session',
     ]);
 
     for (const functionName of functionNames) {

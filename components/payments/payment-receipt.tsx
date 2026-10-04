@@ -29,6 +29,13 @@ import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/domain/payment'
  * holds the printed slip needs to be able to find the record it refers to, and
  * a receipt that vanished would make a reversal look like a deletion.
  *
+ * ## A penalty on a receipt is named as a penalty
+ *
+ * Phase 7 can allocate part of a payment to a late-payment charge. It appears
+ * on its own line, labelled, and is never added into the interest figure: a
+ * borrower is entitled to know which part of what they handed over was the
+ * loan they took and which part was a charge for settling late.
+ *
  * ## Company branding
  *
  * Read from the current company settings. If the business later needs receipts
@@ -77,11 +84,13 @@ export function PaymentReceipt({
   readonly reversalReason: string | null;
   readonly allocations?: readonly {
     readonly id: string;
+    readonly kind?: 'installment' | 'penalty';
     readonly installmentNumber: number;
     readonly dueDate: string;
     readonly allocatedAmount: number;
     readonly allocatedPrincipal: number;
     readonly allocatedInterest: number;
+    readonly allocatedPenalty?: number;
   }[];
 }) {
   const isReversed = reversedAt !== null;
@@ -172,15 +181,29 @@ export function PaymentReceipt({
                   className="flex min-w-0 flex-wrap justify-between gap-x-3"
                 >
                   <span className="text-text-muted">
-                    #{entry.installmentNumber} due{' '}
-                    {formatBusinessDate(entry.dueDate as never)}
+                    {entry.kind === 'penalty' ? (
+                      <>
+                        Late-payment penalty, from{' '}
+                        {formatBusinessDate(entry.dueDate as never)}
+                      </>
+                    ) : (
+                      <>
+                        #{entry.installmentNumber} due{' '}
+                        {formatBusinessDate(entry.dueDate as never)}
+                      </>
+                    )}
                   </span>
                   <span className="text-text tabular-nums">
                     {formatUgx(toUgx(entry.allocatedAmount))}
+                    {/* A penalty is named as a penalty, never folded into
+                        interest. A borrower is entitled to know which part of
+                        what they paid was the loan and which was a charge. */}
                     <span className="text-text-muted">
-                      {' '}
-                      ({formatUgx(toUgx(entry.allocatedPrincipal))} +{' '}
-                      {formatUgx(toUgx(entry.allocatedInterest))} int.)
+                      {entry.kind === 'penalty'
+                        ? ' (penalty)'
+                        : ` (${formatUgx(toUgx(entry.allocatedPrincipal))} + ${formatUgx(
+                            toUgx(entry.allocatedInterest),
+                          )} int.)`}
                     </span>
                   </span>
                 </li>

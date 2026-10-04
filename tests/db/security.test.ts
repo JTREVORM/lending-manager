@@ -104,6 +104,9 @@ describeDb('row level security', () => {
       // Supabase's ALTER DEFAULT PRIVILEGES grants them all on a new view.
       'loan_balances:SELECT',
       'loan_client_snapshots:SELECT',
+      // Phase 7. Three derived views, SELECT only, each `security_invoker` so
+      // it is read under the caller's own policies.
+      'loan_delinquency:SELECT',
       'loan_guarantor_snapshots:SELECT',
       'loan_identity_snapshots:SELECT',
       'loan_installment_coverage:SELECT',
@@ -111,9 +114,15 @@ describeDb('row level security', () => {
       // only by generate_loan_schedule, which runs as the table owner, so no
       // write privilege exists for a session to misuse.
       'loan_installments:SELECT',
+      'loan_obligations:SELECT',
       // Phase 6. The payment ledger, likewise: post_payment and
       // reverse_payment are the only writers.
       'loan_payments:SELECT',
+      // Phase 7. A charge against a borrower, SELECT only for every role
+      // including the Owner: `ensure_penalty_applied` is the only writer, and
+      // a penalty amount a person could type would not be a penalty.
+      'loan_penalties:SELECT',
+      'loan_penalty_coverage:SELECT',
       'loan_periods:SELECT',
       'loan_schedules:SELECT',
       'loans:INSERT',
@@ -201,6 +210,9 @@ describeDb('row level security', () => {
       // Phase 6. The payment ledger, likewise: post_payment and
       // reverse_payment are the only writers.
       'loan_payments:SELECT',
+      // Phase 7. One policy, SELECT, delegating to the loan — and no write
+      // policy, because no write grant exists to need one.
+      'loan_penalties:SELECT',
       'loan_periods:SELECT',
       'loan_schedules:SELECT',
       'loans:INSERT',
@@ -414,7 +426,14 @@ describeDb('views', () => {
         // Phase 6. Balances are derived rather than stored, so a reversal
         // changes every figure the instant it commits.
         'loan_balances',
+        // Phase 7. Delinquency is derived too — arrears, lateness, grace and
+        // penalty eligibility are computed on every read from the schedule,
+        // the ledger and the business date, so no process has to run and no
+        // column can go stale.
+        'loan_delinquency',
         'loan_installment_coverage',
+        'loan_obligations',
+        'loan_penalty_coverage',
         'payment_collection_totals',
       ]);
     });
@@ -453,7 +472,8 @@ describeDb('views', () => {
 
     // And every view is readable by a signed-in caller, so the revoke did not
     // go too far.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(3);
+    // One row per view: three from Phase 6, three from Phase 7.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(6);
   });
 });
 
@@ -471,6 +491,11 @@ describeDb('privileged functions', () => {
     // so a function gaining it by accident gains the ability to ignore every
     // policy in the system.
     expect(rows.map((row) => row.proname)).toEqual([
+      // Phase 7. The sweep and the materialiser both write `loan_penalties`,
+      // which no session role may write at all, and neither takes an amount,
+      // a rate, a basis or a date from its caller. Neither is granted to
+      // `authenticated`.
+      'apply_eligible_penalties',
       // Phase 4 lifecycle functions. Each is SECURITY DEFINER because it
       // writes snapshot tables no session may write, and each checks the
       // caller's capability inside before doing so.
@@ -494,9 +519,20 @@ describeDb('privileged functions', () => {
       // Phase 6: the payment ledger's trail.
       'audit_payment_allocated',
       'audit_payment_change',
+      // Phase 7: the penalty's trail. Records no actor, because a business
+      // rule applied the charge and naming the staff member whose payment
+      // transaction it happened inside would be a false record.
+      'audit_penalty_applied',
       'audit_profile_change',
       'audit_settings_change',
       'audit_user_role_change',
+      // Phase 7. SECURITY DEFINER so the clock gate it consults is callable
+      // whatever the session's privileges — see migration 20261007000200.
+      'business_now',
+      // Reads `company_settings`, which needs `settings:view` — so a derived
+      // view that looked the timezone up directly would return no rows at all
+      // for a borrower, and their own arrears would silently vanish.
+      'business_timezone',
       'cancel_loan',
       'client_guarantors_guard_detach',
       'client_remarks_stamp_author',
@@ -509,6 +545,10 @@ describeDb('privileged functions', () => {
       'current_user_permissions',
       'current_user_role_keys',
       'disburse_loan',
+      // Phase 7. The only writer of `loan_penalties`, with no execute grant to
+      // any session role — the same posture as `generate_loan_schedule`. The
+      // charge, its basis, its rate and its dates are all derived inside.
+      'ensure_penalty_applied',
       // Phase 5. SECURITY DEFINER for the usual reason — it writes tables no
       // session may write — and additionally with no execute grant at all,
       // so it is deliberately absent from the grants list below.
@@ -615,6 +655,14 @@ describeDb('privileged functions', () => {
     // 20261002000800 and tests/db/password-change.test.ts.
     expect(rows.map((row) => row.proname)).toEqual([
       'approve_loan',
+      // Phase 7. The business clock and the timezone it is read in. Granted
+      // because every screen needs to know what "today" means to the
+      // business, and because a date is not sensitive. Neither accepts a
+      // date from a caller: `business_now` honours an override only on a
+      // direct owner connection, which no application path has.
+      'business_date',
+      'business_now',
+      'business_timezone',
       // Pure arithmetic: a function of its arguments that discloses nothing.
       // The preview screen calls it so staff see the authoritative figures
       // rather than the browser's.
@@ -628,7 +676,14 @@ describeDb('privileged functions', () => {
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
       // what Row Level Security allows it to.
       'loan_outstanding',
+      // Phase 7, all three SECURITY INVOKER for the same reason. The as-of
+      // balance is a read-only historical figure: no mutation accepts a date,
+      // so nothing a caller passes here can change what is posted.
+      'loan_outstanding_as_of',
+      'loan_penalty_outstanding',
+      'loan_total_outstanding',
       'mask_nin',
+      'payment_business_date',
       // Phase 6. The two trusted ledger paths. Each re-checks the caller's
       // capability inside, because SECURITY DEFINER means the grant alone
       // decides nothing.

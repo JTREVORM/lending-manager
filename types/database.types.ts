@@ -961,33 +961,78 @@ export type Database = {
         Row: {
           id: string;
           payment_id: string;
-          installment_id: string;
+          installment_id: string | null;
+          penalty_id: string | null;
           loan_id: string;
           allocated_amount: number;
           allocated_principal: number;
           allocated_interest: number;
+          allocated_penalty: number;
           created_at: string;
         };
         Insert: {
           id?: string;
           payment_id: string;
-          installment_id: string;
+          installment_id?: string | null;
+          penalty_id?: string | null;
           loan_id: string;
           allocated_amount: number;
           allocated_principal: number;
           allocated_interest: number;
+          allocated_penalty?: number;
           created_at?: string;
         };
         Update: {
           id?: string;
           payment_id?: string;
-          installment_id?: string;
+          installment_id?: string | null;
+          penalty_id?: string | null;
           loan_id?: string;
           allocated_amount?: number;
           allocated_principal?: number;
           allocated_interest?: number;
+          allocated_penalty?: number;
           created_at?: string;
         };
+        Relationships: [];
+      };
+      loan_penalties: {
+        Row: {
+          id: string;
+          loan_id: string;
+          client_id: string;
+          penalty_type: string;
+          final_due_date: string;
+          grace_period_days: number;
+          grace_end_date: string;
+          effective_date: string;
+          basis_amount: number;
+          penalty_rate_bps: number;
+          penalty_amount: number;
+          trigger_rule: string;
+          applied_at: string;
+          created_at: string;
+        };
+        // No Insert and no Update that any session role can use: the table
+        // grants SELECT only, and `ensure_penalty_applied` is the sole writer.
+        // The shapes are declared so a privileged server path stays typed.
+        Insert: {
+          id?: string;
+          loan_id: string;
+          client_id: string;
+          penalty_type?: string;
+          final_due_date: string;
+          grace_period_days: number;
+          grace_end_date: string;
+          effective_date: string;
+          basis_amount: number;
+          penalty_rate_bps: number;
+          penalty_amount: number;
+          trigger_rule?: string;
+          applied_at?: string;
+          created_at?: string;
+        };
+        Update: Record<PropertyKey, never>;
         Relationships: [];
       };
       permissions: {
@@ -1255,9 +1300,14 @@ export type Database = {
           total_paid: number;
           principal_paid: number;
           interest_paid: number;
-          outstanding: number;
+          contractual_outstanding: number;
           principal_remaining: number;
           interest_remaining: number;
+          penalty_assessed: number;
+          penalty_paid: number;
+          penalty_remaining: number;
+          total_outstanding: number;
+          total_collected: number;
           fully_repaid: boolean;
           posted_payment_total: number;
           posted_payment_count: number;
@@ -1272,6 +1322,92 @@ export type Database = {
           payment_method: string;
           payment_count: number;
           total_amount: number;
+        };
+        Relationships: [];
+      };
+      loan_penalty_coverage: {
+        Row: {
+          penalty_id: string;
+          loan_id: string;
+          client_id: string;
+          penalty_type: string;
+          final_due_date: string;
+          grace_period_days: number;
+          grace_end_date: string;
+          effective_date: string;
+          basis_amount: number;
+          penalty_rate_bps: number;
+          penalty_amount: number;
+          trigger_rule: string;
+          applied_at: string;
+          allocated_amount: number;
+          remaining_amount: number;
+        };
+        Relationships: [];
+      };
+      loan_obligations: {
+        Row: {
+          loan_id: string;
+          obligation_kind: string;
+          obligation_rank: number;
+          installment_id: string | null;
+          penalty_id: string | null;
+          effective_date: string;
+          sequence_number: number;
+          expected_amount: number;
+          scheduled_principal: number;
+          scheduled_interest: number;
+          scheduled_penalty: number;
+          allocated_amount: number;
+          allocated_principal: number;
+          allocated_interest: number;
+          allocated_penalty: number;
+          remaining_amount: number;
+          remaining_principal: number;
+          remaining_interest: number;
+          remaining_penalty: number;
+        };
+        Relationships: [];
+      };
+      loan_delinquency: {
+        Row: {
+          loan_id: string;
+          loan_number: string;
+          client_id: string;
+          loan_status: string;
+          business_date: string;
+          installment_count: number;
+          first_due_date: string;
+          scheduled_completion_date: string;
+          scheduled_total: number;
+          scheduled_due_to_date: number;
+          paid_against_schedule: number;
+          arrears_amount: number;
+          due_today_amount: number;
+          current_due: number;
+          missed_installment_count: number;
+          oldest_unpaid_due_date: string | null;
+          oldest_past_due_date: string | null;
+          days_past_due: number;
+          grace_period_days: number;
+          grace_end_date: string;
+          penalty_effective_date: string;
+          past_final_due_date: boolean;
+          within_grace_period: boolean;
+          contractual_outstanding: number;
+          penalty_amount: number;
+          penalty_paid: number;
+          penalty_remaining: number;
+          total_outstanding: number;
+          penalty_applied: boolean;
+          penalty_id: string | null;
+          penalty_applied_effective_date: string | null;
+          penalty_basis_amount: number | null;
+          penalty_rate_bps: number;
+          penalty_basis_as_of_grace_end: number;
+          penalty_eligible: boolean;
+          penalty_projected_amount: number;
+          delinquency_state: string;
         };
         Relationships: [];
       };
@@ -1305,6 +1441,34 @@ export type Database = {
       approve_loan: {
         Args: { p_loan_id: string };
         Returns: string;
+      };
+      payment_business_date: {
+        Args: { p_received_at: string };
+        Returns: string;
+      };
+      business_now: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      business_date: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      business_timezone: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      loan_penalty_outstanding: {
+        Args: { p_loan_id: string };
+        Returns: number;
+      };
+      loan_total_outstanding: {
+        Args: { p_loan_id: string };
+        Returns: number;
+      };
+      loan_outstanding_as_of: {
+        Args: { p_loan_id: string; p_as_of: string };
+        Returns: number;
       };
       calculate_loan_breakdown: {
         Args: {

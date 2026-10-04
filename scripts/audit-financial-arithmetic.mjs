@@ -53,6 +53,16 @@ const FINANCIAL_FILES = [
   'components/payments/payment-register.tsx',
   'components/payments/loan-balance-summary.tsx',
   'components/payments/portal-payment-history.tsx',
+  // Phase 7. The delinquency engine computes arrears and the one-time
+  // penalty, so it is held to exactly the same standard: no float, no
+  // percentage arithmetic, a rate in basis points and half-up rounding
+  // through `applyRateBps`.
+  'lib/domain/delinquency.ts',
+  'lib/data/delinquency.ts',
+  'components/delinquency/delinquency-panel.tsx',
+  'components/delinquency/penalty-card.tsx',
+  'components/delinquency/overdue-list.tsx',
+  'components/delinquency/portal-loan-position.tsx',
 ];
 
 const UNSAFE = [
@@ -149,13 +159,15 @@ const migrations = readdirSync('supabase/migrations')
 for (const file of migrations) scan(file);
 
 // --- The money.ts exclusion, verified ---------------------------------------
-// Both engines: the Phase 4 loan calculation and the Phase 5 schedule
-// allocation. Each must reach the money layer only through helpers this audit
-// has cleared as integer or BigInt throughout.
+// Four engines: the Phase 4 loan calculation, the Phase 5 schedule
+// allocation, the Phase 6 payment allocation and the Phase 7 delinquency and
+// penalty arithmetic. Each must reach the money layer only through helpers
+// this audit has cleared as integer or BigInt throughout.
 for (const enginePath of [
   'lib/domain/loan.ts',
   'lib/domain/repayment-schedule.ts',
   'lib/domain/payment.ts',
+  'lib/domain/delinquency.ts',
 ]) {
   const engine = readFileSync(enginePath, 'utf8');
   const importBlock = /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/domain\/money'/.exec(
@@ -221,7 +233,7 @@ if (findings.length > 0) {
 
 const count = FINANCIAL_FILES.length + migrations.length;
 console.log(`  ${String(count)} financial files scanned, no hazard found`);
-console.log('  all three engines reach only integer/BigInt money helpers');
+console.log('  all four engines reach only integer/BigInt money helpers');
 console.log(
   `  ${String(ACKNOWLEDGED.length)} acknowledged non-money exemption(s), each verified present`,
 );

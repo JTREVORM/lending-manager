@@ -46,6 +46,9 @@ const ROUTE_PERMISSIONS: readonly {
   // guarded by the broad capability stays open after the real screen lands,
   // and the menu hiding the entry is not protection.
   { prefix: ROUTES.payments, permission: 'payments:view' },
+  // Phase 7. Its own capability, not the dashboard's — the mistake Phase 3
+  // made with `/clients` and Phase 6 found again on `/payments`.
+  { prefix: ROUTES.overdue, permission: 'delinquency:view' },
   { prefix: ROUTES.portal, permission: 'portal:view' },
   { prefix: ROUTES.account, permission: 'account:view' },
   // The dashboard is last: '/' prefixes everything, so it must only match

@@ -908,13 +908,350 @@ and the 50% penalty. What Phase 6 deliberately leaves to it:
    amounts. The allocation engine takes a list of obligations; a penalty is
    another obligation in that list.
 
+# Phase 7 — missed payments, arrears, grace and penalties
+
+Phase 5 generated the plan and Phase 6 recorded the money. Phase 7 answers the
+question those two leave open: **what should have been paid by now, and
+hasn't** — and what it costs a borrower whose loan runs past its end.
+
+## What a missed payment is, and what it is not
+
+A missed payment is a scheduled collection whose due date has passed and which
+posted payments have not covered. That is all it is: **an observation about the
+plan and the ledger**, not an event, not a status and not a change to the
+plan.
+
+So nothing is rewritten when a borrower misses a collection:
+
+* `loan_installments` stays exactly as generated. The row for the missed day
+  keeps its due date and its UGX 4,000, because that is what the borrower
+  agreed to and it is the evidence of the agreement (ADR-026).
+* No interest is added. A missed payment makes nothing larger. The contractual
+  interest was fixed at approval (ADR-021) and Phase 7 does not recompute it,
+  compound it, or charge anything per day. The *only* additional charge in the
+  whole phase is the single expiry penalty below.
+* No arrears figure is stored anywhere. See ADR-033; the schema is asserted
+  free of such a column.
+
+What *does* change is a derived figure: the borrower now owes two collections
+instead of one.
+
+## The three figures
+
+Computed by `loan_delinquency`, as at today in the business timezone:
+
+| Figure | Definition |
+| --- | --- |
+| `arrears_amount` | Uncovered amount of every collection due **strictly before** today |
+| `due_today_amount` | Uncovered amount of collections due **today** |
+| `current_due` | The two added — what a collection officer asks for |
+
+"Uncovered", not "scheduled": a collection part-covered by an earlier
+overpayment contributes only what is actually left of it, so money already
+received is never asked for twice.
+
+This is the carry-forward. A borrower on UGX 4,000 a day who misses Monday
+owes UGX 8,000 on Tuesday — `arrears_amount` 4,000 plus `due_today_amount`
+4,000 — **with both scheduled rows untouched**. Tuesday's installment is still
+a UGX 4,000 installment. The borrower is simply behind by one.
+
+A payment on the due date is on time. The comparison is `due_date < today` for
+arrears, so a collection becomes overdue at the start of the following day and
+not a moment earlier.
+
+## Two measures of lateness, never conflated
+
+* `missed_installment_count` — how many past collections are still uncovered.
+* `days_past_due` — calendar days from `oldest_past_due_date` to today.
+
+They are different numbers, and the difference matters operationally. On an
+every-3-days schedule, three missed collections are **nine days** late.
+Reporting the count as "days overdue" would overstate a borrower's lateness
+threefold, which on a collections list is the difference between a phone call
+and a visit. Both figures are shown, each with its own label.
+
+Neither is capped and neither saturates: a loan 400 days late reports 400.
+
+## Expiry, grace and the penalty date
+
+A loan **expires** at its contractual completion date, which is the due date
+of its final installment — `max(loan_installments.due_date)`, exactly as Phase
+5 defined it. It is deliberately not recomputed from the disbursement date and
+the term: the schedule already resolved every month-end and leap-year
+question, and a second calculation would eventually disagree with the
+collections the borrower was actually given.
+
+After expiry the loan gets a **grace period**, taken from the loan's own
+snapshotted `grace_period_days_applied` and never from the current business
+setting (ADR-023). Changing the setting today must not move the penalty date
+of a loan approved last year.
+
+```
+grace_end_date         = final_due_date + grace_period_days
+penalty_effective_date = grace_end_date + 1
+```
+
+With a final collection on **10 Oct** and three days of grace: grace runs
+11–13 Oct, and the penalty becomes applicable on **14 Oct**, from the start of
+that day. A loan settled in full on 13 Oct is never charged.
+
+`within_grace_period` is true strictly between the final due date and the
+grace end, and only while something is still owed. During grace the loan is
+not "in default" — it is late, with the business's own allowance still
+running, and the screens say so.
+
+## The penalty
+
+One charge, with a rule that fits in a sentence: **a loan still unpaid at the
+end of its grace period is charged 50% of what it owed when the grace period
+ran out.**
+
+Every part of that is deliberate.
+
+**50% comes from configuration as basis points**, snapshotted onto the loan as
+`penalty_rate_bps_applied`. There is no `0.50` anywhere in the system. 50% is
+`5000` bps, and the arithmetic is integer throughout:
+
+```
+penalty_amount = (basis_amount × penalty_rate_bps + 5000) / 10000
+```
+
+The `+ 5000` is half-up rounding to the whole shilling, in integer division —
+the same rule and the same shape as every other rate in the system
+(ADR-020). No floating point touches money anywhere in Phase 7, which
+`npm run audit:money` enforces across 37 files and all four engines.
+
+**The basis is the effective debt as at the end of the grace period**, not
+today's balance — reconstructed by `loan_outstanding_as_of(loan, date)`, which
+counts only still-posted payments whose *business date* falls on or before
+that date. If the basis were read whenever the charge was finally written, a
+borrower who paid most of the debt on day six would be charged on the
+remainder, and the later they paid the less they would owe. The incentive
+would be exactly backwards. Reversed payments never reduce the basis: the
+money was withdrawn, so it never really paid.
+
+**It is charged once.** A unique index on `(loan_id, penalty_type)` makes the
+one-time rule a property of the database rather than a convention: not 50% a
+day, not 50% a month, and never a penalty on the penalty.
+
+**It is immutable.** `loan_penalties` refuses UPDATE and DELETE for every
+caller including `service_role`, and `penalty_amount` is re-derived from the
+stored basis and rate by a CHECK constraint — so a *forged* penalty amount is
+impossible, not merely unauthorized. There is no capability to create, edit,
+delete or waive a penalty, and no user-entered penalty amount anywhere: the
+figure is the rule applied to the ledger.
+
+Each row carries its complete provenance — the final due date, the grace days,
+the basis, the rate, the effective date, the trigger rule and when it was
+applied — so anyone can reconstruct the arithmetic from the row alone.
+
+## Where the penalty comes from, with no scheduled job
+
+Eligibility is **derived continuously**: `loan_delinquency.penalty_eligible`
+becomes true the moment the business date reaches the penalty date, with no
+process involved at all. Materialisation — writing the row — happens at the
+two moments it has to:
+
+* **`post_payment` calls `ensure_penalty_applied` before it reads a balance**,
+  so a borrower cannot settle yesterday's figure and escape a charge that was
+  already due. This is the path that matters.
+* **`reverse_payment` calls it after reconciling**, so a loan whose exemption
+  rested on money that has now been withdrawn does not stay exempt.
+
+`apply_eligible_penalties()` exists for a future scheduled sweep, and is an
+optimisation rather than a dependency. Financial correctness never waits for
+cron.
+
+A read materialises nothing. A SELECT must not write — it may run in a
+read-only transaction, as a borrower, or under a role with no privileges on
+`loan_penalties` — so screens display the *projected* charge from the view,
+labelled as pending, and the transaction that needs the row to exist creates
+it. `ensure_penalty_applied` takes the loan's row lock first, so two
+concurrent payments produce one penalty; the second call returns the first
+one's row.
+
+## Delinquency states
+
+One operational state per loan, by a fixed precedence, so a loan can never
+present two at once:
+
+| State | Meaning |
+| --- | --- |
+| `cleared` | Owes nothing at all, penalty included |
+| `penalty_due` | A penalty is recorded and not fully paid |
+| `expired_unpaid` | Past the penalty date and eligible, not yet materialised |
+| `grace_period` | Past the final due date, inside grace, still owing |
+| `in_arrears` | A collection before today is uncovered |
+| `due_today` | Nothing overdue, but today's collection is uncovered |
+| `current` | Nothing owed today or earlier |
+
+This is **not** a loan status. `loans.status` remains the lifecycle
+(`draft → pending → approved → active → cleared`), stored and transitioned by
+audited acts. Delinquency is derived, so midnight changes it with no
+transition, no trigger and no event.
+
+## Balances, after penalties
+
+`loan_balances.outstanding` is **renamed** `contractual_outstanding`, with no
+alias kept. With penalties in the system a figure called "outstanding" that
+excludes a charge the borrower owes is a trap, and two names for one number
+means a future report quotes the wrong one.
+
+| Column | Meaning |
+| --- | --- |
+| `contractual_outstanding` | The agreement, unaffected by any penalty |
+| `penalty_assessed` / `penalty_paid` / `penalty_remaining` | The charge, apart |
+| `total_outstanding` | What the borrower owes: the two together |
+| `total_collected` | Everything received, contract and penalty |
+
+`total_paid` keeps its Phase 6 meaning (money applied to the contract), so
+`total_paid + contractual_outstanding = scheduled_total` and
+`principal_paid + principal_remaining = contractual_principal` still hold
+exactly. `total_collected` is what reconciles against `posted_payment_total`.
+`fully_repaid` becomes stricter — it now requires the penalty settled — and is
+unchanged for every loan without one.
+
+## Allocation with a penalty in the list
+
+Money reaches a penalty through the same `payment_allocations` table, with
+exactly one of `installment_id` and `penalty_id` set (ADR-036). There is no
+second allocation engine and no second ledger.
+
+The order needs no penalty branch. `loan_obligations` lists collections and
+the penalty together, ordered by `effective_date, obligation_rank,
+sequence_number`, and a penalty's effective date is necessarily later than
+every collection — so ordinary oldest-first settles the whole contract before
+touching the charge. Within an obligation the Phase 6 rule stands: interest
+first, then penalty, then principal as the remainder.
+
+The minimum-payment rule is restated over obligations rather than
+collections — the earliest uncovered obligation's remainder — which means it
+is the earliest unpaid collection while the contract stands, and the penalty's
+remainder once it does not. An overpayment beyond `total_outstanding` is still
+refused with the figure named; no credit balance is ever created, penalty
+included.
+
+Receipts gain a penalty line when a payment touches one, and nothing else
+about them changes. Historical receipts are untouched: a frozen balance
+snapshot from Phase 6 is never retrospectively given a penalty figure, and the
+Phase 6 receipts are byte-for-byte identical after the upgrade.
+
+## Reversal
+
+Reversing a payment restores the position exactly, and `ensure_penalty_applied`
+runs afterwards:
+
+* A loan that was cleared becomes `active` again, and if its grace period had
+  already expired the penalty it escaped is now applied.
+* A penalty that already exists is **never recreated, recalculated or
+  duplicated** — the unique index would refuse it, and the basis was fixed as
+  at the grace deadline so it would not change anyway.
+* Penalty allocations stop counting the moment the payment is reversed, in
+  exactly the way installment allocations do. The rows stay; the coverage
+  disappears.
+
+## Clearance
+
+A loan may not be `cleared` while a penalty is unpaid.
+`loans_guard_transition` now validates against `loan_total_outstanding`, which
+binds every caller including `service_role` (ADR-032) — so the rule holds for
+a direct `UPDATE` as much as for `post_payment`. A loan reaches `cleared` only
+when the contract *and* the charge are settled, and a loan that temporarily
+looked cleared is not silently exempt from a charge it had already earned.
+
+## The business clock
+
+Every date comparison in Phase 7 goes through `business_date()`, which converts
+`business_now()` into a day using the company's configured timezone. Nothing
+uses `current_date`, `now()::date`, the server's timezone, a UTC date or the
+browser's clock — at 23:30 UTC on the 9th it is already the 10th in Kampala,
+and a collection cannot be both overdue and current depending on who looks.
+
+`business_now()` can be overridden, but only on a direct database connection
+owned by the schema owner, which no application path has. That is what makes
+grace boundaries, month ends and leap days testable. See ADR-034.
+
+## Worked examples
+
+A daily loan of UGX 4,000 a collection, and a 100,000-outstanding loan with
+three days of grace and a 5000 bps rate. Every figure below is verified
+end-to-end against a real database in `tests/db/` and by the manual
+verification script.
+
+| Scenario | Result |
+| --- | --- |
+| One collection missed | arrears 4,000 · due today 4,000 · **current due 8,000** · missed 1 · 1 day · `in_arrears` |
+| Borrower then pays 8,000 | arrears 0 · due today 0 · current due 0 · missed 0 · `current` |
+| Two collections missed | arrears 8,000 · due today 4,000 · **current due 12,000** · missed 2 · 2 days |
+| Settled in full during grace | no penalty, ever · total owed 0 · `cleared` |
+| Grace expires owing 100,000 | basis 100,000 · **penalty 50,000** · contract 100,000 · **total 150,000** · `penalty_due` |
+| 40,000 paid during grace, then expiry | basis 60,000 · **penalty 30,000** · contract 60,000 · total 90,000 |
+| 40,000 paid *after* the penalty applied | contract 60,000 · penalty still 50,000 · total 110,000 |
+| Clearing payment reversed after expiry | `active` · contract 100,000 · penalty 50,000 · total 150,000 · one penalty row, same amount and basis |
+
+The sixth and seventh rows are the same money, days apart, and they differ by
+UGX 20,000. That difference is the point of fixing the basis at the grace
+deadline.
+
+## Permissions
+
+| Capability | Roles |
+| --- | --- |
+| `delinquency:view` | Secretary/Treasurer, Manager, Owner/Administrator |
+| `penalties:view` | Secretary/Treasurer, Manager, Owner/Administrator |
+
+There is no `penalties:create`, `penalties:edit`, `penalties:delete` or
+`penalties:waive`, for anyone, including the Owner. A penalty is the rule
+applied to the ledger; if the business ever wants a waiver it will be a new
+audited transaction that leaves the penalty standing, not an edit to it.
+
+Borrowers see their own arrears and their own penalty in the portal without
+either capability, through the same client link that already shows them their
+schedule.
+
+## Row Level Security
+
+`loan_penalties` is enabled, with a single `select` policy that delegates
+entirely to the loan: a reader may see a penalty if they hold
+`penalties:view`, or if the loan is their own. No `insert`, `update` or
+`delete` policy exists for any role, and `authenticated` holds no such
+privilege either — so no session reaches the guard triggers at all.
+
+`loan_penalty_coverage`, `loan_obligations`, `loan_balances` and
+`loan_delinquency` are all `security_invoker`, so each is read under the
+reader's own policies and needs none of its own. Every privilege is revoked
+from `public`, `anon` and `authenticated` before SELECT is granted back to
+`authenticated` — Supabase's default privileges make that explicit revoke
+necessary, as Phase 6 found out.
+
+## Phase 8 handoff
+
+What Phase 7 leaves for later, deliberately:
+
+1. **No notifications.** `loan_delinquency` is the complete input a reminder
+   engine needs — state, amount, lateness, penalty date — and it writes
+   nothing, so a notification layer can read it on any schedule without
+   affecting a single figure.
+2. **No scheduled job in the critical path.** `apply_eligible_penalties()` is
+   ready for one and will materialise nothing a payment would not have
+   materialised anyway. Correctness does not depend on it running.
+3. **No reporting beyond the overdue list.** `/overdue` is an operational
+   screen — who is late, by how much, how late. Portfolio ageing, recovery
+   rates and executive dashboards are Phase 8's.
+4. **No waiver, and no second penalty type.** `penalty_type` exists as a
+   column so a future charge can be added without touching this one, and the
+   unique index is per type.
+5. **The contract still untouched.** Seven phases in, no code path alters a
+   generated installment, a snapshotted term or a contractual interest figure;
+   the upgrade from Phase 6 is fingerprint-identical on all three.
+
 ## Test commands
 
 ```bash
-npm test                 # everything
-npm run test:unit        # pure logic, including the financial engine
-npm run test:integration # components, jsdom
+npm test                 # watch mode
+npm run test:run         # pure logic and components: the unit and integration projects
 npm run test:db          # against a real PostgreSQL, rebuilt first
+npm run verify           # typecheck, lint, format, test:run, build
 
 npm run audit:money      # float-free audit of the loan arithmetic
 npm run typecheck
