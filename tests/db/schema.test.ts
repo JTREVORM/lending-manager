@@ -62,6 +62,10 @@ describeDb('tables', () => {
     // Phase 2: the capability vocabulary and the role-to-capability map.
     'permissions',
     'profiles',
+    // Phase 9: fixed-window rate limit counters. Readable by nobody and
+    // reached only through `consume_rate_limit`; the key is a hash, so the
+    // table carries no identity.
+    'rate_limit_counters',
     'reference_formats',
     'reference_sequences',
     'repayment_frequencies',

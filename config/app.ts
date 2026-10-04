@@ -74,6 +74,9 @@ export const ROUTES = {
   audit: '/audit',
   guarantors: '/guarantors',
 
+  /** Phase 9. Shown by the service worker when there is no network. */
+  offline: '/offline',
+
   /** Every signed-in user, whatever their role. */
   account: '/account',
   changePassword: '/account/password',

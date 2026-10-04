@@ -4,7 +4,7 @@ import { PrintButton } from '@/components/reports/print-button';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import type { ReportColumn } from '@/components/reports/report-table';
 import { ROUTES } from '@/config/app';
-import { guardPermission } from '@/lib/auth/guard';
+import { guardReportPage } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getGracePeriodReport, type PortfolioRow } from '@/lib/data/reports';
 import { businessToday, daysBetween } from '@/lib/domain/datetime';
@@ -36,8 +36,10 @@ export default async function GracePeriodPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardPermission(`${ROUTES.reports}/grace`, 'reports:view_operational');
-  await guardPermission(`${ROUTES.reports}/grace`, 'delinquency:view');
+  await guardReportPage(`${ROUTES.reports}/grace`, [
+    'reports:view_operational',
+    'delinquency:view',
+  ]);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();

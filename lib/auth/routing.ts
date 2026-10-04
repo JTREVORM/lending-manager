@@ -24,7 +24,18 @@ import type { Permission } from '@/lib/permissions';
  * without being considered is protected by default, which is the safe
  * direction for the mistake to go.
  */
-export const PUBLIC_ROUTE_PREFIXES: readonly string[] = [ROUTES.login];
+export const PUBLIC_ROUTE_PREFIXES: readonly string[] = [
+  ROUTES.login,
+  // Phase 9. The installable-application surface, which is reached before
+  // there is a session and must stay reachable when there is no network.
+  //
+  // None of it carries anything private: the manifest holds the software's
+  // own name and icons, and the offline page deliberately shows no figures at
+  // all. Redirecting them to sign-in would mean the service worker precaches
+  // a sign-in page as its offline fallback, and an offline borrower would be
+  // told to log in rather than told the figures are unavailable.
+  ROUTES.offline,
+];
 
 /**
  * The capability each protected route requires.

@@ -20,6 +20,9 @@ export const config = {
      * Everything except static assets and image files, which have no session
      * to refresh and would only add latency.
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    // `sw.js` is excluded alongside the static assets: a service worker is
+    // served from the origin root and must not be redirected to sign-in, and
+    // it has no session to refresh.
+    '/((?!_next/static|_next/image|favicon.ico|favicon.png|sw.js|manifest.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

@@ -9,7 +9,7 @@ import { ReportFilters } from '@/components/reports/report-filters';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { ROUTES } from '@/config/app';
-import { guardPermission } from '@/lib/auth/guard';
+import { guardReportPage } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getClientReport, type ClientReportRow } from '@/lib/data/reports';
 import { CLIENT_STATUS_LABELS, isClientStatus } from '@/lib/domain/client';
@@ -51,8 +51,10 @@ export default async function ClientReportPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardPermission(`${ROUTES.reports}/clients`, 'reports:view_operational');
-  await guardPermission(`${ROUTES.reports}/clients`, 'clients:view');
+  await guardReportPage(`${ROUTES.reports}/clients`, [
+    'reports:view_operational',
+    'clients:view',
+  ]);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();

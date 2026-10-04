@@ -1,8 +1,10 @@
 import Link from 'next/link';
 
 import { OwnDetailsForm } from '@/components/auth/own-details-form';
+import { InstallCard } from '@/components/pwa/install-card';
 import { UserStatusBadge } from '@/components/users/user-status-badge';
 import { Card, CardHeader } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { ROLES } from '@/lib/permissions';
@@ -23,10 +25,12 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1>My account</h1>
-        <p className="text-text-muted mt-1 text-sm">Your details and access.</p>
-      </header>
+      <PageHeader title="My account" description="Your details and access." />
+
+      {/* Renders nothing unless the browser has offered to install. Placed
+          here rather than as a banner: a prompt over the screen is a prompt
+          that appears while somebody is counting money. */}
+      <InstallCard />
 
       <Card>
         <CardHeader title="Access" description="Set by your administrator." />

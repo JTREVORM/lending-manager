@@ -85,12 +85,19 @@ describe('the reporting routes', () => {
         expect(source, `${section} page: ${permission}`).toContain(`'${permission}'`);
       }
 
-      // One `guardPermission` call per capability, so a page needing two does
-      // not check only the first.
-      const guards = source.match(/guardPermission\(/g) ?? [];
-      expect(guards.length, `${section} page guard count`).toBeGreaterThanOrEqual(
-        needs.length,
-      );
+      // As of Phase 9 a report page guards itself with one `guardReportPage`
+      // call that takes every capability it needs and checks them in turn —
+      // and then consumes the read budget, which is why it exists. Asserting
+      // on the single call is stronger than counting calls: a page cannot
+      // satisfy it by checking the first capability twice.
+      const call = /guardReportPage\(\s*[^,]+,\s*\[([\s\S]*?)\]/.exec(source);
+      expect(call, `${section} page: guardReportPage call`).not.toBeNull();
+
+      for (const permission of needs) {
+        expect(call?.[1] ?? '', `${section} page guards: ${permission}`).toContain(
+          `'${permission}'`,
+        );
+      }
     },
   );
 

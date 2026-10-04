@@ -111,6 +111,12 @@ export default tseslint.config(
       'lib/clients/actions.ts',
       'lib/auth/context.ts',
       'lib/auth/guard.ts',
+      // Phase 9. The rate limiter reaches the privileged client for exactly
+      // one case — a caller who has no session yet, at sign-in. The counter
+      // function is not granted to `anon` on purpose: if an anonymous browser
+      // could call it, anyone could exhaust a chosen account's sign-in budget
+      // and lock that person out. It reads no data and writes no record.
+      'lib/security/rate-limit.ts',
     ],
     rules: { 'no-restricted-imports': 'off' },
   },

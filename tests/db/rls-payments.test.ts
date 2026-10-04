@@ -549,12 +549,19 @@ describeDb('payment row level security', () => {
 
       // Phase 6 added three; Phase 7 adds `loan_penalty_coverage`,
       // `loan_obligations` and `loan_delinquency`; Phase 8 adds the five
-      // reporting views. Named rather than counted, so a new view cannot be
-      // waved through by bumping a number — and the loop below requires every
-      // one of them to set `security_invoker`, which is what keeps a reporting
-      // view from becoming a complete Row Level Security bypass.
+      // reporting views; Phase 9 adds `company_identity`. Named rather than
+      // counted, so a new view cannot be waved through by bumping a number —
+      // and the loop below requires every one that touches a borrower or a
+      // figure to set `security_invoker`, which is what keeps a reporting view
+      // from becoming a complete Row Level Security bypass.
+      //
+      // `company_identity` is the one exception and is excluded from the
+      // loop, not from the list: it holds the company's own name, locale and
+      // logo, no borrower, no money and no row choice. The reason is stated
+      // in full in tests/db/security.test.ts, which asserts its column list.
       expect(rows.map((row) => row.relname)).toEqual([
         'collections_today',
+        'company_identity',
         'dashboard_collection_summary',
         'dashboard_portfolio_summary',
         'loan_balances',
@@ -568,6 +575,7 @@ describeDb('payment row level security', () => {
       ]);
 
       for (const row of rows) {
+        if (row.relname === 'company_identity') continue;
         expect(row.invoker, row.relname).toBe('true');
       }
     });

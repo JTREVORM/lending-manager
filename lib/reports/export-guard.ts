@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getAuthContext, type AuthContext } from '@/lib/auth/context';
 import { can, type Permission } from '@/lib/permissions';
+import { checkActorRateLimit, rateLimitHeaders } from '@/lib/security/rate-limit';
 
 /**
  * The capability check an export route performs for itself.
@@ -27,6 +28,14 @@ import { can, type Permission } from '@/lib/permissions';
  * read any particular row. Every query behind it runs as the caller, so the
  * file contains exactly the rows the policies admit — which is why the same
  * export route is safe for a Secretary/Treasurer and an Owner.
+ *
+ * ## The rate limit lives here, not in each route
+ *
+ * All six export routes pass through this function, so one check covers them
+ * all and a seventh route cannot be added without it. A full-register CSV is
+ * the most expensive query this system runs and the most useful single file
+ * to walk out of the building with; ten in ten minutes is more than a person
+ * reconciling a day's takings needs.
  */
 export async function guardExport(
   permissions: readonly Permission[],
@@ -77,6 +86,22 @@ export async function guardExport(
         headers: {
           'content-type': 'text/plain; charset=utf-8',
           'cache-control': 'no-store',
+        },
+      }),
+    };
+  }
+
+  const limit = await checkActorRateLimit('reports.export', result.context.profileId);
+
+  if (!limit.allowed) {
+    return {
+      ok: false,
+      response: new Response(`${limit.message}\n`, {
+        status: 429,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+          ...rateLimitHeaders(limit),
         },
       }),
     };

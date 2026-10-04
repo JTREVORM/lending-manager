@@ -5,7 +5,7 @@ import { PrintButton } from '@/components/reports/print-button';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
-import { guardPermission } from '@/lib/auth/guard';
+import { guardReportPage } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getPortfolioReport } from '@/lib/data/reports';
 import { LOAN_STATUSES } from '@/lib/domain/loan';
@@ -54,8 +54,10 @@ export default async function LoanPortfolioPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardPermission(`${ROUTES.reports}/loans`, 'reports:view_financial');
-  await guardPermission(`${ROUTES.reports}/loans`, 'loans:view');
+  await guardReportPage(`${ROUTES.reports}/loans`, [
+    'reports:view_financial',
+    'loans:view',
+  ]);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();

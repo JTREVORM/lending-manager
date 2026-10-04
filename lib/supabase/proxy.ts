@@ -36,6 +36,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ROUTES } from '@/config/app';
 import { isPublicPath } from '@/lib/auth/routing';
 import { getPublicEnv } from '@/lib/env.public';
+import {
+  CSP_NONCE_HEADER,
+  PRIVATE_CACHE_HEADERS,
+  buildContentSecurityPolicy,
+  createCspNonce,
+  isPubliclyCacheablePath,
+  securityHeaders,
+} from '@/lib/security/headers';
 import type { Database } from '@/types/database.types';
 
 /**
@@ -59,6 +67,21 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   // able to make the guard evaluate a different route's requirements.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(PATHNAME_HEADER, request.nextUrl.pathname);
+
+  // One nonce per response, forwarded so the root layout can stamp it onto
+  // the scripts Next.js emits, and used below to build this response's
+  // Content-Security-Policy. The two must be the same value or no script
+  // runs, which is why it is minted here rather than in either place
+  // separately.
+  const nonce = createCspNonce();
+  requestHeaders.set(CSP_NONCE_HEADER, nonce);
+
+  // Next.js finds the nonce by reading the policy off the *request* headers
+  // and applies it to the scripts it emits. Without this line the response
+  // carries a nonce-based policy that none of the framework's own scripts
+  // satisfy, and the application renders a blank page — which is the usual
+  // way a CSP gets weakened back to 'unsafe-inline' in a hurry.
+  requestHeaders.set('Content-Security-Policy', buildContentSecurityPolicy(nonce));
 
   const forwarded = { headers: requestHeaders } as const;
 
@@ -123,7 +146,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
       url.searchParams.set('next', pathname);
     }
 
-    return redirectPreservingCookies(url, response);
+    return applyResponsePolicy(request, redirectPreservingCookies(url, response), nonce);
   }
 
   // Signed in and heading for the sign-in page. Send them into the
@@ -134,12 +157,49 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     url.pathname = ROUTES.dashboard;
     url.search = '';
 
-    return redirectPreservingCookies(url, response);
+    return applyResponsePolicy(request, redirectPreservingCookies(url, response), nonce);
   }
 
   // The response object must be returned as-is. Constructing a different
   // response without copying these cookies across would desynchronise the
   // browser and the server and sign users out at random.
+  return applyResponsePolicy(request, response, nonce);
+}
+
+/**
+ * Stamp the security and cache policy onto a response on its way out.
+ *
+ * Applied last, so it covers every path through this function — the signed-in
+ * page, the redirect to sign-in, and the redirect away from it. A header set
+ * only on the happy path is a header that is missing exactly when something
+ * has gone wrong.
+ *
+ * The cache rules deserve their own note. Supabase's session refresh already
+ * sets `Cache-Control` when it writes a cookie, and those values are
+ * preserved — but it only does so on the responses that *carry* a cookie. A
+ * signed-in page that needed no refresh would otherwise go out with whatever
+ * Next.js chose, which is how one borrower's balance ends up in a shared
+ * cache and then on somebody else's screen. So every path that is not a build
+ * asset is marked `no-store` here regardless.
+ */
+function applyResponsePolicy(
+  request: NextRequest,
+  response: NextResponse,
+  nonce: string,
+): NextResponse {
+  for (const [name, value] of Object.entries(securityHeaders(nonce))) {
+    response.headers.set(name, value);
+  }
+
+  // Echoed so a page can read its own nonce without re-deriving it.
+  response.headers.set(CSP_NONCE_HEADER, nonce);
+
+  if (!isPubliclyCacheablePath(request.nextUrl.pathname)) {
+    for (const [name, value] of Object.entries(PRIVATE_CACHE_HEADERS)) {
+      response.headers.set(name, value);
+    }
+  }
+
   return response;
 }
 

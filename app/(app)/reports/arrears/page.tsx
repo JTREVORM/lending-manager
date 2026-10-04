@@ -5,7 +5,7 @@ import { ReportFilters } from '@/components/reports/report-filters';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
-import { guardPermission } from '@/lib/auth/guard';
+import { guardReportPage } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { ARREARS_STATES, getArrearsReport } from '@/lib/data/reports';
 import { DELINQUENCY_STATE_LABELS } from '@/lib/domain/delinquency';
@@ -47,11 +47,10 @@ export default async function ArrearsReportPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  const context = await guardPermission(
-    `${ROUTES.reports}/arrears`,
+  const context = await guardReportPage(`${ROUTES.reports}/arrears`, [
     'reports:view_operational',
-  );
-  await guardPermission(`${ROUTES.reports}/arrears`, 'delinquency:view');
+    'delinquency:view',
+  ]);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();

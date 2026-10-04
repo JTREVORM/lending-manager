@@ -8,7 +8,7 @@ import { ReportPagination } from '@/components/reports/report-pagination';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import { ROUTES } from '@/config/app';
-import { guardPermission } from '@/lib/auth/guard';
+import { guardReportPage } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getPenaltyReport, type PenaltyReportRow } from '@/lib/data/reports';
 import { formatUgx } from '@/lib/domain/money';
@@ -52,8 +52,10 @@ export default async function PenaltyReportPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardPermission(`${ROUTES.reports}/penalties`, 'reports:view_financial');
-  await guardPermission(`${ROUTES.reports}/penalties`, 'penalties:view');
+  await guardReportPage(`${ROUTES.reports}/penalties`, [
+    'reports:view_financial',
+    'penalties:view',
+  ]);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();

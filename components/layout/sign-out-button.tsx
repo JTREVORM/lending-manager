@@ -3,6 +3,7 @@
 import { LogOut } from 'lucide-react';
 import { useTransition } from 'react';
 
+import { clearServiceWorkerCaches } from '@/components/pwa/service-worker-provider';
 import { signOutAction } from '@/lib/auth/actions';
 import { cn } from '@/lib/utils/cn';
 
@@ -19,8 +20,13 @@ export function SignOutButton({ className }: { readonly className?: string }) {
   return (
     <form
       action={() => {
-        startTransition(() => {
-          void signOutAction();
+        startTransition(async () => {
+          // Before the session ends, not after: a shared counter browser
+          // changes hands the moment the next person signs in, and the
+          // caches must be gone by then. Nothing private is cached in the
+          // first place — this is the floor under that claim.
+          await clearServiceWorkerCaches();
+          await signOutAction();
         });
       }}
     >

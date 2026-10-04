@@ -1,26 +1,20 @@
 import type { NextConfig } from 'next';
 
 /**
- * Security headers applied to every response.
+ * Build configuration.
  *
- * Deliberately conservative: this is a financial application, so framing,
- * MIME sniffing and cross-origin referrer leakage are all denied by default.
+ * ## Where the security headers went
  *
- * A Content-Security-Policy is intentionally NOT set here yet — Phase 2
- * introduces Supabase Auth flows and will need a nonce-based CSP wired through
- * the proxy to avoid breaking them. See docs/SECURITY.md.
+ * They used to be declared here. A `headers()` entry in this file is static
+ * by construction, and a Content-Security-Policy worth having needs a nonce
+ * minted per response — so as of Phase 9 the whole set is built in
+ * `lib/security/headers.ts` and applied by the proxy, which already runs on
+ * every request. One list, one place, and it can vary by environment and by
+ * path.
+ *
+ * Nothing is declared here instead of there, deliberately: two sources of
+ * headers is how a policy ends up weaker on one route than its author thinks.
  */
-const securityHeaders = [
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'X-DNS-Prefetch-Control', value: 'off' },
-  {
-    key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), payment=()',
-  },
-] as const;
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -34,11 +28,11 @@ const nextConfig: NextConfig = {
   // Do not leak the framework version in response headers.
   poweredByHeader: false,
 
-  // Not `async`: the config type expects a Promise-returning function, and
-  // there is nothing to await.
-  headers() {
-    return Promise.resolve([{ source: '/:path*', headers: [...securityHeaders] }]);
-  },
+  // Source maps are not emitted for the production browser bundle. They would
+  // publish the application's own source — including the shape of every
+  // server action and permission check — to anyone who opens devtools. Server
+  // -side stack traces are unaffected; they never reach a browser.
+  productionBrowserSourceMaps: false,
 };
 
 export default nextConfig;

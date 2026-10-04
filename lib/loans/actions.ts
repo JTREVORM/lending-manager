@@ -39,6 +39,7 @@ import { requirePermission } from '@/lib/auth/context';
 import { mapDatabaseError } from '@/lib/db-errors';
 import { toPublicError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { checkActorRateLimit } from '@/lib/security/rate-limit';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   approveLoanSchema,
@@ -318,11 +319,18 @@ export async function approveLoanAction(
   _previous: ActionResult | undefined,
   formData: FormData,
 ): Promise<ActionResult> {
+  let actor;
   try {
-    await requirePermission('loans:approve');
+    actor = await requirePermission('loans:approve');
   } catch (error) {
     return { ok: false, message: toPublicError(error).message };
   }
+
+  // A decision, not throughput. The database still refuses a second
+  // transition on the same loan; this is the brake on a script walking the
+  // whole book.
+  const limit = await checkActorRateLimit('loans.approve', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const parsed = parseSafely(approveLoanSchema, { loanId: formData.get('loanId') });
 
@@ -401,11 +409,18 @@ export async function disburseLoanAction(
   _previous: ActionResult | undefined,
   formData: FormData,
 ): Promise<ActionResult> {
+  let actor;
   try {
-    await requirePermission('loans:disburse');
+    actor = await requirePermission('loans:disburse');
   } catch (error) {
     return { ok: false, message: toPublicError(error).message };
   }
+
+  // A decision, not throughput. The database still refuses a second
+  // transition on the same loan; this is the brake on a script walking the
+  // whole book.
+  const limit = await checkActorRateLimit('loans.disburse', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const parsed = parseSafely(disburseLoanSchema, { loanId: formData.get('loanId') });
 

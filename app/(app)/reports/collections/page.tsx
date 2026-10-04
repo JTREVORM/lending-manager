@@ -5,7 +5,7 @@ import { PrintButton } from '@/components/reports/print-button';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
-import { guardPermission } from '@/lib/auth/guard';
+import { guardReportPage } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getCollectionReport } from '@/lib/data/reports';
 import { formatBusinessDate } from '@/lib/domain/datetime';
@@ -54,8 +54,10 @@ export default async function CollectionReportPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardPermission(`${ROUTES.reports}/collections`, 'reports:view_operational');
-  await guardPermission(`${ROUTES.reports}/collections`, 'payments:view');
+  await guardReportPage(`${ROUTES.reports}/collections`, [
+    'reports:view_operational',
+    'payments:view',
+  ]);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();

@@ -38,6 +38,7 @@ import { requirePermission } from '@/lib/auth/context';
 import { mapDatabaseError } from '@/lib/db-errors';
 import { toPublicError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { checkActorRateLimit } from '@/lib/security/rate-limit';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { uploadDocument } from '@/lib/storage/documents';
@@ -406,11 +407,17 @@ export async function replaceClientDocumentAction(
   _previous: ActionResult | undefined,
   formData: FormData,
 ): Promise<ActionResult> {
+  let actor;
   try {
-    await requirePermission('clients:documents');
+    actor = await requirePermission('clients:documents');
   } catch (error) {
     return { ok: false, message: toPublicError(error).message };
   }
+
+  // An upload is the one path that moves bytes into storage, so it is the one
+  // worth a budget even though the bucket is private and the size is checked.
+  const limit = await checkActorRateLimit('uploads.document', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const clientId = formData.get('clientId');
   const kindRaw = formData.get('kind');

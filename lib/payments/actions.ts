@@ -43,6 +43,7 @@ import { requirePermission } from '@/lib/auth/context';
 import { mapDatabaseError } from '@/lib/db-errors';
 import { toPublicError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { checkActorRateLimit } from '@/lib/security/rate-limit';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { recordPaymentSchema, reversePaymentSchema } from '@/lib/validation/payment';
 import { parseSafely } from '@/lib/validation/validate';
@@ -77,11 +78,19 @@ export async function recordPaymentAction(
   _previous: PaymentActionResult | undefined,
   formData: FormData,
 ): Promise<PaymentActionResult> {
+  let actor;
   try {
-    await requirePermission('payments:create');
+    actor = await requirePermission('payments:create');
   } catch (error) {
     return { ok: false, message: toPublicError(error).message };
   }
+
+  // A brake on volume, not the protection against a double tap — that is the
+  // idempotency key, which is minted when the form renders and re-presented
+  // on every retry. Sixty a minute is faster than any counter runs and far
+  // slower than a loop.
+  const limit = await checkActorRateLimit('payments.create', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const parsed = parseSafely(recordPaymentSchema, {
     loanId: formData.get('loanId'),
@@ -160,11 +169,15 @@ export async function reversePaymentAction(
   _previous: PaymentActionResult | undefined,
   formData: FormData,
 ): Promise<PaymentActionResult> {
+  let actor;
   try {
-    await requirePermission('payments:reverse');
+    actor = await requirePermission('payments:reverse');
   } catch (error) {
     return { ok: false, message: toPublicError(error).message };
   }
+
+  const limit = await checkActorRateLimit('payments.reverse', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const parsed = parseSafely(reversePaymentSchema, {
     paymentId: formData.get('paymentId'),

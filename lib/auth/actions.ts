@@ -19,6 +19,11 @@ import { IdentityError, authEmailForIdentifier } from '@/lib/auth/identity';
 import { performPasswordChange } from '@/lib/auth/password-change';
 import { safeNextPath } from '@/lib/auth/routing';
 import { logger, maskPhone } from '@/lib/logger';
+import {
+  checkActorRateLimit,
+  checkRateLimit,
+  clientAddress,
+} from '@/lib/security/rate-limit';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { signInSchema, updateOwnDetailsSchema } from '@/lib/validation/auth';
@@ -71,6 +76,31 @@ export async function signInAction(
   }
 
   const { identifier, password } = parsed.data;
+
+  // Two buckets, both consumed before the password is ever checked.
+  //
+  // By address, because a script guessing passwords comes from somewhere; and
+  // by the identifier being tried, because an attacker who forges
+  // `X-Forwarded-For` escapes the first bucket and not the second. Neither
+  // bucket is reported differently from a wrong password — a message that
+  // said "too many attempts for this number" would confirm the number exists.
+  const address = await clientAddress();
+
+  for (const subject of [`ip:${address}`, `id:${identifier}`]) {
+    const verdict = await checkRateLimit('auth.sign-in', subject, {
+      preAuthenticated: true,
+    });
+
+    if (!verdict.allowed) {
+      // Not written to the audit ledger. `record_security_event` is granted
+      // to `authenticated` only, and a caller being refused at sign-in has no
+      // session — but more to the point, a refused attempt is an operational
+      // event, not a financial one, and a script hammering the form would
+      // write thousands of rows into the ledger that records what actually
+      // happened to people's money. The limiter logs it instead.
+      return { ok: false, message: verdict.message };
+    }
+  }
 
   let authEmail: string;
   try {
@@ -185,6 +215,14 @@ export async function changePasswordAction(
   }
 
   const context = result.context;
+
+  // The form asks for the current password, which makes it a guessing oracle
+  // for anyone who reaches an unlocked browser. Five attempts in fifteen
+  // minutes is more than a person who mistyped needs and far fewer than a
+  // script wants.
+  const limit = await checkActorRateLimit('auth.password-change', context.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
+
   const supabase = await createSupabaseServerClient();
 
   // The ordering lives in performPasswordChange, which is driven directly by

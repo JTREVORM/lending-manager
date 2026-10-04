@@ -41,6 +41,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      /**
+       * Phase 9. Fixed-window rate limit counters. The key is a hash, so the
+       * table carries no identity; it is readable by nobody and reached only
+       * through `consume_rate_limit`.
+       */
+      rate_limit_counters: {
+        Row: {
+          bucket_key: string;
+          action: string;
+          window_started_at: string;
+          window_seconds: number;
+          request_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          bucket_key: string;
+          action: string;
+          window_started_at: string;
+          window_seconds: number;
+          request_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          bucket_key?: string;
+          action?: string;
+          window_started_at?: string;
+          window_seconds?: number;
+          request_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
       audit_log: {
         Row: {
           id: number;
@@ -1647,6 +1683,28 @@ export type Database = {
     };
 
     Functions: {
+      /**
+       * Phase 9. Records one request against a fixed window and reports
+       * whether it is within the limit. SECURITY DEFINER; see migration
+       * 20261009000200.
+       */
+      consume_rate_limit: {
+        Args: {
+          p_bucket_key: string;
+          p_action: string;
+          p_limit: number;
+          p_window_seconds: number;
+        };
+        Returns: {
+          allowed: boolean;
+          remaining: number;
+          retry_after_seconds: number;
+        }[];
+      };
+      purge_expired_rate_limits: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
       current_profile_id: {
         Args: Record<PropertyKey, never>;
         Returns: string;

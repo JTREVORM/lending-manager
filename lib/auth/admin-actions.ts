@@ -47,6 +47,7 @@ import {
 } from '@/lib/validation/auth';
 import { parseSafely } from '@/lib/validation/validate';
 import type { ActionResult } from '@/lib/auth/actions';
+import { checkActorRateLimit } from '@/lib/security/rate-limit';
 
 /**
  * Create a staff account and its authentication identity.
@@ -70,6 +71,9 @@ export async function createStaffUserAction(
   } catch (error) {
     return failure(error);
   }
+
+  const limit = await checkActorRateLimit('users.create', actorId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const parsed = parseSafely(createStaffUserSchema, {
     fullName: formData.get('fullName'),
@@ -378,6 +382,9 @@ export async function resetUserPasswordAction(
   } catch (error) {
     return failure(error);
   }
+
+  const limit = await checkActorRateLimit('users.reset-password', actorId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
 
   const parsed = parseSafely(resetUserPasswordSchema, {
     profileId: formData.get('profileId'),

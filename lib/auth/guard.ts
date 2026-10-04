@@ -10,6 +10,7 @@ import {
   signInRedirectPath,
 } from '@/lib/auth/routing';
 import { can, type Permission } from '@/lib/permissions';
+import { checkActorRateLimit } from '@/lib/security/rate-limit';
 
 /**
  * The authoritative route guard, run inside Server Components.
@@ -97,4 +98,52 @@ export async function guardPermission(
   }
 
   return context;
+}
+
+/**
+ * The guard a report page runs: capability, then budget.
+ *
+ * Report reads are the heaviest queries in the system and the ones a scraper
+ * would walk. 120 a minute is a number no person reaches by clicking and a
+ * script reaches immediately, so the limit costs honest use nothing.
+ *
+ * It fails **open** when the counter is unreachable — see `LIMITS` — because
+ * a report is a read. Refusing to show a manager their arrears because a
+ * counter table is unavailable would be an outage caused by a safety
+ * mechanism, which is the wrong trade for an operation that changes nothing.
+ */
+export async function guardReportPage(
+  pathname: string,
+  permissions: readonly Permission[],
+): Promise<AuthContext> {
+  let context: AuthContext | undefined;
+
+  for (const permission of permissions) {
+    context = await guardPermission(pathname, permission);
+  }
+
+  if (context === undefined) {
+    throw new Error('guardReportPage needs at least one capability to check.');
+  }
+
+  const limit = await checkActorRateLimit('reports.read', context.profileId);
+
+  if (!limit.allowed) {
+    // A read, so this is a message rather than a thrown error: the page is
+    // still the right page, it simply has nothing new to show yet.
+    throw new RateLimitedError(limit.message, limit.retryAfterSeconds);
+  }
+
+  return context;
+}
+
+/** Raised when a report read exceeds its budget. Carries the wait. */
+export class RateLimitedError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message);
+    this.name = 'RateLimitedError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
 }

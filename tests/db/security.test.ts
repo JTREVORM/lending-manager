@@ -91,6 +91,11 @@ describeDb('row level security', () => {
       // aggregates or joins the authoritative views; none recomputes a figure,
       // and none is writable by any session.
       'collections_today:SELECT',
+      // Phase 9. The company's own name and locale, readable by every
+      // signed-in user including borrowers — SELECT only, through the one
+      // definer view, so the registration and tax numbers on
+      // `company_settings` stay behind `settings:view`.
+      'company_identity:SELECT',
       'company_settings:SELECT',
       'company_settings:UPDATE',
       'dashboard_collection_summary:SELECT',
@@ -418,9 +423,56 @@ describeDb('views', () => {
     // There are views, so this is a real check rather than a vacuous one.
     expect(rows.length).toBeGreaterThan(0);
 
+    /**
+     * The one documented exception, Phase 9.
+     *
+     * `company_identity` exposes the company's own name, locale, timezone,
+     * logo and brand colour to every signed-in user, borrowers included —
+     * because a borrower seeing the name of the software instead of the name
+     * of the lender they owe money to is what the pre-Phase-9 portal did.
+     *
+     * RLS decides rows, not columns, and there is one row here, so no policy
+     * can say "the name but not the tax number". The view is safe because of
+     * what it selects: five public-facing columns, no parameter, no row
+     * choice, and nothing of anyone's money in it. Everything sensitive stays
+     * on `company_settings` behind `settings:view`.
+     *
+     * Listed by name rather than skipped by a pattern, so a second definer
+     * view cannot arrive without this test being edited and the reason
+     * written down. The column list is asserted below.
+     */
+    const DEFINER_BY_DESIGN = new Set(['company_identity']);
+
     for (const row of rows) {
+      if (DEFINER_BY_DESIGN.has(row.relname)) {
+        expect(row.invoker, `${row.relname} is definer by design`).not.toBe('true');
+        continue;
+      }
+
       expect(row.invoker, `${row.relname} must set security_invoker`).toBe('true');
     }
+  });
+
+  it('exposes nothing sensitive through the one definer view', async () => {
+    // The protection on `company_identity` is its column list, so the column
+    // list is the thing to assert. A later migration adding `phone` or
+    // `tax_identification_number` to it would hand the business's
+    // registration details to every borrower.
+    const rows = await query<{ column_name: string }>(
+      `select column_name
+         from information_schema.columns
+        where table_schema = 'public' and table_name = 'company_identity'
+        order by column_name`,
+    );
+
+    expect(rows.map((row) => row.column_name)).toEqual([
+      'brand_primary_color',
+      'company_name',
+      'currency_code',
+      'locale',
+      'logo_path',
+      'timezone',
+    ]);
   });
 
   it('creates exactly the expected views, and no more', () => {
@@ -444,6 +496,10 @@ describeDb('views', () => {
         // cannot apply to it at all. Phase 7 noted one might help a larger
         // portfolio; Phase 8 declines it for that reason.
         'collections_today',
+        // Phase 9. The company's own identity, readable by every signed-in
+        // user including borrowers. The only SECURITY DEFINER view in the
+        // schema, and the test above says why.
+        'company_identity',
         'dashboard_collection_summary',
         'dashboard_portfolio_summary',
         // Phase 6. Balances are derived rather than stored, so a reversal
@@ -498,10 +554,11 @@ describeDb('views', () => {
     // And every view is readable by a signed-in caller, so the revoke did not
     // go too far.
     // One row per view: three from Phase 6, three from Phase 7, five from
-    // Phase 8's reporting layer. Counted here because the names are already
-    // enumerated above; what this assertion is for is the *privilege*, and the
-    // count catches a view that arrived with more than SELECT.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(11);
+    // Phase 8's reporting layer, one from Phase 9. Counted here because the
+    // names are already enumerated above; what this assertion is for is the
+    // *privilege*, and the count catches a view that arrived with more than
+    // SELECT.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(12);
   });
 });
 
@@ -568,6 +625,11 @@ describeDb('privileged functions', () => {
       'clients_guard_privileged_columns',
       'clients_stamp_provenance',
       'confirm_password_change',
+      // Phase 9. The rate limiter. SECURITY DEFINER because its counter table
+      // is readable by nobody: a caller who could read it could tell whether
+      // a given phone number has been attempted, and one who could write it
+      // could clear their own budget. It takes a hash, not an identity.
+      'consume_rate_limit',
       'current_profile_id',
       'current_user_max_rank',
       'current_user_permissions',
@@ -599,6 +661,10 @@ describeDb('privileged functions', () => {
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
+      // Phase 9. Housekeeping for the rate limit counters. Granted to
+      // `service_role` alone: it deletes rows, and a caller who could run it
+      // on demand could clear their own budget.
+      'purge_expired_rate_limits',
       'record_audit_event',
       'record_security_event',
       'record_sign_in',
@@ -696,6 +762,12 @@ describeDb('privileged functions', () => {
       // rather than the browser's.
       'calculate_loan_breakdown',
       'cancel_loan',
+      // Phase 9. The rate limiter. Granted to `authenticated` so a signed-in
+      // caller's own budget is consumed on the path they are using; **not**
+      // granted to `anon`, because an anonymous caller who could consume a
+      // bucket could exhaust a chosen account's sign-in budget and lock that
+      // person out. The pre-authentication path goes through the server.
+      'consume_rate_limit',
       'current_profile_id',
       'current_user_max_rank',
       'current_user_permissions',
