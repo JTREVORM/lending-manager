@@ -573,3 +573,35 @@ describeDb('seeded reference data matches the application constants', () => {
     expect(row.count).toBe('0');
   });
 });
+
+describeDb('embedded relationships PostgREST has to resolve', () => {
+  /**
+   * PostgREST resolves an embed like `profiles -> user_roles(role_key)` from
+   * the foreign keys between the two tables. Where there is more than one it
+   * refuses the request (PGRST201) instead of choosing, so the application has
+   * to name the key it means.
+   *
+   * This asserts the ambiguity is real. `lib/data/users.ts` carries the hint
+   * `user_roles!user_roles_profile_id_fkey`, and a test that the hint is
+   * present proves nothing unless the thing it disambiguates exists — if a
+   * later migration dropped `granted_by`, this would fail and the hint could
+   * be reconsidered rather than silently kept as cargo.
+   */
+  it('user_roles reaches profiles twice, so the directory must name its key', async () => {
+    const rows = await query<{ constraint_name: string }>(
+      `select c.conname as constraint_name
+         from pg_catalog.pg_constraint c
+         join pg_catalog.pg_class child on child.oid = c.conrelid
+         join pg_catalog.pg_class parent on parent.oid = c.confrelid
+        where c.contype = 'f'
+          and child.relname = 'user_roles'
+          and parent.relname = 'profiles'
+        order by c.conname`,
+    );
+
+    expect(rows.map((row) => row.constraint_name)).toEqual([
+      'user_roles_granted_by_fkey',
+      'user_roles_profile_id_fkey',
+    ]);
+  });
+});

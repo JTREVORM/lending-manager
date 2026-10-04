@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -135,5 +138,28 @@ describe('UserStatusBadge', () => {
       expect(screen.getByText(label)).toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+/**
+ * The embed that reads each profile's roles.
+ *
+ * `user_roles` reaches `profiles` through two foreign keys — `profile_id`, the
+ * holder of the role, and `granted_by`, whoever granted it. A PostgREST embed
+ * written as `user_roles(role_key)` is therefore ambiguous, and PostgREST
+ * refuses the whole request with PGRST201 rather than guessing: the directory
+ * does not load at all, for anyone.
+ *
+ * It is asserted here rather than in a rendering test because nothing a
+ * component renders can show it. The failure is in the query, and it only
+ * appears against a real PostgREST — which is how it reached a running build
+ * unnoticed.
+ */
+describe('the user directory query', () => {
+  it('names the foreign key, because user_roles reaches profiles twice', () => {
+    const source = readFileSync(join(process.cwd(), 'lib/data/users.ts'), 'utf8');
+
+    expect(source).toContain('user_roles!user_roles_profile_id_fkey(role_key)');
+    expect(source).not.toMatch(/[^!]user_roles\(role_key\)/);
   });
 });

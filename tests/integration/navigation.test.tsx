@@ -1,4 +1,7 @@
 import { render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -170,7 +173,7 @@ describe('PrimaryNav', () => {
 
   it('marks the current page with aria-current, not only a colour', () => {
     mockPathname.current = ROUTES.users;
-    render(<PrimaryNav variant="sidebar" items={NAV_ITEMS} permissions={OWNER} />);
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
 
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute(
       'aria-current',
@@ -183,7 +186,7 @@ describe('PrimaryNav', () => {
 
   it('marks exactly one item as current', () => {
     mockPathname.current = ROUTES.audit;
-    render(<PrimaryNav variant="sidebar" items={NAV_ITEMS} permissions={OWNER} />);
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
 
     const current = screen
       .getAllByRole('link')
@@ -198,7 +201,7 @@ describe('PrimaryNav', () => {
     render(
       <PrimaryNav
         variant="sidebar"
-        items={NAV_ITEMS}
+        menu="staff"
         permissions={ROLE_PERMISSIONS.secretary_treasurer}
       />,
     );
@@ -210,7 +213,7 @@ describe('PrimaryNav', () => {
 
   it('renders every entry as a link, since each changes the page', () => {
     mockPathname.current = ROUTES.dashboard;
-    render(<PrimaryNav variant="sidebar" items={NAV_ITEMS} permissions={OWNER} />);
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
 
     const links = screen.getAllByRole('link');
     expect(links).toHaveLength(visibleNavItems(NAV_ITEMS, OWNER).length);
@@ -218,7 +221,7 @@ describe('PrimaryNav', () => {
 
   it('uses the short labels in the bottom bar and keeps the touch target', () => {
     mockPathname.current = ROUTES.dashboard;
-    render(<PrimaryNav variant="bottom-bar" items={NAV_ITEMS} permissions={OWNER} />);
+    render(<PrimaryNav variant="bottom-bar" menu="staff" permissions={OWNER} />);
 
     const home = screen.getByRole('link', { name: 'Home' });
     expect(home.className).toContain('min-h-touch');
@@ -227,7 +230,7 @@ describe('PrimaryNav', () => {
 
   it('keeps a section active on its detail pages', () => {
     mockPathname.current = `${ROUTES.users}/0f8fad5b-d9cb-469f-a165-70867728950e`;
-    render(<PrimaryNav variant="sidebar" items={NAV_ITEMS} permissions={OWNER} />);
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
 
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute(
       'aria-current',
@@ -251,5 +254,60 @@ describe('PhasePlaceholder', () => {
     expect(screen.getByText('Planned for Phase 4')).toBeInTheDocument();
     expect(screen.getByText('Not available yet')).toBeInTheDocument();
     expect(screen.getByText('Create a loan')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The server/client boundary around the menu.
+ *
+ * A Lucide icon is a React component, and a React component **cannot be passed
+ * as a prop from a Server Component to a Client Component**: React Server
+ * Components refuses it at render time with "Functions cannot be passed
+ * directly to Client Components", and the error takes down the whole page.
+ *
+ * The shells are Server Components and `PrimaryNav` is a Client Component, so
+ * the menu has to be named across the boundary and resolved on the client
+ * side. That is asserted here at the source level because it cannot be caught
+ * by rendering: these tests run in jsdom, where there is no boundary to cross,
+ * so `PrimaryNav` renders perfectly with items passed in — which is exactly
+ * how this shipped broken and stayed broken.
+ */
+describe('the menu across the server/client boundary', () => {
+  const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+
+  it('resolves the menu inside the client component, not in the shell', () => {
+    const nav = read('components/layout/primary-nav.tsx');
+
+    expect(nav).toContain("'use client'");
+    // Imported here, on the client side, rather than received as a prop.
+    expect(nav).toMatch(/import \{[^}]*NAV_ITEMS[^}]*\} from '\.\/nav-items'/);
+    expect(nav).toContain("menu === 'portal'");
+  });
+
+  it.each([['components/layout/app-shell.tsx'], ['components/layout/portal-shell.tsx']])(
+    'passes %s no component-valued prop to the menu',
+    (file) => {
+      const source = read(file);
+
+      // The shells are Server Components: no 'use client' directive, and no
+      // reference to the item arrays, whose entries hold icon components.
+      expect(source.slice(0, 40)).not.toContain('use client');
+      expect(source).not.toContain('NAV_ITEMS');
+      expect(source).not.toContain('items={');
+      expect(source).toContain('menu=');
+    },
+  );
+
+  it('keeps every prop the shells do pass serialisable', () => {
+    // `variant`, `menu` and `permissions` — a string, a string and an array of
+    // strings. Anything else crossing this boundary needs the same scrutiny.
+    const nav = read('components/layout/primary-nav.tsx');
+    const props =
+      /export interface PrimaryNavProps \{([\s\S]*?)\n\}/.exec(nav)?.[1] ?? '';
+
+    expect(props).toContain('variant:');
+    expect(props).toContain('menu:');
+    expect(props).toContain('permissions:');
+    expect(props).not.toContain('NavItem[]');
   });
 });

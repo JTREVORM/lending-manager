@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import type { AuthContext } from '@/lib/auth/context';
 import { getCompanyBranding } from '@/lib/data/company';
 import { SignOutButton } from './sign-out-button';
-import { PORTAL_NAV_ITEMS } from './nav-items';
 import { PrimaryNav } from './primary-nav';
 
 /**
@@ -65,7 +64,7 @@ export async function PortalShell({
       >
         <PrimaryNav
           variant="bottom-bar"
-          items={PORTAL_NAV_ITEMS}
+          menu="portal"
           permissions={context.permissions}
         />
       </nav>

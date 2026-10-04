@@ -281,6 +281,54 @@ describe('the payment form', () => {
       expect(screen.getByLabelText(/Amount received/i)).toBeInTheDocument();
     });
 
+    /**
+     * The regression this exists for: step one is unmounted while step two is
+     * shown, and an unmounted input is not part of the form. When the amount,
+     * method, reference and note lived only in step one, the submission
+     * carried the loan id and the idempotency key alone — so every payment was
+     * rejected for fields the staff member could no longer see, and nothing
+     * could be recorded through the interface at all.
+     *
+     * Asserting on the FormData the browser would build, rather than on what
+     * is painted, is the point: a confirmation step that *shows* the right
+     * figures while *submitting* none of them is exactly the failure that got
+     * through.
+     */
+    it('submits the figures it is confirming, not just the hidden ids', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<PaymentForm {...FORM_PROPS} />);
+
+      const amount = screen.getByLabelText(/Amount received/i);
+      await user.clear(amount);
+      await user.type(amount, '10000');
+      await user.click(screen.getByRole('radio', { name: /MTN Mobile Money/i }));
+      await user.type(screen.getByLabelText(/Transaction reference/i), 'MP250101ABC');
+      await user.type(screen.getByLabelText(/Note/i), 'Paid at the shop');
+      await user.click(screen.getByRole('button', { name: /Continue/i }));
+
+      const form = container.querySelector('form');
+      expect(form).not.toBeNull();
+
+      const data = new FormData(form!);
+      expect(data.get('loanId')).toBe(FORM_PROPS.loanId);
+      expect(data.get('idempotencyKey')).toBe(FORM_PROPS.idempotencyKey);
+      expect(data.get('amount')).toBe('10000');
+      expect(data.get('paymentMethod')).toBe('mtn_mobile_money');
+      expect(data.get('externalReference')).toBe('MP250101ABC');
+      expect(data.get('notes')).toBe('Paid at the shop');
+    });
+
+    it('carries no reference for a cash payment, which the database refuses', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<PaymentForm {...FORM_PROPS} />);
+
+      await user.click(screen.getByRole('button', { name: /Continue/i }));
+
+      const data = new FormData(container.querySelector('form')!);
+      expect(data.get('paymentMethod')).toBe('cash');
+      expect(data.get('externalReference')).toBeNull();
+    });
+
     it('names the amount on the submit button, so it cannot be tapped blind', async () => {
       const user = userEvent.setup();
       render(<PaymentForm {...FORM_PROPS} />);

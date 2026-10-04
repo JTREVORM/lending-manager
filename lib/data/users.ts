@@ -28,6 +28,19 @@ import type { ProfileStatus } from '@/lib/domain/status';
 import type { UserDirectoryFilter } from '@/lib/validation/auth';
 
 /**
+ * The columns a directory row is built from, with the roles embedded.
+ *
+ * `user_roles!user_roles_profile_id_fkey` names the foreign key explicitly
+ * because `user_roles` reaches `profiles` twice: once as the profile the role
+ * belongs to, and once as `granted_by`, the profile that granted it. Left
+ * unqualified, PostgREST cannot tell which relationship is meant and refuses
+ * the request (PGRST201) rather than guessing — so the directory would not
+ * load at all. The hint says: the holder, not the grantor.
+ */
+const DIRECTORY_COLUMNS =
+  'id, full_name, phone, email, status, must_change_password, last_sign_in_at, created_at, auth_user_id, user_roles!user_roles_profile_id_fkey(role_key)';
+
+/**
  * Reading the user directory.
  *
  * Every query runs as the signed-in caller, so Row Level Security decides what
@@ -56,9 +69,7 @@ export async function listUsers(
 
   let query = supabase
     .from('profiles')
-    .select(
-      'id, full_name, phone, email, status, must_change_password, last_sign_in_at, created_at, auth_user_id, user_roles(role_key)',
-    )
+    .select(DIRECTORY_COLUMNS)
     .order('full_name', { ascending: true })
     .limit(200);
 
@@ -112,9 +123,7 @@ export async function getUser(profileId: string): Promise<DirectoryUser | null> 
 
   const { data, error } = await supabase
     .from('profiles')
-    .select(
-      'id, full_name, phone, email, status, must_change_password, last_sign_in_at, created_at, auth_user_id, user_roles(role_key)',
-    )
+    .select(DIRECTORY_COLUMNS)
     .eq('id', profileId)
     .maybeSingle();
 

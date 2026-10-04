@@ -6,7 +6,6 @@ import type { AuthContext } from '@/lib/auth/context';
 import { getCompanyBranding } from '@/lib/data/company';
 import { ROLES, effectiveRole } from '@/lib/permissions';
 import { SignOutButton } from './sign-out-button';
-import { NAV_ITEMS } from './nav-items';
 import { PrimaryNav } from './primary-nav';
 
 /**
@@ -63,11 +62,7 @@ export async function AppShell({
           </span>
         </div>
 
-        <PrimaryNav
-          variant="sidebar"
-          items={NAV_ITEMS}
-          permissions={context.permissions}
-        />
+        <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
 
         <div className="border-border mt-2 border-t pt-2">
           <p className="truncate px-3 pt-1 text-sm font-medium">{context.fullName}</p>
@@ -112,11 +107,7 @@ export async function AppShell({
         aria-label="Main navigation"
         className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
       >
-        <PrimaryNav
-          variant="bottom-bar"
-          items={NAV_ITEMS}
-          permissions={context.permissions}
-        />
+        <PrimaryNav variant="bottom-bar" menu="staff" permissions={context.permissions} />
       </nav>
     </div>
   );

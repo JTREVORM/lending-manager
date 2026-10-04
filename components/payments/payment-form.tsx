@@ -113,6 +113,8 @@ export function PaymentForm({
 
   const [amountText, setAmountText] = useState(suggested > 0 ? String(suggested) : '');
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [reference, setReference] = useState('');
+  const [notes, setNotes] = useState('');
   const [confirming, setConfirming] = useState(false);
 
   // The preview. Deliberately tolerant of input that is not yet a number —
@@ -283,6 +285,10 @@ export function PaymentForm({
                 autoComplete="off"
                 autoCapitalize="characters"
                 required
+                value={reference}
+                onChange={(event) => {
+                  setReference(event.target.value);
+                }}
                 error={result?.fieldErrors?.externalReference?.[0]}
                 hint="From the Mobile Money message. It is what stops the same payment being recorded twice."
               />
@@ -301,6 +307,10 @@ export function PaymentForm({
               name="notes"
               type="text"
               autoComplete="off"
+              value={notes}
+              onChange={(event) => {
+                setNotes(event.target.value);
+              }}
               error={result?.fieldErrors?.notes?.[0]}
             />
           </div>
@@ -350,6 +360,20 @@ export function PaymentForm({
       {/* --- Step two: confirm ----------------------------------------- */}
       {confirming && plan !== null ? (
         <Card>
+          {/* Step one is unmounted while this step is shown, and an unmounted
+              input is not submitted — so the amount, the method, the reference
+              and the note are carried here as hidden fields. Without them the
+              submission arrives with `loanId` and the idempotency key alone,
+              and the action rejects it for fields the staff member can no
+              longer see. The values are the same state step one edits, so the
+              two steps cannot disagree. */}
+          <input type="hidden" name="amount" value={amountText} />
+          <input type="hidden" name="paymentMethod" value={method} />
+          {isMobileMoney(method) ? (
+            <input type="hidden" name="externalReference" value={reference} />
+          ) : null}
+          <input type="hidden" name="notes" value={notes} />
+
           <h3 className="text-text text-lg font-semibold">Confirm this payment</h3>
           <p className="text-text-muted mt-1 text-sm">
             Check every figure against what the borrower handed over. Once recorded, a
