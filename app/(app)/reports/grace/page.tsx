@@ -1,0 +1,110 @@
+import { ExportLink } from '@/components/reports/export-link';
+import { PortfolioReportView } from '@/components/reports/portfolio-report-view';
+import { PrintButton } from '@/components/reports/print-button';
+import { ReportPagination } from '@/components/reports/report-pagination';
+import type { ReportColumn } from '@/components/reports/report-table';
+import { ROUTES } from '@/config/app';
+import { guardPermission } from '@/lib/auth/guard';
+import { getCompanyBranding } from '@/lib/data/company';
+import { getGracePeriodReport, type PortfolioRow } from '@/lib/data/reports';
+import { businessToday, daysBetween, formatBusinessDate } from '@/lib/domain/datetime';
+import { singleParam, type ParamRecord } from '@/lib/reports/filters';
+
+export const metadata = { title: 'Grace period' };
+
+/**
+ * Loans inside their grace period.
+ *
+ * ## Penalised loans are deliberately absent
+ *
+ * §29, and it matters operationally rather than cosmetically. This is the list
+ * of borrowers who can *still* settle with no charge, which is what a
+ * collections officer rings them to say. A loan that has already been charged
+ * has no such offer left, and putting it here would have somebody promising a
+ * deadline that passed. Those loans are on the arrears and penalty reports.
+ *
+ * ## Days remaining is a date subtraction, not a new rule
+ *
+ * `grace_end_date` comes from Phase 7, computed from the loan's own
+ * snapshotted grace period. This page subtracts today from it to say how long
+ * is left. No grace rule is reimplemented here, and the figure cannot disagree
+ * with the delinquency engine because it is the engine's own date.
+ */
+export default async function GracePeriodPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<ParamRecord>;
+}) {
+  await guardPermission(`${ROUTES.reports}/grace`, 'reports:view_operational');
+  await guardPermission(`${ROUTES.reports}/grace`, 'delinquency:view');
+
+  const params = await searchParams;
+  const { branding } = await getCompanyBranding();
+  const today = businessToday(new Date(), branding.timezone);
+
+  const report = await getGracePeriodReport({ page: singleParam(params, 'page') });
+
+  const graceColumns: readonly ReportColumn<PortfolioRow>[] = [
+    {
+      key: 'graceEnd',
+      header: 'Grace ends',
+      cell: (row) =>
+        row.graceEndDate === null ? '—' : formatBusinessDate(row.graceEndDate),
+    },
+    {
+      key: 'penaltyFrom',
+      header: 'Charge applies from',
+      cell: (row) =>
+        row.penaltyEffectiveDate === null
+          ? '—'
+          : formatBusinessDate(row.penaltyEffectiveDate),
+    },
+    {
+      key: 'daysLeft',
+      header: 'Days left',
+      numeric: true,
+      cell: (row) =>
+        row.graceEndDate === null
+          ? '—'
+          : String(Math.max(0, daysBetween(today, row.graceEndDate))),
+    },
+  ];
+
+  return (
+    <div className="min-w-0 space-y-5">
+      <header className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-text text-2xl font-semibold">Grace period</h1>
+            <p className="text-text-muted mt-1 text-sm">
+              As at {formatBusinessDate(today)} · {branding.companyName}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <PrintButton />
+            <ExportLink href={`${ROUTES.reports}/grace/export`} />
+          </div>
+        </div>
+        <p className="text-text-muted text-sm">
+          These loans are past their final collection date and can still be settled in
+          full with no late-payment charge. Loans that have already been charged are on
+          the arrears and charges reports, not here.
+        </p>
+      </header>
+
+      <PortfolioReportView
+        report={report}
+        timeZone={branding.timezone}
+        columns={graceColumns}
+        emptyTitle="No loans are in their grace period"
+        emptyDescription="Every loan is either within its schedule, already charged, or settled."
+      />
+
+      <ReportPagination
+        page={report.page.page}
+        hasMore={report.page.hasMore}
+        rowsShown={report.page.rows.length}
+      />
+    </div>
+  );
+}

@@ -210,6 +210,30 @@ export const PERMISSIONS = [
   'delinquency:view',
   /** See a loan's expiry penalty: its basis, rate, amount and what remains. */
   'penalties:view',
+
+  // Phase 8. Reporting is split by *what the figures reveal*, not by which
+  // screen they appear on. One `reports:view` would have meant that the person
+  // who counts cash over the counter and the person who owns the business see
+  // the same screens, and the first financial report shipped behind it would
+  // have handed the portfolio's interest income to the counter.
+  //
+  // A reporting capability grants the reporting *surface*, never the rows: the
+  // arrears report also needs `delinquency:view`, the collection report also
+  // needs `payments:view`, and Row Level Security decides what comes back in
+  // either case. So these three widen nobody's access to a record they could
+  // not already open one at a time.
+  //
+  // There is no `reports:export` apart from viewing. A holder who may read a
+  // report may take the CSV of exactly the rows it showed them; denying that
+  // would be denying copy-and-paste rather than enforcing anything. What
+  // export does need is the same check on the server, which the route
+  // handlers perform.
+  /** Open the operational reports: collections, today's list, arrears, grace. */
+  'reports:view_operational',
+  /** Open portfolio-wide reports: the loan register, cleared loans, penalties. */
+  'reports:view_financial',
+  /** Open the executive summary: interest and penalty collected, principal lent. */
+  'reports:view_sensitive',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -290,6 +314,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // Chasing collections is this role's daily work.
     'delinquency:view',
     'penalties:view',
+
+    // The collection sheet and the arrears list are this role's working
+    // documents all day. Deliberately nothing beyond: portfolio-wide
+    // outstanding, business-wide interest income and the executive summary are
+    // not needed to take money over a counter, and §42 asks for that to be a
+    // decision rather than an inheritance.
+    'reports:view_operational',
   ],
 
   manager: [
@@ -350,6 +381,14 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'delinquency:view',
     'penalties:view',
+
+    // Supervising lending is not possible without seeing the book: what is
+    // outstanding, what is late, what has been charged. Still not
+    // `reports:view_sensitive` — what the business *earns* is the Owner's
+    // figure, and a Manager needs none of it to chase a payment or approve a
+    // loan.
+    'reports:view_operational',
+    'reports:view_financial',
   ],
 
   owner_admin: [
@@ -401,6 +440,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'delinquency:view',
     'penalties:view',
+
+    'reports:view_operational',
+    'reports:view_financial',
+    'reports:view_sensitive',
   ],
 } as const;
 

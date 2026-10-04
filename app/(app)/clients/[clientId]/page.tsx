@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ClientGuarantorPanel } from '@/components/guarantors/client-guarantor-panel';
+import { ClientLoanSummary } from '@/components/clients/client-loan-summary';
+import { RecentPayments } from '@/components/dashboard/recent-payments';
 import { ClientRemarks } from '@/components/clients/client-remarks';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
 import { ClientStatusPanel } from '@/components/clients/client-status-panel';
@@ -13,6 +15,9 @@ import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getClient, getClientIdentity, listClientRemarks } from '@/lib/data/clients';
 import { listClientGuarantors } from '@/lib/data/guarantors';
+import { listRecentPayments } from '@/lib/data/dashboard';
+import { getCompanyBranding } from '@/lib/data/company';
+import { listClientLoans } from '@/lib/data/reports';
 import { signedDocumentUrl } from '@/lib/storage/documents';
 import {
   SEX_LABELS,
@@ -58,11 +63,23 @@ export default async function ClientDetailPage({
 
   const canSeeNin = contextCan(context, 'clients:view_nin');
 
-  const [identity, remarks, guarantors] = await Promise.all([
-    canSeeNin ? getClientIdentity(clientId) : Promise.resolve(null),
-    listClientRemarks(clientId),
-    listClientGuarantors(clientId),
-  ]);
+  const canSeeLoans = contextCan(context, 'loans:view');
+  const canSeePayments = contextCan(context, 'payments:view');
+
+  const [identity, remarks, guarantors, loans, payments, { branding }] =
+    await Promise.all([
+      canSeeNin ? getClientIdentity(clientId) : Promise.resolve(null),
+      listClientRemarks(clientId),
+      listClientGuarantors(clientId),
+      // Phase 8. The client record now answers "where does this borrower
+      // stand", which previously meant opening the loan register and filtering
+      // it. Fetched only for a caller who may read loans: hiding a section in
+      // the markup after fetching it is the mistake that turns a presentation
+      // decision into a leak.
+      canSeeLoans ? listClientLoans(clientId) : Promise.resolve([]),
+      canSeePayments ? listRecentPayments(8, { clientId }) : Promise.resolve([]),
+      getCompanyBranding(),
+    ]);
 
   // Signed at render time, valid for a minute. Never a permanent address.
   const [photoUrl, documentUrl] = await Promise.all([
@@ -211,7 +228,15 @@ export default async function ClientDetailPage({
 
       {/* --- Remarks ------------------------------------------------------ */}
       {contextCan(context, 'clients:remarks_view') ? (
-        <section aria-labelledby="remarks-heading" className="min-w-0 space-y-3">
+        <section
+          /* Phase 8's arrears report links here with #remarks, so a
+             collections officer reading the list can reach the full timeline
+             and the existing form in one click — rather than Phase 8 growing
+             a second place to write a note. */
+          id="remarks"
+          aria-labelledby="remarks-heading"
+          className="min-w-0 scroll-mt-4 space-y-3"
+        >
           <h2 id="remarks-heading" className="text-text text-lg font-semibold">
             Remarks
           </h2>
@@ -248,11 +273,31 @@ export default async function ClientDetailPage({
         </section>
       ) : null}
 
-      {/* A per-client loan list is not built here. The loan register at
-          /loans filters by client, so this would be a second route to the
-          same rows; and an empty "Loans" heading on this page would read as
-          "this client has no loans", which needs a query this page does not
-          make. */}
+      {canSeeLoans ? (
+        <section aria-labelledby="client-loans-heading" className="min-w-0 space-y-3">
+          <h2 id="client-loans-heading" className="text-base">
+            Loans
+          </h2>
+          <ClientLoanSummary loans={loans} />
+        </section>
+      ) : null}
+
+      {canSeePayments ? (
+        <section aria-labelledby="client-payments-heading" className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="client-payments-heading" className="text-base">
+              Recent payments
+            </h2>
+            <Link
+              href={`${ROUTES.reports}/collections?period=year&clientId=${client.id}`}
+              className="text-brand-700 text-sm hover:underline"
+            >
+              Every payment this year
+            </Link>
+          </div>
+          <RecentPayments payments={payments} timeZone={branding.timezone} />
+        </section>
+      ) : null}
     </div>
   );
 }

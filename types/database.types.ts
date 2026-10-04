@@ -1267,6 +1267,221 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      /**
+       * Phase 8. One row per recorded payment with its allocation components.
+       * `loan_number` and the client columns are nullable because the joins are
+       * outer: a financial register must show a payment the caller may read even
+       * if a future role could not read the borrower's directory entry.
+       */
+      payment_register: {
+        Row: {
+          payment_id: string;
+          payment_number: string;
+          loan_id: string;
+          loan_number: string | null;
+          client_id: string;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          client_name_at_payment: string;
+          amount: number;
+          payment_method: string;
+          status: string;
+          is_effective: boolean;
+          effective_amount: number;
+          received_at: string;
+          business_date: string;
+          recorded_by: string;
+          recorded_by_label: string;
+          external_reference: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversal_reason: string | null;
+          outstanding_before: number;
+          outstanding_after: number;
+          allocated_principal: number;
+          allocated_interest: number;
+          allocated_penalty: number;
+          principal_collected: number;
+          interest_collected: number;
+          penalty_collected: number;
+        };
+        Relationships: [];
+      };
+      /** Phase 8. Loans with a collection due today that was not already covered. */
+      collections_today: {
+        Row: {
+          loan_id: string;
+          loan_number: string;
+          loan_status: string;
+          client_id: string;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          business_date: string;
+          installment_id: string;
+          installment_number: number;
+          scheduled_amount: number;
+          expected_today: number;
+          collected_today: number;
+          payments_today: number;
+          remaining_today: number;
+          arrears_amount: number;
+          current_due: number;
+          total_outstanding: number;
+          days_past_due: number;
+          missed_installment_count: number;
+          delinquency_state: string;
+          collection_status: string;
+        };
+        Relationships: [];
+      };
+      /**
+       * Phase 8. The loan register with its derived balances and delinquency.
+       * Everything from `loan_balances` and `loan_delinquency` is nullable: a
+       * draft or cancelled loan has no schedule, so it appears here with no
+       * derived position rather than with invented zeroes.
+       */
+      loan_portfolio_report: {
+        Row: {
+          loan_id: string;
+          loan_number: string;
+          client_id: string;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          client_status: string | null;
+          client_name_at_origination: string | null;
+          client_phone_at_origination: string | null;
+          loan_status: string;
+          principal_amount: number;
+          interest_rate_bps: number;
+          interest_method: string;
+          loan_term_months: number;
+          repayment_frequency: string;
+          contractual_interest: number;
+          total_expected_repayment: number;
+          grace_period_days_applied: number;
+          penalty_rate_bps_applied: number;
+          proposed_disbursement_date: string | null;
+          disbursed_at: string | null;
+          cleared_at: string | null;
+          cancelled_at: string | null;
+          created_at: string;
+          scheduled_total: number | null;
+          total_paid: number | null;
+          principal_paid: number | null;
+          interest_paid: number | null;
+          contractual_outstanding: number | null;
+          principal_remaining: number | null;
+          interest_remaining: number | null;
+          penalty_assessed: number | null;
+          penalty_paid: number | null;
+          penalty_remaining: number | null;
+          total_outstanding: number | null;
+          total_collected: number | null;
+          fully_repaid: boolean | null;
+          posted_payment_total: number | null;
+          posted_payment_count: number | null;
+          reversed_payment_count: number | null;
+          last_payment_at: string | null;
+          scheduled_completion_date: string | null;
+          installment_count: number | null;
+          first_due_date: string | null;
+          arrears_amount: number | null;
+          due_today_amount: number | null;
+          current_due: number | null;
+          missed_installment_count: number | null;
+          days_past_due: number | null;
+          oldest_unpaid_due_date: string | null;
+          oldest_past_due_date: string | null;
+          grace_end_date: string | null;
+          penalty_effective_date: string | null;
+          within_grace_period: boolean | null;
+          penalty_applied: boolean | null;
+          penalty_eligible: boolean | null;
+          penalty_projected_amount: number | null;
+          delinquency_state: string | null;
+        };
+        Relationships: [];
+      };
+      /**
+       * Phase 8. A single row of business-wide figures. Every column is an
+       * aggregate with a `coalesce`, so none of them is ever null — an empty
+       * database reports zero, which is the true answer.
+       */
+      dashboard_portfolio_summary: {
+        Row: {
+          business_date: string;
+          total_clients: number;
+          active_clients: number;
+          inactive_clients: number;
+          suspended_clients: number;
+          blacklisted_clients: number;
+          archived_clients: number;
+          clients_with_active_loan: number;
+          loans_total: number;
+          loans_draft: number;
+          loans_pending_approval: number;
+          loans_approved: number;
+          loans_active: number;
+          loans_cleared: number;
+          loans_cancelled: number;
+          principal_disbursed: number;
+          contractual_interest: number;
+          contractual_expected: number;
+          contract_collected: number;
+          principal_collected: number;
+          interest_collected: number;
+          penalty_collected: number;
+          total_collected: number;
+          posted_payment_total: number;
+          contractual_outstanding: number;
+          principal_outstanding: number;
+          interest_outstanding: number;
+          penalty_assessed: number;
+          penalty_outstanding: number;
+          total_outstanding: number;
+          loans_with_schedule: number;
+          loans_state_current: number;
+          loans_state_due_today: number;
+          loans_state_in_arrears: number;
+          loans_state_grace_period: number;
+          loans_state_expired_unpaid: number;
+          loans_state_penalty_due: number;
+          loans_state_cleared: number;
+          loans_with_arrears: number;
+          loans_penalised: number;
+          loans_penalty_pending: number;
+          arrears_total: number;
+          due_today_total: number;
+          current_due_total: number;
+        };
+        Relationships: [];
+      };
+      /** Phase 8. A single row for today: target, received, method split, components. */
+      dashboard_collection_summary: {
+        Row: {
+          business_date: string;
+          expected_today: number;
+          remaining_today: number;
+          loans_due_today: number;
+          clients_due_today: number;
+          loans_settled_today: number;
+          collected_today: number;
+          payments_today: number;
+          clients_paying_today: number;
+          cash_received: number;
+          mtn_received: number;
+          airtel_received: number;
+          principal_collected: number;
+          interest_collected: number;
+          penalty_collected: number;
+          reversed_today_amount: number;
+          reversed_today_count: number;
+        };
+        Relationships: [];
+      };
       loan_installment_coverage: {
         Row: {
           installment_id: string;

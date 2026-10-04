@@ -548,15 +548,23 @@ describeDb('payment row level security', () => {
       );
 
       // Phase 6 added three; Phase 7 adds `loan_penalty_coverage`,
-      // `loan_obligations` and `loan_delinquency`. Named rather than counted,
-      // so a new view cannot be waved through by bumping a number.
+      // `loan_obligations` and `loan_delinquency`; Phase 8 adds the five
+      // reporting views. Named rather than counted, so a new view cannot be
+      // waved through by bumping a number — and the loop below requires every
+      // one of them to set `security_invoker`, which is what keeps a reporting
+      // view from becoming a complete Row Level Security bypass.
       expect(rows.map((row) => row.relname)).toEqual([
+        'collections_today',
+        'dashboard_collection_summary',
+        'dashboard_portfolio_summary',
         'loan_balances',
         'loan_delinquency',
         'loan_installment_coverage',
         'loan_obligations',
         'loan_penalty_coverage',
+        'loan_portfolio_report',
         'payment_collection_totals',
+        'payment_register',
       ]);
 
       for (const row of rows) {

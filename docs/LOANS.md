@@ -1245,6 +1245,32 @@ What Phase 7 leaves for later, deliberately:
    generated installment, a snapshotted term or a contractual interest figure;
    the upgrade from Phase 6 is fingerprint-identical on all three.
 
+# Phase 8 — reporting
+
+Phase 8 adds no loan rule, no money rule and no table. Dashboards, reports, the
+client statement, the portal and the Manager remarks integration are documented
+in [REPORTING.md](REPORTING.md), which also carries the definition of every
+figure they display.
+
+Two things are worth stating here, in the document about the loan engine,
+because they are promises Phase 8 makes about it:
+
+1. **Nothing in the reporting layer calculates money.** Every figure is read
+   from `loans`, `loan_balances`, `loan_delinquency` or the payment ledger. The
+   one new quantity in the whole phase is `expected_today` — the day's
+   collection target as it stood at the start of the day — and it is a
+   subtraction between two stored amounts, computed in SQL beside the data. See
+   ADR-037.
+2. **Nothing in the reporting layer writes.** No route under `/reports` exports
+   anything but `GET`, no reporting view is writable by any session role, and a
+   report read never materialises a late-payment charge: fifteen reads across
+   every reporting view against a loan past its charge date leave
+   `loan_penalties` empty. Phase 7 made reads side-effect free and Phase 8
+   keeps them that way.
+
+The upgrade is fingerprint-identical on loans, installments, periods, payments,
+allocations, charges, balances, snapshots, receipts and the audit trail.
+
 ## Test commands
 
 ```bash

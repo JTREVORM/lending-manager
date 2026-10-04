@@ -87,8 +87,14 @@ describeDb('row level security', () => {
       'clients:INSERT',
       'clients:SELECT',
       'clients:UPDATE',
+      // Phase 8. The reporting views, SELECT only like every other view. Each
+      // aggregates or joins the authoritative views; none recomputes a figure,
+      // and none is writable by any session.
+      'collections_today:SELECT',
       'company_settings:SELECT',
       'company_settings:UPDATE',
+      'dashboard_collection_summary:SELECT',
+      'dashboard_portfolio_summary:SELECT',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
@@ -124,6 +130,8 @@ describeDb('row level security', () => {
       'loan_penalties:SELECT',
       'loan_penalty_coverage:SELECT',
       'loan_periods:SELECT',
+      // Phase 8. Reporting views, SELECT only like every other view.
+      'loan_portfolio_report:SELECT',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
@@ -132,6 +140,7 @@ describeDb('row level security', () => {
       // reverse_payment are the only writers, and they run as the table owner.
       'payment_allocations:SELECT',
       'payment_collection_totals:SELECT',
+      'payment_register:SELECT',
       'permissions:SELECT',
       'profiles:INSERT',
       'profiles:SELECT',
@@ -423,6 +432,20 @@ describeDb('views', () => {
         order by c.relname`,
     ).then((rows) => {
       expect(rows.map((row) => row.relname)).toEqual([
+        // Phase 8. The reporting views: the collection sheet, the two
+        // dashboard summaries, the loan register and the payment register.
+        // Every one aggregates or joins the views below rather than
+        // recomputing anything, and every one is `security_invoker` — a
+        // reporting view that ran as its owner would be the most valuable
+        // single object in the schema to an attacker.
+        //
+        // None is materialised, deliberately. A materialised view is owned
+        // data with no caller to be read on behalf of, so Row Level Security
+        // cannot apply to it at all. Phase 7 noted one might help a larger
+        // portfolio; Phase 8 declines it for that reason.
+        'collections_today',
+        'dashboard_collection_summary',
+        'dashboard_portfolio_summary',
         // Phase 6. Balances are derived rather than stored, so a reversal
         // changes every figure the instant it commits.
         'loan_balances',
@@ -434,7 +457,9 @@ describeDb('views', () => {
         'loan_installment_coverage',
         'loan_obligations',
         'loan_penalty_coverage',
+        'loan_portfolio_report',
         'payment_collection_totals',
+        'payment_register',
       ]);
     });
   });
@@ -472,8 +497,11 @@ describeDb('views', () => {
 
     // And every view is readable by a signed-in caller, so the revoke did not
     // go too far.
-    // One row per view: three from Phase 6, three from Phase 7.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(6);
+    // One row per view: three from Phase 6, three from Phase 7, five from
+    // Phase 8's reporting layer. Counted here because the names are already
+    // enumerated above; what this assertion is for is the *privilege*, and the
+    // count catches a view that arrived with more than SELECT.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(11);
   });
 });
 

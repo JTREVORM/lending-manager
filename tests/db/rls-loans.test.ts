@@ -522,6 +522,11 @@ describeDb('loan row level security', () => {
         'loan_penalties:SELECT',
         'loan_penalty_coverage:SELECT',
         'loan_periods:SELECT',
+        // Phase 8. The loan register for reports: a join of the loan, its
+        // balances and its delinquency position. SELECT only, and
+        // `security_invoker`, so it returns exactly the loans the reader's own
+        // policies admit.
+        'loan_portfolio_report:SELECT',
         'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',

@@ -278,3 +278,51 @@ The delinquency rules exist twice for the same reason the allocation rules do:
 `tests/db/delinquency-parity.test.ts` reconciles it against the database view
 across randomly aged loans, the way `payment-parity` and `schedule-parity` do
 for Phases 6 and 5.
+
+## Phase 8 — dashboards, reports and the client portal
+
+The KPI definitions, the role matrix, every report, the filters, the exports,
+the statement, the portal contents, the remarks integration, the reporting
+views, their Row Level Security and the measured query costs are documented in
+[REPORTING.md](REPORTING.md).
+
+**No table is added.** Phase 8 adds three capabilities and five
+`security_invoker` views — `payment_register`, `collections_today`,
+`loan_portfolio_report`, `dashboard_portfolio_summary` and
+`dashboard_collection_summary` — and nothing else to the schema. None is
+materialised and none is `SECURITY DEFINER`: both would be owned data with no
+caller to be read on behalf of, which Row Level Security cannot apply to at
+all. See ADR-039.
+
+**Nothing in the phase computes money.** The views aggregate and join figures
+that `loans`, `loan_balances`, `loan_delinquency` and the payment ledger
+already decided; `lib/data/reports.ts` sums per-row figures those views
+produced; `lib/domain/reporting.ts` handles dates, paging, CSV and the written
+definitions and adds no money at all. `npm run audit:money` covers all
+nineteen new financial files for exactly this reason, and caught two hazards on
+its first run. See ADR-037.
+
+**One new quantity exists in the whole phase**: `expected_today`, the day's
+collection target as it stood at the start of the day, which Phase 7's
+`due_today_amount` cannot express because it nets off today's payments too.
+The two are reported side by side and the screen says in words that
+`expected − collected ≠ remaining`. See ADR-040.
+
+**The reporting layer uses only the caller's own client.** A source-level test
+asserts no report page, export route or data module reaches
+`createSupabasePrivilegedClient` — a report is business-wide only because the
+caller is entitled to every row in it, which is why one export route serves a
+Secretary/Treasurer and an Owner with the same code and different files.
+
+The dashboard is one page composed from capabilities rather than three
+role-specific pages, so each card has exactly one definition; a caller without
+a capability never triggers the query behind it, so the data is not fetched and
+then hidden in the markup.
+
+Two small refactors paid for themselves here. The loan lifecycle vocabulary and
+the collection-status vocabulary now live in `lib/domain/` rather than beside
+the queries that produce them, so the layer that validates a URL does not have
+to import the data access layer; and `lib/reports/{csv,filters}.ts` carry no
+`server-only` marker, because the formula-disarming and the filter whitelisting
+are security controls and a control that cannot be unit-tested is a control
+nobody can be sure of.

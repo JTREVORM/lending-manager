@@ -49,7 +49,7 @@ export async function AppShell({
       {/* --- Desktop sidebar ------------------------------------------- */}
       <nav
         aria-label="Main navigation"
-        className="border-border bg-surface fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r p-3 md:flex"
+        className="border-border bg-surface fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r p-3 md:flex print:hidden"
       >
         <div className="mb-5 flex items-center gap-2.5 px-2 pt-2">
           <span className="bg-brand-600 flex size-9 shrink-0 items-center justify-center rounded-lg">
@@ -77,7 +77,7 @@ export async function AppShell({
       </nav>
 
       {/* --- Mobile header -------------------------------------------- */}
-      <header className="border-border bg-surface sticky top-0 z-20 flex items-center gap-2.5 border-b px-4 py-3 md:hidden">
+      <header className="border-border bg-surface sticky top-0 z-20 flex items-center gap-2.5 border-b px-4 py-3 md:hidden print:hidden">
         <span className="bg-brand-600 flex size-8 shrink-0 items-center justify-center rounded-lg">
           <ShieldCheck aria-hidden="true" className="size-4 text-white" />
         </span>
@@ -95,7 +95,10 @@ export async function AppShell({
       </header>
 
       {/* --- Main region ---------------------------------------------- */}
-      <div className="md:pl-60">
+      {/* `print:pl-0` matters: the sidebar is hidden when printing, so the
+          main region's left padding would otherwise leave a 15rem blank
+          margin down every printed page. */}
+      <div className="md:pl-60 print:pl-0">
         <main
           id="main-content"
           className="mx-auto w-full max-w-5xl px-4 py-5 pb-24 sm:px-6 md:pb-10"
@@ -107,7 +110,7 @@ export async function AppShell({
       {/* --- Mobile bottom bar ---------------------------------------- */}
       <nav
         aria-label="Main navigation"
-        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
+        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
       >
         <PrimaryNav
           variant="bottom-bar"

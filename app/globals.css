@@ -236,3 +236,58 @@
     font-weight: 600;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Print
+ 
+   Statements and reports are printed and handed to borrowers, so the printed
+   page is a real output of this system rather than an afterthought. The
+   navigation, the filter bar, the pagination and the action buttons all carry
+   `print:hidden` where they are rendered; what is left here is what cannot be
+   expressed as a utility class on one element.
+ 
+   No colour is forced to black. A status badge whose meaning depended on
+   colour would be unreadable in print — which is exactly why every badge in
+   this application also states its meaning in words.
+ --------------------------------------------------------------------------- */
+@media print {
+  /* A printed page is paper, not a dark screen. Backgrounds are dropped so a
+     dark-mode viewer does not print a page of ink. */
+  :root {
+    --color-surface: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-bg: #ffffff;
+    --color-text: #000000;
+    --color-text-muted: #333333;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  /* Tables are the substance of a printed report. Repeating the header on each
+     page is what makes a multi-page report readable, and keeping a row whole
+     stops a figure being split across a page break. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  dl > div {
+    break-inside: avoid;
+  }
+
+  /* A link's destination is of no use on paper, and underlining every one of
+     them makes a printed table harder to read than a plain one. */
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* The stacked mobile card rendering is hidden: the table is the printed
+     form, and printing both would duplicate every row. */
+  .md\:hidden {
+    display: none !important;
+  }
+}

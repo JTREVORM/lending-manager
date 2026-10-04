@@ -33,7 +33,7 @@ export async function PortalShell({
         Skip to main content
       </a>
 
-      <header className="border-border bg-surface sticky top-0 z-20 border-b">
+      <header className="border-border bg-surface sticky top-0 z-20 border-b print:hidden">
         <div className="mx-auto flex w-full max-w-3xl items-center gap-2.5 px-4 py-3">
           <span className="bg-brand-600 flex size-8 shrink-0 items-center justify-center rounded-lg">
             <ShieldCheck aria-hidden="true" className="size-4 text-white" />
@@ -61,7 +61,7 @@ export async function PortalShell({
 
       <nav
         aria-label="Main navigation"
-        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]"
+        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] print:hidden"
       >
         <PrimaryNav
           variant="bottom-bar"

@@ -256,6 +256,13 @@ describe('authorization matrix', () => {
     // why `client` is absent from both.
     'delinquency:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'penalties:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+
+    // Phase 8. Reporting is split by what the figures reveal. The counter role
+    // gets the working reports; the Manager also gets the book; what the
+    // business earns is the Owner's alone.
+    'reports:view_operational': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'reports:view_financial': ['manager', 'owner_admin'],
+    'reports:view_sensitive': ['owner_admin'],
   };
 
   it('covers every declared permission', () => {

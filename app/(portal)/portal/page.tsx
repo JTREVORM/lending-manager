@@ -3,13 +3,14 @@ import { Construction } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
 import { PortalPaymentHistory } from '@/components/payments/portal-payment-history';
-import { PortalLoanPosition } from '@/components/delinquency/portal-loan-position';
+import { PortalLoanCard } from '@/components/portal/portal-loan-card';
 import { listClientDelinquency } from '@/lib/data/delinquency';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
 import { getCompanyBranding } from '@/lib/data/company';
 import { listClientPayments } from '@/lib/data/payments';
+import { listClientLoans } from '@/lib/data/reports';
 import { signedDocumentUrl } from '@/lib/storage/documents';
 import { formatRecordedDate } from '@/lib/domain/client';
 import { formatUgandanPhoneLocal } from '@/lib/domain/phone';
@@ -25,19 +26,38 @@ export const metadata = { title: 'My account' };
  * exactly one row and the row is theirs. No capability is involved, and none
  * could be: `clients:view` means "read the directory" everywhere else.
  *
+ * ## What Phase 8 adds
+ *
+ * The agreement beside the position — amount borrowed, total interest, total to
+ * repay, amount paid — and a link to a printable statement with the full
+ * payment plan and every receipt. Phase 7 gave a borrower their position
+ * (what is due, what was missed, what remains); what it could not tell them
+ * was what they had agreed to in the first place, which is the question
+ * somebody asks before they ask anything else.
+ *
+ * Loans still being repaid and loans finished are separated. A settled loan
+ * shown among current ones invites a borrower to think they still owe
+ * something on it; removed entirely, it looks as though the business has
+ * forgotten they ever paid. §74.
+ *
  * ## What is deliberately absent
  *
- * No loan balance, no repayment history, no expiry date, no penalties. Those
- * are later phases, and the page says so rather than rendering a zero that a
- * borrower might read as "I owe nothing".
- *
- * No National Identification Number either, and that is not an oversight. The
+ * No National Identification Number, and that is not an oversight. The
  * policy on `client_identities` has no self-clause: the borrower already knows
  * their own number, the portal gains nothing by reproducing it, and a page that
  * never displays one cannot leak one.
  *
  * No remarks. Those are the notes staff write *about* the borrower, and the
- * policy keeps them out of reach here.
+ * policy keeps them out of reach here — asserted by a regression test rather
+ * than assumed, because a note written for internal use appearing in a
+ * borrower's own account would be the single worst leak this system could
+ * have.
+ *
+ * No guarantor details either, beyond what Phase 3 already approved. A
+ * guarantor's phone number and identity belong to the guarantor.
+ *
+ * No staff attribution anywhere: who recorded a payment is internal
+ * information about the business's own people.
  *
  * A signed-in borrower with no linked client record is a normal state — staff
  * created their login before attaching it, or they are staff with no client
@@ -60,11 +80,19 @@ export default async function PortalPage() {
   // number — what was missed, what is due today, what remains, and when the
   // loan ends — which is information a borrower who is behind needs and
   // should not have to learn from a phone call.
-  const [payments, { branding }, positions] = await Promise.all([
+  const [payments, { branding }, positions, loans] = await Promise.all([
     client === null ? Promise.resolve([]) : listClientPayments(client.id),
     getCompanyBranding(),
     client === null ? Promise.resolve([]) : listClientDelinquency(client.id),
+    client === null ? Promise.resolve([]) : listClientLoans(client.id),
   ]);
+
+  // Matched by loan id, so a position and a contract on the same card are
+  // always the same loan. One pass, not a find() per row.
+  const contracts = new Map(loans.map((loan) => [loan.loanId, loan]));
+
+  const current = positions.filter((position) => position.state !== 'cleared');
+  const finished = positions.filter((position) => position.state === 'cleared');
 
   return (
     <div className="min-w-0 space-y-5">
@@ -127,20 +155,40 @@ export default async function PortalPage() {
         </Card>
       ) : null}
 
-      {client !== null && positions.length > 0 ? (
-        <section aria-labelledby="my-loans-heading" className="min-w-0 space-y-3">
+      {client !== null && current.length > 0 ? (
+        <section aria-labelledby="my-loans-heading" className="min-w-0 space-y-4">
           <h2 id="my-loans-heading" className="text-base">
             Your loans
           </h2>
 
-          {positions.map((position) => (
-            <PortalLoanPosition key={position.loanId} position={position} />
+          {current.map((position) => (
+            <PortalLoanCard
+              key={position.loanId}
+              position={position}
+              loan={contracts.get(position.loanId)}
+            />
           ))}
 
           <p className="text-text-muted text-sm">
             These figures are what our records show today. If anything looks wrong, please
             speak to our staff — bring your receipts and we will check it with you.
           </p>
+        </section>
+      ) : null}
+
+      {client !== null && finished.length > 0 ? (
+        <section aria-labelledby="finished-loans-heading" className="min-w-0 space-y-4">
+          <h2 id="finished-loans-heading" className="text-base">
+            Loans you have finished paying
+          </h2>
+
+          {finished.map((position) => (
+            <PortalLoanCard
+              key={position.loanId}
+              position={position}
+              loan={contracts.get(position.loanId)}
+            />
+          ))}
         </section>
       ) : null}
 

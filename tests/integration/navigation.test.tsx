@@ -101,6 +101,14 @@ describe('what each role sees in the menu', () => {
     expect(visible).toContain(ROUTES.account);
   });
 
+  it('shows every staff role the reporting section', () => {
+    // `reports:view_operational` is the floor, and every staff role holds it.
+    // What differs is which reports open inside, which the pages decide.
+    for (const role of ['secretary_treasurer', 'manager', 'owner_admin'] as const) {
+      expect(visibleFor(role), role).toContain(ROUTES.reports);
+    }
+  });
+
   it('shows a client nothing from the staff menu', () => {
     // A borrower should never be offered a staff surface, even one that would
     // be refused on arrival.

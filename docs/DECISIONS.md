@@ -1563,3 +1563,337 @@ collection is unpaid, and the penalty's remainder once the contract is settled.
   `penalty_remaining` separately from the contractual figures, and
   `total_collected` — contract and penalty together — is what now reconciles
   against the payments themselves.
+
+## ADR-037 — A report reads; it never computes
+
+**Status:** accepted (Phase 8)
+
+### Context
+
+Phase 8 puts figures on screens: dashboards, collection reports, a portfolio
+register, arrears lists, statements. Every one of those figures already exists
+somewhere — in `loan_balances`, in `loan_delinquency`, in the payment ledger
+and its allocations.
+
+The tempting shortcut is for a card to work out its own number. It is one line
+of JavaScript to divide interest collected by principal disbursed, or to
+subtract collected from expected and call the result outstanding.
+
+### Decision
+
+**No Phase 8 module performs financial arithmetic.** The reporting layer
+aggregates and joins figures the database already decided, and nothing else.
+
+Concretely:
+
+* `lib/domain/reporting.ts` handles date ranges, pagination, CSV and the
+  written definitions. It adds no money.
+* The five reporting views aggregate and join. The only new quantity in the
+  whole phase is `expected_today` — a subtraction between two stored
+  amounts — and even that is in SQL, beside the data, not in a component.
+* `lib/data/reports.ts` sums per-row figures the views produced
+  (`effectiveAmount`, `totalOutstanding`). Summing authoritative rows is
+  aggregation; re-deriving what a borrower owes would be a second ledger.
+* `npm run audit:money` covers all nineteen new financial files, so a
+  `toFixed`, a `/ 100` or a float rate in a dashboard fails the build. It
+  caught two on the first run — see `docs/SECURITY.md`.
+
+### Why this is stricter than it sounds
+
+A dashboard that computes its own total is not merely redundant. It is a
+*second answer* to a question the ledger has already answered, and the first
+time the two disagree nobody can tell which is wrong. That is worse than
+having no dashboard: a wrong figure that looks authoritative gets acted on.
+
+The engines in `lib/domain/{loan,repayment-schedule,payment,delinquency}.ts`
+exist because a screen must be able to preview a calculation before it is
+committed, and a parity test reconciles each against the database. A report
+previews nothing. It has no reason to calculate and therefore no permission to.
+
+### Consequences
+
+* Every reported figure traces to a named column in a named view, which is
+  what `METRIC_DEFINITIONS` records and what the documentation quotes.
+* A reported figure cannot drift from the ledger, because there is nothing to
+  drift. `tests/db/reporting-parity.test.ts` reconciles each dashboard column
+  against SQL written independently of the views, and finds them equal by
+  construction rather than by luck.
+* The cost is that a figure nobody has defined cannot be shown. That is the
+  intended cost: it forces the definition to be written down before the card
+  is built.
+
+## ADR-038 — Reporting is split by what the figures reveal
+
+**Status:** accepted (Phase 8)
+
+### Context
+
+A single `reports:view` was the obvious design and is the wrong one. The
+person who counts cash over the counter and the person who owns the business
+need different screens, and one capability would have handed the portfolio's
+interest income to the counter the moment the first financial report shipped
+behind it.
+
+### Decision
+
+Three capabilities, split by what the figures tell you rather than by which
+screen they appear on:
+
+| Capability | What it opens | Who holds it |
+| --- | --- | --- |
+| `reports:view_operational` | Today's collection sheet, the collection report, arrears, grace, the client directory | Secretary/Treasurer, Manager, Owner |
+| `reports:view_financial` | The loan register, cleared loans, the charges report, portfolio-wide outstanding | Manager, Owner |
+| `reports:view_sensitive` | The executive summary: principal disbursed, interest collected, penalty collected | Owner alone |
+
+The operational reports are per-client and per-loan figures the holder already
+sees one record at a time, arranged for a day's work. The financial reports
+are the book. The sensitive ones are what the business earns.
+
+### Two things these capabilities are not
+
+**They are not a substitute for the underlying ones.** A report is a rendering
+of data the holder must already be entitled to, so the arrears report also
+requires `delinquency:view`, the collection report also requires
+`payments:view`, and the capabilities are tested as a conjunction. Adding
+these three therefore widens nobody's access to a row they could not already
+open individually.
+
+**They are not the boundary.** Row Level Security decides which rows come
+back, which is why the same export route is safe for a Secretary/Treasurer
+and an Owner: the code is identical and the files are different lengths.
+
+### Consequences
+
+* `reports:view_sensitive` is the first capability in the system held by the
+  Owner alone besides `settings:update`, `audit:view` and `payments:reverse` —
+  which is the right company for it.
+* A Manager supervises lending without seeing what the business earns. That
+  was a decision, not an omission, and §42 asked for it to be one.
+* There is no `reports:create`, `reports:schedule` or `reports:export`.
+  Export is not separately gated because denying it would deny
+  copy-and-paste rather than enforce anything; what export does need is the
+  same check *on the server*, which each route handler performs.
+
+## ADR-039 — Every reporting view is `security_invoker`, and none is materialised
+
+**Status:** accepted (Phase 8)
+
+### Context
+
+Phase 7 noted that a larger portfolio might one day benefit from a
+materialised view. Phase 8 is the phase that would have built one: five
+reporting views, two of them portfolio-wide aggregates recomputed on every
+dashboard load.
+
+### Decision
+
+**All five are ordinary `security_invoker` views. None is materialised, and
+none is `SECURITY DEFINER`.**
+
+A materialised view is *owned data*. It is populated by whoever refreshes it,
+so it has no caller to be read on behalf of, and Row Level Security cannot
+apply to it at all. A materialised `dashboard_portfolio_summary` would be a
+single row holding every borrower's position, readable by anyone with a grant
+on it — which is the most valuable object an attacker could ask for in this
+schema.
+
+The same reasoning rules out `SECURITY DEFINER`: a view that ran as its owner
+would return the whole book to a borrower.
+
+With `security_invoker`, each view is read under the caller's own policies. A
+borrower selecting from `payment_register` sees their own payments; selecting
+from `dashboard_portfolio_summary` they get an aggregate over their own one
+loan, which `tests/db/rls-reports.test.ts` asserts explicitly rather than
+assumes.
+
+### What the measurements say
+
+Profiled at ten times this business's expected scale — 500 loans, 15,000
+collections, 5,000 payments — every report query completes well inside a
+second:
+
+| Query | Median |
+| --- | --- |
+| `dashboard_portfolio_summary` | 61 ms |
+| `dashboard_collection_summary` | 104 ms |
+| `collections_today` (one page) | 5 ms |
+| `payment_register` (one month) | 67 ms |
+| `loan_portfolio_report` (one page) | 24–48 ms |
+
+So the trade is not even a trade yet. **Correctness before performance**, and
+the performance is fine.
+
+### One measured change that was worth making
+
+The collection report filters on `received_at`, not on `business_date`.
+`business_date` is `payment_business_date(received_at)`, which reads the
+company's timezone — so it is STABLE rather than IMMUTABLE and **cannot be
+indexed at all**. Filtering on it costs a function call per row and gives the
+planner no estimate: 65 ms that way against 2 ms on `received_at`, using an
+index that already existed.
+
+The two filters are exactly equivalent, because a business date range *is* an
+instant range in the business timezone, and the conversion uses the Phase 1
+helpers rather than a third implementation.
+
+### Consequences
+
+* No new index was added. Every report either uses an existing index or scans
+  a table small enough that scanning is the correct plan, and
+  `docs/SECURITY.md` records the profiling rather than leaving it to opinion.
+* If the ledger grows by an order of magnitude, the cost will be the
+  allocation aggregation in `payment_register`, not the date filter. The
+  remedy then is a covering index on `payment_allocations`, and a materialised
+  view remains the last resort rather than the first.
+
+## ADR-040 — Expected, collected and remaining are three numbers, not a subtraction
+
+**Status:** accepted (Phase 8)
+
+### Context
+
+The collections dashboard has to answer three questions that look like one:
+
+* what were we expecting to collect today?
+* what have we collected today?
+* what is still owed for today?
+
+Phase 7 already answers the third: `due_today_amount` is the uncovered part of
+today's collections, netting off every payment including today's.
+
+### Decision
+
+**All three are reported, and the screen says in words that the first minus
+the second is not the third.**
+
+* `expected_today` — today's scheduled collections less whatever *earlier*
+  payments had already covered of them. The day's target as it stood this
+  morning. This is the one genuinely new quantity in Phase 8.
+* `collected_today` — every posted payment received today, whatever it was
+  applied to.
+* `remaining_today` — Phase 7's `due_today_amount`, live.
+
+They do not form an identity, and they must not be presented as one. Money
+taken today may settle arrears from last month or run ahead into next week; it
+does not have to land on today's installment. A dashboard implying
+`expected − collected = remaining` would be asserting a relationship the ledger
+does not have, and the first person to notice they do not add up would stop
+trusting all three.
+
+### Why `expected_today` had to be new
+
+Reading `due_today_amount` as the day's target makes the target shrink as the
+day goes on, which is the wrong answer to "how are we doing". And reading the
+raw installment amount makes a borrower who paid ahead last week appear due
+again — the prepayment defect §130 exists to prevent, and the reason a loan
+whose collection is already covered is **absent from `collections_today`
+entirely** rather than present with a zero.
+
+### Consequences
+
+* `collections_today` is the operational list and `dashboard_collection_summary`
+  aggregates exactly it, so the card and the sheet beneath it cannot disagree —
+  asserted in `tests/db/reporting-views.test.ts`.
+* A sentence under the three cards explains the relationship. That sentence is
+  asserted by a UI test, because it is doing real work.
+
+## ADR-041 — A statement carries the borrower as they were when the loan was written
+
+**Status:** accepted (Phase 8)
+
+### Context
+
+A loan statement has a header: the borrower's name, client number and phone. A
+borrower who marries and changes their name is an ordinary event, and Phase 3
+lets staff correct a client record.
+
+So which name belongs on a statement for a loan agreed in March, printed in
+October, for a borrower who changed their name in April?
+
+### Decision
+
+**The name recorded when the loan was written**, from the loan's own immutable
+`loan_client_snapshots` row, with the current name shown beside it when the two
+differ and a sentence explaining why.
+
+Each payment line likewise carries `client_name_at_payment` — the name on that
+receipt — so a statement and the receipts it lists cannot contradict each
+other.
+
+A statement is a historical document about an agreement. The borrower who
+signed in March did not change because they married in April, and a statement
+whose header silently rewrote itself would disagree with the paper the client
+is holding. Phase 4 captured the snapshot for exactly this question; §33 asked
+for the choice to be made deliberately rather than by whichever column was to
+hand.
+
+### Where the current name is used instead
+
+Everywhere the question is "who do I contact": the collection sheet, the
+arrears report, the client directory. A collections officer needs the name the
+borrower answers to today. The distinction is consistent — historical
+documents use the snapshot, working lists use the record — and
+`loan_portfolio_report` exposes both so neither screen has to choose wrongly.
+
+### Consequences
+
+* `tests/db/reporting-views.test.ts` renames a borrower and asserts the
+  snapshot does not follow.
+* The statement is explicitly **not** an as-at document in any other respect:
+  the balances are today's, and the header says "as at" with today's date.
+  Phase 8 builds no historical balance reporting (§106), and nothing on the
+  page implies otherwise.
+
+## ADR-042 — A total always describes exactly the rows shown
+
+**Status:** accepted (Phase 8)
+
+### Context
+
+A report has a table, a set of summary cards, a day-by-day breakdown and a CSV
+download. The straightforward implementation runs four queries that happen to
+share a filter.
+
+They will eventually disagree. A filter applied in one place and not another,
+a pagination bound that leaks into an aggregate, a cached count — and then a
+card says UGX 4.1 million while the rows beneath it add to 3.8 million, and
+somebody has to work out which is right.
+
+### Decision
+
+**One query per report, summed and sliced in memory.**
+
+`getCollectionReport` reads the whole filtered set once, bounded by the export
+cap, then sums it, groups it by day, week and month, and slices the display
+page out of it. The cards, the three breakdowns, the table and the CSV are four
+renderings of one array. Parity is structural: there is no arrangement of the
+code in which they could differ.
+
+The same shape applies to the portfolio, arrears, penalty and client reports.
+
+### The row cap, and saying so
+
+`MAX_EXPORT_ROWS` is 5,000 — several years of this business's collections, and
+small enough that the file arrives rather than times out. When a filtered set
+hits it, the report **says so and withholds the totals** rather than showing a
+partial sum.
+
+That is the important half. A partial total presented as a total is worse than
+no total at all: it is a figure somebody would circulate. So the screen shows
+the rows it has, an explanation, and no summary.
+
+### What this costs
+
+Reading the whole filtered set to show 25 rows is wasteful in the abstract. In
+practice a month of this business's collections is a few hundred rows, the
+measured cost is 67 ms at ten times that, and what it buys is that a report
+cannot contradict itself. When the ledger outgrows it, the fix is an aggregate
+query *and* a test that pins it to the table — not the other way round.
+
+### Consequences
+
+* A CSV contains every matching row, not the page somebody happened to be on.
+  A file containing page 3 of a report would be a quiet lie about what was
+  downloaded.
+* `truncated` is part of the report type, so a caller cannot forget to handle
+  it; the UI test asserts the warning appears and the totals do not.

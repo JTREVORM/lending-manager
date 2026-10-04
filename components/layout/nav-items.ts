@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Banknote,
+  ChartColumn,
   HeartHandshake,
   LayoutDashboard,
   Receipt,
@@ -102,6 +103,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // never this directory.
     permission: 'delinquency:view',
     phase: 7,
+  },
+  {
+    href: ROUTES.reports,
+    label: 'Reports',
+    shortLabel: 'Reports',
+    icon: ChartColumn,
+    // `reports:view_operational`, which every staff role holds — not
+    // `dashboard:view`. The two narrower reporting capabilities gate
+    // individual pages inside this section rather than the entry itself, so
+    // the menu matches the route map exactly, which is the agreement the
+    // navigation parity test asserts.
+    permission: 'reports:view_operational',
+    phase: 8,
   },
   {
     href: ROUTES.users,

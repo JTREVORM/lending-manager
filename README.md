@@ -2,12 +2,18 @@
 
 Loan, repayment and client management for a Ugandan money lending business.
 
-> **Phases 1 and 2 complete.** This repository contains the database schema,
-> the security model, the domain layer, the application shell, and
-> authentication, user management, roles and permissions. It does **not**
-> contain client registration, guarantors, loans, repayment schedules,
-> payments, arrears, penalties, the full client portal or reporting. Those are
-> later phases, and each unbuilt section of the interface says so.
+> **Phases 1 to 8 complete.** This repository contains the database schema and
+> security model; authentication, users, roles and capabilities; client and
+> guarantor registration; the loan engine with reducing-balance interest,
+> approval and disbursement; immutable repayment schedules; the payment ledger
+> with allocations, receipts and reversals; arrears, the grace period and the
+> one-time expiry penalty; and dashboards, reports, exports and the client
+> portal.
+>
+> Still to come: PWA and offline support, production security hardening,
+> reliability and go-live work (Phase 9 and beyond), and the integrations the
+> business has deferred — MTN and Airtel APIs, SMS, WhatsApp and native
+> applications.
 
 > **The company name is temporary.** Registration is in progress, so the
 > system runs under the working title above. It lives in
@@ -120,20 +126,25 @@ posture and what is deferred to Phase 2.
 
 Every later phase must keep these passing.
 
-| Gate | Command | Phase 1 result |
+| Gate | Command | Result |
 | --- | --- | --- |
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
 | Format | `npm run format:check` | clean |
-| Unit tests | `npm run test:run` | 334 passed |
-| Integration tests | *(included in `test:run`)* | 93 passed |
-| Database tests | `npm run test:db` | 176 passed |
+| Float-free money audit | `npm run audit:money` | 56 files, no hazard |
+| Unit and component tests | `npm run test:run` | 1,533 passed |
+| Database tests | `npm run test:db` | 1,043 passed |
 | Production build | `npm run build` | succeeds |
-| **Total** | | **603 tests, 0 failed, 0 skipped** |
+| **Total** | | **2,576 tests, 0 failed, 0 skipped** |
 
-Phase 1 ended at 398. Phase 2 adds 205 and changes no Phase 1 behaviour; the
-Phase 1 tests that were updated are the ones asserting facts Phase 2
-deliberately changed, each noted in the Phase 2 report.
+The count by phase: 398 at the end of Phase 1, then 603, 1,087, 1,462, 1,749,
+2,003, 2,264 and 2,576. Each phase keeps every earlier test passing; where an
+earlier test changed it is because the later phase deliberately changed the
+fact it asserted, and each one is named in that phase's report.
+
+`npm run verify` runs the type check, the lint, the format check, `test:run`
+and the build in one command. The database suite is separate because it needs a
+PostgreSQL to talk to.
 
 Database tests skip with an explanation when `DATABASE_URL` is unset. A skipped
 suite is not a passing one — run it before accepting a schema change.
@@ -175,7 +186,36 @@ Three decisions worth knowing before writing any code here:
   `current_profile_id()`, which is why disabling an account takes effect
   immediately. See ADR-015.
 
-## Phase 1 scope
+## What each phase built
+
+**Built in Phase 8.** Role-aware dashboards composed from capabilities;
+collection, loan portfolio, arrears, grace-period, charges and client reports
+with whitelisted filters, paging and CSV export; printable client statements;
+the client portal's agreement figures, settled-loan history and per-loan
+statement; the Manager remarks integration on the arrears report; an audit
+viewer with filters and paging; and three reporting capabilities split by what
+the figures reveal. No table, no new money rule — see
+[docs/REPORTING.md](docs/REPORTING.md).
+
+**Built in Phase 7.** Missed-payment carry-forward, derived arrears, two
+separate lateness measures, the expiry date and grace period, and the one-time
+50% penalty as its own obligation — with the contractual schedule untouched.
+
+**Built in Phase 6.** The payment ledger: posting, interest-first allocation,
+digital receipts, idempotency, Owner-only reversals, derived balances and
+automatic clearance and reopening.
+
+**Built in Phase 5.** Immutable repayment collection schedules for daily,
+every-2-days and every-3-days repayment, generated inside the disbursement
+transaction.
+
+**Built in Phase 4.** The loan engine: reducing-balance interest in integer
+shillings, draft/submit/approve/disburse/cancel with separated duties,
+snapshotted terms and immutable client, guarantor and identity snapshots.
+
+**Built in Phase 3.** Client and guarantor registration, identity documents in
+private buckets, append-only staff remarks, client status and blacklisting, and
+the portal's client linkage.
 
 **Built in Phase 2.** Sign-in by phone number with a derived authentication
 identity; session management and sign-out; three-layer route protection;
@@ -195,10 +235,9 @@ validation schemas; error taxonomy; redacting logger; Supabase client
 architecture; environment management; the responsive, accessible application
 shell; and the three-project test suite.
 
-**Deferred.** Client and guarantor registration, loan origination, the reducing-balance interest engine,
-repayment schedules, payment capture, arrears, grace-period and penalty
-processing, the client portal, reports, MTN and Airtel integration, SMS,
-WhatsApp, PWA, and native applications.
+**Deferred.** PWA and offline support, production security hardening,
+reliability and backup work, go-live rate limiting, MTN and Airtel API
+integration, SMS, WhatsApp, and native applications.
 
 ## Business rules the architecture is built around
 

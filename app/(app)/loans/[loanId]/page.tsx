@@ -166,6 +166,18 @@ export default async function LoanDetailPage({
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <LoanStatusBadge status={loan.status} />
+            {/* Phase 8. A statement is a rendering of this loan, so it needs no
+                capability beyond the one that opened this page — and it is the
+                document staff print for a borrower who asks where they stand.
+                Only offered once the loan has a schedule to state. */}
+            {loan.status === 'active' || loan.status === 'cleared' ? (
+              <Link
+                href={`${ROUTES.loans}/${loan.id}/statement`}
+                className="border-border text-text focus-visible:outline-accent inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Statement
+              </Link>
+            ) : null}
             {termsAreEditable(loan.status) &&
             contextCan(context, 'loans:update_draft') ? (
               <Link

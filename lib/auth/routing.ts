@@ -49,6 +49,16 @@ const ROUTE_PERMISSIONS: readonly {
   // Phase 7. Its own capability, not the dashboard's — the mistake Phase 3
   // made with `/clients` and Phase 6 found again on `/payments`.
   { prefix: ROUTES.overdue, permission: 'delinquency:view' },
+  // Phase 8. `reports:view_operational` is the floor for the reporting
+  // surface, not `dashboard:view`: §98 is explicit that a dashboard
+  // capability must not open a report, which is the third time this project
+  // has been told about the same defect. The two narrower reporting
+  // capabilities are checked by the individual pages, because they differ
+  // *within* this prefix — the loan register needs
+  // `reports:view_financial` while the collection report does not — and a
+  // prefix map cannot express that. The pages call `guardPermission`, and
+  // their export routes check again.
+  { prefix: ROUTES.reports, permission: 'reports:view_operational' },
   { prefix: ROUTES.portal, permission: 'portal:view' },
   { prefix: ROUTES.account, permission: 'account:view' },
   // The dashboard is last: '/' prefixes everything, so it must only match

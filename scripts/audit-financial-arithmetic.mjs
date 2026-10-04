@@ -63,6 +63,31 @@ const FINANCIAL_FILES = [
   'components/delinquency/penalty-card.tsx',
   'components/delinquency/overdue-list.tsx',
   'components/delinquency/portal-loan-position.tsx',
+  // Phase 8. The reporting layer computes no money — it aggregates figures the
+  // database already decided — but that is exactly why it is scanned. A
+  // percentage, a ratio or a `toFixed` creeping into a dashboard would
+  // produce a figure that *looks* authoritative while disagreeing with the
+  // ledger it claims to report, which is the worst failure mode available to
+  // a report.
+  'lib/domain/reporting.ts',
+  'lib/data/reports.ts',
+  'lib/data/dashboard.ts',
+  'lib/reports/csv.ts',
+  'lib/reports/filters.ts',
+  'components/reports/stat-card.tsx',
+  'components/reports/collection-report-view.tsx',
+  'components/reports/portfolio-report-view.tsx',
+  'components/reports/arrears-report-view.tsx',
+  'components/reports/loan-statement.tsx',
+  'components/dashboard/today-cards.tsx',
+  'components/dashboard/portfolio-cards.tsx',
+  'components/dashboard/executive-cards.tsx',
+  'components/dashboard/collection-sheet.tsx',
+  'components/dashboard/recent-payments.tsx',
+  'components/dashboard/upcoming-collections.tsx',
+  'components/dashboard/loan-activity.tsx',
+  'components/portal/portal-loan-card.tsx',
+  'components/clients/client-loan-summary.tsx',
 ];
 
 const UNSAFE = [

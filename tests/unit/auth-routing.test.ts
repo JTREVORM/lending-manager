@@ -56,6 +56,61 @@ describe('permissionForPath', () => {
     expect(permissionForPath(ROUTES.users)).not.toBe('dashboard:view');
   });
 
+  /**
+   * The defect this project has now been told about three times.
+   *
+   * Phase 3 shipped `/clients` behind `dashboard:view`; Phase 6 found the same
+   * thing on `/payments`; §98 asks explicitly that a dashboard capability must
+   * not open a report. So every protected route is asserted to require
+   * something *other* than the dashboard's capability, with the dashboard
+   * itself as the single exception.
+   */
+  it('lets no route but the dashboard be opened with dashboard:view alone', () => {
+    for (const [name, path] of Object.entries(ROUTES)) {
+      if (path === ROUTES.dashboard || path === ROUTES.login) continue;
+      expect(permissionForPath(path), name).not.toBe('dashboard:view');
+    }
+  });
+
+  it('guards the reporting surface with its own capability', () => {
+    expect(permissionForPath(ROUTES.reports)).toBe('reports:view_operational');
+
+    // Every page inside the section inherits the prefix. The two narrower
+    // reporting capabilities differ *within* it — the loan register needs
+    // `reports:view_financial` while the collection report does not — which a
+    // prefix map cannot express, so those are checked by the pages themselves
+    // and by their export routes.
+    for (const page of [
+      'collections',
+      'loans',
+      'arrears',
+      'grace',
+      'penalties',
+      'clients',
+    ]) {
+      expect(permissionForPath(`${ROUTES.reports}/${page}`), page).toBe(
+        'reports:view_operational',
+      );
+    }
+  });
+
+  it('guards an export route as tightly as the page it came from', () => {
+    // A download is a separate request to a separate URL that can be typed,
+    // kept, or shared. It resolves through the same prefix, and the handler
+    // repeats the check.
+    expect(permissionForPath(`${ROUTES.reports}/collections/export`)).toBe(
+      'reports:view_operational',
+    );
+    expect(permissionForPath(`${ROUTES.reports}/loans/export`)).toBe(
+      'reports:view_operational',
+    );
+  });
+
+  it('guards a statement with the capability of the record it states', () => {
+    expect(permissionForPath(`${ROUTES.loans}/abc/statement`)).toBe('loans:view');
+    expect(permissionForPath(`${ROUTES.portal}/loans/abc`)).toBe('portal:view');
+  });
+
   it('returns null only for a public path', () => {
     expect(permissionForPath(ROUTES.login)).toBeNull();
   });
