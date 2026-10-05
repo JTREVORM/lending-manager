@@ -1,8 +1,7 @@
-import Link from 'next/link';
-
 import { PaymentRegister } from '@/components/payments/payment-register';
 import { Card } from '@/components/ui/card';
 import { Money } from '@/components/ui/money';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -69,23 +68,15 @@ export default async function PaymentsPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-text text-2xl font-semibold">Payments</h1>
-          <p className="text-text-muted mt-1 text-sm">
-            Every payment recorded, including reversed ones.
-          </p>
-        </div>
-
-        {contextCan(context, 'payments:create') ? (
-          <Link
-            href={`${ROUTES.payments}/new`}
-            className="bg-accent text-accent-foreground focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Record a payment
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Payments"
+        description="Every payment recorded, including reversed ones."
+        primaryAction={
+          contextCan(context, 'payments:create') ? (
+            <ActionLink href={`${ROUTES.payments}/new`}>Record a payment</ActionLink>
+          ) : null
+        }
+      />
 
       {/* --- Today's collections ---------------------------------------- */}
       <section aria-labelledby="today-heading" className="min-w-0 space-y-3">

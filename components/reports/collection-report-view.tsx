@@ -7,12 +7,13 @@ import { ReportTable, type ReportColumn } from '@/components/reports/report-tabl
 import { StatCard, StatGrid } from '@/components/reports/stat-card';
 import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
-import { formatBusinessDate, formatInstant } from '@/lib/domain/datetime';
+import { formatBusinessDate, formatInstant, toBusinessDate } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import { MAX_EXPORT_ROWS } from '@/lib/domain/reporting';
 import type { CollectionReport, DayTotals } from '@/lib/data/reports';
 import { DateValue } from '@/components/ui/data-value';
+import { MagnitudeChart } from '@/components/charts/magnitude-chart';
 import type { ReactNode } from 'react';
 
 /**
@@ -206,6 +207,26 @@ export function CollectionReportView({
         exactly one method. Principal, interest and penalty collected also add up to it,
         because every shilling received is applied to one of the three.
       </p>
+
+      {report.byDay.length > 1 ? (
+        <section className="border-border bg-surface min-w-0 rounded-xl border p-4 sm:p-5">
+          {/* The same `report.byDay` rows the table below renders, drawn to
+              scale. Nothing is summed here: a chart that computed its own
+              totals could disagree with the table beside it, and the table is
+              the authority. */}
+          <MagnitudeChart
+            title="Collected, by day"
+            caption="Money received each day over the selected range, as recorded. Reversed payments are excluded."
+            valueHeading="Collected"
+            format="money"
+            rows={report.byDay.map((row) => ({
+              label: formatBusinessDate(toBusinessDate(row.key)),
+              value: row.collected,
+              note: `${String(row.paymentCount)} ${row.paymentCount === 1 ? 'payment' : 'payments'}`,
+            }))}
+          />
+        </section>
+      ) : null}
 
       {report.byDay.length > 1 ? (
         <Breakdown

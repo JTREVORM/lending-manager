@@ -1,4 +1,5 @@
 import { OverdueList } from '@/components/delinquency/overdue-list';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
@@ -73,13 +74,10 @@ export default async function OverduePage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <h1 className="text-text text-2xl font-semibold">Overdue</h1>
-        <p className="text-text-muted mt-1 text-sm">
-          Loans with something uncovered: what is due now, how late it is, and whether a
-          penalty applies. Settled loans are not listed.
-        </p>
-      </div>
+      <PageHeader
+        title="Overdue"
+        description="Loans with something uncovered: what is due now, how late it is, and whether a late-payment charge applies. Settled loans are not listed."
+      />
 
       <OverdueList
         loans={loans}

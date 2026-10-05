@@ -1,12 +1,14 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Money } from '@/components/ui/money';
+import { ROUTES } from '@/config/app';
 import { recordPaymentAction } from '@/lib/payments/actions';
 import {
   allocatePayment,
@@ -98,12 +100,29 @@ export function PaymentForm({
   };
   readonly onPosted?: (paymentId: string) => void;
 }) {
+  const router = useRouter();
+
   const [result, submit, pending] = useActionState<
     PaymentActionResult | undefined,
     FormData
   >(async (previous, formData) => {
     const next = await recordPaymentAction(previous, formData);
-    if (next.ok && next.paymentId !== undefined) onPosted?.(next.paymentId);
+
+    if (next.ok && next.paymentId !== undefined) {
+      onPosted?.(next.paymentId);
+
+      // Leave the form behind on success.
+      //
+      // `replace`, not `push`: the form's URL must not stay in history, or
+      // the browser's back button offers to re-submit a payment that has
+      // already been recorded. The destination reads the payment from the
+      // ledger and shows the receipt number, the amount and the new balance
+      // — none of which this form is in a position to state authoritatively,
+      // because the amount the database accepted may differ from the one
+      // typed here if a penalty was applied in the same transaction.
+      router.replace(`${ROUTES.payments}/${next.paymentId}?recorded=1`);
+    }
+
     return next;
   }, undefined);
 
@@ -144,9 +163,11 @@ export function PaymentForm({
   const canContinue = parsedAmount !== null && failure === null && plan !== null;
 
   if (result?.ok === true) {
+    // Shown for the moment between the action returning and the navigation
+    // completing. The real confirmation is the page it is going to.
     return (
       <Alert tone="success">
-        <span className="font-medium">{result.message}</span>
+        <span className="font-medium">{result.message}</span> Opening the receipt…
       </Alert>
     );
   }

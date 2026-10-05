@@ -16,6 +16,7 @@ import {
 } from '@/lib/domain/delinquency';
 import type { DelinquentLoanRow } from '@/lib/data/delinquency';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
+import { MagnitudeChart } from '@/components/charts/magnitude-chart';
 
 /**
  * The overdue list: who is behind, by how much, and since when.
@@ -93,6 +94,27 @@ export function OverdueList({
           <Count label="Grace period" value={counts.grace_period} tone="warning" />
           <Count label="In arrears" value={counts.in_arrears} tone="warning" />
         </dl>
+
+        {/* The same four counts, drawn to scale and in order of severity.
+            One hue rather than the four status colours: `success` and
+            `warning` separate by ΔE 5.8 under protanopia, so a reader with
+            the commonest form of colour blindness could not tell a grace
+            period from arrears by colour. The row label carries the identity;
+            the bar carries the magnitude. */}
+        <MagnitudeChart
+          className="mt-4"
+          title="How the delinquent loans are spread"
+          caption="Loans by delinquency state, worst first. Each loan is in exactly one state."
+          valueHeading="Loans"
+          format="count"
+          empty="Nothing is behind."
+          rows={[
+            { label: 'Penalty due', value: counts.penalty_due, emphasis: true },
+            { label: 'Expired, unpaid', value: counts.expired_unpaid, emphasis: true },
+            { label: 'Grace period', value: counts.grace_period },
+            { label: 'In arrears', value: counts.in_arrears },
+          ]}
+        />
       </Card>
 
       {/* --- Filters ----------------------------------------------------- */}

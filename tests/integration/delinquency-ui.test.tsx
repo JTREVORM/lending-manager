@@ -422,6 +422,22 @@ describe('the penalty card', () => {
 // ---------------------------------------------------------------------------
 
 describe('the overdue list', () => {
+  /**
+   * The overdue table, not the chart's.
+   *
+   * Phase 9 added a delinquency distribution chart above the list, and every
+   * chart in this application carries a visually hidden table of its own rows
+   * so no figure is available only as a picture. Two tables are therefore in
+   * the accessibility tree, which is correct — the tests just have to say
+   * which one they mean.
+   */
+  const overdueTable = (): HTMLElement => {
+    const caption = screen.getByText(/Overdue loans:/i);
+    const table = caption.closest('table');
+    expect(table).not.toBeNull();
+    return table as HTMLElement;
+  };
+
   const ROWS: readonly DelinquentLoanRow[] = [
     {
       ...position({
@@ -511,7 +527,7 @@ describe('the overdue list', () => {
       />,
     );
 
-    const table = screen.getByRole('table');
+    const table = overdueTable();
 
     expect(within(table).getByText('Missed')).toBeInTheDocument();
     expect(within(table).getByText('Days late')).toBeInTheDocument();
@@ -574,7 +590,11 @@ describe('the overdue list', () => {
 
     // The labels appear in the summary and again in the filter's options, so
     // the counts are read from the summary list itself.
-    const summary = getByCompositeText(/As at 3 Nov 2026/i).closest('div');
+    // The summary list itself, not the card around it: the chart beneath
+    // names the same four states, and the card contains both.
+    const summary = getByCompositeText(/As at 3 Nov 2026/i)
+      .closest('div')
+      ?.querySelector('dl');
     expect(summary).not.toBeNull();
 
     const counts = within(summary as HTMLElement);
@@ -666,9 +686,9 @@ describe('the overdue list', () => {
       />,
     );
 
-    const list = container.querySelector('ul');
+    // The phone card list, not the chart's bar list above it.
+    const list = container.querySelector('ul.md\\:hidden');
     expect(list?.querySelectorAll('li')).toHaveLength(2);
-    expect(list?.className).toContain('md:hidden');
   });
 
   it('gives the table a caption describing its columns', () => {
@@ -700,10 +720,10 @@ describe('the overdue list', () => {
       />,
     );
 
-    const table = screen.getByRole('table');
+    const table = overdueTable();
     expect(within(table).queryByText('Settled')).toBeNull();
 
-    const cards = screen.getByRole('table').parentElement?.parentElement;
+    const cards = table.parentElement?.parentElement;
     expect(cards).not.toBeNull();
   });
 });

@@ -142,7 +142,9 @@ describe('the reporting routes', () => {
     const source = read(join(REPORTS_DIR, 'page.tsx'));
 
     expect(source).toContain("'reports:view_operational'");
-    expect(source).toContain('guardPermission(');
+    // Phase 9: the index guards itself through `guardReportPage`, which runs
+    // the capability check and then consumes the report read budget.
+    expect(source).toContain('guardReportPage(');
   });
 
   it('exports no mutation from any report route', () => {

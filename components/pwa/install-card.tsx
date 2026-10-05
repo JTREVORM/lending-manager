@@ -37,17 +37,22 @@ const DECLINED_KEY = 'lending:install-declined';
 
 export function InstallCard() {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [declined, setDeclined] = useState(true);
+
+  // Read lazily rather than in an effect. There is no hydration risk: the
+  // component renders nothing until the browser fires `beforeinstallprompt`,
+  // which it never does during server rendering, so the first client render
+  // and the server's agree whatever this returns.
+  const [declined, setDeclined] = useState(() => {
+    try {
+      return window.localStorage.getItem(DECLINED_KEY) === 'yes';
+    } catch {
+      // Server rendering, or a private window. Neither is a decision to
+      // decline.
+      return false;
+    }
+  });
 
   useEffect(() => {
-    // Read in an effect rather than during render: `localStorage` is absent
-    // during server rendering and throws in a private window.
-    try {
-      setDeclined(window.localStorage.getItem(DECLINED_KEY) === 'yes');
-    } catch {
-      setDeclined(false);
-    }
-
     const onPrompt = (event: Event): void => {
       // Suppress the browser's own banner so the offer appears here instead,
       // where it is not in anybody's way.

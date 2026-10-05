@@ -1,7 +1,6 @@
-import Link from 'next/link';
-
 import { UserDirectory } from '@/components/users/user-directory';
 import { Alert } from '@/components/ui/alert';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { contextCan } from '@/lib/auth/context';
@@ -47,23 +46,13 @@ export default async function UsersPage({
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1>Users</h1>
-          <p className="text-text-muted mt-1 text-sm">
-            Staff and client accounts, their roles and their access.
-          </p>
-        </div>
-
-        {mayCreate ? (
-          <Link
-            href="/users/new"
-            className="bg-brand-600 hover:bg-brand-700 min-h-touch inline-flex shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium text-white transition-colors"
-          >
-            Add staff member
-          </Link>
-        ) : null}
-      </header>
+      <PageHeader
+        title="Users"
+        description="Staff and client accounts, their roles and their access."
+        primaryAction={
+          mayCreate ? <ActionLink href="/users/new">Add staff member</ActionLink> : null
+        }
+      />
 
       {!mayCreate ? (
         <Alert tone="info">

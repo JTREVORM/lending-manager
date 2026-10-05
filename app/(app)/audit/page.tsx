@@ -1,7 +1,5 @@
+import { AuditLog } from '@/components/audit/audit-log';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
@@ -16,7 +14,6 @@ import { getCompanyBranding } from '@/lib/data/company';
 import { describeRange } from '@/lib/domain/reporting';
 import { formatBusinessDate } from '@/lib/domain/datetime';
 import { resolveReportRange, singleParam, type ParamRecord } from '@/lib/reports/filters';
-import { DateValue } from '@/components/ui/data-value';
 
 export const metadata = { title: 'Audit trail' };
 
@@ -128,56 +125,7 @@ export default async function AuditPage({
         resultSummary={`${String(page.rows.length)} ${page.rows.length === 1 ? 'record' : 'records'} shown`}
       />
 
-      {page.rows.length === 0 ? (
-        <ReportEmpty
-          title="No audit records match"
-          description="Nothing was recorded with these filters. Try clearing the action or widening the dates."
-        />
-      ) : (
-        <ul className="min-w-0 space-y-2">
-          {page.rows.map((entry) => (
-            <li key={entry.id}>
-              <Card className="min-w-0">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium break-words">
-                      {AUDIT_ACTION_LABELS[entry.action] ?? entry.action}
-                    </p>
-                    <p className="text-text-muted mt-0.5 text-sm break-words">
-                      by {entry.actorLabel}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <Badge>{entry.entityType.replace(/_/g, ' ')}</Badge>
-                    <time dateTime={entry.occurredAt} className="text-text-muted text-xs">
-                      <DateValue
-                        value={entry.occurredAt}
-                        variant="datetime"
-                        timeZone={branding.timezone}
-                      />
-                    </time>
-                  </div>
-                </div>
-
-                {entry.newValues !== null || entry.oldValues !== null ? (
-                  <details className="mt-3">
-                    <summary className="text-text-muted min-h-touch flex cursor-pointer items-center text-xs">
-                      What changed
-                    </summary>
-                    <pre className="bg-surface-raised mt-2 overflow-x-auto rounded-lg p-3 text-xs">
-                      {JSON.stringify(
-                        { before: entry.oldValues, after: entry.newValues },
-                        null,
-                        2,
-                      )}
-                    </pre>
-                  </details>
-                ) : null}
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
+      <AuditLog entries={page.rows} timeZone={branding.timezone} />
 
       <ReportPagination
         page={page.page}

@@ -36,7 +36,7 @@ async function manifest(): Promise<Manifest> {
 }
 
 describe('the web app manifest', () => {
-  it('is served as a manifest, not as JSON', async () => {
+  it('is served as a manifest, not as JSON', () => {
     // A browser that does not see `application/manifest+json` may refuse to
     // install at all.
     const response = manifestRoute();

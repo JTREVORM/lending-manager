@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { PaymentRecorded } from '@/components/payments/payment-recorded';
 import { PaymentReceipt } from '@/components/payments/payment-receipt';
 import { PaymentReversalPanel } from '@/components/payments/payment-reversal-panel';
 import { Badge } from '@/components/ui/badge';
@@ -27,10 +28,20 @@ export const metadata = { title: 'Payment' };
  */
 export default async function PaymentDetailPage({
   params,
+  searchParams,
 }: {
   readonly params: Promise<{ readonly paymentId: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { paymentId } = await params;
+  const query = await searchParams;
+
+  // The *only* thing the query string decides is whether the confirmation
+  // panel appears. Every figure in it is read from the payment record below.
+  // A confirmation assembled from query parameters is one anybody can forge
+  // by editing the address bar, and a borrower photographing that screen
+  // would have a receipt for a payment nobody took.
+  const justRecorded = query.recorded === '1';
   const context = await guardPermission(
     `${ROUTES.payments}/${paymentId}`,
     'payments:view',
@@ -50,6 +61,21 @@ export default async function PaymentDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
+      {justRecorded && !isReversed ? (
+        <PaymentRecorded
+          paymentNumber={payment.paymentNumber}
+          amount={payment.amount}
+          clientName={payment.clientName}
+          clientId={payment.clientId}
+          loanNumber={payment.loanNumber}
+          loanId={payment.loanId}
+          paymentMethod={payment.paymentMethod}
+          receivedAt={payment.receivedAt}
+          outstandingAfter={payment.outstandingAfter}
+          timeZone={branding.timezone}
+        />
+      ) : null}
+
       <div className="min-w-0">
         <Link
           href={ROUTES.payments}

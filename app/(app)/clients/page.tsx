@@ -1,6 +1,5 @@
-import Link from 'next/link';
-
 import { ClientDirectory } from '@/components/clients/client-directory';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -41,23 +40,15 @@ export default async function ClientsPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-text text-2xl font-semibold break-words">Clients</h1>
-          <p className="text-text-muted mt-1">
-            Search by name, client number or phone number.
-          </p>
-        </div>
-
-        {contextCan(context, 'clients:create') ? (
-          <Link
-            href={`${ROUTES.clients}/new`}
-            className="bg-accent text-accent-contrast focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Register client
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Clients"
+        description="Search by name, client number or phone number."
+        primaryAction={
+          contextCan(context, 'clients:create') ? (
+            <ActionLink href={`${ROUTES.clients}/new`}>Register client</ActionLink>
+          ) : null
+        }
+      />
 
       <ClientDirectory
         page={page}

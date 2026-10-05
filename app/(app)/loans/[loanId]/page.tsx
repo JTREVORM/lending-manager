@@ -329,7 +329,7 @@ export default async function LoanDetailPage({
             position.totalOutstanding > 0 ? (
               <Link
                 href={`${ROUTES.payments}/new?loanId=${loan.id}`}
-                className="bg-accent text-accent-foreground focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="bg-accent text-accent-contrast focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 Record a payment
               </Link>

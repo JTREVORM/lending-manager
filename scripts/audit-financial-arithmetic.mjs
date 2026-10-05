@@ -93,6 +93,11 @@ const FINANCIAL_FILES = [
   // makes it the single highest-leverage place for a `toFixed` to do damage:
   // one line here would misstate every figure in the system at once.
   'components/ui/money.tsx',
+  // Phase 9. The chart draws money to scale. It works out widths and never
+  // figures — but a `toFixed` or a rounded total here would produce a picture
+  // that disagrees with the table beside it while looking authoritative,
+  // which is the worst failure available to a chart.
+  'components/charts/magnitude-chart.tsx',
 ];
 
 const UNSAFE = [
