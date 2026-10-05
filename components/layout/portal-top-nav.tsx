@@ -42,10 +42,10 @@ export function PortalTopNav({
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'min-h-touch flex items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors',
+                  'min-h-touch flex items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors duration-150',
                   isActive
-                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
-                    : 'text-text-muted hover:bg-surface-raised hover:text-text',
+                    ? 'bg-accent-surface text-accent font-semibold'
+                    : 'text-text-muted hover:bg-surface-hover hover:text-text',
                 )}
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0" />

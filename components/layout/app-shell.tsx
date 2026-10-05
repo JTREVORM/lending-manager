@@ -47,11 +47,11 @@ export async function AppShell({
       {/* --- Desktop sidebar ------------------------------------------- */}
       <nav
         aria-label="Main navigation"
-        className="border-border bg-surface fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r p-3 md:flex print:hidden"
+        className="border-border bg-surface elevation-2 fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r p-3 md:flex print:hidden"
       >
         <div className="mb-5 flex items-center gap-2.5 px-2 pt-2">
-          <span className="bg-brand-600 flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <ShieldCheck aria-hidden="true" className="size-5 text-white" />
+          <span className="bg-accent flex size-9 shrink-0 items-center justify-center rounded-md [box-shadow:var(--highlight-top),var(--elevate-2)]">
+            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-5" />
           </span>
           <span className="min-w-0">
             {/* The company's name and the signed-in person's role. The
@@ -74,9 +74,9 @@ export async function AppShell({
       </nav>
 
       {/* --- Mobile header -------------------------------------------- */}
-      <header className="border-border bg-surface sticky top-0 z-20 flex items-center gap-2.5 border-b px-4 py-3 md:hidden print:hidden">
-        <span className="bg-brand-600 flex size-8 shrink-0 items-center justify-center rounded-lg">
-          <ShieldCheck aria-hidden="true" className="size-4 text-white" />
+      <header className="border-border bg-surface elevation-1 sticky top-0 z-20 flex items-center gap-2.5 border-b px-4 py-3 md:hidden print:hidden">
+        <span className="bg-accent flex size-8 shrink-0 items-center justify-center rounded-md [box-shadow:var(--highlight-top),var(--elevate-1)]">
+          <ShieldCheck aria-hidden="true" className="text-accent-contrast size-4" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">
@@ -112,7 +112,7 @@ export async function AppShell({
         // overflow destinations and lives inside this element, so matching on
         // its contents finds every link, not the four in the bar.
         data-nav="bottom-bar"
-        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
+        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] [box-shadow:0_-6px_20px_-8px_oklch(0.3_0.03_var(--shadow-color)/0.18)] md:hidden print:hidden"
       >
         <PrimaryNav
           variant="bottom-bar"

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
+import { ActionLink } from '@/components/ui/page-header';
 import { CollectionSheet } from '@/components/dashboard/collection-sheet';
 import { ExecutiveCards } from '@/components/dashboard/executive-cards';
 import { LoanActivity } from '@/components/dashboard/loan-activity';
@@ -268,45 +269,33 @@ export default async function DashboardPage() {
         <ul className="flex flex-wrap gap-2">
           {mayCollect ? (
             <li>
-              <Link
-                href={`${ROUTES.payments}/new`}
-                className="min-h-touch bg-brand-600 hover:bg-brand-700 inline-flex items-center gap-2 rounded-lg px-4 text-sm text-white"
-              >
+              <ActionLink href={`${ROUTES.payments}/new`}>
                 <CirclePlus aria-hidden="true" className="size-4" />
                 Record a payment
-              </Link>
+              </ActionLink>
             </li>
           ) : null}
           {contextCan(context, 'clients:view') ? (
             <li>
-              <Link
-                href={ROUTES.clients}
-                className="min-h-touch border-border-strong bg-surface text-text hover:bg-surface-raised inline-flex items-center gap-2 rounded-lg border px-4 text-sm"
-              >
+              <ActionLink href={ROUTES.clients} variant="secondary">
                 <Search aria-hidden="true" className="size-4" />
                 Find a client
-              </Link>
+              </ActionLink>
             </li>
           ) : null}
           {contextCan(context, 'clients:create') ? (
             <li>
-              <Link
-                href={`${ROUTES.clients}/new`}
-                className="min-h-touch border-border-strong bg-surface text-text hover:bg-surface-raised inline-flex items-center gap-2 rounded-lg border px-4 text-sm"
-              >
+              <ActionLink href={`${ROUTES.clients}/new`} variant="secondary">
                 <UserPlus aria-hidden="true" className="size-4" />
                 Register a client
-              </Link>
+              </ActionLink>
             </li>
           ) : null}
           {seeOperational ? (
             <li>
-              <Link
-                href={ROUTES.reports}
-                className="min-h-touch border-border-strong bg-surface text-text hover:bg-surface-raised inline-flex items-center gap-2 rounded-lg border px-4 text-sm"
-              >
+              <ActionLink href={ROUTES.reports} variant="secondary">
                 Reports
-              </Link>
+              </ActionLink>
             </li>
           ) : null}
         </ul>

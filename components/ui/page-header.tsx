@@ -94,13 +94,14 @@ export function PageHeader({
 // ---------------------------------------------------------------------------
 
 const ACTION_BASE =
-  'inline-flex min-h-touch items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors duration-150';
+  'inline-flex min-h-touch items-center justify-center gap-2 rounded-md px-4 text-sm font-medium pressable';
 
 const ACTION_VARIANTS = {
-  primary: 'bg-accent text-accent-contrast hover:bg-brand-700 active:bg-brand-800',
+  primary:
+    'bg-accent text-accent-contrast [box-shadow:var(--highlight-top),var(--elevate-2)] hover:bg-accent-hover',
   secondary:
-    'bg-surface text-text border border-border-strong hover:bg-surface-raised active:bg-surface-raised',
-  danger: 'bg-danger text-white hover:opacity-90 active:opacity-80',
+    'bg-surface-raised text-text border border-border [box-shadow:var(--highlight-top),var(--elevate-1)] hover:bg-surface-hover',
+  danger: 'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90',
 } as const;
 
 export interface ActionLinkProps extends ComponentProps<typeof Link> {

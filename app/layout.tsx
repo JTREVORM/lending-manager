@@ -49,8 +49,8 @@ export const viewport: Viewport = {
   // system chrome does not frame it in a colour it never shows. A single
   // value would be wrong in one of the two themes.
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f7f8f9' },
-    { media: '(prefers-color-scheme: dark)', color: '#14181c' },
+    { media: '(prefers-color-scheme: light)', color: '#f4f0e9' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d1013' },
   ],
 };
 

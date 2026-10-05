@@ -1,7 +1,6 @@
-import Link from 'next/link';
-
 import { ROUTES } from '@/config/app';
 import { Card } from '@/components/ui/card';
+import { ActionLink } from '@/components/ui/page-header';
 
 export const metadata = { title: 'Page not found' };
 
@@ -16,12 +15,9 @@ export default function NotFound() {
           the system, please let your administrator know.
         </p>
         {/* A navigation control is a link, not a button. */}
-        <Link
-          href={ROUTES.dashboard}
-          className="bg-brand-600 hover:bg-brand-700 min-h-touch mt-5 inline-flex items-center justify-center rounded-lg px-4 text-sm font-medium text-white transition-colors"
-        >
+        <ActionLink href={ROUTES.dashboard} className="mt-5">
           Return to the dashboard
-        </Link>
+        </ActionLink>
       </Card>
     </main>
   );

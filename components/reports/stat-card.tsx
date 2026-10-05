@@ -70,28 +70,28 @@ export function StatCard({
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <span className="text-text-muted text-sm">{label}</span>
+        <span className="t-label">{label}</span>
         {badge !== undefined ? (
           <Badge tone={tone === 'neutral' ? 'neutral' : tone}>{badge}</Badge>
         ) : null}
       </div>
-      <p className="text-text mt-1 text-xl font-semibold break-words sm:text-2xl">
-        {value}
-      </p>
+      {/* The headline figure, the loudest thing on the card. */}
+      <p className="t-metric text-text mt-2 break-words">{value}</p>
       {secondary !== undefined ? (
-        <p className="text-text-muted mt-0.5 text-sm break-words">{secondary}</p>
+        <p className="t-helper mt-1 break-words">{secondary}</p>
       ) : null}
       {text !== undefined ? (
-        <p className="text-text-muted mt-2 text-xs leading-snug break-words">{text}</p>
+        <p className="t-caption mt-2 leading-snug break-words">{text}</p>
       ) : null}
     </>
   );
 
   const classes = cn(
-    'bg-surface rounded-xl border p-4 min-w-0',
+    // Level-3 raised surface — a KPI card catches light from above.
+    'surface-raised-soft rounded-lg border p-4 min-w-0',
     TONES[tone],
     href !== undefined
-      ? 'hover:bg-surface-raised focus-visible:outline-brand-600 block transition-colors focus-visible:outline-2 focus-visible:outline-offset-2'
+      ? 'lift block focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2'
       : '',
   );
 

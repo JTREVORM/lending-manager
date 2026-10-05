@@ -25,10 +25,15 @@ export function Input({
       type={type}
       aria-invalid={invalid || undefined}
       className={cn(
-        'min-h-touch w-full rounded-lg border px-3 py-2',
-        'bg-surface text-text placeholder:text-text-muted',
+        // A softly sunken well — the reference's "inset layer" — so a field
+        // reads as somewhere to type into. One subtle inner shadow, not a glow
+        // around every edge.
+        'min-h-touch w-full rounded-md border px-3 py-2',
+        'bg-surface-sunken text-text placeholder:text-text-muted',
+        '[box-shadow:var(--inset-soft)]',
         'text-base sm:text-sm',
-        'transition-colors duration-150',
+        'transition-[color,background-color,border-color,box-shadow] duration-150',
+        'focus-visible:border-accent focus-visible:bg-surface',
         'disabled:cursor-not-allowed disabled:opacity-60',
         invalid ? 'border-danger focus-visible:outline-danger' : 'border-border-strong',
         className,

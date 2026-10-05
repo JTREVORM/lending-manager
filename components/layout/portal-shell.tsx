@@ -44,10 +44,10 @@ export async function PortalShell({
         Skip to main content
       </a>
 
-      <header className="border-border bg-surface sticky top-0 z-20 border-b print:hidden">
+      <header className="border-border bg-surface elevation-1 sticky top-0 z-20 border-b print:hidden">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 px-4 py-3 sm:px-6">
-          <span className="bg-brand-600 flex size-8 shrink-0 items-center justify-center rounded-lg">
-            <ShieldCheck aria-hidden="true" className="size-4 text-white" />
+          <span className="bg-accent flex size-8 shrink-0 items-center justify-center rounded-md [box-shadow:var(--highlight-top),var(--elevate-1)]">
+            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-4" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">

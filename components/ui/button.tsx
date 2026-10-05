@@ -3,12 +3,18 @@ import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils/cn';
 
 const VARIANTS = {
+  // Primary — the dark-teal accent, filled, lit from above by the highlight.
   primary:
-    'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 disabled:bg-brand-300',
+    'bg-accent text-accent-contrast elevation-2 [box-shadow:var(--highlight-top),var(--elevate-2)] hover:bg-accent-hover disabled:bg-brand-300',
+  // Secondary — a soft raised neutral, the reference's "raised layer".
   secondary:
-    'bg-surface text-text border border-border-strong hover:bg-surface-raised active:bg-surface-raised',
-  danger: 'bg-danger text-white hover:opacity-90 active:opacity-80',
-  ghost: 'bg-transparent text-text hover:bg-surface-raised',
+    'bg-surface-raised text-text border border-border [box-shadow:var(--highlight-top),var(--elevate-1)] hover:bg-surface-hover',
+  // Outline — subtle border, no fill, for a quieter second action.
+  outline: 'bg-transparent text-text border border-border-strong hover:bg-surface-hover',
+  // Ghost — lowest emphasis, no chrome until hovered.
+  ghost: 'bg-transparent text-text hover:bg-surface-hover',
+  // Destructive — accessible danger fill.
+  danger: 'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90',
 } as const;
 
 const SIZES = {
@@ -54,9 +60,11 @@ export function Button({
       // spinner alone does not.
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium',
-        'transition-colors duration-150',
-        'disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex items-center justify-center gap-2 rounded-md font-medium',
+        // The physical press: scale down a hair on :active, 120ms ease-out,
+        // transform only. `pressable` also transitions background and shadow.
+        'pressable',
+        'disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
         VARIANTS[variant],
         SIZES[size],
         className,

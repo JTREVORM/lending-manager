@@ -51,8 +51,8 @@ export default async function LoginPage({
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="bg-brand-600 mb-3 flex size-12 items-center justify-center rounded-xl">
-            <ShieldCheck aria-hidden="true" className="size-6 text-white" />
+          <span className="bg-accent mb-3 flex size-12 items-center justify-center rounded-lg [box-shadow:var(--highlight-top),var(--elevate-3)]">
+            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-6" />
           </span>
           {/* The company name comes from the database, never a constant, so it
               changes everywhere when registration completes. */}

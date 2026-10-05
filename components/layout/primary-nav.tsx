@@ -139,12 +139,20 @@ function SidebarLink({
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'min-h-touch flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+        'min-h-touch relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150',
         isActive
-          ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
-          : 'text-text-muted hover:bg-surface-raised hover:text-text',
+          ? 'bg-accent-surface text-accent font-semibold'
+          : 'text-text-muted hover:bg-surface-hover hover:text-text',
       )}
     >
+      {/* A left indicator bar, so the active destination is marked by shape as
+          well as colour — the same belt-and-braces the bottom bar uses. */}
+      {isActive ? (
+        <span
+          aria-hidden="true"
+          className="bg-accent absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full"
+        />
+      ) : null}
       <Icon aria-hidden="true" className="size-5 shrink-0" />
       <span className="truncate">{item.label}</span>
       {/* The application carries no full-page loading spinner — see
@@ -272,7 +280,7 @@ function MoreMenu({
           if (event.target === dialogRef.current) close();
         }}
         className={cn(
-          'bg-surface text-text m-0 mt-auto w-full max-w-none rounded-t-2xl p-0',
+          'bg-surface text-text elevation-5 m-0 mt-auto w-full max-w-none rounded-t-xl p-0',
           'backdrop:bg-black/40',
         )}
       >
@@ -302,10 +310,10 @@ function MoreMenu({
                   aria-current={isActive ? 'page' : undefined}
                   onClick={close}
                   className={cn(
-                    'min-h-touch flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium',
+                    'min-h-touch flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium',
                     isActive
-                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
-                      : 'text-text hover:bg-surface-raised',
+                      ? 'bg-accent-surface text-accent font-semibold'
+                      : 'text-text hover:bg-surface-hover',
                   )}
                 >
                   <Icon aria-hidden="true" className="size-5 shrink-0" />

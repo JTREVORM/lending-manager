@@ -24,8 +24,8 @@ export default function GlobalError({ reset }: { readonly reset: () => void }) {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '1.5rem',
-          background: '#f8fafc',
-          color: '#1e293b',
+          background: '#f4f0e9',
+          color: '#25221f',
         }}
       >
         <div style={{ maxWidth: '28rem', textAlign: 'center' }}>
@@ -45,9 +45,9 @@ export default function GlobalError({ reset }: { readonly reset: () => void }) {
               fontSize: '0.875rem',
               fontWeight: 500,
               color: '#ffffff',
-              background: '#15803d',
+              background: '#00514f',
               border: 'none',
-              borderRadius: '0.5rem',
+              borderRadius: '0.625rem',
               cursor: 'pointer',
             }}
           >

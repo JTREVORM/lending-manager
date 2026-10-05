@@ -48,7 +48,7 @@ export function DataTable({
   return (
     <div
       className={cn(
-        'border-border bg-surface min-w-0 overflow-x-auto rounded-xl border',
+        'border-border bg-surface elevation-1 min-w-0 overflow-x-auto rounded-lg border',
         containerClassName,
       )}
       data-data-table=""
@@ -94,7 +94,7 @@ export function TableHead({
     <th
       scope={scope}
       className={cn(
-        'text-text-muted border-border bg-surface border-b px-3 py-2.5 text-xs font-medium tracking-wide uppercase',
+        'text-text-muted border-border bg-surface-raised border-b px-3 py-2.5 text-xs font-semibold tracking-wide uppercase',
         ALIGN[align],
         nowrap ? 'whitespace-nowrap' : undefined,
         className,
@@ -157,7 +157,7 @@ export function TableRow({
     <tr
       className={cn(
         'last:[&>td]:border-b-0 last:[&>th]:border-b-0',
-        interactive ? 'hover:bg-surface-raised transition-colors' : undefined,
+        interactive ? 'hover:bg-surface-hover transition-colors duration-150' : undefined,
         className,
       )}
     >

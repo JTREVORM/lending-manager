@@ -1,10 +1,8 @@
-import Link from 'next/link';
-
 import { OwnDetailsForm } from '@/components/auth/own-details-form';
 import { InstallCard } from '@/components/pwa/install-card';
 import { UserStatusBadge } from '@/components/users/user-status-badge';
 import { Card, CardHeader } from '@/components/ui/card';
-import { PageHeader } from '@/components/ui/page-header';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { ROLES } from '@/lib/permissions';
@@ -67,12 +65,9 @@ export default async function AccountPage() {
       <Card>
         <CardHeader title="Password" />
         <p className="text-text-muted text-sm">Choose a new password at any time.</p>
-        <Link
-          href={ROUTES.changePassword}
-          className="bg-brand-600 hover:bg-brand-700 min-h-touch mt-3 inline-flex items-center justify-center rounded-lg px-4 text-sm font-medium text-white transition-colors"
-        >
+        <ActionLink href={ROUTES.changePassword} className="mt-3">
           Change password
-        </Link>
+        </ActionLink>
       </Card>
     </div>
   );

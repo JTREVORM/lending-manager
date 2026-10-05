@@ -1,143 +1,237 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Design tokens
+   Design tokens — the lending-manager design system
    ===========================================================================
    A financial application for non-technical staff, used mostly on phones in
-   bright daylight. The palette is therefore restrained and high-contrast
-   rather than decorative: a deep green as the brand colour (trust, and
-   distinct from the red/amber used for arrears), neutral greys for structure,
-   and semantic colours reserved for state so that "red" always means
-   something is wrong.
+   bright daylight, and a borrower portal used by clients. The visual language
+   is a restrained, premium fintech one: a warm cream canvas, soft raised and
+   inset surfaces, carefully controlled shadows, and a single dark-teal accent
+   reserved for things that *do* something. It is calm and trustworthy rather
+   than decorative — depth communicates hierarchy, never ornament.
 
-   Every colour is a token. A later phase will let the business set its own
-   brand colour from `company_settings.brand_primary_color`, which means
-   overriding `--color-brand-*` in one place rather than hunting hex values
-   through components.
+   Everything here is a token. Colour, elevation, radius and motion each have
+   one place they are defined and are consumed by name everywhere else, so the
+   product reads as though one hand designed it and a theme change is one edit
+   rather than a hunt through components.
+
+   The redesign is presentation-only: no financial rule, schedule, allocation
+   or report definition changed. Only the surface the numbers are read on did.
    =========================================================================== */
 
 @theme {
-  /* Brand — deep green */
-  --color-brand-50: oklch(0.96 0.02 160);
-  --color-brand-100: oklch(0.92 0.04 160);
-  --color-brand-200: oklch(0.85 0.07 160);
-  --color-brand-300: oklch(0.76 0.1 160);
-  --color-brand-400: oklch(0.66 0.12 160);
-  --color-brand-500: oklch(0.56 0.12 160);
-  --color-brand-600: oklch(0.47 0.11 160);
-  --color-brand-700: oklch(0.39 0.09 160);
-  --color-brand-800: oklch(0.31 0.07 160);
-  --color-brand-900: oklch(0.24 0.05 160);
+  /* -------------------------------------------------------------------------
+     Brand / accent ramp — dark teal.
+
+     The company colour and the interactive colour are the same hue: a deep,
+     slightly desaturated teal (trust, and distinct from the red/amber that
+     mean something is wrong). The ramp mirrors the lightness steps the old
+     green ramp used, so every contrast relationship that held before still
+     holds. A later phase lets the business set its own brand colour from
+     `company_settings.brand_primary_color` by overriding these in one place.
+     ------------------------------------------------------------------------- */
+  --color-brand-50: oklch(0.96 0.02 192);
+  --color-brand-100: oklch(0.92 0.04 192);
+  --color-brand-200: oklch(0.85 0.06 192);
+  --color-brand-300: oklch(0.76 0.08 192);
+  --color-brand-400: oklch(0.66 0.09 192);
+  --color-brand-500: oklch(0.56 0.09 192);
+  --color-brand-600: oklch(0.47 0.085 192);
+  --color-brand-700: oklch(0.39 0.07 192);
+  --color-brand-800: oklch(0.31 0.055 192);
+  --color-brand-900: oklch(0.24 0.04 192);
 
   /* ---------------------------------------------------------------------
      Accent — the interactive colour.
 
-     A deliberate alias of the brand green rather than a second hue. Every
+     A deliberate alias of the brand teal rather than a second hue. Every
      control that *does* something (a primary action, a link, a selected
      option, a focus ring) reaches for `accent`; `brand` names the company's
      colour. Today they are the same value, and when the business sets its own
-     brand colour from `company_settings.brand_primary_color` they can part
-     company without every interactive element following the logo.
+     brand colour they can part company without every interactive element
+     following the logo. The values live in `:root` below because the accent
+     has to change between light and dark.
 
      Phase 9 note: these three tokens were referenced 117 times across the
-     application before they existed. Tailwind emits nothing for an undefined
-     token and reports no error, so `bg-accent` on the "New loan" button
-     produced a button with no background — which is exactly why the
-     pre-Phase-9 screenshots show page actions as bare text on six screens,
-     and why the selected payment method had no visible state. Defining them
-     here fixes all 117 at once. The values themselves live with the other
-     theme-varying colours in `:root` below, because the accent has to change
-     between light and dark.
+     application before they existed, and an undefined Tailwind token emits
+     nothing silently — which is why six page actions once rendered as bare
+     text. They are defined, and asserted, so that cannot recur.
      --------------------------------------------------------------------- */
 
-  /* Semantic state */
-  /* The four status colours, and the tints they are read on.
-     
-     Each pair is the *text* colour and the *badge background* it sits on, so
-     each pair has to clear 4.5:1 — the badges are 12px, which is below the
-     large-text threshold, and they are read on a counter in daylight. The
-     lightnesses here are not chosen by eye: they are the values an axe sweep
-     and a contrast calculation agreed on, and `tests/unit/colour-contrast.test.ts`
-     recomputes them from this file so they cannot drift back.
-     
-     Before Phase 9 these were 0.55 / 0.65 and failed: success 4.11, info
-     4.30, warning 3.02. Only danger passed, at 4.60. */
-  --color-success: oklch(0.52 0.13 150);
-  --color-success-surface: oklch(0.96 0.03 150);
-  --color-warning: oklch(0.545 0.14 75);
-  --color-warning-surface: oklch(0.97 0.04 85);
-  --color-danger: oklch(0.55 0.17 25);
-  --color-danger-surface: oklch(0.96 0.03 25);
-  --color-info: oklch(0.53 0.12 250);
-  --color-info-surface: oklch(0.96 0.03 250);
+  /* Semantic state.
 
-  /* Typography — system stack. No webfont download on a slow connection. */
+     The four status colours, and the tints they are read on. Each pair is the
+     *text* colour and the *badge background* it sits on, so each pair has to
+     clear 4.5:1 — the badges are 12px, below the large-text threshold, and
+     read on a counter in daylight. The lightnesses are not chosen by eye: they
+     are the values a contrast calculation agreed on, and
+     `tests/unit/colour-contrast.test.ts` recomputes them from this file so
+     they cannot drift back. Retuned for the warm-cream surface the badges now
+     sit on; every pair clears 4.7:1 with margin. */
+  --color-success: oklch(0.515 0.13 150);
+  --color-success-surface: oklch(0.96 0.032 150);
+  --color-warning: oklch(0.535 0.14 75);
+  --color-warning-surface: oklch(0.97 0.042 85);
+  --color-danger: oklch(0.53 0.17 25);
+  --color-danger-surface: oklch(0.955 0.035 25);
+  --color-info: oklch(0.505 0.115 215);
+  --color-info-surface: oklch(0.96 0.028 215);
+
+  /* Typography — system stack. No webfont download on a slow connection, which
+     for staff on a 3G phone at a counter is a deliberate performance choice,
+     not a shortcut. Hierarchy comes from size, weight and tracking (defined in
+     the typography layer below), not from a display face. */
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     'Noto Sans', sans-serif;
   --font-mono:
-    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    ui-mono, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+
+  /* Radius scale — standardised, not arbitrary. Controls are tight, cards are
+     soft, large surfaces are softest, and an inner element is always a step
+     tighter than its container so curves stay concentric. */
+  --radius-xs: 0.375rem; /* 6px — chips, tiny controls */
+  --radius-sm: 0.5rem; /* 8px — small controls, badges */
+  --radius-md: 0.625rem; /* 10px — inputs, buttons */
+  --radius-lg: 0.875rem; /* 14px — cards */
+  --radius-xl: 1.125rem; /* 18px — large surfaces, modals */
+  --radius-2xl: 1.375rem; /* 22px — hero panels */
+
+  /* Spacing — the 4 / 8 / 12 / 16 / 24 / 32 / 48 rhythm the layout keeps to.
+     Tailwind's scale already lands on these (1 2 3 4 6 8 12); they are named
+     here so the rhythm is documented rather than tribal. */
+  --spacing-section: 2rem; /* 32px — gap between major page sections */
+  --spacing-gutter: 1rem; /* 16px — the phone side gutter */
 
   /* Minimum comfortable touch target. WCAG 2.5.5 asks for 44px; staff use
      this one-handed at a counter, so it is the floor for every control. */
   --spacing-touch: 2.75rem; /* 44px */
+
+  /* Motion — restrained. Durations and easing are tokens so every transition
+     in the app shares one physical feel. The curves are stronger than the CSS
+     built-ins, which lack the punch that makes motion feel intentional; the
+     durations stay under ~220ms because this UI is used all day and a slow
+     animation is a slow app. Enter/exit use ease-out (immediate movement);
+     on-screen morphs use ease-in-out; ease-in is never used — it delays the
+     first frame, the moment the eye is on it. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-press: 120ms;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
 }
 
 /* ---------------------------------------------------------------------------
-   Semantic surface tokens, defined for both colour schemes.
+   Semantic surface, accent and elevation tokens, defined for both schemes.
 
-   Components reference these rather than picking a grey, so dark mode is a
-   property of the theme instead of a `dark:` variant on every element.
+   Components reference these rather than picking a grey or a shadow, so dark
+   mode and the whole elevation system are properties of the theme instead of a
+   `dark:` variant and a hand-rolled box-shadow on every element.
    --------------------------------------------------------------------------- */
 :root {
-  --color-accent: oklch(0.47 0.11 160);
-  --color-accent-contrast: oklch(1 0 0);
-  --color-accent-surface: oklch(0.96 0.02 160);
-  --color-page: oklch(0.985 0.002 250);
-  --color-surface: oklch(1 0 0);
-  --color-surface-raised: oklch(0.975 0.003 250);
-  --color-border: oklch(0.9 0.004 250);
-  --color-border-strong: oklch(0.82 0.006 250);
-  --color-text: oklch(0.22 0.01 250);
-  --color-text-muted: oklch(0.48 0.012 250);
-  --color-text-inverse: oklch(0.99 0 0);
+  /* Accent */
+  --color-accent: oklch(0.46 0.072 192);
+  --color-accent-contrast: oklch(0.99 0.005 85);
+  --color-accent-surface: oklch(0.95 0.028 192);
+  --color-accent-hover: oklch(0.41 0.07 192);
+  /* Secondary accent — a muted sea-green, used sparingly for a second series
+     in a chart or a non-primary highlight. Never competes with the accent. */
+  --color-accent-2: oklch(0.56 0.07 170);
+  --color-accent-2-surface: oklch(0.95 0.03 170);
+
+  /* Warm neutral surfaces — a cream canvas, cleaner surfaces that catch light,
+     and a sunken well a step darker for inset controls. One warm hue family
+     (83) throughout, so nothing reads as a cool/warm clash. */
+  --color-page: oklch(0.957 0.01 83);
+  --color-surface: oklch(0.978 0.008 83);
+  --color-surface-raised: oklch(0.988 0.006 83);
+  --color-surface-sunken: oklch(0.94 0.011 83);
+  --color-surface-hover: oklch(0.965 0.01 83);
+  --color-border: oklch(0.885 0.01 83);
+  --color-border-strong: oklch(0.8 0.012 83);
+  --color-text: oklch(0.255 0.008 75);
+  --color-text-muted: oklch(0.468 0.01 75);
+  --color-text-inverse: oklch(0.99 0.004 85);
+
+  /* Elevation — five levels, warm-tinted. A shadow carries the hue of the page
+     it falls on (never pure black), and a raised surface also takes a hairline
+     top highlight so it reads as lit from above. Used through the helper
+     classes below, never scattered ad hoc. */
+  --shadow-color: 83;
+  --elevate-1: 0 1px 1px oklch(0.4 0.03 var(--shadow-color) / 0.04);
+  --elevate-2:
+    0 1px 2px oklch(0.4 0.03 var(--shadow-color) / 0.06),
+    0 2px 4px oklch(0.4 0.03 var(--shadow-color) / 0.04);
+  --elevate-3:
+    0 1px 2px oklch(0.4 0.03 var(--shadow-color) / 0.06),
+    0 6px 16px oklch(0.4 0.03 var(--shadow-color) / 0.08);
+  --elevate-4:
+    0 2px 6px oklch(0.35 0.03 var(--shadow-color) / 0.1),
+    0 12px 28px oklch(0.35 0.03 var(--shadow-color) / 0.14);
+  --elevate-5:
+    0 4px 10px oklch(0.3 0.03 var(--shadow-color) / 0.12),
+    0 18px 40px oklch(0.3 0.03 var(--shadow-color) / 0.18);
+  --highlight-top: inset 0 1px 0 oklch(1 0 0 / 0.55);
+  --inset-soft:
+    inset 0 1px 2px oklch(0.4 0.03 var(--shadow-color) / 0.1),
+    inset 0 1px 1px oklch(0.4 0.03 var(--shadow-color) / 0.05);
+  --inset-press: inset 0 2px 5px oklch(0.35 0.03 var(--shadow-color) / 0.16);
+  --ring-focus: 0 0 0 2px var(--color-page), 0 0 0 4px var(--color-accent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-page: oklch(0.17 0.008 250);
-    --color-surface: oklch(0.21 0.009 250);
-    --color-surface-raised: oklch(0.25 0.01 250);
-    --color-border: oklch(0.31 0.011 250);
-    --color-border-strong: oklch(0.42 0.013 250);
-    --color-text: oklch(0.95 0.004 250);
-    --color-text-muted: oklch(0.72 0.009 250);
-    --color-text-inverse: oklch(0.17 0.008 250);
+    /* Dark mode is a deliberate equivalent of the warm scheme, not an
+       inversion: a deep, near-neutral charcoal with the faintest cool lean,
+       surfaces that lift by lightness, and the same teal accent brightened so
+       it still lifts off the page. */
+    --color-page: oklch(0.172 0.008 235);
+    --color-surface: oklch(0.215 0.009 235);
+    --color-surface-raised: oklch(0.25 0.01 235);
+    --color-surface-sunken: oklch(0.19 0.008 235);
+    --color-surface-hover: oklch(0.24 0.01 235);
+    --color-border: oklch(0.31 0.011 235);
+    --color-border-strong: oklch(0.42 0.013 235);
+    --color-text: oklch(0.95 0.004 235);
+    --color-text-muted: oklch(0.72 0.009 235);
+    --color-text-inverse: oklch(0.172 0.008 235);
 
-    /* The accent has to lift off a dark page, so it brightens rather than
-       staying at its light-mode value — which would fail contrast on both the
-       page and the surface. Its contrast colour inverts with it. */
-    --color-accent: oklch(0.72 0.12 160);
-    --color-accent-contrast: oklch(0.17 0.008 250);
-    --color-accent-surface: oklch(0.28 0.05 160);
+    /* The accent brightens so it lifts off a dark page, and its contrast
+       colour inverts with it. */
+    --color-accent: oklch(0.74 0.11 192);
+    --color-accent-contrast: oklch(0.17 0.008 235);
+    --color-accent-surface: oklch(0.28 0.05 192);
+    --color-accent-hover: oklch(0.79 0.11 192);
+    --color-accent-2: oklch(0.72 0.08 170);
+    --color-accent-2-surface: oklch(0.28 0.05 170);
 
     /* Surfaces need more lightness contrast against a dark page than the
-       light-mode tints provide. */
-    --color-success-surface: oklch(0.28 0.05 150);
-    --color-warning-surface: oklch(0.3 0.06 85);
-    --color-danger-surface: oklch(0.29 0.07 25);
-    --color-info-surface: oklch(0.28 0.05 250);
+       light-mode tints provide, and the status text has to brighten with them
+       or every badge is dark ink on a dark tint — the Phase 9 defect this
+       whole token set is arithmetically guarded against. */
+    --color-success: oklch(0.66 0.13 150);
+    --color-success-surface: oklch(0.29 0.05 150);
+    --color-warning: oklch(0.7 0.14 85);
+    --color-warning-surface: oklch(0.31 0.06 85);
+    --color-danger: oklch(0.7 0.16 25);
+    --color-danger-surface: oklch(0.3 0.07 25);
+    --color-info: oklch(0.7 0.11 215);
+    --color-info-surface: oklch(0.29 0.05 215);
 
-    /* And the text has to brighten with them, for exactly the reason the
-       accent does two blocks up. This was missed: the surfaces were given a
-       dark-mode value and the four text colours were not, so every status
-       badge in the application was dark ink on a dark tint — success 3.13,
-       info 3.01, warning 2.77, danger 2.74, where 4.5 is the floor. All four
-       failed, and none of them looked obviously wrong in a screenshot. */
-    --color-success: oklch(0.65 0.13 150);
-    --color-warning: oklch(0.68 0.14 75);
-    --color-danger: oklch(0.68 0.17 25);
-    --color-info: oklch(0.655 0.12 250);
+    /* Shadows go deeper and nearly neutral on a dark page; the top highlight
+       is a faint white edge rather than a bright one. */
+    --shadow-color: 235;
+    --elevate-1: 0 1px 1px oklch(0 0 0 / 0.3);
+    --elevate-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 2px 4px oklch(0 0 0 / 0.3);
+    --elevate-3: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 16px oklch(0 0 0 / 0.45);
+    --elevate-4: 0 2px 6px oklch(0 0 0 / 0.5), 0 12px 28px oklch(0 0 0 / 0.55);
+    --elevate-5: 0 4px 10px oklch(0 0 0 / 0.5), 0 18px 40px oklch(0 0 0 / 0.6);
+    --highlight-top: inset 0 1px 0 oklch(1 0 0 / 0.06);
+    --inset-soft: inset 0 1px 2px oklch(0 0 0 / 0.4), inset 0 1px 1px oklch(0 0 0 / 0.25);
+    --inset-press: inset 0 2px 5px oklch(0 0 0 / 0.5);
   }
 }
 
@@ -145,9 +239,14 @@
   --color-accent: var(--color-accent);
   --color-accent-contrast: var(--color-accent-contrast);
   --color-accent-surface: var(--color-accent-surface);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-2: var(--color-accent-2);
+  --color-accent-2-surface: var(--color-accent-2-surface);
   --color-page: var(--color-page);
   --color-surface: var(--color-surface);
   --color-surface-raised: var(--color-surface-raised);
+  --color-surface-sunken: var(--color-surface-sunken);
+  --color-surface-hover: var(--color-surface-hover);
   --color-border: var(--color-border);
   --color-border-strong: var(--color-border-strong);
   --color-text: var(--color-text);
@@ -177,12 +276,14 @@
        320px screen. Width is contained structurally; this is the backstop. */
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   /* A visible focus ring on every keyboard-focused control. Never removed:
-     without it the application is unusable without a mouse. */
+     without it the application is unusable without a mouse. Reaches for the
+     accent, so the focus colour is the interactive colour. */
   :focus-visible {
-    outline: 2px solid var(--color-brand-500);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
     border-radius: 0.25rem;
   }
@@ -197,14 +298,16 @@
   h3,
   h4 {
     font-weight: 600;
-    letter-spacing: -0.01em;
-    /* Prevents a long heading from overflowing a narrow phone screen. */
+    letter-spacing: -0.014em;
+    /* Prevents a long heading from overflowing a narrow phone screen, and
+       keeps the last line from orphaning a single word. */
     overflow-wrap: break-word;
+    text-wrap: balance;
   }
 
   h1 {
     font-size: 1.5rem;
-    line-height: 1.25;
+    line-height: 1.2;
   }
 
   h2 {
@@ -245,6 +348,163 @@
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ===========================================================================
+   Typography roles
+   ===========================================================================
+   One scale, named by role, so a metric value is strong everywhere and a
+   caption is quiet everywhere without each screen re-deciding. Financial
+   values are the loudest thing on the page; labels and captions step back.
+   Applied through these classes rather than ad-hoc text utilities so the
+   hierarchy stays consistent across forty screens.
+   =========================================================================== */
+@layer components {
+  .t-page-title {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    font-weight: 650;
+    letter-spacing: -0.016em;
+  }
+
+  .t-section-title {
+    font-size: 1.0625rem;
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .t-card-title {
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+
+  /* The headline number on a KPI card or a loan summary. Tabular, tight, and
+     larger than anything around it. */
+  .t-metric {
+    font-size: 1.75rem;
+    line-height: 1.1;
+    font-weight: 680;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  .t-metric-sm {
+    font-size: 1.25rem;
+    line-height: 1.15;
+    font-weight: 660;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* The quiet label above or below a metric. Uppercase, tracked, muted. */
+  .t-label {
+    font-size: 0.6875rem;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .t-body {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .t-helper {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+  }
+
+  .t-caption {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--color-text-muted);
+  }
+
+  .t-th {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  @media (min-width: 48rem) {
+    .t-page-title {
+      font-size: 1.875rem;
+    }
+  }
+}
+
+/* ===========================================================================
+   Surface & elevation helpers
+   ===========================================================================
+   The five elevation levels and the two neumorphic treatments, as classes.
+   A component picks a level; it never writes a box-shadow. This is what keeps
+   shadows from scattering and what makes depth mean hierarchy.
+   =========================================================================== */
+@layer components {
+  .elevation-1 {
+    box-shadow: var(--elevate-1);
+  }
+  .elevation-2 {
+    box-shadow: var(--elevate-2);
+  }
+  .elevation-3 {
+    box-shadow: var(--elevate-3);
+  }
+  .elevation-4 {
+    box-shadow: var(--elevate-4);
+  }
+  .elevation-5 {
+    box-shadow: var(--elevate-5);
+  }
+
+  /* A soft raised surface: a cream card that catches light from above. The
+     top highlight plus a tinted ambient shadow is the reference's "raised
+     layer" without heavy neumorphism. */
+  .surface-raised-soft {
+    background-color: var(--color-surface-raised);
+    box-shadow: var(--highlight-top), var(--elevate-3);
+  }
+
+  /* A sunken well for search fields and segmented controls — the reference's
+     "inset layer". */
+  .surface-inset {
+    background-color: var(--color-surface-sunken);
+    box-shadow: var(--inset-soft);
+  }
+
+  /* Pressable: the physical click. Scale down a hair and sink on :active.
+     120ms, ease-out, transform only, so it is GPU-cheap and instant. */
+  .pressable {
+    transition:
+      transform var(--duration-press) var(--ease-out),
+      box-shadow var(--duration-press) var(--ease-out),
+      background-color var(--duration-fast) var(--ease-out);
+  }
+  .pressable:active {
+    transform: scale(0.97);
+  }
+
+  /* A card that lifts slightly on hover, for interactive rows and tiles. */
+  .lift {
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      box-shadow var(--duration-base) var(--ease-out);
+  }
+  @media (hover: hover) {
+    .lift:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--highlight-top), var(--elevate-4);
     }
   }
 }
@@ -296,8 +556,8 @@
     padding: 0.625rem 1rem;
     overflow: visible;
     clip-path: none;
-    border: 2px solid var(--color-brand-500);
-    border-radius: 0.5rem;
+    border: 2px solid var(--color-accent);
+    border-radius: var(--radius-md);
     background-color: var(--color-surface);
     color: var(--color-text);
     font-weight: 600;
@@ -306,31 +566,50 @@
 
 /* ---------------------------------------------------------------------------
    Print
- 
+
    Statements and reports are printed and handed to borrowers, so the printed
    page is a real output of this system rather than an afterthought. The
    navigation, the filter bar, the pagination and the action buttons all carry
    `print:hidden` where they are rendered; what is left here is what cannot be
    expressed as a utility class on one element.
- 
+
    No colour is forced to black. A status badge whose meaning depended on
    colour would be unreadable in print — which is exactly why every badge in
    this application also states its meaning in words.
  --------------------------------------------------------------------------- */
 @media print {
   /* A printed page is paper, not a dark screen. Backgrounds are dropped so a
-     dark-mode viewer does not print a page of ink. */
+     dark-mode viewer does not print a page of ink, and every soft shadow is
+     removed so nothing wastes toner. */
   :root {
     --color-surface: #ffffff;
     --color-surface-raised: #ffffff;
-    --color-bg: #ffffff;
+    --color-surface-sunken: #ffffff;
+    --color-page: #ffffff;
     --color-text: #000000;
     --color-text-muted: #333333;
+    --elevate-1: none;
+    --elevate-2: none;
+    --elevate-3: none;
+    --elevate-4: none;
+    --elevate-5: none;
+    --highlight-top: none;
+    --inset-soft: none;
   }
 
   body {
     background: #ffffff;
     color: #000000;
+  }
+
+  .elevation-1,
+  .elevation-2,
+  .elevation-3,
+  .elevation-4,
+  .elevation-5,
+  .surface-raised-soft,
+  .surface-inset {
+    box-shadow: none !important;
   }
 
   /* Tables are the substance of a printed report. Repeating the header on each
