@@ -121,6 +121,9 @@ posture and what is deferred to Phase 2.
 | `npm run bootstrap:owner` | Create the first Owner/Administrator. Refuses if one exists. |
 | `npm run db:types` | Regenerate `types/database.types.ts`. |
 | `npm run db:local:setup` / `:migrate` / `:teardown` | Throwaway local cluster. |
+| `npm run audit:money` | Scan for floating-point arithmetic on money. |
+| `npm run e2e:up` / `e2e:down` / `e2e:env` | The end-to-end stack: PostgreSQL, the real PostgREST, an auth shim, a seeded database and the production build. |
+| `npm run test:e2e` | Browser tests against that stack. Needs it up. |
 
 ## Verification baseline
 
@@ -131,16 +134,24 @@ Every later phase must keep these passing.
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
 | Format | `npm run format:check` | clean |
-| Float-free money audit | `npm run audit:money` | 56 files, no hazard |
-| Unit and component tests | `npm run test:run` | 1,533 passed |
-| Database tests | `npm run test:db` | 1,043 passed |
+| Float-free money audit | `npm run audit:money` | 58 files, no hazard |
+| Unit and component tests | `npm run test:run` | 1,701 passed |
+| Database tests | `npm run test:db` | 1,056 passed |
+| Browser tests | `npm run test:e2e` | 339 passed |
 | Production build | `npm run build` | succeeds |
-| **Total** | | **2,576 tests, 0 failed, 0 skipped** |
+| **Total** | | **3,096 assertions, 0 failed** |
 
 The count by phase: 398 at the end of Phase 1, then 603, 1,087, 1,462, 1,749,
-2,003, 2,264 and 2,576. Each phase keeps every earlier test passing; where an
+2,003, 2,264, 2,576 and 2,757 in Vitest — plus 339 browser assertions from
+Phase 9, which are counted separately because they need a running stack rather
+than a test runner. Each phase keeps every earlier test passing; where an
 earlier test changed it is because the later phase deliberately changed the
 fact it asserted, and each one is named in that phase's report.
+
+Phase 9 is the phase to read on this subject. It passed every gate above and
+the application was still unusable, because none of these gates opens the
+application. The browser tests exist for that reason, and they found twelve
+defects on their first run.
 
 `npm run verify` runs the type check, the lint, the format check, `test:run`
 and the build in one command. The database suite is separate because it needs a
@@ -172,6 +183,8 @@ docs/          Architecture, database, decisions, security
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are the way they are (ADR-001 … ADR-012). |
 | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) | Sign-in, sessions, roles, permissions, user management, RLS. |
 | [docs/SECURITY.md](docs/SECURITY.md) | Posture, review results, known gaps. |
+| [docs/DELIVERY.md](docs/DELIVERY.md) | The installable application, the service worker and what it may cache, CSP and headers, rate limits, UI conventions, what a page costs, health and version, deployment, Phase 10 handover. |
+| [docs/PHASE-9-REPORT.md](docs/PHASE-9-REPORT.md) | Phase 9's completion report: the twelve defects running the application found, the verification results, the deviations and the handover. |
 
 Three decisions worth knowing before writing any code here:
 
@@ -187,6 +200,20 @@ Three decisions worth knowing before writing any code here:
   immediately. See ADR-015.
 
 ## What each phase built
+
+**Built in Phase 9.** The way to run this application and the defences around
+it: an end-to-end harness of real parts (PostgreSQL with every migration, the
+real PostgREST binary, the production build) driven by a browser at two
+viewports; a Content-Security-Policy with a per-request nonce; `HttpOnly`
+session cookies and no Supabase client in the browser at all; per-action rate
+limits; a service worker that caches static assets and never a figure; one
+shared primitive each for money, dates, phone numbers, empty states and
+row links; a phone navigation of four destinations and a More sheet; WCAG AA
+across every screen in both themes; a health endpoint and a visible build
+version. Twelve defects found by running it, each with a regression test — see
+[docs/DELIVERY.md](docs/DELIVERY.md) and
+[docs/SECURITY.md](docs/SECURITY.md#issues-found-and-fixed-in-phase-9). No
+financial rule changed.
 
 **Built in Phase 8.** Role-aware dashboards composed from capabilities;
 collection, loan portfolio, arrears, grace-period, charges and client reports
