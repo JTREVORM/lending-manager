@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
@@ -203,7 +203,7 @@ export function PaymentRegister({
           <ul className="min-w-0 space-y-2 md:hidden">
             {payments.map((payment) => (
               <li key={payment.id} className="min-w-0">
-                <Link
+                <RowLink
                   href={`${ROUTES.payments}/${payment.id}`}
                   className="border-border bg-surface focus-visible:outline-accent block min-w-0 rounded-xl border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
@@ -229,7 +229,7 @@ export function PaymentRegister({
                     </span>
                     <StatusBadge status={payment.status} />
                   </div>
-                </Link>
+                </RowLink>
               </li>
             ))}
           </ul>
@@ -273,12 +273,12 @@ export function PaymentRegister({
                 {payments.map((payment) => (
                   <tr key={payment.id} className="border-border border-b">
                     <th scope="row" className="py-2 pr-4 font-normal">
-                      <Link
+                      <RowLink
                         href={`${ROUTES.payments}/${payment.id}`}
                         className="text-accent focus-visible:outline-accent font-mono underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {payment.paymentNumber}
-                      </Link>
+                      </RowLink>
                     </th>
                     <td className="text-text py-2 pr-4 break-words">
                       {payment.clientName}

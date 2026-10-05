@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { useFocusWhen } from '@/components/ui/focus-on-appear';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Money } from '@/components/ui/money';
@@ -62,6 +63,7 @@ export function PaymentReversalPanel({
   >(reversePaymentAction, undefined);
 
   const [confirming, setConfirming] = useState(false);
+  const confirmRef = useFocusWhen<HTMLFormElement>(confirming);
 
   if (alreadyReversed) {
     return (
@@ -87,7 +89,15 @@ export function PaymentReversalPanel({
       ) : null}
 
       {confirming ? (
-        <form action={submit} className="min-w-0 space-y-3">
+        // Takes focus when it appears: the "Reverse…" button is unmounted by
+        // now, so the browser would drop focus to `<body>`. See
+        // `useFocusWhen`.
+        <form
+          action={submit}
+          className="min-w-0 space-y-3"
+          ref={confirmRef}
+          tabIndex={-1}
+        >
           <input type="hidden" name="paymentId" value={paymentId} />
 
           <Alert tone="warning" title="This changes what the borrower owes">

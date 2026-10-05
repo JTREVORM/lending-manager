@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { useFocusWhen } from '@/components/ui/focus-on-appear';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Money } from '@/components/ui/money';
@@ -182,6 +183,7 @@ function ApproveForm({
   );
 
   const [confirming, setConfirming] = useState(false);
+  const confirmRef = useFocusWhen<HTMLFormElement>(confirming);
 
   return (
     <Card className="space-y-3">
@@ -212,7 +214,10 @@ function ApproveForm({
           Approve…
         </Button>
       ) : (
-        <form action={formAction} className="space-y-3">
+        // Takes focus when it appears: the "Approve…" button is unmounted by
+        // now, so the browser would drop focus to `<body>`. See
+        // `useFocusWhen`.
+        <form action={formAction} className="space-y-3" ref={confirmRef} tabIndex={-1}>
           <input type="hidden" name="loanId" value={loanId} />
 
           <Alert tone="info">
@@ -338,6 +343,7 @@ function DisburseForm({
   );
 
   const [confirming, setConfirming] = useState(false);
+  const confirmRef = useFocusWhen<HTMLFormElement>(confirming);
 
   return (
     <Card className="space-y-3">
@@ -363,7 +369,10 @@ function DisburseForm({
           Disburse…
         </Button>
       ) : (
-        <form action={formAction} className="space-y-3">
+        // Takes focus when it appears, for the same reason the approval
+        // confirmation does — and with more at stake, because the next press
+        // hands cash over.
+        <form action={formAction} className="space-y-3" ref={confirmRef} tabIndex={-1}>
           <input type="hidden" name="loanId" value={loanId} />
 
           <dl className="border-border bg-surface-raised min-w-0 space-y-2 rounded-lg border p-3 text-sm">

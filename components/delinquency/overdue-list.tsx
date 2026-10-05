@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
@@ -215,7 +215,7 @@ export function OverdueList({
               <li key={loan.loanId} className="min-w-0">
                 <div className="border-border bg-surface focus-within:outline-accent relative min-w-0 rounded-xl border p-3 focus-within:outline-2 focus-within:outline-offset-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <Link
+                    <RowLink
                       href={`${ROUTES.loans}/${loan.loanId}`}
                       // The stretched link: it covers the card, so a tap
                       // anywhere that is not another control opens the loan.
@@ -224,7 +224,7 @@ export function OverdueList({
                       className="text-text font-medium break-words before:absolute before:inset-0 before:content-['']"
                     >
                       {loan.clientName}
-                    </Link>
+                    </RowLink>
                     <span className="text-text font-semibold tabular-nums">
                       <Money amount={loan.totalOutstanding} />
                     </span>
@@ -299,12 +299,12 @@ export function OverdueList({
                 {loans.map((loan) => (
                   <tr key={loan.loanId} className="border-border border-b">
                     <th scope="row" className="py-2 pr-4 font-normal">
-                      <Link
+                      <RowLink
                         href={`${ROUTES.clients}/${loan.clientId}`}
                         className="text-accent focus-visible:outline-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {loan.clientName}
-                      </Link>
+                      </RowLink>
                       <span className="text-text-muted block font-mono text-xs">
                         {loan.clientNumber}
                       </span>
@@ -313,12 +313,12 @@ export function OverdueList({
                       <PhoneValue value={loan.clientPhone} linked />
                     </td>
                     <td className="py-2 pr-4">
-                      <Link
+                      <RowLink
                         href={`${ROUTES.loans}/${loan.loanId}`}
                         className="text-accent focus-visible:outline-accent font-mono underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {loan.loanNumber}
-                      </Link>
+                      </RowLink>
                     </td>
                     <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
                       <Money amount={loan.currentDue} />

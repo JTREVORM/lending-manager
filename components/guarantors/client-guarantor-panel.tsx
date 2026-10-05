@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+
+import { RowLink } from '@/components/ui/row-link';
 import { useActionState, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
@@ -56,12 +58,12 @@ export function ClientGuarantorPanel({
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Link
+                  <RowLink
                     href={`/guarantors/${link.guarantorId}`}
                     className="text-accent focus-visible:outline-accent font-medium break-words underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
                     {link.fullName}
-                  </Link>
+                  </RowLink>
                   <p className="text-text-muted text-sm">
                     {link.relationshipToClient} · <PhoneValue value={link.phone} />
                   </p>

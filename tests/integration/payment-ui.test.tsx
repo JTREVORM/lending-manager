@@ -233,6 +233,66 @@ describe('the payment form', () => {
   });
 
   // =======================================================================
+  describe('where focus goes when the confirmation appears', () => {
+    /**
+     * Step one unmounts when step two appears, so the control that was
+     * focused stops existing and the browser drops focus to `<body>`:
+     * somebody working by keyboard is returned to the top of the document and
+     * has to tab back down past the whole navigation, and somebody using a
+     * screen reader is told nothing — the screen changed and the only
+     * indication was visual.
+     *
+     * Asserted here rather than in a browser because nothing about the
+     * rendered output looks wrong when focus is in the wrong place, which is
+     * exactly how it gets lost again.
+     */
+
+    it('the panel takes focus, not the button that commits the payment', async () => {
+      const user = userEvent.setup();
+      render(<PaymentForm {...FORM_PROPS} />);
+
+      await user.click(screen.getByRole('button', { name: /Continue/i }));
+
+      const panel = screen
+        .getByRole('heading', { name: /Confirm this payment/i })
+        .closest('[tabindex="-1"]');
+
+      expect(panel).not.toBeNull();
+      expect(document.activeElement).toBe(panel);
+    });
+
+    it('the focused panel names itself, so it is announced', async () => {
+      const user = userEvent.setup();
+      render(<PaymentForm {...FORM_PROPS} />);
+
+      await user.click(screen.getByRole('button', { name: /Continue/i }));
+
+      const panel = document.activeElement as HTMLElement;
+      const labelledBy = panel.getAttribute('aria-labelledby');
+
+      expect(labelledBy).toBe('confirm-payment-heading');
+      expect(document.getElementById(labelledBy ?? '')?.textContent).toMatch(
+        /Confirm this payment/i,
+      );
+    });
+
+    it('does not steal focus back once somebody has moved on', async () => {
+      const user = userEvent.setup();
+      render(<PaymentForm {...FORM_PROPS} />);
+
+      await user.click(screen.getByRole('button', { name: /Continue/i }));
+
+      const record = screen.getByRole('button', { name: /^Record /i });
+      record.focus();
+      expect(document.activeElement).toBe(record);
+
+      // A later render must leave them where they are. Taking focus on every
+      // render rather than on the transition would be its own bug.
+      await user.hover(record);
+      expect(document.activeElement).toBe(record);
+    });
+  });
+
   describe('the confirmation step', () => {
     it('shows every figure the specification requires before posting', async () => {
       const user = userEvent.setup();
@@ -676,6 +736,20 @@ describe('the reversal panel', () => {
     willReopenLoan: false,
     alreadyReversed: false,
   };
+
+  it('the reason form takes focus when it replaces the Reverse button', async () => {
+    // Same reason as the payment confirmation: the button that was focused is
+    // unmounted, and a reversal is not a step to perform with focus lost.
+    const user = userEvent.setup();
+    render(<PaymentReversalPanel {...PANEL} />);
+
+    await user.click(screen.getByRole('button', { name: /^Reverse…$/i }));
+
+    const form = screen.getByLabelText(/Reason for this reversal/i).closest('form');
+
+    expect(form).not.toBeNull();
+    expect(document.activeElement).toBe(form);
+  });
 
   it('never calls itself a delete', () => {
     render(<PaymentReversalPanel {...PANEL} />);

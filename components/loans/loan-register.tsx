@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 
@@ -126,7 +126,7 @@ export function LoanRegister({
           <ul className="space-y-3 md:hidden">
             {page.loans.map((loan) => (
               <li key={loan.id}>
-                <Link
+                <RowLink
                   href={`/loans/${loan.id}`}
                   className="border-border bg-surface focus-visible:outline-accent block rounded-xl border p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
@@ -167,7 +167,7 @@ export function LoanRegister({
                       <dd className="text-text">{formatRecordedDate(loan.createdAt)}</dd>
                     </div>
                   </dl>
-                </Link>
+                </RowLink>
               </li>
             ))}
           </ul>
@@ -209,12 +209,12 @@ export function LoanRegister({
                 {page.loans.map((loan) => (
                   <tr key={loan.id} className="border-border border-b last:border-0">
                     <td className="py-3 pr-4 font-mono">
-                      <Link
+                      <RowLink
                         href={`/loans/${loan.id}`}
                         className="text-accent focus-visible:outline-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {loan.loanNumber}
-                      </Link>
+                      </RowLink>
                     </td>
                     <td className="text-text py-3 pr-4">
                       {loan.clientName}

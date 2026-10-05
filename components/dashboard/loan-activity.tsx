@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 
 import { Card } from '@/components/ui/card';
 import { ReportEmpty } from '@/components/reports/report-empty';
@@ -42,12 +42,12 @@ export function LoanActivity({
             className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
           >
             <div className="min-w-0">
-              <Link
+              <RowLink
                 href={`${ROUTES.loans}/${row.loanId}`}
                 className="text-brand-700 font-mono text-sm hover:underline"
               >
                 {row.loanNumber}
-              </Link>
+              </RowLink>
               <p className="text-text min-w-0 text-sm break-words">{row.clientName}</p>
               <p className="text-text-muted text-xs">
                 {kind === 'disbursed' && row.disbursedAt !== null

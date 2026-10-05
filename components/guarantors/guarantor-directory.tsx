@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 
@@ -96,7 +96,7 @@ export function GuarantorDirectory({
         <ul className="space-y-3">
           {page.guarantors.map((guarantor) => (
             <li key={guarantor.id}>
-              <Link
+              <RowLink
                 href={`/guarantors/${guarantor.id}`}
                 className="border-border bg-surface focus-visible:outline-accent block rounded-xl border p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
@@ -119,7 +119,7 @@ export function GuarantorDirectory({
                       : `${String(guarantor.activeClientCount)} client${guarantor.activeClientCount === 1 ? '' : 's'}`}
                   </p>
                 </div>
-              </Link>
+              </RowLink>
             </li>
           ))}
         </ul>

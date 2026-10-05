@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { useFocusWhen } from '@/components/ui/focus-on-appear';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Money } from '@/components/ui/money';
@@ -136,6 +137,7 @@ export function PaymentForm({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const confirmRef = useFocusWhen<HTMLDivElement>(confirming);
 
   // The preview. Deliberately tolerant of input that is not yet a number —
   // somebody mid-type should not see an error on every keystroke.
@@ -392,7 +394,10 @@ export function PaymentForm({
 
       {/* --- Step two: confirm ----------------------------------------- */}
       {confirming && plan !== null ? (
-        <Card>
+        // Takes focus when it appears: step one is unmounted by now, so the
+        // button that was focused no longer exists and the browser would drop
+        // focus to `<body>`. See `useFocusWhen`.
+        <Card ref={confirmRef} tabIndex={-1} aria-labelledby="confirm-payment-heading">
           {/* Step one is unmounted while this step is shown, and an unmounted
               input is not submitted — so the amount, the method, the reference
               and the note are carried here as hidden fields. Without them the
@@ -407,7 +412,9 @@ export function PaymentForm({
           ) : null}
           <input type="hidden" name="notes" value={notes} />
 
-          <h3 className="text-text text-lg font-semibold">Confirm this payment</h3>
+          <h3 id="confirm-payment-heading" className="text-text text-lg font-semibold">
+            Confirm this payment
+          </h3>
           <p className="text-text-muted mt-1 text-sm">
             Check every figure against what the borrower handed over. Once recorded, a
             payment can only be withdrawn by the Owner, as a reversal.

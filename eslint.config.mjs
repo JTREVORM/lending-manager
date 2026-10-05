@@ -10,6 +10,11 @@ export default tseslint.config(
       'out/**',
       'build/**',
       '.pglocal/**',
+      // The end-to-end harness's working directory: a seeded database, a
+      // production build's logs, and Playwright's trace artifacts — which
+      // contain the application's own bundled JavaScript, so linting them
+      // reports the framework's rules against minified vendor code.
+      '.e2e/**',
       'next-env.d.ts',
     ],
   },

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -60,12 +60,12 @@ export function ClientLoanSummary({
         <Card key={loan.loanId} className="min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <Link
+              <RowLink
                 href={`${ROUTES.loans}/${loan.loanId}`}
                 className="text-brand-700 font-mono hover:underline"
               >
                 {loan.loanNumber}
-              </Link>
+              </RowLink>
               <p className="text-text-muted text-sm">
                 <Money amount={loan.principalAmount} /> borrowed ·{' '}
                 {loan.scheduledCompletionDate === null
@@ -117,12 +117,12 @@ export function ClientLoanSummary({
           </dl>
 
           {loan.loanStatus === 'active' || loan.loanStatus === 'cleared' ? (
-            <Link
+            <RowLink
               href={`${ROUTES.loans}/${loan.loanId}/statement`}
               className="text-brand-700 mt-3 inline-block text-sm hover:underline"
             >
               Statement
-            </Link>
+            </RowLink>
           ) : null}
         </Card>
       ))}

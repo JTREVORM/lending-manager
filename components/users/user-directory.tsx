@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 
@@ -122,7 +122,7 @@ export function UserDirectory({
           <ul className="space-y-2 md:hidden">
             {users.map((user) => (
               <li key={user.id}>
-                <Link
+                <RowLink
                   href={`/users/${user.id}`}
                   className="bg-surface border-border hover:bg-surface-raised block rounded-xl border p-4 transition-colors"
                 >
@@ -143,7 +143,7 @@ export function UserDirectory({
                       <Badge tone="warning">Temporary password</Badge>
                     ) : null}
                   </div>
-                </Link>
+                </RowLink>
               </li>
             ))}
           </ul>
@@ -176,12 +176,12 @@ export function UserDirectory({
                       className="border-border hover:bg-surface-raised border-b last:border-0"
                     >
                       <th scope="row" className="px-4 py-3 text-left font-normal">
-                        <Link
+                        <RowLink
                           href={`/users/${user.id}`}
                           className="font-medium hover:underline"
                         >
                           {user.fullName}
-                        </Link>
+                        </RowLink>
                         {user.mustChangePassword ? (
                           <Badge tone="warning" className="ml-2">
                             Temporary password

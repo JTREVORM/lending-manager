@@ -65,7 +65,18 @@ export function ReportTable<Row>({
             <Card
               className={cn(
                 'min-w-0 space-y-2',
-                rowTone?.(row) === 'muted' ? 'opacity-70' : '',
+                // `text-text-muted`, the same thing the table below does —
+                // not `opacity-70`.
+                //
+                // Opacity dims everything inside the card, including a link
+                // that has its own colour, and takes it below the contrast
+                // floor: an axe sweep found a `text-brand-700` link inside a
+                // settled row at under 4.5:1. A muted *token* is a colour
+                // that was chosen to be readable, and anything with its own
+                // colour keeps it. The information is in a column either way
+                // — "Paid", a zero remaining balance — so the dimming was
+                // only ever emphasis.
+                rowTone?.(row) === 'muted' ? 'text-text-muted' : '',
               )}
             >
               {primary === undefined ? null : (

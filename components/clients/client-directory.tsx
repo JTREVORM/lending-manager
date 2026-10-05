@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 
@@ -136,7 +136,7 @@ export function ClientDirectory({
           <ul className="space-y-3 md:hidden">
             {page.clients.map((client) => (
               <li key={client.id}>
-                <Link
+                <RowLink
                   href={`/clients/${client.id}`}
                   className="border-border bg-surface focus-visible:outline-accent block rounded-xl border p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
@@ -164,7 +164,7 @@ export function ClientDirectory({
                       </dd>
                     </div>
                   </dl>
-                </Link>
+                </RowLink>
               </li>
             ))}
           </ul>
@@ -201,12 +201,12 @@ export function ClientDirectory({
                 {page.clients.map((client) => (
                   <tr key={client.id} className="border-border border-b last:border-0">
                     <td className="py-3 pr-4 font-mono">
-                      <Link
+                      <RowLink
                         href={`/clients/${client.id}`}
                         className="text-accent focus-visible:outline-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {client.clientNumber}
-                      </Link>
+                      </RowLink>
                     </td>
                     <td className="text-text py-3 pr-4">{client.fullName}</td>
                     <td className="text-text-muted py-3 pr-4">

@@ -356,10 +356,18 @@ function Setting({
         ) : (
           value
         )}
+
+        {/* The hint lives inside the `<dd>`, not beside it.
+            
+            A `<div>` is a permitted child of `<dl>`, but only as a wrapper
+            around `<dt>`/`<dd>` groups — anything else inside it is invalid,
+            which an axe sweep reported as "dl element has direct children
+            that are not allowed: div > p". It is also the better reading
+            order: the hint explains the value, so it belongs with it. */}
+        {hint === undefined ? null : (
+          <span className="text-text-muted mt-0.5 block text-xs font-normal">{hint}</span>
+        )}
       </dd>
-      {hint === undefined ? null : (
-        <p className="text-text-muted mt-0.5 text-xs">{hint}</p>
-      )}
     </div>
   );
 }

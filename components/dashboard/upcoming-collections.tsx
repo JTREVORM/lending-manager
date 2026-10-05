@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 
 import { Card } from '@/components/ui/card';
 import { ReportEmpty } from '@/components/reports/report-empty';
@@ -63,12 +63,12 @@ export function UpcomingCollections({
                 {rows.slice(0, 6).map((row, index) => (
                   <span key={row.loanId}>
                     {index > 0 ? ', ' : ''}
-                    <Link
+                    <RowLink
                       href={`${ROUTES.loans}/${row.loanId}`}
                       className="text-brand-700 font-mono hover:underline"
                     >
                       {row.loanNumber}
-                    </Link>
+                    </RowLink>
                   </span>
                 ))}
                 {rows.length > 6 ? ` and ${String(rows.length - 6)} more` : ''}

@@ -51,13 +51,24 @@
      --------------------------------------------------------------------- */
 
   /* Semantic state */
-  --color-success: oklch(0.55 0.13 150);
+  /* The four status colours, and the tints they are read on.
+     
+     Each pair is the *text* colour and the *badge background* it sits on, so
+     each pair has to clear 4.5:1 — the badges are 12px, which is below the
+     large-text threshold, and they are read on a counter in daylight. The
+     lightnesses here are not chosen by eye: they are the values an axe sweep
+     and a contrast calculation agreed on, and `tests/unit/colour-contrast.test.ts`
+     recomputes them from this file so they cannot drift back.
+     
+     Before Phase 9 these were 0.55 / 0.65 and failed: success 4.11, info
+     4.30, warning 3.02. Only danger passed, at 4.60. */
+  --color-success: oklch(0.52 0.13 150);
   --color-success-surface: oklch(0.96 0.03 150);
-  --color-warning: oklch(0.65 0.14 75);
+  --color-warning: oklch(0.545 0.14 75);
   --color-warning-surface: oklch(0.97 0.04 85);
   --color-danger: oklch(0.55 0.17 25);
   --color-danger-surface: oklch(0.96 0.03 25);
-  --color-info: oklch(0.55 0.12 250);
+  --color-info: oklch(0.53 0.12 250);
   --color-info-surface: oklch(0.96 0.03 250);
 
   /* Typography — system stack. No webfont download on a slow connection. */
@@ -116,6 +127,17 @@
     --color-warning-surface: oklch(0.3 0.06 85);
     --color-danger-surface: oklch(0.29 0.07 25);
     --color-info-surface: oklch(0.28 0.05 250);
+
+    /* And the text has to brighten with them, for exactly the reason the
+       accent does two blocks up. This was missed: the surfaces were given a
+       dark-mode value and the four text colours were not, so every status
+       badge in the application was dark ink on a dark tint — success 3.13,
+       info 3.01, warning 2.77, danger 2.74, where 4.5 is the floor. All four
+       failed, and none of them looked obviously wrong in a screenshot. */
+    --color-success: oklch(0.65 0.13 150);
+    --color-warning: oklch(0.68 0.14 75);
+    --color-danger: oklch(0.68 0.17 25);
+    --color-info: oklch(0.655 0.12 250);
   }
 }
 
