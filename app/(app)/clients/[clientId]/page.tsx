@@ -10,6 +10,7 @@ import { ClientStatusPanel } from '@/components/clients/client-status-panel';
 import { DocumentPanel } from '@/components/clients/document-panel';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
+import { SectionTabs } from '@/components/ui/section-tabs';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -132,6 +133,16 @@ export default async function ClientDetailPage({
             : ''}
         </Alert>
       ) : null}
+
+      <SectionTabs
+        label="Client sections"
+        tabs={[
+          { id: 'profile-heading', label: 'Profile' },
+          { id: 'client-loans-heading', label: 'Loans' },
+          { id: 'client-payments-heading', label: 'Payments' },
+          { id: 'remarks-heading', label: 'Remarks' },
+        ]}
+      />
 
       {/* --- Profile ------------------------------------------------------ */}
       <section aria-labelledby="profile-heading" className="min-w-0 space-y-3">

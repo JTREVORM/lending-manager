@@ -98,10 +98,11 @@ const ACTION_BASE =
 
 const ACTION_VARIANTS = {
   primary:
-    'bg-accent text-accent-contrast [box-shadow:var(--highlight-top),var(--elevate-2)] hover:bg-accent-hover',
+    'bg-accent text-accent-contrast [box-shadow:var(--elevate-2)] hover:bg-accent-hover active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)]',
   secondary:
-    'bg-surface-raised text-text border border-border [box-shadow:var(--highlight-top),var(--elevate-1)] hover:bg-surface-hover',
-  danger: 'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90',
+    'text-text [background:var(--surface-raised-fill)] [box-shadow:var(--elevate-2)] hover:text-accent active:[box-shadow:var(--inset-press)]',
+  danger:
+    'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90 active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)]',
 } as const;
 
 export interface ActionLinkProps extends ComponentProps<typeof Link> {

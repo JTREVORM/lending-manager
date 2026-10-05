@@ -3,18 +3,20 @@ import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils/cn';
 
 const VARIANTS = {
-  // Primary — the dark-teal accent, filled, lit from above by the highlight.
+  // Primary — the dark-teal accent, a raised neumorphic key. Hover sinks the
+  // teal a shade; :active presses it in with an inner shadow.
   primary:
-    'bg-accent text-accent-contrast elevation-2 [box-shadow:var(--highlight-top),var(--elevate-2)] hover:bg-accent-hover disabled:bg-brand-300',
-  // Secondary — a soft raised neutral, the reference's "raised layer".
+    'bg-accent text-accent-contrast [box-shadow:var(--elevate-2)] hover:bg-accent-hover active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)] disabled:bg-brand-300 disabled:shadow-none',
+  // Secondary — the reference's neutral raised layer, on the gradient fill.
   secondary:
-    'bg-surface-raised text-text border border-border [box-shadow:var(--highlight-top),var(--elevate-1)] hover:bg-surface-hover',
-  // Outline — subtle border, no fill, for a quieter second action.
+    'text-text [background:var(--surface-raised-fill)] [box-shadow:var(--elevate-2)] hover:text-accent active:[box-shadow:var(--inset-press)]',
+  // Outline — a quiet second action: a border, no lift.
   outline: 'bg-transparent text-text border border-border-strong hover:bg-surface-hover',
   // Ghost — lowest emphasis, no chrome until hovered.
   ghost: 'bg-transparent text-text hover:bg-surface-hover',
-  // Destructive — accessible danger fill.
-  danger: 'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90',
+  // Destructive — accessible danger fill, same raised/pressed language.
+  danger:
+    'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90 active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)]',
 } as const;
 
 const SIZES = {

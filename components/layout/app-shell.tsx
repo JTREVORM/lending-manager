@@ -112,7 +112,7 @@ export async function AppShell({
         // overflow destinations and lives inside this element, so matching on
         // its contents finds every link, not the four in the bar.
         data-nav="bottom-bar"
-        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] [box-shadow:0_-6px_20px_-8px_oklch(0.3_0.03_var(--shadow-color)/0.18)] md:hidden print:hidden"
+        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] [box-shadow:0_-6px_18px_-8px_rgba(120,110,92,0.3)] md:hidden print:hidden"
       >
         <PrimaryNav
           variant="bottom-bar"

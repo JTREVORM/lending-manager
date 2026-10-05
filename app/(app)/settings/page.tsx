@@ -7,6 +7,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
 import { Money } from '@/components/ui/money';
 import { PageHeader, SectionHeader } from '@/components/ui/page-header';
+import { SectionTabs } from '@/components/ui/section-tabs';
 import { APP_NAME, APP_SHORT_NAME, APP_VERSION, ROUTES } from '@/config/app';
 import { getAppEnvironment } from '@/lib/env.public';
 import { contextCan } from '@/lib/auth/context';
@@ -65,6 +66,16 @@ export default async function SettingsPage() {
           The values below may be incomplete. Tell your administrator if this persists.
         </Alert>
       ) : null}
+
+      <SectionTabs
+        label="Settings sections"
+        tabs={[
+          { id: 'company-heading', label: 'Company' },
+          { id: 'rules-heading', label: 'Lending' },
+          { id: 'cadences-heading', label: 'Repayment' },
+          { id: 'locale-heading', label: 'System' },
+        ]}
+      />
 
       {/* --- Company ---------------------------------------------------- */}
       <section aria-labelledby="company-heading">

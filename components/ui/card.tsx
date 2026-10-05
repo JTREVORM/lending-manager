@@ -6,11 +6,12 @@ export function Card({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        // Level-3 surface: a cream card, a hairline border, lit from above by
-        // the top highlight over a soft tinted ambient shadow. Restrained —
-        // depth marks it as a distinct surface without shouting.
-        'bg-surface border-border rounded-lg border p-4 sm:p-5',
-        '[box-shadow:var(--highlight-top),var(--elevate-2)]',
+        // The reference's raised layer: a cream card on the gradient fill,
+        // lit from the top-left and shadowed to the bottom-right, with a
+        // hairline border that keeps it defined in dark mode where the fill
+        // is flat. Radius 16px.
+        'border-border rounded-lg border p-4 [background:var(--surface-raised-fill)] sm:p-5',
+        '[box-shadow:var(--elevate-2)]',
         // `min-w-0` matters here. A grid or flex item defaults to
         // `min-width: auto`, so its min-content width can force the track
         // wider than the viewport. Without this, one long unbreakable string

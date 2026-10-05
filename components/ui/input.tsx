@@ -33,7 +33,7 @@ export function Input({
         '[box-shadow:var(--inset-soft)]',
         'text-base sm:text-sm',
         'transition-[color,background-color,border-color,box-shadow] duration-150',
-        'focus-visible:border-accent focus-visible:bg-surface',
+        'focus-visible:border-accent focus-visible:[box-shadow:var(--inset-soft),0_0_0_3px_var(--color-accent-surface)]',
         'disabled:cursor-not-allowed disabled:opacity-60',
         invalid ? 'border-danger focus-visible:outline-danger' : 'border-border-strong',
         className,

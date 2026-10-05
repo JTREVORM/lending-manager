@@ -236,13 +236,13 @@ export default async function ReportsPage() {
 
                 return (
                   <li key={report.href} className="min-w-0">
-                    <Card className="flex h-full min-w-0 flex-col">
+                    <Card className="lift flex h-full min-w-0 flex-col">
                       <Link
                         href={report.href}
                         className="focus-visible:outline-accent -m-1 flex min-w-0 items-start gap-3 rounded-lg p-1 focus-visible:outline-2"
                       >
-                        <span className="bg-accent-surface flex size-9 shrink-0 items-center justify-center rounded-lg">
-                          <Icon aria-hidden="true" className="text-accent size-4.5" />
+                        <span className="bg-accent text-accent-contrast flex size-10 shrink-0 items-center justify-center rounded-md [box-shadow:var(--elevate-2)]">
+                          <Icon aria-hidden="true" className="size-5" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="text-text block text-base font-semibold">
@@ -296,13 +296,15 @@ function Highlight({
     <Link
       href={href}
       className={cn(
-        'bg-surface hover:bg-surface-raised block min-w-0 rounded-xl border p-4 transition-colors',
-        tone === 'warning' ? 'border-warning/30' : 'border-border',
+        'surface-raised-soft lift focus-visible:outline-accent block min-w-0 rounded-lg border p-4 focus-visible:outline-2 focus-visible:outline-offset-2',
+        tone === 'warning' ? 'border-warning/40' : 'border-border',
       )}
     >
-      <span className="text-text-muted block text-sm">{label}</span>
-      <Money amount={amount} size="lg" weight="semibold" className="mt-0.5" />
-      <span className="text-text-muted mt-0.5 block text-xs">{note}</span>
+      <span className="t-label">{label}</span>
+      <p className="t-metric-sm text-text mt-2 break-words">
+        <Money amount={amount} variant="full" />
+      </p>
+      <span className="t-caption mt-1 block">{note}</span>
     </Link>
   );
 }

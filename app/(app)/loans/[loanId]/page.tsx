@@ -5,6 +5,7 @@ import { LoanBreakdownTable } from '@/components/loans/loan-breakdown-table';
 import { LoanLifecyclePanel } from '@/components/loans/loan-lifecycle-panel';
 import { LoanStatusBadge } from '@/components/loans/loan-status-badge';
 import { RepaymentScheduleTable } from '@/components/loans/repayment-schedule-table';
+import { SectionTabs } from '@/components/ui/section-tabs';
 import { ScheduleSummary } from '@/components/loans/schedule-summary';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -220,6 +221,26 @@ export default async function LoanDetailPage({
           <span className="font-medium">Returned for correction:</span> {loan.reviewNote}
         </Alert>
       ) : null}
+
+      {/* A jump-nav over the sections below. Every section stays in the
+          document — the schedule the browser suite reads is never hidden
+          behind a click — so this reads as tabs while keeping the page whole. */}
+      <SectionTabs
+        label="Loan sections"
+        tabs={[
+          { id: 'terms-heading', label: 'Overview' },
+          ...(position !== null ? [{ id: 'balance-heading', label: 'Balance' }] : []),
+          ...(canSeeSchedule && schedule !== null
+            ? [{ id: 'schedule-heading', label: 'Schedule' }]
+            : []),
+          ...(canSeePayments ? [{ id: 'payments-heading', label: 'Payments' }] : []),
+          ...(delinquency !== null && contextCan(context, 'delinquency:view')
+            ? [{ id: 'delinquency-heading', label: 'Delinquency' }]
+            : []),
+          { id: 'client-snapshot-heading', label: 'Parties' },
+          { id: 'lifecycle-heading', label: 'History' },
+        ]}
+      />
 
       {/* --- Terms -------------------------------------------------------- */}
       <section aria-labelledby="terms-heading" className="min-w-0 space-y-3">

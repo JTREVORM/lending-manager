@@ -30,16 +30,16 @@
      holds. A later phase lets the business set its own brand colour from
      `company_settings.brand_primary_color` by overriding these in one place.
      ------------------------------------------------------------------------- */
-  --color-brand-50: oklch(0.96 0.02 192);
-  --color-brand-100: oklch(0.92 0.04 192);
-  --color-brand-200: oklch(0.85 0.06 192);
-  --color-brand-300: oklch(0.76 0.08 192);
-  --color-brand-400: oklch(0.66 0.09 192);
-  --color-brand-500: oklch(0.56 0.09 192);
-  --color-brand-600: oklch(0.47 0.085 192);
-  --color-brand-700: oklch(0.39 0.07 192);
-  --color-brand-800: oklch(0.31 0.055 192);
-  --color-brand-900: oklch(0.24 0.04 192);
+  --color-brand-50: oklch(0.96 0.018 209);
+  --color-brand-100: oklch(0.92 0.032 209);
+  --color-brand-200: oklch(0.85 0.045 209);
+  --color-brand-300: oklch(0.76 0.055 209);
+  --color-brand-400: oklch(0.66 0.062 209);
+  --color-brand-500: oklch(0.55 0.065 209);
+  --color-brand-600: oklch(0.47 0.065 209);
+  --color-brand-700: oklch(0.39 0.063 209); /* #0C4E57 — the reference teal */
+  --color-brand-800: oklch(0.31 0.05 209);
+  --color-brand-900: oklch(0.24 0.04 209);
 
   /* ---------------------------------------------------------------------
      Accent — the interactive colour.
@@ -68,14 +68,14 @@
      `tests/unit/colour-contrast.test.ts` recomputes them from this file so
      they cannot drift back. Retuned for the warm-cream surface the badges now
      sit on; every pair clears 4.7:1 with margin. */
-  --color-success: oklch(0.515 0.13 150);
-  --color-success-surface: oklch(0.96 0.032 150);
-  --color-warning: oklch(0.535 0.14 75);
-  --color-warning-surface: oklch(0.97 0.042 85);
-  --color-danger: oklch(0.53 0.17 25);
-  --color-danger-surface: oklch(0.955 0.035 25);
-  --color-info: oklch(0.505 0.115 215);
-  --color-info-surface: oklch(0.96 0.028 215);
+  --color-success: oklch(0.5 0.128 150);
+  --color-success-surface: oklch(0.955 0.03 150);
+  --color-warning: oklch(0.52 0.135 75);
+  --color-warning-surface: oklch(0.965 0.04 85);
+  --color-danger: oklch(0.52 0.17 25);
+  --color-danger-surface: oklch(0.95 0.035 25);
+  --color-info: oklch(0.5 0.113 215);
+  --color-info-surface: oklch(0.955 0.028 215);
 
   /* Typography — system stack. No webfont download on a slow connection, which
      for staff on a 3G phone at a counter is a deliberate performance choice,
@@ -91,12 +91,12 @@
   /* Radius scale — standardised, not arbitrary. Controls are tight, cards are
      soft, large surfaces are softest, and an inner element is always a step
      tighter than its container so curves stay concentric. */
-  --radius-xs: 0.375rem; /* 6px — chips, tiny controls */
-  --radius-sm: 0.5rem; /* 8px — small controls, badges */
-  --radius-md: 0.625rem; /* 10px — inputs, buttons */
-  --radius-lg: 0.875rem; /* 14px — cards */
-  --radius-xl: 1.125rem; /* 18px — large surfaces, modals */
-  --radius-2xl: 1.375rem; /* 22px — hero panels */
+  --radius-xs: 0.25rem; /* 4px — small technical details */
+  --radius-sm: 0.5rem; /* 8px — compact controls, badges */
+  --radius-md: 0.75rem; /* 12px — inputs, buttons, standard controls */
+  --radius-lg: 1rem; /* 16px — cards */
+  --radius-xl: 1.25rem; /* 20px — large surfaces */
+  --radius-2xl: 1.5rem; /* 24px — large dialogs, important surfaces */
 
   /* Spacing — the 4 / 8 / 12 / 16 / 24 / 32 / 48 rhythm the layout keeps to.
      Tailwind's scale already lands on these (1 2 3 4 6 8 12); they are named
@@ -132,53 +132,94 @@
    `dark:` variant and a hand-rolled box-shadow on every element.
    --------------------------------------------------------------------------- */
 :root {
-  /* Accent */
-  --color-accent: oklch(0.46 0.072 192);
-  --color-accent-contrast: oklch(0.99 0.005 85);
-  --color-accent-surface: oklch(0.95 0.028 192);
-  --color-accent-hover: oklch(0.41 0.07 192);
-  /* Secondary accent — a muted sea-green, used sparingly for a second series
-     in a chart or a non-primary highlight. Never competes with the accent. */
-  --color-accent-2: oklch(0.56 0.07 170);
-  --color-accent-2-surface: oklch(0.95 0.03 170);
+  /* ----------------------------------------------------------------------
+     The reference palette, to the hex. Expressed in oklch because the
+     contrast test recomputes AA from these declarations; the comment on each
+     names the source hex so the two can never silently drift.
+     ---------------------------------------------------------------------- */
 
-  /* Warm neutral surfaces — a cream canvas, cleaner surfaces that catch light,
-     and a sunken well a step darker for inset controls. One warm hue family
-     (83) throughout, so nothing reads as a cool/warm clash. */
-  --color-page: oklch(0.957 0.01 83);
-  --color-surface: oklch(0.978 0.008 83);
-  --color-surface-raised: oklch(0.988 0.006 83);
-  --color-surface-sunken: oklch(0.94 0.011 83);
-  --color-surface-hover: oklch(0.965 0.01 83);
-  --color-border: oklch(0.885 0.01 83);
-  --color-border-strong: oklch(0.8 0.012 83);
-  --color-text: oklch(0.255 0.008 75);
-  --color-text-muted: oklch(0.468 0.01 75);
-  --color-text-inverse: oklch(0.99 0.004 85);
+  /* Accent — the reference's dark teal #0C4E57. Every interactive thing
+     reaches for it; pressed/hover sinks to a darker teal. */
+  --color-accent: oklch(0.39 0.0627 209); /* #0C4E57 */
+  --color-accent-contrast: oklch(0.99 0.004 89); /* near-white */
+  --color-accent-surface: oklch(0.9 0.03 209); /* pale teal selection tint */
+  --color-accent-hover: oklch(0.34 0.055 209); /* darker teal, pressed/hover */
+  /* Secondary accent — the slightly lighter #0F5660, for a second chart
+     series or a non-primary highlight. Never competes with the accent. */
+  --color-accent-2: oklch(0.417 0.0669 209); /* #0F5660 */
+  --color-accent-2-surface: oklch(0.9 0.03 200);
 
-  /* Elevation — five levels, warm-tinted. A shadow carries the hue of the page
-     it falls on (never pure black), and a raised surface also takes a hairline
-     top highlight so it reads as lit from above. Used through the helper
-     classes below, never scattered ad hoc. */
-  --shadow-color: 83;
-  --elevate-1: 0 1px 1px oklch(0.4 0.03 var(--shadow-color) / 0.04);
+  /* Warm neutral surfaces — the reference's #EAE5D9 canvas, cards a shade
+     lighter (#EFEBE1 / #F0ECE0) so they catch the light in the neumorphic
+     model, and a sunken well (#E5DFD2) for inset controls. One warm hue
+     family (~88) throughout, so nothing reads as a cool/warm clash. */
+  --color-page: oklch(0.9225 0.0169 88); /* #EAE5D9 */
+  --color-surface: oklch(0.9404 0.014 88.7); /* #EFEBE1 */
+  --color-surface-raised: oklch(0.9429 0.0165 91.6); /* #F0ECE0 */
+  --color-surface-sunken: oklch(0.9048 0.0186 86); /* #E5DFD2 */
+  --color-surface-hover: oklch(0.93 0.016 88);
+  --color-border: oklch(0.8804 0.0188 86); /* #DDD7CA */
+  --color-border-strong: oklch(0.8 0.02 86);
+  --color-text: oklch(0.2749 0.0188 258); /* #222831 */
+  --color-text-muted: oklch(0.47 0.02 251); /* darkened from #7A848F to clear AA */
+  --color-text-inverse: oklch(0.99 0.004 89);
+
+  /* The raised surface's gradient fill — linear-gradient(145deg,#F0ECE0,#E4DFD3)
+     from the reference. A var so dark mode can swap it for a flat surface
+     instead of a gradient that reads as a seam on a dark page. */
+  --surface-raised-fill: linear-gradient(145deg, #f0ece0, #e4dfd3);
+
+  /* ----------------------------------------------------------------------
+     Neumorphic shadow system (light mode).
+
+     The reference's soft-UI model: every raised surface is lit from the
+     top-left (a near-white highlight) and shadowed to the bottom-right (a
+     warm beige shadow, never black). Inset surfaces invert it. These are the
+     literal reference values, centralised here and consumed through the
+     elevation/surface helper classes below — never hand-written per page.
+
+     `--neu-dark`  rgba(188,178,160,.5)   the warm shadow
+     `--neu-light` rgba(255,255,255,.85)  the highlight
+     ---------------------------------------------------------------------- */
+  --neu-dark: 188, 178, 160;
+  --neu-light: 255, 255, 255;
+
+  /* Level 1 — near-flat. Deliberately gentle: it is what dense tables and
+     low-priority sections sit on, where the full 5px/12px lift would be too
+     much and hurt scanning. */
+  --elevate-1:
+    2px 2px 6px rgba(var(--neu-dark), 0.35), -2px -2px 6px rgba(var(--neu-light), 0.7);
+  /* Level 2 — the compact "small raised" (3px/7px), for hoverable rows and
+     secondary controls. */
   --elevate-2:
-    0 1px 2px oklch(0.4 0.03 var(--shadow-color) / 0.06),
-    0 2px 4px oklch(0.4 0.03 var(--shadow-color) / 0.04);
+    3px 3px 7px rgba(var(--neu-dark), 0.5), -3px -3px 7px rgba(var(--neu-light), 0.85);
+  /* Level 3 — the raised card / KPI surface (7px/15px). The hero lift. */
   --elevate-3:
-    0 1px 2px oklch(0.4 0.03 var(--shadow-color) / 0.06),
-    0 6px 16px oklch(0.4 0.03 var(--shadow-color) / 0.08);
+    7px 7px 15px rgba(var(--neu-dark), 0.5), -7px -7px 15px rgba(var(--neu-light), 0.85);
+  /* Level 4 — modal. The raised dual-shadow plus a real drop so it reads as
+     floating above a scrim. */
   --elevate-4:
-    0 2px 6px oklch(0.35 0.03 var(--shadow-color) / 0.1),
-    0 12px 28px oklch(0.35 0.03 var(--shadow-color) / 0.14);
+    10px 10px 24px rgba(var(--neu-dark), 0.55),
+    -8px -8px 18px rgba(var(--neu-light), 0.8), 0 16px 40px rgba(90, 80, 64, 0.2);
+  /* Level 5 — popover / floating panel, the strongest. */
   --elevate-5:
-    0 4px 10px oklch(0.3 0.03 var(--shadow-color) / 0.12),
-    0 18px 40px oklch(0.3 0.03 var(--shadow-color) / 0.18);
-  --highlight-top: inset 0 1px 0 oklch(1 0 0 / 0.55);
+    8px 8px 18px rgba(var(--neu-dark), 0.55), -6px -6px 14px rgba(var(--neu-light), 0.85),
+    0 20px 48px rgba(90, 80, 64, 0.26);
+
+  /* The dual-shadow already carries its own top-left highlight, so the
+     separate top-rim highlight the previous system layered on is now a no-op;
+     kept as a token so the many `var(--highlight-top),var(--elevate-N)`
+     call-sites stay valid and simply resolve to the neumorphic shadow. */
+  --highlight-top: 0 0 transparent;
+
+  /* Inset — the reference's 4px/8px well, for form fields and segmented
+     tracks. `--inset-press` is the deeper 6px/12px pressed state. */
   --inset-soft:
-    inset 0 1px 2px oklch(0.4 0.03 var(--shadow-color) / 0.1),
-    inset 0 1px 1px oklch(0.4 0.03 var(--shadow-color) / 0.05);
-  --inset-press: inset 0 2px 5px oklch(0.35 0.03 var(--shadow-color) / 0.16);
+    inset 3px 3px 7px rgba(var(--neu-dark), 0.5),
+    inset -3px -3px 7px rgba(var(--neu-light), 0.85);
+  --inset-press:
+    inset 6px 6px 12px rgba(175, 164, 145, 0.65),
+    inset -6px -6px 12px rgba(var(--neu-light), 0.85);
   --ring-focus: 0 0 0 2px var(--color-page), 0 0 0 4px var(--color-accent);
 }
 
@@ -200,13 +241,18 @@
     --color-text-inverse: oklch(0.172 0.008 235);
 
     /* The accent brightens so it lifts off a dark page, and its contrast
-       colour inverts with it. */
-    --color-accent: oklch(0.74 0.11 192);
+       colour inverts with it. Same teal hue (209) as the light scheme. */
+    --color-accent: oklch(0.74 0.1 209);
     --color-accent-contrast: oklch(0.17 0.008 235);
-    --color-accent-surface: oklch(0.28 0.05 192);
-    --color-accent-hover: oklch(0.79 0.11 192);
-    --color-accent-2: oklch(0.72 0.08 170);
-    --color-accent-2-surface: oklch(0.28 0.05 170);
+    --color-accent-surface: oklch(0.3 0.05 209);
+    --color-accent-hover: oklch(0.79 0.1 209);
+    --color-accent-2: oklch(0.72 0.07 200);
+    --color-accent-2-surface: oklch(0.3 0.05 200);
+
+    /* No gradient on a dark page — a flat raised surface instead, so the lift
+       comes from the clean drop shadows below rather than a faked light
+       source, exactly as the neumorphism guidance asks for dark mode. */
+    --surface-raised-fill: var(--color-surface-raised);
 
     /* Surfaces need more lightness contrast against a dark page than the
        light-mode tints provide, and the status text has to brighten with them
@@ -290,6 +336,57 @@
 
   /* Mouse users do not get a ring, keyboard users always do. */
   :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* -------------------------------------------------------------------------
+     Native form controls, given the design system's look without each form
+     having to adopt a bespoke component. Checkboxes and radios take the teal
+     accent; selects and textareas get the inset well, the 12px radius and the
+     teal focus the shared `Input` has. The real native control stays — its
+     semantics, keyboard behaviour and screen-reader name are untouched — so
+     this is presentation only.
+     ------------------------------------------------------------------------- */
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-accent);
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  select,
+  textarea {
+    background-color: var(--color-surface-sunken);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--inset-soft);
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
+  }
+
+  select {
+    min-height: var(--spacing-touch);
+    padding: 0 2rem 0 0.75rem;
+    /* A teal chevron, so the one piece of chrome a native select shows belongs
+       to the palette rather than the browser's default grey. */
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230C4E57' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+  }
+
+  textarea {
+    padding: 0.5rem 0.75rem;
+  }
+
+  select:focus-visible,
+  textarea:focus-visible {
+    border-color: var(--color-accent);
+    box-shadow:
+      var(--inset-soft),
+      0 0 0 3px var(--color-accent-surface);
     outline: none;
   }
 
@@ -468,19 +565,26 @@
     box-shadow: var(--elevate-5);
   }
 
-  /* A soft raised surface: a cream card that catches light from above. The
-     top highlight plus a tinted ambient shadow is the reference's "raised
-     layer" without heavy neumorphism. */
+  /* The reference's "raised layer": a cream card on the gradient fill, lit
+     from the top-left and shadowed to the bottom-right (Level 3). This is the
+     neumorphic hero surface — KPI cards, key panels, modals. */
   .surface-raised-soft {
-    background-color: var(--color-surface-raised);
-    box-shadow: var(--highlight-top), var(--elevate-3);
+    background: var(--surface-raised-fill);
+    box-shadow: var(--elevate-3);
   }
 
-  /* A sunken well for search fields and segmented controls — the reference's
-     "inset layer". */
+  /* The reference's "inset layer": a sunken well for search fields, segmented
+     controls and progress tracks. */
   .surface-inset {
     background-color: var(--color-surface-sunken);
     box-shadow: var(--inset-soft);
+  }
+
+  /* The reference's "pressed layer": a deeper inset over the darker surface,
+     for an active toggle or a held control. */
+  .surface-pressed {
+    background-color: var(--color-surface-sunken);
+    box-shadow: var(--inset-press);
   }
 
   /* Pressable: the physical click. Scale down a hair and sink on :active.

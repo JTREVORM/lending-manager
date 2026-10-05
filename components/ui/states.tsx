@@ -58,16 +58,11 @@ export function EmptyState({
     <div
       data-empty-state=""
       className={cn(
-        'border-border flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center',
+        'surface-raised-soft border-border flex flex-col items-center rounded-lg border px-6 py-10 text-center',
         className,
       )}
     >
-      <span
-        className={cn(
-          'mb-3 flex size-11 items-center justify-center rounded-full',
-          TONES.neutral.surface,
-        )}
-      >
+      <span className="surface-inset mb-3 flex size-12 items-center justify-center rounded-full">
         <Icon aria-hidden="true" className={cn('size-5', TONES.neutral.icon)} />
       </span>
       <p className="text-text font-medium">{title}</p>
