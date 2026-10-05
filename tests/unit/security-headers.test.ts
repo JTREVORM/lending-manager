@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   PRIVATE_CACHE_HEADERS,
@@ -64,21 +64,45 @@ describe('the content security policy', () => {
     expect(scriptSrc).not.toContain("'unsafe-inline'");
   });
 
-  it('refuses eval in production and permits it in development', () => {
-    process.env.NEXT_PUBLIC_APP_ENV = 'production';
+  it('permits eval only when the development server is serving', () => {
+    // The dev overlay and React Refresh compile in the browser, and they
+    // exist only under `next dev`.
+    vi.stubEnv('NODE_ENV', 'development');
+    resetPublicEnvCache();
+    expect(directive(buildContentSecurityPolicy('n'), 'script-src')).toContain(
+      "'unsafe-eval'",
+    );
+
+    vi.stubEnv('NODE_ENV', 'production');
     resetPublicEnvCache();
     expect(directive(buildContentSecurityPolicy('n'), 'script-src')).not.toContain(
       "'unsafe-eval'",
     );
 
-    // The dev overlay and React Refresh compile in the browser. The
-    // difference is deliberate, which is why it is asserted rather than
-    // tolerated.
-    process.env.NEXT_PUBLIC_APP_ENV = 'development';
+    vi.unstubAllEnvs();
     resetPublicEnvCache();
-    expect(directive(buildContentSecurityPolicy('n'), 'script-src')).toContain(
-      "'unsafe-eval'",
-    );
+  });
+
+  it('does not permit eval in a built artefact merely because it is not labelled production', () => {
+    // The defect this asserts against: the gate used to be
+    // `NEXT_PUBLIC_APP_ENV === 'production'`, which is a deployment label.
+    // A staging or test deployment is a `next build` artefact with no dev
+    // overlay in it, and it was being handed `'unsafe-eval'` anyway. The
+    // end-to-end harness, which runs the production build under the label
+    // `test`, read the header out of a real response and found it.
+    vi.stubEnv('NODE_ENV', 'production');
+
+    for (const label of ['test', 'staging', 'development']) {
+      process.env.NEXT_PUBLIC_APP_ENV = label;
+      resetPublicEnvCache();
+      expect(
+        directive(buildContentSecurityPolicy('n'), 'script-src'),
+        label,
+      ).not.toContain("'unsafe-eval'");
+    }
+
+    vi.unstubAllEnvs();
+    resetPublicEnvCache();
   });
 
   it('lets the browser reach the Supabase project and nothing else', () => {

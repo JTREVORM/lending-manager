@@ -7,7 +7,8 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
 import { Money } from '@/components/ui/money';
 import { PageHeader, SectionHeader } from '@/components/ui/page-header';
-import { APP_NAME, APP_SHORT_NAME, ROUTES } from '@/config/app';
+import { APP_NAME, APP_SHORT_NAME, APP_VERSION, ROUTES } from '@/config/app';
+import { getAppEnvironment } from '@/lib/env.public';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getSettingsSnapshot } from '@/lib/data/settings';
@@ -284,6 +285,31 @@ export default async function SettingsPage() {
               </p>
             </div>
           </div>
+        </Card>
+      </section>
+
+      {/* --- This build ------------------------------------------------- */}
+      {/* §108. Somewhere a person can read which version they are looking at.
+          Without it, "it is still not showing my change" is an argument
+          rather than a question — and on an installed progressive web app,
+          where a stale service worker can serve yesterday's shell, it is the
+          first thing worth checking. The same string is what `/api/health`
+          reports, so a screen and a monitor can be compared. */}
+      <section aria-labelledby="build-heading">
+        <SectionHeader
+          id="build-heading"
+          title="This build"
+          description="Quote this if something looks out of date."
+        />
+        <Card>
+          <dl className="grid min-w-0 gap-4 sm:grid-cols-3">
+            <Setting label="Application" value={APP_NAME} />
+            <Setting
+              label="Version"
+              value={<span className="font-mono">{APP_VERSION}</span>}
+            />
+            <Setting label="Environment" value={getAppEnvironment()} />
+          </dl>
         </Card>
       </section>
 

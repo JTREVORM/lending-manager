@@ -25,6 +25,16 @@ export const APP_NAME = 'Money Lending Management System' as const;
 /** Short form used in tight spaces (mobile header, PWA name later). */
 export const APP_SHORT_NAME = 'Lending Manager' as const;
 
+/**
+ * The build's version, inlined by `next.config.ts` from `package.json`.
+ *
+ * Shown on the Settings page and reported by `/api/health`, so what a person
+ * reads on a screen and what a monitor reads over HTTP are the same string.
+ * Falls back to `0.0.0` rather than throwing: a missing version number is not
+ * a reason to refuse to render a page.
+ */
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? '0.0.0';
+
 export const APP_DESCRIPTION =
   'Loan, repayment and client management for a Ugandan money lending business.' as const;
 
@@ -76,6 +86,12 @@ export const ROUTES = {
 
   /** Phase 9. Shown by the service worker when there is no network. */
   offline: '/offline',
+
+  /**
+   * Phase 9. Liveness and readiness for whatever is watching the deployment.
+   * Public, and says as little as a monitor can work with.
+   */
+  health: '/api/health',
 
   /** Every signed-in user, whatever their role. */
   account: '/account',

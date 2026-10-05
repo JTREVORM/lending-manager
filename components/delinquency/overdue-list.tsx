@@ -195,37 +195,49 @@ export function OverdueList({
         </Card>
       ) : (
         <>
-          {/* Phones: one card per loan. */}
+          {/* Phones: one card per loan.
+
+              The card is tappable anywhere, and the phone number dials. Those
+              two wants are in tension: an `<a href="tel:">` inside the card's
+              own `<a>` is a nested anchor, which is invalid HTML. The browser
+              does not render it as written — the parser closes the outer
+              anchor at the inner one — so the server's markup and React's tree
+              disagree and hydration fails (React #418), after which everything
+              below the phone number stops opening the loan. Stopping the click
+              from propagating does not help, because the damage is done by the
+              parser before any handler exists.
+
+              So the card is a plain element with one link stretched across it,
+              and the phone number sits above that link on its own. Both
+              targets work, the HTML is valid, and the tap area is unchanged. */}
           <ul className="min-w-0 space-y-2 md:hidden">
             {loans.map((loan) => (
               <li key={loan.loanId} className="min-w-0">
-                <Link
-                  href={`${ROUTES.loans}/${loan.loanId}`}
-                  className="border-border bg-surface focus-visible:outline-accent block min-w-0 rounded-xl border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
+                <div className="border-border bg-surface focus-within:outline-accent relative min-w-0 rounded-xl border p-3 focus-within:outline-2 focus-within:outline-offset-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-text font-medium break-words">
+                    <Link
+                      href={`${ROUTES.loans}/${loan.loanId}`}
+                      // The stretched link: it covers the card, so a tap
+                      // anywhere that is not another control opens the loan.
+                      // `before:` keeps the overlay out of the accessibility
+                      // tree as a second element — it is this link's own box.
+                      className="text-text font-medium break-words before:absolute before:inset-0 before:content-['']"
+                    >
                       {loan.clientName}
-                    </span>
+                    </Link>
                     <span className="text-text font-semibold tabular-nums">
                       <Money amount={loan.totalOutstanding} />
                     </span>
                   </div>
                   <div className="text-text-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     <span className="font-mono">{loan.loanNumber}</span>
-                    <span
-                      onClick={(event) => {
-                        // The card is itself a link; a tap on the number
-                        // should dial rather than open the loan.
-                        event.stopPropagation();
-                      }}
-                    >
-                      <PhoneValue
-                        value={loan.clientPhone}
-                        linked
-                        className="text-accent"
-                      />
-                    </span>
+                    {/* Above the stretched link, so dialling wins over
+                        opening the loan. */}
+                    <PhoneValue
+                      value={loan.clientPhone}
+                      linked
+                      className="text-accent relative"
+                    />
                     <DelinquencyBadge state={loan.state} />
                   </div>
                   <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
@@ -240,7 +252,7 @@ export function OverdueList({
                       <dd className="text-text tabular-nums">{loan.daysPastDue}</dd>
                     </div>
                   </dl>
-                </Link>
+                </div>
               </li>
             ))}
           </ul>

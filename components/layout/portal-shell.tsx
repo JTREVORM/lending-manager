@@ -79,6 +79,11 @@ export async function PortalShell({
 
       <nav
         aria-label="Main navigation"
+        // Named so a test can ask about the bar itself rather than about
+        // "whichever nav contains the More button" — the More sheet holds the
+        // overflow destinations and lives inside this element, so matching on
+        // its contents finds every link, not the four in the bar.
+        data-nav="bottom-bar"
         className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
       >
         <PrimaryNav

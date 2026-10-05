@@ -17,7 +17,8 @@ import 'server-only';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-import { getPublicEnv } from '@/lib/env.public';
+import { getPublicEnv, isProduction } from '@/lib/env.public';
+import { hardenSessionCookie } from '@/lib/security/session-cookie';
 import type { Database } from '@/types/database.types';
 
 /**
@@ -40,7 +41,11 @@ export async function createSupabaseServerClient() {
         setAll(cookiesToSet, _headers) {
           try {
             for (const { name, value, options } of cookiesToSet) {
-              cookieStore.set(name, value, options);
+              cookieStore.set(
+                name,
+                value,
+                hardenSessionCookie(options, { secure: isProduction() }),
+              );
             }
           } catch {
             // A Server Component cannot write cookies. This is expected and

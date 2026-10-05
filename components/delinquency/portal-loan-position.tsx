@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
 import { Money } from '@/components/ui/money';
 import { formatBusinessDate } from '@/lib/domain/datetime';
-import { formatUgx } from '@/lib/domain/money';
 import type { LoanDelinquency } from '@/lib/data/delinquency';
 import { DateValue } from '@/components/ui/data-value';
 
@@ -69,9 +68,19 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
                 <Money amount={position.currentDue} />
               </dd>
               <dd className="text-text-muted text-xs">
-                {position.arrearsAmount > 0
-                  ? `${formatUgx(position.arrearsAmount)} not yet paid from earlier, plus ${formatUgx(position.dueToday)} due today`
-                  : 'Your payment due today'}
+                {position.arrearsAmount > 0 ? (
+                  // Through `Money`, not through a template string. A figure
+                  // inside prose is still a figure: it needs the same
+                  // grouping, the same tabular digits and the same
+                  // non-breaking treatment as one in a column, or the same
+                  // amount reads two ways on one screen.
+                  <>
+                    <Money amount={position.arrearsAmount} /> not yet paid from earlier,
+                    plus <Money amount={position.dueToday} /> due today
+                  </>
+                ) : (
+                  'Your payment due today'
+                )}
               </dd>
             </div>
 
@@ -81,9 +90,14 @@ export function PortalLoanPosition({ position }: { readonly position: LoanDelinq
                 <Money amount={position.totalOutstanding} />
               </dd>
               <dd className="text-text-muted text-xs">
-                {position.penaltyRemaining > 0
-                  ? `Includes a late-payment charge of ${formatUgx(position.penaltyRemaining)}`
-                  : 'The whole remaining balance, not a settlement offer'}
+                {position.penaltyRemaining > 0 ? (
+                  <>
+                    Includes a late-payment charge of{' '}
+                    <Money amount={position.penaltyRemaining} />
+                  </>
+                ) : (
+                  'The whole remaining balance, not a settlement offer'
+                )}
               </dd>
             </div>
           </dl>

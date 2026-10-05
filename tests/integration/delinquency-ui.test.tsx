@@ -550,6 +550,62 @@ describe('the overdue list', () => {
     expect(getByCompositeText(/incl\. UGX\s*50,000 penalty/)).toBeInTheDocument();
   });
 
+  it('nests no interactive element inside another', () => {
+    // The defect this guards against was found by opening /overdue in a real
+    // browser: the phone card wrapped the whole row in a `<Link>` and then put
+    // an `<a href="tel:">` inside it. Nested anchors are invalid HTML, so the
+    // parser closes the outer anchor at the inner one — the server's markup and
+    // React's tree then disagree, hydration fails with React #418, and
+    // everything below the phone number stops opening the loan. jsdom parses
+    // the same way a browser does, so the invariant is assertable here.
+    const { container } = render(
+      <OverdueList
+        loans={ROWS}
+        page={1}
+        hasMore={false}
+        counts={COUNTS}
+        businessDate="2026-11-03"
+      />,
+    );
+
+    for (const selector of [
+      'a a',
+      'button button',
+      'a button',
+      'button a',
+      'label label',
+    ]) {
+      expect(
+        container.querySelectorAll(selector).length,
+        `${selector} is not valid HTML`,
+      ).toBe(0);
+    }
+  });
+
+  it('still dials the borrower and still opens the loan from the card', () => {
+    render(
+      <OverdueList
+        loans={ROWS}
+        page={1}
+        hasMore={false}
+        counts={COUNTS}
+        businessDate="2026-11-03"
+      />,
+    );
+
+    // Both affordances survive the fix: the phone number is a `tel:` link,
+    // and the borrower's name opens the loan.
+    const dial = screen
+      .getAllByRole('link')
+      .filter((link) => (link.getAttribute('href') ?? '').startsWith('tel:'));
+    expect(dial.length).toBeGreaterThan(0);
+
+    const toLoan = screen
+      .getAllByRole('link')
+      .filter((link) => (link.getAttribute('href') ?? '').startsWith('/loans/'));
+    expect(toLoan.length).toBeGreaterThan(0);
+  });
+
   it('flags a pending charge as pending', () => {
     const pending: readonly DelinquentLoanRow[] = [
       {
@@ -739,7 +795,7 @@ describe('the portal loan position', () => {
     expect(screen.getByText('Please pay now')).toBeInTheDocument();
     expect(screen.getByText(/UGX\s*8,000/)).toBeInTheDocument();
     expect(
-      screen.getByText(
+      getByCompositeText(
         /UGX\s*4,000 not yet paid from earlier, plus UGX\s*4,000 due today/,
       ),
     ).toBeInTheDocument();
@@ -843,8 +899,11 @@ describe('the portal loan position', () => {
     expect(
       screen.getByText(/It is\s+a charge for settling late, not interest/i),
     ).toBeInTheDocument();
+    // The figure now renders through `Money`, so the sentence spans more than
+    // one element. `getByCompositeText` asserts the whole sentence across
+    // those boundaries — the same claim, not a weaker one.
     expect(
-      screen.getByText(/Includes a late-payment charge of UGX\s*50,000/),
+      getByCompositeText(/Includes a late-payment charge of UGX\s*50,000/),
     ).toBeInTheDocument();
   });
 

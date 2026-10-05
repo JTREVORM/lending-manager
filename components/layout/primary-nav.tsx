@@ -6,6 +6,7 @@ import { Ellipsis, X } from 'lucide-react';
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 
 import { ROUTES } from '@/config/app';
+import { LinkPending } from '@/components/ui/link-pending';
 import { cn } from '@/lib/utils/cn';
 import type { Permission } from '@/lib/permissions';
 import {
@@ -146,6 +147,10 @@ function SidebarLink({
     >
       <Icon aria-hidden="true" className="size-5 shrink-0" />
       <span className="truncate">{item.label}</span>
+      {/* The application carries no full-page loading spinner — see
+          `LinkPending` for why — so the feedback for a tap lives in the thing
+          that was tapped. */}
+      <LinkPending className="ml-auto" label={`Opening ${item.label}`} />
     </Link>
   );
 }
@@ -183,6 +188,12 @@ function BottomBarLink({
       {/* No truncation: with four cells the label fits, and a label that did
           not fit would be a sign the bar is holding too much again. */}
       <span className="w-full text-center">{item.shortLabel}</span>
+      {/* Absolutely positioned so an appearing spinner cannot shift the
+          label under a finger that is already on its way down. */}
+      <LinkPending
+        className="absolute right-1 bottom-1"
+        label={`Opening ${item.label}`}
+      />
     </Link>
   );
 }

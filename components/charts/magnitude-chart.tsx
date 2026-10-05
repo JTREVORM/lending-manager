@@ -130,27 +130,40 @@ export function MagnitudeChart({
 
           {/* The same rows, as a table. Visually hidden on screen and shown
               in print, so a printed report carries the figures rather than a
-              row of bars with no axis. */}
-          <table className="sr-only print:not-sr-only print:mt-3 print:w-full print:text-sm">
-            <caption>{caption}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">{valueHeading}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.label}>
-                  <th scope="row">
-                    {row.label}
-                    {row.note === undefined ? '' : ` (${row.note})`}
-                  </th>
-                  <td>{format === 'money' ? <Money amount={row.value} /> : row.value}</td>
+              row of bars with no axis.
+
+              `sr-only` is on the wrapper, never on the `<table>` itself.
+              `sr-only` hides by shrinking an element to 1px and clipping the
+              rest with `overflow: hidden` — and `overflow` has no effect on
+              `display: table`. A table wearing `sr-only` therefore lays itself
+              out at its natural width, stays in the scrollable overflow area
+              because it is also absolutely positioned, and pushes the page
+              sideways: 390px of phone showed 617px of document, with 227px of
+              nothing to scroll into. A block wrapper clips properly. */}
+          <div className="sr-only print:not-sr-only">
+            <table className="print:mt-3 print:w-full print:text-sm">
+              <caption>{caption}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">{valueHeading}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.label}>
+                    <th scope="row">
+                      {row.label}
+                      {row.note === undefined ? '' : ` (${row.note})`}
+                    </th>
+                    <td>
+                      {format === 'money' ? <Money amount={row.value} /> : row.value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </figure>

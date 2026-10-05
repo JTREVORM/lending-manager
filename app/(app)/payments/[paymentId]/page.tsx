@@ -87,7 +87,12 @@ export default async function PaymentDetailPage({
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-text text-2xl font-semibold break-words">
-              <Money amount={payment.amount} />
+              {/* Struck through when the payment has been reversed, the way
+                  the register and the borrower's own history show it. This
+                  page is where a staff member comes to look at a reversal,
+                  so it is the worst place for the figure to read as though
+                  the money were still received. */}
+              <Money amount={payment.amount} struck={isReversed} />
             </h1>
             <p className="text-text-muted font-mono">{payment.paymentNumber}</p>
           </div>
@@ -127,7 +132,7 @@ export default async function PaymentDetailPage({
             </Detail>
             <Detail label="Amount">
               <span className="font-semibold tabular-nums">
-                <Money amount={payment.amount} />
+                <Money amount={payment.amount} struck={isReversed} />
               </span>
             </Detail>
             <Detail label="Method">{PAYMENT_METHOD_LABELS[payment.paymentMethod]}</Detail>

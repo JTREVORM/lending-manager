@@ -35,6 +35,14 @@ export const PUBLIC_ROUTE_PREFIXES: readonly string[] = [
   // a sign-in page as its offline fallback, and an offline borrower would be
   // told to log in rather than told the figures are unavailable.
   ROUTES.offline,
+  // Phase 9. The health endpoint, which a monitor reaches with no session.
+  //
+  // Reachable, and deliberately uninformative: it reports whether the process
+  // is up, whether the database answers, and which build is running. Not the
+  // database's host, not the schema version, not a row count, not a reason for
+  // a failure. A health check is the easiest thing on a deployment to probe,
+  // so what it says is said to everybody.
+  ROUTES.health,
 ];
 
 /**
@@ -82,6 +90,26 @@ export function isPublicPath(pathname: string): boolean {
   return PUBLIC_ROUTE_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+}
+
+/**
+ * Paths that make no sense to somebody who is already signed in.
+ *
+ * Just the sign-in page. "Public" and "for signed-out visitors only" used to
+ * be the same set, because `/login` was the only public path — so the proxy
+ * redirected a signed-in caller away from *any* public path. Adding
+ * `/api/health` made that wrong in a way worth recording: a signed-in browser,
+ * or a monitor that happened to hold a session cookie, asked for the health
+ * endpoint and got a 307 to the dashboard and a page of HTML where it expected
+ * JSON.
+ *
+ * The offline page is in the same position. It is served by the service worker
+ * rather than navigated to, so the redirect never fired in practice — but a
+ * signed-in person with no network has more use for "the figures are
+ * unavailable" than for a dashboard that cannot load.
+ */
+export function isSignedOutOnlyPath(pathname: string): boolean {
+  return pathname === ROUTES.login || pathname.startsWith(`${ROUTES.login}/`);
 }
 
 /**

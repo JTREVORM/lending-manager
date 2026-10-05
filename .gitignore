@@ -84,3 +84,4 @@ yarn-error.log*
 # Deployment platform caches
 # ---------------------------------------------------------------------------
 .vercel/
+.e2e/

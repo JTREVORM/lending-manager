@@ -26,9 +26,13 @@
  * ineffective in modern browsers, which is the point: there is no host this
  * application wants to trust for script, only its own nonce.
  *
- * `'unsafe-eval'` is **not** present in production. It is permitted in
- * development because the Next.js dev overlay and React Refresh need it, and
- * that difference is deliberate and asserted in the tests.
+ * `'unsafe-eval'` is present only when the Next.js **development server** is
+ * serving the response, because the dev overlay and React Refresh compile in
+ * the browser. It is absent from every built artefact, whatever environment
+ * that artefact is labelled — a staging deployment is not a dev server. That
+ * distinction matters: gating this on the deployment label instead shipped
+ * `'unsafe-eval'` to anything not labelled `production`, which the end-to-end
+ * harness found by reading the header out of a real response.
  *
  * ## `connect-src`
  *
@@ -68,6 +72,24 @@ function supabaseOrigin(): string | null {
   }
 }
 
+/**
+ * Whether the Next.js development server is serving this response.
+ *
+ * This is the gate for `'unsafe-eval'`, and it is deliberately **not**
+ * `isProduction()`. `isProduction()` reads `NEXT_PUBLIC_APP_ENV`, which is a
+ * deployment *label* — a staging or test deployment built with `next build`
+ * is not labelled production, and gating on that label shipped
+ * `'unsafe-eval'` to every such deployment. The E2E harness, which runs the
+ * production build under the label `test`, is what found it.
+ *
+ * What actually needs `eval` is the dev overlay and React Refresh, and those
+ * exist only under `next dev`, which is exactly what `NODE_ENV` reports. A
+ * built artefact never has them, whatever it is labelled.
+ */
+function isDevelopmentServer(): boolean {
+  return process.env.NODE_ENV === 'development';
+}
+
 export function buildContentSecurityPolicy(nonce: string): string {
   const production = isProduction();
   const supabase = supabaseOrigin();
@@ -94,8 +116,10 @@ export function buildContentSecurityPolicy(nonce: string): string {
         // Ignored by browsers that honour strict-dynamic; present so a very
         // old browser still gets *a* policy rather than none.
         'https:',
-        // The dev overlay and React Refresh compile in the browser.
-        ...(production ? [] : ["'unsafe-eval'"]),
+        // The dev overlay and React Refresh compile in the browser. Gated on
+        // the dev *server* rather than on the deployment label — see
+        // `isDevelopmentServer`.
+        ...(isDevelopmentServer() ? ["'unsafe-eval'"] : []),
       ],
     ],
 

@@ -1,15 +1,17 @@
+import { existsSync, globSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigurationError } from '@/lib/errors';
-import { resetPublicEnvCache } from '@/lib/env.public';
+import { getPublicEnv, resetPublicEnvCache } from '@/lib/env.public';
 
 /**
  * The Supabase client architecture.
  *
- * Phase 1 does not yet read data from a Client Component or perform any
- * privileged operation, so neither of these modules has a caller. They are
- * part of the required client architecture and are covered here so that they
- * are verified code rather than untested scaffolding.
+ * Three claims: there is no browser client and there must not be one, the
+ * privileged client cannot be reached from client code, and the public
+ * environment is validated before any client is built from it.
  */
 
 const KEYS = [
@@ -35,40 +37,67 @@ afterEach(() => {
   resetPublicEnvCache();
 });
 
-describe('browser client', () => {
-  it('fails clearly when Supabase is not configured', async () => {
-    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-
-    // Better a loud configuration error than a client pointed at nothing.
-    expect(() => createSupabaseBrowserClient()).toThrow(ConfigurationError);
+describe('there is no browser client', () => {
+  it('the module is gone, and that is load-bearing', () => {
+    // `lib/supabase/client.ts` was removed in Phase 9, and not as tidying.
+    // The session cookie is now written `HttpOnly` (see
+    // `lib/security/session-cookie.ts`), which a browser Supabase client
+    // cannot work with: `createBrowserClient` reads the session out of
+    // `document.cookie`, would find nothing, and would sign the user out on
+    // the first render. Every read and write in this application is a Server
+    // Component or a Server Action, so nothing wanted one — but a module
+    // sitting there invites the import that would break authentication in a
+    // way no unit test would notice.
+    expect(existsSync(join(process.cwd(), 'lib/supabase/client.ts'))).toBe(false);
   });
 
-  it('constructs a usable client from valid configuration', async () => {
+  it('nothing in the application creates one', () => {
+    const files = globSync('{app,components,lib,hooks}/**/*.{ts,tsx}', {
+      cwd: process.cwd(),
+    });
+
+    expect(files.length).toBeGreaterThan(50);
+
+    for (const file of files) {
+      expect(
+        readFileSync(join(process.cwd(), file), 'utf8'),
+        `${file} creates a browser Supabase client`,
+      ).not.toContain('createBrowserClient');
+    }
+  });
+});
+
+describe('the public environment guard', () => {
+  // These three assertions used to be made through the browser client, which
+  // was the only caller that reached them. The guard itself lives in
+  // `getPublicEnv`, and it is what the server client and the proxy depend on
+  // too — so it is asserted where it lives rather than through a module that
+  // no longer exists.
+
+  it('fails clearly when Supabase is not configured', () => {
+    // Better a loud configuration error than a client pointed at nothing.
+    expect(() => getPublicEnv()).toThrow(ConfigurationError);
+  });
+
+  it('accepts valid configuration', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abcdefghijklmnop.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test123';
     resetPublicEnvCache();
 
-    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-    const supabase = createSupabaseBrowserClient();
+    const env = getPublicEnv();
 
-    expect(supabase).toHaveProperty('from');
-    expect(supabase).toHaveProperty('auth');
-
-    // Building a typed query must not throw. It is lazy — nothing is sent
-    // until the builder is awaited — so this makes no network call.
-    expect(() => supabase.from('roles').select('key')).not.toThrow();
+    expect(env.NEXT_PUBLIC_SUPABASE_URL).toBe('https://abcdefghijklmnop.supabase.co');
+    expect(env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toBe('sb_publishable_test123');
   });
 
-  it('refuses a secret key supplied as the publishable key', async () => {
+  it('refuses a secret key supplied as the publishable key', () => {
     // The worst available misconfiguration: this key bypasses Row Level
-    // Security and a NEXT_PUBLIC_ value is inlined into every browser bundle.
+    // Security, and a NEXT_PUBLIC_ value is inlined into every browser bundle.
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abcdefghijklmnop.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_secret_dangerous';
     resetPublicEnvCache();
 
-    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-
-    expect(() => createSupabaseBrowserClient()).toThrow(/expose it to every browser/);
+    expect(() => getPublicEnv()).toThrow(/expose it to every browser/);
   });
 });
 

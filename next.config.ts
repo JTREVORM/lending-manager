@@ -1,4 +1,21 @@
+import { readFileSync } from 'node:fs';
+
 import type { NextConfig } from 'next';
+
+/**
+ * The build's own version, read from `package.json` at build time.
+ *
+ * Phase 9 §108 asks for a version somewhere a person can read it, so that
+ * "it is not showing my change" can be answered rather than argued about. It
+ * is also what the health endpoint reports.
+ *
+ * Read here rather than imported: importing `package.json` into application
+ * code would pull the whole manifest — including the dependency list — into
+ * the bundle. This inlines one string.
+ */
+const { version } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+) as { version: string };
 
 /**
  * Build configuration.
@@ -33,6 +50,11 @@ const nextConfig: NextConfig = {
   // server action and permission check — to anyone who opens devtools. Server
   // -side stack traces are unaffected; they never reach a browser.
   productionBrowserSourceMaps: false,
+
+  // The one build-time constant the application is given. Public on purpose:
+  // it is a version number, and both the Settings page and the health
+  // endpoint report it.
+  env: { NEXT_PUBLIC_APP_VERSION: version },
 };
 
 export default nextConfig;

@@ -160,7 +160,18 @@ export function PaymentForm({
         })()
       : null;
 
-  const canContinue = parsedAmount !== null && failure === null && plan !== null;
+  // A Mobile Money payment is not complete without its network reference.
+  //
+  // The field is `required` and `post_payment` refuses without it, but
+  // `Continue` is a `type="button"`, so the browser's own validation never
+  // runs — which meant a cashier could reach the confirmation screen, read
+  // the whole allocation, press "Record UGX …" and only then be told the
+  // reference was missing. The reference is also what stops the same transfer
+  // being recorded twice, so it is not a detail to collect late.
+  const referenceMissing = isMobileMoney(method) && reference.trim() === '';
+
+  const canContinue =
+    parsedAmount !== null && failure === null && plan !== null && !referenceMissing;
 
   if (result?.ok === true) {
     // Shown for the moment between the action returning and the navigation

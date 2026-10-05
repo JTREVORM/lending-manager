@@ -193,6 +193,36 @@ describe('the payment form', () => {
     expect(screen.getByLabelText(/Transaction reference/i)).toBeRequired();
   });
 
+  it('will not go forward on Mobile Money until the reference is entered', async () => {
+    // Found by recording a payment in a browser. `Continue` is a
+    // `type="button"`, so the browser's own `required` validation never runs
+    // — a cashier could select MTN, leave the reference blank, read the whole
+    // allocation on the confirmation screen, press "Record UGX …" and only
+    // then be told what was missing. The reference is also what stops the
+    // same transfer being recorded twice, so it is not a detail to collect
+    // after the figures have been agreed.
+    const user = userEvent.setup();
+    render(<PaymentForm {...FORM_PROPS} />);
+
+    // Cash is complete without one.
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
+
+    await user.click(screen.getByText('MTN Mobile Money'));
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+
+    // Whitespace is not a reference.
+    await user.type(screen.getByLabelText(/Transaction reference/i), '   ');
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+
+    await user.clear(screen.getByLabelText(/Transaction reference/i));
+    await user.type(screen.getByLabelText(/Transaction reference/i), 'MP260104.1234');
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
+
+    // And switching back to cash does not strand the form.
+    await user.click(screen.getByText('Cash'));
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
+  });
+
   it('offers exactly the three confirmed methods', () => {
     render(<PaymentForm {...FORM_PROPS} />);
 

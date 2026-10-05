@@ -34,8 +34,9 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { ROUTES } from '@/config/app';
-import { isPublicPath } from '@/lib/auth/routing';
-import { getPublicEnv } from '@/lib/env.public';
+import { isPublicPath, isSignedOutOnlyPath } from '@/lib/auth/routing';
+import { getPublicEnv, isProduction } from '@/lib/env.public';
+import { hardenSessionCookie } from '@/lib/security/session-cookie';
 import {
   CSP_NONCE_HEADER,
   PRIVATE_CACHE_HEADERS,
@@ -107,7 +108,13 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
           response = NextResponse.next({ request: forwarded });
 
           for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
+            // `HttpOnly`, because nothing in the browser reads the session.
+            // See `hardenSessionCookie`.
+            response.cookies.set(
+              name,
+              value,
+              hardenSessionCookie(options, { secure: isProduction() }),
+            );
           }
 
           // Cache-Control / Expires / Pragma, which stop an intermediary from
@@ -152,7 +159,12 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   // Signed in and heading for the sign-in page. Send them into the
   // application; `landingPathFor` cannot be used here because it needs the
   // profile, so the root route decides and redirects onward.
-  if (hasSession && isPublicPath(pathname)) {
+  //
+  // `isSignedOutOnlyPath`, not `isPublicPath`: the health endpoint is public
+  // and must answer a caller who happens to hold a session, and the offline
+  // page is more use to a signed-in person with no network than a dashboard
+  // that cannot load.
+  if (hasSession && isSignedOutOnlyPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = ROUTES.dashboard;
     url.search = '';

@@ -1,0 +1,22 @@
+{
+  "staff": {
+    "owner": "+256772100101",
+    "manager": "+256772100102",
+    "secretary": "+256772100103",
+    "temporaryPassword": "+256772100104"
+  },
+  "borrower": "+256772110008",
+  "clients": {
+    "arrears": "7a8f3419-338f-4654-a6d5-c083117ae8fe",
+    "current": "95733883-0c42-47be-b47d-b9a9164e8dfd"
+  },
+  "loans": {
+    "current": "5c79647a-e4e7-49f7-b346-3361b8faa57f",
+    "arrears": "19f752a6-7895-443d-a48d-0cc347af6c88",
+    "charged": "69bcf9dd-a9d7-4da6-81a7-721430e62d7c",
+    "grace": "ad01591f-4a8f-4626-b080-7bc89d94bc24",
+    "pending": "28d90735-bd9e-4f43-bd9f-d39e2037866f",
+    "draft": "2add7926-21c3-4c1e-a392-c004b418e886",
+    "approvedNotDisbursed": "33069563-22b9-4b5d-975f-d781378f6e8f"
+  }
+}

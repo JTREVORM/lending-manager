@@ -275,12 +275,49 @@ export async function checkRateLimit(
       message: rule.message,
     };
   } catch (error) {
-    return storeFailed(
-      action,
-      rule,
-      error instanceof Error ? error.message : 'Unknown limiter failure.',
-    );
+    return storeFailed(action, rule, describeLimiterFailure(error));
   }
+}
+
+/**
+ * What to put in the log when the limiter could not be consulted.
+ *
+ * A `PostgrestError` is a plain object, not an `Error`, so a bare
+ * `instanceof Error` check reduced every database-side refusal to "Unknown
+ * limiter failure" — which is how a misconfigured API key once presented
+ * itself as an unexplained outage on the sign-in form. The code and the hint
+ * are the two fields that say which it was; the message is quoted as it
+ * arrives, and nothing here is shown to the person.
+ */
+function describeLimiterFailure(error: unknown): string {
+  if (error instanceof Error) return error.message;
+
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as {
+      message?: unknown;
+      code?: unknown;
+      hint?: unknown;
+      details?: unknown;
+    };
+
+    const parts = [
+      typeof candidate.code === 'string' ? `[${candidate.code}]` : null,
+      typeof candidate.message === 'string' ? candidate.message : null,
+      typeof candidate.details === 'string' ? candidate.details : null,
+      typeof candidate.hint === 'string' ? candidate.hint : null,
+    ].filter((part): part is string => part !== null && part !== '');
+
+    if (parts.length > 0) return parts.join(' ');
+  }
+
+  // Nothing recognisable. Say what arrived rather than "unknown": the
+  // constructor name alone has twice been enough to find the cause.
+  const shape =
+    typeof error === 'object' && error !== null
+      ? `${error.constructor?.name ?? 'object'} {${Object.keys(error).join(',')}}`
+      : typeof error;
+
+  return `Unrecognised limiter failure (${shape}).`;
 }
 
 function storeFailed(

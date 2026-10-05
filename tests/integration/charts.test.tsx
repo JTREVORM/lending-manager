@@ -159,6 +159,34 @@ describe('the magnitude chart', () => {
     expect(document.querySelectorAll('[data-money]').length).toBeGreaterThan(0);
   });
 
+  it('never puts sr-only on the table element itself', () => {
+    // `sr-only` hides by shrinking to 1px and clipping with
+    // `overflow: hidden`, and `overflow` has no effect on `display: table`. A
+    // table wearing `sr-only` lays itself out at full width and — being
+    // absolutely positioned — drags the page sideways with it: 390px of phone
+    // showed 617px of document. The wrapper is a block, which clips.
+    expect(source).not.toMatch(/<table[^>]*className="[^"]*sr-only/);
+    expect(source).toContain('<div className="sr-only print:not-sr-only">');
+  });
+
+  it('keeps the table reachable to a screen reader and in print', () => {
+    render(
+      <MagnitudeChart
+        title="t"
+        caption="A caption."
+        valueHeading="Loans"
+        format="count"
+        rows={ROWS}
+      />,
+    );
+
+    // Hidden visually, not hidden from assistive technology: `sr-only` is not
+    // `display: none`, and the wrapper carries no `aria-hidden`.
+    const table = screen.getByRole('table');
+    expect(table).toBeInTheDocument();
+    expect(table.closest('[aria-hidden="true"]')).toBeNull();
+  });
+
   it('computes no money of its own', () => {
     // §17. The one rule. The component works out widths; the query works out
     // figures. A chart that summed its own rows could disagree with the table
