@@ -96,7 +96,7 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
       {blocks.map((block) => (
         <div key={block.group}>
-          <p className="text-sidebar-muted/80 mb-1 px-3 text-[0.6875rem] font-semibold tracking-wider uppercase">
+          <p className="text-sidebar-muted mb-1 px-3 text-[0.6875rem] font-semibold tracking-wider uppercase">
             {NAV_GROUP_LABELS[block.group]}
           </p>
           <ul className="flex flex-col gap-0.5">
