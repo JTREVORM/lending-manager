@@ -1,0 +1,185 @@
+name: CI
+
+# Runs the full verification matrix on every push and pull request. The
+# browser tier is mandatory and not optional: Phases 1–8 shipped 2,584 green
+# unit tests over three defects that only a real browser against a real
+# database could see, which is the entire reason the end-to-end harness exists.
+#
+# Three jobs run in parallel. `checks` and `database` are fast; `browser`
+# stands up the Docker-free stack (real PostgreSQL + the real PostgREST binary
+# + the auth shim + the production Next build) and drives Playwright over it.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# One in-flight run per ref; a new push cancels the previous run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Static checks + unit/integration + money audit + secret scan + build.
+  # No database required.
+  # --------------------------------------------------------------------------
+  checks:
+    name: checks, unit/integration, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so the secret scan sees every commit
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Unit and integration tests
+        run: npm run test:run
+
+      - name: Money arithmetic audit
+        run: npm run audit:money
+
+      - name: Secret scan (source + full history)
+        run: |
+          # Fail if a real secret key, private key or database URL is committed.
+          # Harness/example/placeholder values are allowed.
+          if git log -p --all \
+            | grep -inE "sb_secret_[a-z0-9]{10}|BEGIN (RSA )?PRIVATE KEY|service_role_key\s*[:=]\s*[\"'][a-z0-9]{20}" \
+            | grep -vicE "harness|example|placeholder|test" | grep -q '[1-9]'; then
+            echo "::error::A secret-like value was found in the repository history."
+            exit 1
+          fi
+          echo "No committed secrets found."
+
+      - name: Production dependency audit
+        # Production dependencies must be clean. Dev-only advisories do not fail
+        # the build but are printed for visibility.
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit || true
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          NEXT_PUBLIC_APP_ENV: production
+          NEXT_PUBLIC_SITE_URL: https://ci.invalid
+          SUPABASE_SECRET_KEY: sb_secret_ci_placeholder
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          LOG_LEVEL: error
+
+      - name: No secret in client bundle
+        run: |
+          if grep -rlE "sb_secret_|SUPABASE_SECRET_KEY|service_role|BEGIN (RSA )?PRIVATE KEY" .next/static 2>/dev/null; then
+            echo "::error::A secret pattern was found in the built client bundle."
+            exit 1
+          fi
+          echo "Client bundle is free of secret patterns."
+
+  # --------------------------------------------------------------------------
+  # Database suite: real PostgreSQL, every migration applied from zero, then
+  # the schema/RLS/constraint/concurrency tests.
+  # --------------------------------------------------------------------------
+  database:
+    name: database (real PostgreSQL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Put PostgreSQL binaries on PATH
+        run: echo "$(ls -d /usr/lib/postgresql/*/bin | tail -1)" >> "$GITHUB_PATH"
+
+      - name: Build a local throwaway cluster and apply every migration
+        run: npm run db:local:setup
+
+      - name: Database tests
+        run: npm run test:db
+        env:
+          DATABASE_URL: postgresql://lending@localhost:5433/lending_test
+
+  # --------------------------------------------------------------------------
+  # Browser suite: the production build driven by Playwright against the
+  # Docker-free stack, on a freshly seeded database. Fixture IDs are generated
+  # by the seed on every run; the manifest is never restored mid-run (the
+  # seed-hygiene rule that an earlier manual run violated).
+  # --------------------------------------------------------------------------
+  browser:
+    name: browser E2E (production build, fresh seed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Put PostgreSQL binaries on PATH
+        run: echo "$(ls -d /usr/lib/postgresql/*/bin | tail -1)" >> "$GITHUB_PATH"
+
+      - name: Install the real PostgREST binary
+        run: |
+          mkdir -p .e2e
+          curl -sSL -o .e2e/pgrst.tar.xz \
+            https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz
+          tar -C .e2e -xf .e2e/pgrst.tar.xz
+          chmod +x .e2e/postgrest
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Bring up the stack (migrate, seed, build, serve)
+        run: bash tests/e2e/harness/stack.sh up
+
+      - name: Browser tests
+        run: |
+          source <(bash tests/e2e/harness/stack.sh env)
+          npx playwright test
+
+      - name: Tear down the stack
+        if: always()
+        run: bash tests/e2e/harness/stack.sh down || true
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          # Traces, screenshots and the HTML report — never the harness logs,
+          # which would carry the synthetic-but-local credentials.
+          path: |
+            .e2e/playwright/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

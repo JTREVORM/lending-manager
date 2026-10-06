@@ -185,6 +185,11 @@ docs/          Architecture, database, decisions, security
 | [docs/SECURITY.md](docs/SECURITY.md) | Posture, review results, known gaps. |
 | [docs/DELIVERY.md](docs/DELIVERY.md) | The installable application, the service worker and what it may cache, CSP and headers, rate limits, UI conventions, what a page costs, health and version, deployment, Phase 10 handover. |
 | [docs/PHASE-9-REPORT.md](docs/PHASE-9-REPORT.md) | Phase 9's completion report: the twelve defects running the application found, the verification results, the deviations and the handover. |
+| [docs/PRODUCTION.md](docs/PRODUCTION.md) | Runtime, environment-variable matrix, build/run, HTTPS/domain/session, headers, rate limits, first-owner bootstrap, production data policy, observability. |
+| [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) | Backup strategy, the proven restore drill, point-in-time recovery, disaster recovery and the migration-rollback caveat. |
+| [docs/INCIDENT-RUNBOOK.md](docs/INCIDENT-RUNBOOK.md) | First actions for sign-in, payment, role, availability, deployment and compromise incidents, and the data-correction policy. |
+| [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) | Launch-day gate, first-day operation, daily operation, and the NO-GO stop conditions. |
+| [docs/PHASE-10-REPORT.md](docs/PHASE-10-REPORT.md) | Phase 10 production-readiness audit: test matrix, financial/RLS/security/recoverability evidence, CI, and the GO / CONDITIONAL-GO / NO-GO decision. |
 
 Three decisions worth knowing before writing any code here:
 
