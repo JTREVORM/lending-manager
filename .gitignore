@@ -85,3 +85,24 @@ yarn-error.log*
 # ---------------------------------------------------------------------------
 .vercel/
 .e2e/
+
+# ---------------------------------------------------------------------------
+# AI development-assistant tooling (not required by the application)
+# next dev may regenerate AGENTS.md/CLAUDE.md; skill installers recreate these.
+# Keep them out of the production repository.
+# ---------------------------------------------------------------------------
+.agents/
+.claude/
+skills-lock.json
+AGENTS.md
+CLAUDE.md
+.cursor/
+.aider*
+.windsurf/
+
+# ---------------------------------------------------------------------------
+# Scratch / temporary validation artifacts
+# ---------------------------------------------------------------------------
+*.scratch
+scratchpad/
+val-screenshots/
