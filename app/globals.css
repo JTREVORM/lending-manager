@@ -21,25 +21,26 @@
 
 @theme {
   /* -------------------------------------------------------------------------
-     Brand / accent ramp — dark teal.
+     Brand ramp — enterprise royal blue, deepening to navy.
 
-     The company colour and the interactive colour are the same hue: a deep,
-     slightly desaturated teal (trust, and distinct from the red/amber that
-     mean something is wrong). The ramp mirrors the lightness steps the old
-     green ramp used, so every contrast relationship that held before still
-     holds. A later phase lets the business set its own brand colour from
+     A serious financial-software blue (trust, and distinct from the red/amber
+     that mean something is wrong). The light steps carry UI tints; the dark
+     steps (800–950) are the navy the application shell and sidebar are built
+     from, the way an enterprise system like this one reads at a glance. A
+     later phase lets the business set its own brand colour from
      `company_settings.brand_primary_color` by overriding these in one place.
      ------------------------------------------------------------------------- */
-  --color-brand-50: oklch(0.96 0.018 209);
-  --color-brand-100: oklch(0.92 0.032 209);
-  --color-brand-200: oklch(0.85 0.045 209);
-  --color-brand-300: oklch(0.76 0.055 209);
-  --color-brand-400: oklch(0.66 0.062 209);
-  --color-brand-500: oklch(0.55 0.065 209);
-  --color-brand-600: oklch(0.47 0.065 209);
-  --color-brand-700: oklch(0.39 0.063 209); /* #0C4E57 — the reference teal */
-  --color-brand-800: oklch(0.31 0.05 209);
-  --color-brand-900: oklch(0.24 0.04 209);
+  --color-brand-50: oklch(0.97 0.015 256);
+  --color-brand-100: oklch(0.93 0.035 256);
+  --color-brand-200: oklch(0.87 0.065 256);
+  --color-brand-300: oklch(0.78 0.095 256);
+  --color-brand-400: oklch(0.66 0.12 256);
+  --color-brand-500: oklch(0.56 0.13 256);
+  --color-brand-600: oklch(0.4844 0.13 254.5); /* #215FA6 — the interactive blue */
+  --color-brand-700: oklch(0.41 0.115 256);
+  --color-brand-800: oklch(0.3474 0.0809 256); /* #1B3A63 — sidebar hover */
+  --color-brand-900: oklch(0.2852 0.0699 257); /* #112A4C — the navy shell */
+  --color-brand-950: oklch(0.22 0.055 257);
 
   /* ---------------------------------------------------------------------
      Accent — the interactive colour.
@@ -66,16 +67,16 @@
      read on a counter in daylight. The lightnesses are not chosen by eye: they
      are the values a contrast calculation agreed on, and
      `tests/unit/colour-contrast.test.ts` recomputes them from this file so
-     they cannot drift back. Retuned for the warm-cream surface the badges now
-     sit on; every pair clears 4.7:1 with margin. */
-  --color-success: oklch(0.5 0.128 150);
-  --color-success-surface: oklch(0.955 0.03 150);
-  --color-warning: oklch(0.52 0.135 75);
-  --color-warning-surface: oklch(0.965 0.04 85);
-  --color-danger: oklch(0.52 0.17 25);
-  --color-danger-surface: oklch(0.95 0.035 25);
-  --color-info: oklch(0.5 0.113 215);
-  --color-info-surface: oklch(0.955 0.028 215);
+     they cannot drift back. Retuned for the cool blue-gray surface the badges
+     now sit on; every pair clears AA with margin. */
+  --color-success: oklch(0.5133 0.12 152.2);
+  --color-success-surface: oklch(0.95 0.03 150);
+  --color-warning: oklch(0.545 0.115 71.1);
+  --color-warning-surface: oklch(0.965 0.038 85);
+  --color-danger: oklch(0.545 0.175 27.4);
+  --color-danger-surface: oklch(0.96 0.032 25);
+  --color-info: oklch(0.4844 0.13 254.5);
+  --color-info-surface: oklch(0.95 0.03 255);
 
   /* Typography — system stack. No webfont download on a slow connection, which
      for staff on a 3G phone at a counter is a deliberate performance choice,
@@ -138,51 +139,73 @@
      names the source hex so the two can never silently drift.
      ---------------------------------------------------------------------- */
 
-  /* Accent — the reference's dark teal #0C4E57. Every interactive thing
-     reaches for it; pressed/hover sinks to a darker teal. */
-  --color-accent: oklch(0.39 0.0627 209); /* #0C4E57 */
-  --color-accent-contrast: oklch(0.99 0.004 89); /* near-white */
-  --color-accent-surface: oklch(0.9 0.03 209); /* pale teal selection tint */
-  --color-accent-hover: oklch(0.34 0.055 209); /* darker teal, pressed/hover */
-  /* Secondary accent — the slightly lighter #0F5660, for a second chart
-     series or a non-primary highlight. Never competes with the accent. */
-  --color-accent-2: oklch(0.417 0.0669 209); /* #0F5660 */
-  --color-accent-2-surface: oklch(0.9 0.03 200);
+  /* Accent — the interactive royal blue #215FA6. Every interactive thing
+     reaches for it; pressed/hover sinks to a darker blue. */
+  --color-accent: oklch(0.4844 0.1301 254.5); /* #215FA6 */
+  --color-accent-contrast: oklch(0.99 0.004 255); /* near-white */
+  --color-accent-surface: oklch(0.93 0.035 255); /* pale blue selection tint */
+  --color-accent-hover: oklch(0.42 0.12 255); /* darker blue, pressed/hover */
+  /* Secondary accent — a cyan-teal #0E8AA6, for a second chart series, a
+     highlight, or the active indicator on the navy sidebar. */
+  --color-accent-2: oklch(0.5863 0.1037 219.3); /* #0E8AA6 */
+  --color-accent-2-surface: oklch(0.93 0.04 219);
 
-  /* Warm neutral surfaces — the reference's #EAE5D9 canvas, cards a shade
-     lighter (#EFEBE1 / #F0ECE0) so they catch the light in the neumorphic
-     model, and a sunken well (#E5DFD2) for inset controls. One warm hue
-     family (~88) throughout, so nothing reads as a cool/warm clash. */
-  --color-page: oklch(0.9225 0.0169 88); /* #EAE5D9 */
-  --color-surface: oklch(0.9404 0.014 88.7); /* #EFEBE1 */
-  --color-surface-raised: oklch(0.9429 0.0165 91.6); /* #F0ECE0 */
-  --color-surface-sunken: oklch(0.9048 0.0186 86); /* #E5DFD2 */
-  --color-surface-hover: oklch(0.93 0.016 88);
-  --color-border: oklch(0.8804 0.0188 86); /* #DDD7CA */
-  --color-border-strong: oklch(0.8 0.02 86);
-  --color-text: oklch(0.2749 0.0188 258); /* #222831 */
-  --color-text-muted: oklch(0.47 0.02 251); /* darkened from #7A848F to clear AA */
-  --color-text-inverse: oklch(0.99 0.004 89);
+  /* Enterprise neutral surfaces — a light blue-gray canvas (#EDF1F7), near-
+     white cards (#FBFCFE), a pure-white raised layer and a sunken well
+     (#E6EBF2) for inset controls. One cool hue family (~258) throughout. */
+  --color-page: oklch(0.9568 0.0091 258); /* #EDF1F7 */
+  --color-surface: oklch(0.9909 0.0029 264.5); /* #FBFCFE */
+  --color-surface-raised: oklch(1 0 0); /* white */
+  --color-surface-sunken: oklch(0.9383 0.0109 256.7); /* #E6EBF2 */
+  --color-surface-hover: oklch(0.965 0.008 258);
+  --color-border: oklch(0.8921 0.0157 257); /* #D5DCE6 */
+  --color-border-strong: oklch(0.8 0.02 257);
+  --color-text: oklch(0.2833 0.039 259.4); /* #1E2A3D — dark navy */
+  --color-text-muted: oklch(0.5033 0.0358 258.9); /* #586579 */
+  --color-text-inverse: oklch(0.99 0.004 255);
 
-  /* The raised surface's gradient fill — linear-gradient(145deg,#F0ECE0,#E4DFD3)
-     from the reference. A var so dark mode can swap it for a flat surface
-     instead of a gradient that reads as a seam on a dark page. */
-  --surface-raised-fill: linear-gradient(145deg, #f0ece0, #e4dfd3);
+  /* The navy application shell — the sidebar and the brand mark. Deep royal
+     navy with light foreground, a brighter cyan active accent, and a
+     translucent hover. Not theme-varying: the shell stays navy in both modes,
+     which is what makes the product read as one enterprise system. */
+  --color-sidebar: oklch(0.2852 0.0699 257); /* #112A4C */
+  --color-sidebar-raised: oklch(0.33 0.075 257);
+  --color-sidebar-hover: color-mix(in oklch, white 8%, transparent);
+  --color-sidebar-foreground: oklch(0.93 0.015 255);
+  --color-sidebar-muted: oklch(0.72 0.025 255);
+  --color-sidebar-active: oklch(0.72 0.11 219); /* cyan */
+  --color-sidebar-active-surface: color-mix(in oklch, white 12%, transparent);
+
+  /* The raised surface's gradient fill — a cool near-white, lit from the
+     top-left. A var so dark mode can swap it for a flat surface instead of a
+     gradient that reads as a seam on a dark page. */
+  --surface-raised-fill: linear-gradient(145deg, #ffffff, #eef2f8);
+
+  /* ----------------------------------------------------------------------
+     Glass layer.
+
+     The restrained enterprise glass: a semi-opaque light surface over a
+     backdrop blur, a thin bright border, a soft cool shadow. Used on the top
+     header, the dashboard hero's inner panels, KPI cards and small summary
+     surfaces — never on a dense table, which stays solid and readable.
+     ---------------------------------------------------------------------- */
+  --glass-bg: color-mix(in oklch, white 72%, transparent);
+  --glass-border: color-mix(in oklch, white 70%, transparent);
+  --glass-blur: 14px;
+  --glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 30px rgba(30, 45, 75, 0.1);
 
   /* ----------------------------------------------------------------------
      Neumorphic shadow system (light mode).
 
-     The reference's soft-UI model: every raised surface is lit from the
-     top-left (a near-white highlight) and shadowed to the bottom-right (a
-     warm beige shadow, never black). Inset surfaces invert it. These are the
-     literal reference values, centralised here and consumed through the
-     elevation/surface helper classes below — never hand-written per page.
-
-     `--neu-dark`  rgba(188,178,160,.5)   the warm shadow
-     `--neu-light` rgba(255,255,255,.85)  the highlight
+     Soft-UI depth: every raised surface is lit from the top-left (a near-white
+     highlight) and shadowed to the bottom-right — now with a cool blue-gray
+     shadow rather than the earlier warm beige, so it belongs to the enterprise
+     palette. Inset surfaces invert it. Consumed through the elevation/surface
+     helper classes below — never hand-written per page.
      ---------------------------------------------------------------------- */
-  --neu-dark: 188, 178, 160;
-  --neu-light: 255, 255, 255;
+  --neu-dark: 160, 170, 190; /* cool blue-gray shadow */
+  --neu-light: 255, 255, 255; /* highlight */
 
   /* Level 1 — near-flat. Deliberately gentle: it is what dense tables and
      low-priority sections sit on, where the full 5px/12px lift would be too
@@ -200,11 +223,11 @@
      floating above a scrim. */
   --elevate-4:
     10px 10px 24px rgba(var(--neu-dark), 0.55),
-    -8px -8px 18px rgba(var(--neu-light), 0.8), 0 16px 40px rgba(90, 80, 64, 0.2);
+    -8px -8px 18px rgba(var(--neu-light), 0.8), 0 16px 40px rgba(30, 45, 75, 0.18);
   /* Level 5 — popover / floating panel, the strongest. */
   --elevate-5:
     8px 8px 18px rgba(var(--neu-dark), 0.55), -6px -6px 14px rgba(var(--neu-light), 0.85),
-    0 20px 48px rgba(90, 80, 64, 0.26);
+    0 20px 48px rgba(30, 45, 75, 0.24);
 
   /* The dual-shadow already carries its own top-left highlight, so the
      separate top-rim highlight the previous system layered on is now a no-op;
@@ -218,58 +241,70 @@
     inset 3px 3px 7px rgba(var(--neu-dark), 0.5),
     inset -3px -3px 7px rgba(var(--neu-light), 0.85);
   --inset-press:
-    inset 6px 6px 12px rgba(175, 164, 145, 0.65),
+    inset 6px 6px 12px rgba(140, 150, 172, 0.6),
     inset -6px -6px 12px rgba(var(--neu-light), 0.85);
   --ring-focus: 0 0 0 2px var(--color-page), 0 0 0 4px var(--color-accent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark mode is a deliberate equivalent of the warm scheme, not an
-       inversion: a deep, near-neutral charcoal with the faintest cool lean,
-       surfaces that lift by lightness, and the same teal accent brightened so
-       it still lifts off the page. */
-    --color-page: oklch(0.172 0.008 235);
-    --color-surface: oklch(0.215 0.009 235);
-    --color-surface-raised: oklch(0.25 0.01 235);
-    --color-surface-sunken: oklch(0.19 0.008 235);
-    --color-surface-hover: oklch(0.24 0.01 235);
-    --color-border: oklch(0.31 0.011 235);
-    --color-border-strong: oklch(0.42 0.013 235);
-    --color-text: oklch(0.95 0.004 235);
-    --color-text-muted: oklch(0.72 0.009 235);
-    --color-text-inverse: oklch(0.172 0.008 235);
+    /* Dark mode is a deliberate enterprise equivalent, not an inversion: a
+       deep navy-charcoal with a cool lean, surfaces that lift by lightness,
+       and the royal-blue accent brightened so it still lifts off the page. */
+    --color-page: oklch(0.18 0.015 258);
+    --color-surface: oklch(0.23 0.02 258);
+    --color-surface-raised: oklch(0.27 0.022 258);
+    --color-surface-sunken: oklch(0.2 0.017 258);
+    --color-surface-hover: oklch(0.26 0.021 258);
+    --color-border: oklch(0.33 0.02 258);
+    --color-border-strong: oklch(0.44 0.022 258);
+    --color-text: oklch(0.95 0.005 258);
+    --color-text-muted: oklch(0.72 0.012 258);
+    --color-text-inverse: oklch(0.18 0.015 258);
 
     /* The accent brightens so it lifts off a dark page, and its contrast
-       colour inverts with it. Same teal hue (209) as the light scheme. */
-    --color-accent: oklch(0.74 0.1 209);
-    --color-accent-contrast: oklch(0.17 0.008 235);
-    --color-accent-surface: oklch(0.3 0.05 209);
-    --color-accent-hover: oklch(0.79 0.1 209);
-    --color-accent-2: oklch(0.72 0.07 200);
-    --color-accent-2-surface: oklch(0.3 0.05 200);
+       colour inverts with it. Same royal-blue hue (255) as the light scheme. */
+    --color-accent: oklch(0.68 0.12 255);
+    --color-accent-contrast: oklch(0.17 0.02 258);
+    --color-accent-surface: oklch(0.32 0.06 255);
+    --color-accent-hover: oklch(0.73 0.12 255);
+    --color-accent-2: oklch(0.72 0.09 219);
+    --color-accent-2-surface: oklch(0.32 0.06 219);
+
+    /* The navy shell is already dark; in dark mode it only deepens slightly so
+       it still separates from the page behind it. */
+    --color-sidebar: oklch(0.23 0.045 257);
+    --color-sidebar-raised: oklch(0.28 0.05 257);
+    --color-sidebar-foreground: oklch(0.92 0.012 255);
+    --color-sidebar-muted: oklch(0.68 0.02 255);
 
     /* No gradient on a dark page — a flat raised surface instead, so the lift
        comes from the clean drop shadows below rather than a faked light
        source, exactly as the neumorphism guidance asks for dark mode. */
     --surface-raised-fill: var(--color-surface-raised);
 
+    /* Dark glass: a translucent dark surface rather than a translucent light
+       one, so the blur reads as frosted dark rather than washed out. */
+    --glass-bg: color-mix(in oklch, var(--color-surface) 72%, transparent);
+    --glass-border: color-mix(in oklch, white 14%, transparent);
+    --glass-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 30px rgba(0, 0, 0, 0.4);
+
     /* Surfaces need more lightness contrast against a dark page than the
        light-mode tints provide, and the status text has to brighten with them
        or every badge is dark ink on a dark tint — the Phase 9 defect this
        whole token set is arithmetically guarded against. */
     --color-success: oklch(0.66 0.13 150);
-    --color-success-surface: oklch(0.29 0.05 150);
-    --color-warning: oklch(0.7 0.14 85);
-    --color-warning-surface: oklch(0.31 0.06 85);
+    --color-success-surface: oklch(0.3 0.05 150);
+    --color-warning: oklch(0.72 0.13 85);
+    --color-warning-surface: oklch(0.32 0.06 85);
     --color-danger: oklch(0.7 0.16 25);
-    --color-danger-surface: oklch(0.3 0.07 25);
-    --color-info: oklch(0.7 0.11 215);
-    --color-info-surface: oklch(0.29 0.05 215);
+    --color-danger-surface: oklch(0.31 0.07 25);
+    --color-info: oklch(0.7 0.12 255);
+    --color-info-surface: oklch(0.3 0.05 255);
 
     /* Shadows go deeper and nearly neutral on a dark page; the top highlight
        is a faint white edge rather than a bright one. */
-    --shadow-color: 235;
     --elevate-1: 0 1px 1px oklch(0 0 0 / 0.3);
     --elevate-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 2px 4px oklch(0 0 0 / 0.3);
     --elevate-3: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 16px oklch(0 0 0 / 0.45);
@@ -298,6 +333,12 @@
   --color-text: var(--color-text);
   --color-text-muted: var(--color-text-muted);
   --color-text-inverse: var(--color-text-inverse);
+  --color-sidebar: var(--color-sidebar);
+  --color-sidebar-raised: var(--color-sidebar-raised);
+  --color-sidebar-foreground: var(--color-sidebar-foreground);
+  --color-sidebar-muted: var(--color-sidebar-muted);
+  --color-sidebar-active: var(--color-sidebar-active);
+  --color-sidebar-active-surface: var(--color-sidebar-active-surface);
 }
 
 /* ---------------------------------------------------------------------------
@@ -372,7 +413,7 @@
     /* A teal chevron, so the one piece of chrome a native select shows belongs
        to the palette rather than the browser's default grey. */
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230C4E57' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23215FA6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.625rem center;
   }
@@ -585,6 +626,27 @@
   .surface-pressed {
     background-color: var(--color-surface-sunken);
     box-shadow: var(--inset-press);
+  }
+
+  /* Glass: the restrained enterprise frosted surface — a translucent fill over
+     a backdrop blur, a bright hairline border, a soft cool shadow. For the top
+     header, the hero's inner panels, KPI cards and small summaries. A solid
+     fallback is supplied for viewers that block backdrop filters or prefer
+     reduced transparency, so text never lands on a bare blur. */
+  .glass {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--glass-shadow);
+  }
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    @media not (prefers-reduced-transparency: reduce) {
+      .glass {
+        background-color: var(--glass-bg);
+        border-color: var(--glass-border);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+        backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+      }
+    }
   }
 
   /* Pressable: the physical click. Scale down a hair and sink on :active.

@@ -87,8 +87,8 @@ export function StatCard({
   );
 
   const classes = cn(
-    // Level-3 raised surface — a KPI card catches light from above.
-    'surface-raised-soft rounded-lg border p-4 min-w-0',
+    // A glass KPI card — translucent, lightly blurred, a soft cool shadow.
+    'glass rounded-lg p-4 min-w-0',
     TONES[tone],
     href !== undefined
       ? 'lift block focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2'

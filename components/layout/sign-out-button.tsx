@@ -14,7 +14,20 @@ import { cn } from '@/lib/utils/cn';
  * changes state: a GET that ends a session can be triggered by any page that
  * embeds the URL as an image, which is an irritating way to be logged out.
  */
-export function SignOutButton({ className }: { readonly className?: string }) {
+const VARIANTS = {
+  /** On a light surface — the More sheet. */
+  default: 'text-text-muted hover:bg-surface-raised hover:text-text',
+  /** On the navy shell — the sidebar foot and the mobile header. */
+  'on-dark': 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-foreground',
+} as const;
+
+export function SignOutButton({
+  className,
+  variant = 'default',
+}: {
+  readonly className?: string;
+  readonly variant?: keyof typeof VARIANTS;
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -35,8 +48,9 @@ export function SignOutButton({ className }: { readonly className?: string }) {
         disabled={pending}
         aria-busy={pending || undefined}
         className={cn(
-          'min-h-touch text-text-muted hover:bg-surface-raised hover:text-text',
-          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+          'min-h-touch',
+          VARIANTS[variant],
+          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
           'disabled:cursor-not-allowed disabled:opacity-60',
           className,
         )}

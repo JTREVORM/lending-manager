@@ -1,30 +1,33 @@
-import { ShieldCheck } from 'lucide-react';
+import { CalendarDays, Search, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import type { AuthContext } from '@/lib/auth/context';
+import { APP_SHORT_NAME, ROUTES } from '@/config/app';
 import { getCompanyBranding } from '@/lib/data/company';
 import { ROLES, effectiveRole } from '@/lib/permissions';
 import { SignOutButton } from './sign-out-button';
 import { PrimaryNav } from './primary-nav';
 
 /**
- * The authenticated staff shell.
+ * The authenticated staff shell — an enterprise application frame.
  *
- * ## Responsive strategy
+ * ## Structure
  *
- * Mobile-first, because staff work from phones at a counter:
- *
- *   - **< 768px**  a fixed bottom tab bar, within thumb reach, and a header
- *     carrying the company name and a sign-out control.
- *   - **≥ 768px**  a persistent left sidebar. No hamburger, no drawer: a menu
- *     that is always visible is one fewer thing to teach, and a drawer needs
- *     focus trapping, an escape handler and a scroll lock to be accessible.
+ *   - **≥ 768px**  a deep-navy fixed sidebar (brand, grouped navigation, the
+ *     signed-in person at the foot) plus a glass top header carrying the
+ *     business date, a search entry and the current user. A wide working area
+ *     sits between them.
+ *   - **< 768px**  the Phase 9 phone structure is kept: a compact top header
+ *     and a bottom tab bar with four destinations and a More sheet. No attempt
+ *     is made to fold the desktop sidebar onto a phone.
  *
  * ## Role awareness
  *
  * The session is resolved once in the layout and passed down, so the shell
  * makes no database call of its own and the navigation, the role badge and the
- * route guard all read the same resolved context.
+ * route guard all read the same resolved context. Capability-driven visibility
+ * lives in `PrimaryNav`.
  */
 export async function AppShell({
   context,
@@ -37,6 +40,18 @@ export async function AppShell({
 
   const role = effectiveRole(context.roles);
   const roleLabel = role === null ? 'No role' : ROLES[role].label;
+  const initials = toInitials(context.fullName);
+
+  // The business date, in the lending timezone. A real figure (today's date),
+  // not an invented "business day open/close" workflow this system does not
+  // have — the structure of the Chetu header, not fake functionality.
+  const businessDate = new Date().toLocaleDateString('en-GB', {
+    timeZone: 'Africa/Kampala',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
     <div className="min-h-dvh">
@@ -44,61 +59,102 @@ export async function AppShell({
         Skip to main content
       </a>
 
-      {/* --- Desktop sidebar ------------------------------------------- */}
+      {/* --- Desktop sidebar (navy) ----------------------------------- */}
       <nav
         aria-label="Main navigation"
-        className="border-border bg-surface elevation-2 fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r p-3 md:flex print:hidden"
+        className="bg-sidebar text-sidebar-foreground fixed inset-y-0 left-0 z-30 hidden w-64 flex-col p-3 md:flex print:hidden"
       >
-        <div className="mb-5 flex items-center gap-2.5 px-2 pt-2">
-          <span className="bg-accent flex size-9 shrink-0 items-center justify-center rounded-md [box-shadow:var(--highlight-top),var(--elevate-2)]">
-            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-5" />
+        <div className="mb-5 flex items-center gap-3 px-2 pt-2">
+          <span className="bg-sidebar-active flex size-10 shrink-0 items-center justify-center rounded-lg [box-shadow:0_6px_16px_rgba(0,0,0,0.3)]">
+            <ShieldCheck aria-hidden="true" className="size-6 text-[#07233f]" />
           </span>
           <span className="min-w-0">
-            {/* The company's name and the signed-in person's role. The
-                delivery phase used to sit here; a build label is for a
-                changelog, not for the chrome a cashier looks at all day. */}
-            <span className="line-clamp-2 block text-sm leading-snug font-semibold">
+            <span className="line-clamp-1 block text-sm leading-tight font-semibold">
               {branding.companyName}
             </span>
-            <span className="text-text-muted block truncate text-xs">{roleLabel}</span>
+            <span className="text-sidebar-muted block truncate text-xs">
+              {APP_SHORT_NAME}
+            </span>
           </span>
         </div>
 
         <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
 
-        <div className="border-border mt-2 shrink-0 border-t pt-2">
-          <p className="truncate px-3 pt-1 text-sm font-medium">{context.fullName}</p>
-          <p className="text-text-muted mb-1 truncate px-3 text-xs">{roleLabel}</p>
-          <SignOutButton />
+        {/* The signed-in person, at the foot of the shell. */}
+        <div className="mt-2 shrink-0 border-t border-white/10 pt-3">
+          <div className="flex items-center gap-2.5 px-1">
+            <span className="bg-sidebar-raised text-sidebar-foreground flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+              {initials}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {context.fullName}
+              </span>
+              <span className="text-sidebar-muted block truncate text-xs">
+                {roleLabel}
+              </span>
+            </span>
+          </div>
+          <div className="mt-2">
+            <SignOutButton variant="on-dark" />
+          </div>
         </div>
       </nav>
 
-      {/* --- Mobile header -------------------------------------------- */}
-      <header className="border-border bg-surface elevation-1 sticky top-0 z-20 flex items-center gap-2.5 border-b px-4 py-3 md:hidden print:hidden">
-        <span className="bg-accent flex size-8 shrink-0 items-center justify-center rounded-md [box-shadow:var(--highlight-top),var(--elevate-1)]">
-          <ShieldCheck aria-hidden="true" className="text-accent-contrast size-4" />
+      {/* --- Desktop top header (glass) ------------------------------- */}
+      <header className="glass fixed top-0 right-0 left-64 z-20 hidden h-16 items-center gap-4 border-x-0 border-t-0 px-6 md:flex print:hidden">
+        <div className="text-text-muted flex min-w-0 items-center gap-2 text-sm">
+          <CalendarDays aria-hidden="true" className="text-accent size-4 shrink-0" />
+          <span className="truncate font-medium">{businessDate}</span>
+        </div>
+
+        <Link
+          href={ROUTES.clients}
+          className="surface-inset text-text-muted hover:text-text ml-auto flex h-10 w-full max-w-xs items-center gap-2 rounded-md px-3 text-sm transition-colors"
+        >
+          <Search aria-hidden="true" className="size-4 shrink-0" />
+          <span className="truncate">Search clients and loans</span>
+        </Link>
+
+        <div className="flex shrink-0 items-center gap-2.5">
+          <span className="bg-accent text-accent-contrast flex size-9 items-center justify-center rounded-full text-xs font-semibold">
+            {initials}
+          </span>
+          <span className="min-w-0">
+            <span className="text-text block truncate text-sm font-medium">
+              {context.fullName}
+            </span>
+            <span className="text-text-muted block truncate text-xs">{roleLabel}</span>
+          </span>
+        </div>
+      </header>
+
+      {/* --- Mobile header (navy) ------------------------------------- */}
+      <header className="bg-sidebar text-sidebar-foreground sticky top-0 z-20 flex items-center gap-2.5 px-4 py-3 md:hidden print:hidden">
+        <span className="bg-sidebar-active flex size-8 shrink-0 items-center justify-center rounded-md">
+          <ShieldCheck aria-hidden="true" className="size-4 text-[#07233f]" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">
             {branding.companyName}
           </span>
-          <span className="text-text-muted block truncate text-xs">
+          <span className="text-sidebar-muted block truncate text-xs">
             {context.fullName} · {roleLabel}
           </span>
         </span>
         <div className="shrink-0">
-          <SignOutButton className="w-auto px-2" />
+          <SignOutButton className="w-auto px-2" variant="on-dark" />
         </div>
       </header>
 
       {/* --- Main region ---------------------------------------------- */}
       {/* `print:pl-0` matters: the sidebar is hidden when printing, so the
-          main region's left padding would otherwise leave a 15rem blank
-          margin down every printed page. */}
-      <div className="md:pl-60 print:pl-0">
+          main region's left padding would otherwise leave a blank margin down
+          every printed page. `md:pt-16` clears the fixed top header. */}
+      <div className="md:pt-16 md:pl-64 print:pt-0 print:pl-0">
         <main
           id="main-content"
-          className="mx-auto w-full max-w-5xl px-4 py-5 pb-24 sm:px-6 md:pb-10"
+          className="mx-auto w-full max-w-[90rem] px-4 py-5 pb-24 sm:px-6 md:px-8 md:pb-10"
         >
           {children}
         </main>
@@ -107,12 +163,8 @@ export async function AppShell({
       {/* --- Mobile bottom bar ---------------------------------------- */}
       <nav
         aria-label="Main navigation"
-        // Named so a test can ask about the bar itself rather than about
-        // "whichever nav contains the More button" — the More sheet holds the
-        // overflow destinations and lives inside this element, so matching on
-        // its contents finds every link, not the four in the bar.
         data-nav="bottom-bar"
-        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] [box-shadow:0_-6px_18px_-8px_rgba(120,110,92,0.3)] md:hidden print:hidden"
+        className="glass fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-x-0 border-b-0 px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
       >
         <PrimaryNav
           variant="bottom-bar"
@@ -123,4 +175,13 @@ export async function AppShell({
       </nav>
     </div>
   );
+}
+
+/** First letters of the first and last name — the avatar fallback. */
+function toInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+  return (first + last).toUpperCase();
 }

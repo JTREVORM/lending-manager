@@ -2,7 +2,6 @@ import { CirclePlus, Search, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ActionLink } from '@/components/ui/page-header';
 import { CollectionSheet } from '@/components/dashboard/collection-sheet';
@@ -124,20 +123,78 @@ export default async function DashboardPage() {
       ? 'The portfolio figures could not be read just now. They are derived from the ledger, so nothing is lost — reload in a moment.'
       : null;
 
+  // The hero's greeting and attention line, built from figures already read
+  // above — no extra query, and no invented metric.
+  const nowHour = Number(
+    new Date().toLocaleString('en-GB', {
+      timeZone: branding.timezone,
+      hour: '2-digit',
+      hour12: false,
+    }),
+  );
+  const greeting =
+    nowHour < 12 ? 'Good morning' : nowHour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = context.fullName.trim().split(/\s+/)[0] ?? context.fullName;
+  const attentionParts: string[] = [];
+  if (collections !== null) {
+    attentionParts.push(
+      `${String(collections.clientsDueToday)} ${collections.clientsDueToday === 1 ? 'client' : 'clients'} due today`,
+    );
+  }
+  if (portfolio !== null) {
+    attentionParts.push(
+      `${String(portfolio.loansWithArrears)} ${portfolio.loansWithArrears === 1 ? 'loan' : 'loans'} in arrears`,
+    );
+  }
+  const attention =
+    attentionParts.length > 0
+      ? `You have ${attentionParts.join(' and ')}.`
+      : `Welcome back to ${branding.companyName}.`;
+
   return (
     <div className="min-w-0 space-y-6">
-      <header className="min-w-0 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h1>Dashboard</h1>
-          <Badge tone={environment === 'production' ? 'warning' : 'neutral'}>
-            {environment}
-          </Badge>
+      {/* A strong navy context panel — the Chetu-style hero. "Dashboard" is
+          the eyebrow; the greeting is the page's heading. */}
+      <section
+        aria-labelledby="dash-greeting"
+        className="relative overflow-hidden rounded-xl p-6 text-white sm:p-8"
+        style={{
+          background: 'linear-gradient(135deg, #1a3c66 0%, #112c4d 55%, #0c2340 100%)',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-16 -right-10 size-56 rounded-full opacity-40 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #0e8aa6 0%, transparent 70%)' }}
+        />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[0.6875rem] font-semibold tracking-[0.14em] text-white/55 uppercase">
+              Dashboard
+            </p>
+            <p className="mt-2 text-sm text-white/70">{greeting},</p>
+            <h1
+              id="dash-greeting"
+              className="text-2xl font-semibold text-white sm:text-3xl"
+            >
+              {firstName}
+            </h1>
+            <p className="mt-2 max-w-xl text-sm text-white/85">{attention}</p>
+          </div>
+          <div className="shrink-0 text-right text-sm text-white/70">
+            <p className="font-semibold text-white">{roleLabel}</p>
+            <p className="max-w-[12rem] truncate">{branding.companyName}</p>
+            <p className="mt-0.5">
+              <DateValue value={today} />
+            </p>
+            {environment !== 'production' ? (
+              <span className="mt-2 inline-flex rounded-full bg-white/10 px-2 py-0.5 text-[0.6875rem] font-medium text-white/80">
+                {environment}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <p className="text-text-muted text-sm">
-          <DateValue value={today} /> · {branding.companyName} · Signed in as{' '}
-          {context.fullName}, {roleLabel}
-        </p>
-      </header>
+      </section>
 
       {!envStatus.ok ? (
         <Alert tone="warning" title="Supabase is not configured">
