@@ -144,27 +144,27 @@ export function RepaymentScheduleTable({
             principal, interest and total expected for each scheduled collection
           </caption>
           <thead>
-            <tr className="border-border text-text-muted border-b">
-              <th scope="col" className="py-2 pr-4 font-medium">
+            <tr className="border-border bg-surface-sunken border-b">
+              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                 #
               </th>
-              <th scope="col" className="py-2 pr-4 font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                 Due date
               </th>
-              <th scope="col" className="py-2 pr-4 font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                 Month
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Principal
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Interest
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Expected
               </th>
               {provisional ? null : (
-                <th scope="col" className="py-2 font-medium">
+                <th scope="col" className="t-th py-2.5 whitespace-nowrap">
                   Status
                 </th>
               )}

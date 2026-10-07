@@ -398,3 +398,87 @@ schedules, routes, API route handlers, report queries and exports are not
 modified. The work is confined to `app/globals.css`, `app/layout.tsx`,
 `components/ui/*`, `components/layout/*`, the two auth presentation files, and
 presentation-only class attributes on screens.
+
+---
+
+## 11. What changed during implementation
+
+The audit above was written before any file was touched. These are the points
+where carrying it out taught something the inspection had not, recorded here
+so the next person does not have to rediscover them.
+
+1. **Inter is self-hosted, not linked.** The reference links the Google Fonts
+   stylesheet. This application fetches that same URL at build time through
+   `next/font/google` and serves the resulting `.woff2` files itself — seven
+   of them, one per weight. Same family, same weights, same `display: swap`,
+   same binaries; no third-party request on load, no render-blocking round
+   trip before first paint, and no IP address handed to Google by every member
+   of staff on every visit. This is the only place the implementation departs
+   from the reference's own mechanism rather than its result.
+
+2. **The page banner's gradient interpolates in oklab.** The reference's
+   stops are kept exactly. The declaration is then repeated with `in oklab`,
+   because sRGB walks `#3d76bd` to `#d9a441` straight through grey and the
+   last third of a wide banner washes out to a muddy tan. There is no way to
+   feature-query a gradient's interpolation method, so it is two declarations:
+   a browser that does not understand the second drops it and keeps the
+   reference's original. Same endpoints, saturated path.
+
+3. **The sidebar brand block wraps rather than truncates.** The reference's
+   mark is the single word "CHETU", so `truncate` costs it nothing. A real
+   company name is "Kyanja Credit Services", which truncates to "KYANJA CREDIT
+   SE…". The brand block is the one place in the product that must never
+   abbreviate the business's own name, so it takes two lines and
+   `tracking-wide` instead of `tracking-wider`.
+
+4. **The sidebar's open state needed a client island.** The reference holds
+   `isSidebarOpen` in `ProtectedLayout` and passes it to both the rail and the
+   header. This application's shell is a Server Component — it awaits the
+   company's branding and reads the resolved session — so the boolean lives in
+   `SidebarToggle`, the smallest component that can hold it. Everything passed
+   into it stays on the server. The state is *derived* from the pathname
+   rather than reset by an effect, because setting state in an effect body
+   schedules a second render of the whole shell on every navigation.
+
+5. **The accordion changed what the navigation tests could claim.** With
+   groups collapsed by default, a test that queries for a hidden link passes
+   whether the entry is correctly filtered out or merely inside a shut group —
+   the weaker claim. `tests/integration/navigation.test.tsx` now opens every
+   group before asserting, and three tests were added for the disclosure
+   behaviour itself: that the group holding the current page opens, that the
+   others stay shut, and that the dashboard is pinned above the accordion
+   rather than duplicated inside it.
+
+6. **Two defects were found by rendering the application, not by reading it.**
+
+   - *Pagination lost its touch target.* Restyling the controls to the
+     reference's compact chip dropped `min-h-touch`; the accessibility suite
+     caught it. They are now 44px on a phone and the reference's 30px chip
+     from `md` up. The visible labels are the reference's "Prev" and "Next",
+     with "Previous page" and "Next page" as the accessible names — an
+     abbreviation is fine to read and poor to hear.
+   - *The arrears report had 240px rows.* Its fourteen-column table squeezed
+     the prose "Latest note" column to 127px and wrapped it to thirteen lines,
+     which set the height of every row. Pre-existing, but table overflow is
+     the design system's to own, so `ReportTable` gained the reference's
+     relative column-width mechanism (`MisTable`'s "a hint, not a share of
+     100") and the note is clamped to two lines with the full text on hover.
+     Rows are now 102px.
+
+7. **`TableHead`'s `nowrap` prop is now a no-op.** A header cell never wraps,
+   as in the reference. The prop is kept and marked deprecated so the thirty-
+   odd `<TableHead nowrap>` call sites keep compiling and still get the
+   behaviour they were asking for.
+
+### Verification
+
+- `typecheck`, `lint`, `format:check`: clean.
+- 1703 unit and integration tests pass.
+- Production build succeeds; Inter resolves to seven self-hosted `.woff2`
+  files and the brand tokens survive minification (`--color-accent: #0b4394`,
+  both gradients emitted verbatim).
+- The application was rendered against the real stack — PostgreSQL with every
+  migration applied, PostgREST, and the production build — at 1440×900 and
+  390×844. All 26 page loads return 200 with no console errors.
+- The Playwright suite, including its axe WCAG 2.1 AA sweep of every staff
+  screen, the borrower portal and the sign-in page, passes at both viewports.

@@ -198,16 +198,22 @@ export default async function PaymentDetailPage({
               </caption>
               <thead>
                 <tr className="border-border text-text-muted border-b">
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Collection
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Principal
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Interest
                   </th>
-                  <th scope="col" className="py-2 text-right font-medium">
+                  <th scope="col" className="t-th py-2.5 text-right whitespace-nowrap">
                     Applied
                   </th>
                 </tr>

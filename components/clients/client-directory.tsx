@@ -176,23 +176,23 @@ export function ClientDirectory({
                 Client directory, newest registration first
               </caption>
               <thead>
-                <tr className="border-border text-text-muted border-b">
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                <tr className="border-border bg-surface-sunken border-b">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Client number
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Name
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Phone
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Location
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Registered
                   </th>
-                  <th scope="col" className="py-2 font-medium">
+                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
                     Status
                   </th>
                 </tr>

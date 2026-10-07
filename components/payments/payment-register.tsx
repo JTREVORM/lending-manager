@@ -242,29 +242,32 @@ export function PaymentRegister({
                 status and who recorded it
               </caption>
               <thead>
-                <tr className="border-border text-text-muted border-b">
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                <tr className="border-border bg-surface-sunken border-b">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Receipt
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Borrower
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Loan
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Amount
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Method
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Received
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Status
                   </th>
-                  <th scope="col" className="py-2 font-medium">
+                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
                     By
                   </th>
                 </tr>

@@ -452,23 +452,35 @@ export function PaymentForm({
                 penalty and the total applied
               </caption>
               <thead>
-                <tr className="border-border text-text-muted border-b">
-                  <th scope="col" className="px-3 py-2 font-medium">
+                <tr className="border-border bg-surface-sunken border-b">
+                  <th scope="col" className="t-th px-3 py-2.5 whitespace-nowrap">
                     Collection
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="t-th px-3 py-2.5 whitespace-nowrap">
                     Due
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
+                  >
                     Principal
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
+                  >
                     Interest
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
+                  >
                     Penalty
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
+                  >
                     Applied
                   </th>
                 </tr>

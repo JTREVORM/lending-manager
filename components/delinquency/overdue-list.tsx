@@ -265,32 +265,44 @@ export function OverdueList({
                 collections missed, days late, final collection date and state
               </caption>
               <thead>
-                <tr className="border-border text-text-muted border-b">
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                <tr className="border-border bg-surface-sunken border-b">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Borrower
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Phone
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Loan
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Due now
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Outstanding
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Missed
                   </th>
-                  <th scope="col" className="py-2 pr-4 text-right font-medium">
+                  <th
+                    scope="col"
+                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
+                  >
                     Days late
                   </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Final due
                   </th>
-                  <th scope="col" className="py-2 font-medium">
+                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
                     State
                   </th>
                 </tr>

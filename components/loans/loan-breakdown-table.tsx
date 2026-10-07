@@ -66,23 +66,23 @@ export function LoanBreakdownTable({
             amount due, and closing balance for each month
           </caption>
           <thead>
-            <tr className="border-border text-text-muted border-b">
-              <th scope="col" className="py-2 pr-4 font-medium">
+            <tr className="border-border bg-surface-sunken border-b">
+              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                 Month
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Opening
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Principal
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Interest
               </th>
-              <th scope="col" className="py-2 pr-4 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
                 Amount due
               </th>
-              <th scope="col" className="py-2 text-right font-medium">
+              <th scope="col" className="t-th py-2.5 text-right whitespace-nowrap">
                 Closing
               </th>
             </tr>

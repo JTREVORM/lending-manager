@@ -155,16 +155,16 @@ export function UserDirectory({
                 <caption className="sr-only">Staff and client accounts</caption>
                 <thead>
                   <tr className="border-border border-b text-left">
-                    <th scope="col" className="px-4 py-3 font-medium">
+                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
                       Name
                     </th>
-                    <th scope="col" className="px-4 py-3 font-medium">
+                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
                       Phone
                     </th>
-                    <th scope="col" className="px-4 py-3 font-medium">
+                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
                       Role
                     </th>
-                    <th scope="col" className="px-4 py-3 font-medium">
+                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
                       Status
                     </th>
                   </tr>
