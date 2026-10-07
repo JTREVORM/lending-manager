@@ -1596,6 +1596,21 @@
     overflow: visible !important;
   }
 
+  /*
+    …except the things whose whole job is to be hidden.
+
+    `.sr-only` hides itself with a 1px box, `overflow: hidden` and a clip
+    path, so the rule above un-hides it: a table's visually-hidden caption is
+    a nowrap sentence that then paints several hundred pixels past the edge of
+    the sheet. It does not show up as a wide element — the box stays 1px — it
+    only shows up as a page that scrolls sideways, which is what made four
+    report screens fail their print check.
+  */
+  .sr-only,
+  .skip-link {
+    overflow: hidden !important;
+  }
+
   /* The gradient banner would print as a block of ink; on paper it becomes a
      plain heading with a rule under it. */
   .page-banner,
@@ -1644,6 +1659,56 @@
      whole stops a figure being split across a page break. */
   thead {
     display: table-header-group;
+  }
+
+  /*
+    A report's column-width hints are for the screen, where the table sits in
+    a horizontally scrollable panel and may be wider than it. Paper does not
+    scroll: `body * { overflow: visible }` above unwraps that panel, so the
+    hints would push a fourteen-column report off the side of the sheet
+    instead of letting it compress. They are dropped here, and the table is
+    allowed to wrap, so the whole report lands on the page.
+  */
+  /*
+    A printed table is laid out to the sheet, not to its content.
+
+    `table-layout: auto` sizes columns to what they would like, and lets the
+    table grow past its container when they cannot all be satisfied — which on
+    a narrow sheet pushes a wide report off the side, because `overflow:
+    visible` above means there is no longer a scroll box to catch it. Fixed
+    layout gives every column an equal share of the page and makes the
+    content fit inside it. Columns are evenly spaced rather than
+    content-sized; on paper that reads as tidy, and nothing is lost.
+  */
+  table {
+    table-layout: fixed !important;
+    width: 100% !important;
+  }
+
+  table col,
+  table th,
+  table td,
+  table th *,
+  table td * {
+    min-width: 0 !important;
+    width: auto !important;
+    white-space: normal !important;
+    /*
+      And long values may break mid-word on paper.
+
+      Without this a table's narrowest possible width is the sum of each
+      column's longest unbreakable word, which for a fourteen-column arrears
+      report is about 1050px — wider than the sheet, so it ran off the side.
+      Breaking inside a value is ugly and it is still better than losing a
+      column: `overflow: visible` above means an escaping table is not
+      clipped, it is simply printed off the page.
+
+      The descendants matter as much as the cells. A figure or a date is
+      wrapped in a `whitespace-nowrap` span so it stays on one line on screen,
+      and a single one of those sets its column's minimum width to the whole
+      string however much the cell itself is allowed to wrap.
+    */
+    overflow-wrap: anywhere !important;
   }
 
   tr,

@@ -222,13 +222,17 @@ export async function AppShell({
               <span className="sr-only">Overdue loans</span>
             </Link>
 
-            <div className="shrink-0">
-              <SignOutButton
-                className="w-auto rounded-lg p-1.5"
-                icon={<LogOut aria-hidden="true" className="size-5" />}
-                iconOnly
-              />
-            </div>
+            {/*
+              No sign-out here.
+
+              The reference carries one in both its header and its sidebar
+              foot, and on a wide screen both are on show at once. This shell
+              keeps the one in the sidebar foot, directly under the name of
+              the person it signs out, and leaves the header to search and
+              arrears. Two identical controls for one irreversible action is
+              redundancy, not emphasis — and the phone header keeps its own,
+              because there the rail is off-canvas.
+            */}
           </div>
 
           {/* --- Mobile icon bar ----------------------------------- */}

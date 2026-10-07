@@ -103,7 +103,19 @@ export function SidebarToggle({
           'border-r border-blue-900/60 shadow-2xl',
           'transition-transform duration-300 ease-in-out print:hidden',
           isOpen ? 'translate-x-0' : '-translate-x-full',
-          'md:translate-x-0',
+          /*
+            `invisible` when closed, not merely pushed off-screen.
+
+            A transform moves the rail out of view but leaves it in the
+            accessibility tree and in the tab order, so on a phone the first
+            dozen Tab presses used to walk an invisible menu before reaching
+            the page. `visibility: hidden` takes it out of both, and because
+            visibility is animatable it still slides rather than blinking.
+
+            Only below `md`: from there up the rail is always on screen.
+          */
+          isOpen ? 'visible' : 'invisible',
+          'md:visible md:translate-x-0',
         )}
       >
         {sidebar}
