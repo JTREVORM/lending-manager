@@ -1,8 +1,11 @@
+import { Banknote } from 'lucide-react';
+
 import { Alert } from '@/components/ui/alert';
 import { ExportLink } from '@/components/reports/export-link';
 import { PortfolioReportView } from '@/components/reports/portfolio-report-view';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportFilters } from '@/components/reports/report-filters';
+import { PageHeader } from '@/components/ui/page-header';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
 import { guardReportPage } from '@/lib/auth/guard';
@@ -83,25 +86,28 @@ export default async function LoanPortfolioPage({
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold">Loan portfolio</h1>
-            <p className="text-text-muted mt-1 text-sm">
-              {resolved === null
-                ? 'Every loan'
-                : `Paid out ${describeRange(resolved.range, formatBusinessDate)}`}{' '}
-              · balances as at today
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
+      <PageHeader
+        eyebrow="Portfolio Report"
+        icon={Banknote}
+        back={{ href: ROUTES.reports, label: 'All reports' }}
+        title="Loan portfolio"
+        description={
+          <>
+            {resolved === null
+              ? 'Every loan'
+              : `Paid out ${describeRange(resolved.range, formatBusinessDate)}`}{' '}
+            · balances as at today
+          </>
+        }
+        secondaryActions={
+          <>
             <PrintButton />
             <ExportLink
               href={`${ROUTES.reports}/loans/export${query === '' ? '' : `?${query}`}`}
             />
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {resolved?.error !== undefined && resolved.error !== null ? (
         <Alert tone="warning" title="That range could not be used">

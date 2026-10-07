@@ -1,3 +1,4 @@
+import { Users } from 'lucide-react';
 import { ClientDirectory } from '@/components/clients/client-directory';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
@@ -41,6 +42,8 @@ export default async function ClientsPage({
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
+        eyebrow="Borrower Register"
+        icon={Users}
         title="Clients"
         description="Search by name, client number or phone number."
         primaryAction={

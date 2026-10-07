@@ -1,3 +1,5 @@
+import { ArrowLeft, Receipt } from 'lucide-react';
+
 import Link from 'next/link';
 
 import { PaymentForm } from '@/components/payments/payment-form';
@@ -5,6 +7,7 @@ import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Money } from '@/components/ui/money';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getLoan, listLoans } from '@/lib/data/loans';
@@ -75,7 +78,7 @@ export default async function NewPaymentPage({
     if (position === null) {
       return (
         <div className="min-w-0 space-y-4">
-          <BackLink />
+          <ChooseDifferentLoan />
           <Alert tone="danger">
             That loan cannot be found, or it has no repayment schedule yet. A payment can
             only be recorded against a disbursed loan.
@@ -87,7 +90,7 @@ export default async function NewPaymentPage({
     if (!position.reconciles) {
       return (
         <div className="min-w-0 space-y-4">
-          <BackLink />
+          <ChooseDifferentLoan />
           <Alert tone="danger">
             <span className="font-medium">
               This loan&rsquo;s ledger does not reconcile, so no payment can be recorded
@@ -103,7 +106,7 @@ export default async function NewPaymentPage({
     if (position.totalOutstanding === 0) {
       return (
         <div className="min-w-0 space-y-4">
-          <BackLink />
+          <ChooseDifferentLoan />
           <Alert tone="info">
             Loan {position.loanNumber} is fully repaid. There is nothing left to pay.
           </Alert>
@@ -114,7 +117,7 @@ export default async function NewPaymentPage({
     if (position.status !== 'active') {
       return (
         <div className="min-w-0 space-y-4">
-          <BackLink />
+          <ChooseDifferentLoan />
           <Alert tone="warning">
             Loan {position.loanNumber} is {position.status}. A payment can only be
             recorded against an active loan.
@@ -125,15 +128,13 @@ export default async function NewPaymentPage({
 
     return (
       <div className="min-w-0 space-y-4">
-        <BackLink />
-
-        <div className="min-w-0">
-          <h1 className="text-text text-2xl font-semibold">Record a payment</h1>
-          <p className="text-text-muted mt-1 text-sm">
-            Check the amount against what the borrower hands over. Only the Owner can
-            reverse a payment once it is recorded.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="Collections"
+          icon={Receipt}
+          back={{ href: `${ROUTES.payments}/new`, label: 'Choose a different loan' }}
+          title="Record a payment"
+          description="Check the amount against what the borrower hands over. Only the Owner can reverse a payment once it is recorded."
+        />
 
         <PaymentForm
           loanId={loanId}
@@ -178,19 +179,13 @@ export default async function NewPaymentPage({
 
   return (
     <div className="min-w-0 space-y-4">
-      <Link
-        href={ROUTES.payments}
-        className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-      >
-        ← Payments
-      </Link>
-
-      <div className="min-w-0">
-        <h1 className="text-text text-2xl font-semibold">Record a payment</h1>
-        <p className="text-text-muted mt-1 text-sm">
-          Find the borrower, then choose their loan.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Collections"
+        icon={Receipt}
+        back={{ href: ROUTES.payments, label: 'Payments' }}
+        title="Record a payment"
+        description="Find the borrower, then choose their loan."
+      />
 
       <Card>
         <form method="get" className="flex min-w-0 flex-wrap gap-2">
@@ -230,7 +225,7 @@ export default async function NewPaymentPage({
             <li key={loan.id} className="min-w-0">
               <Link
                 href={`${ROUTES.payments}/new?loanId=${loan.id}`}
-                className="border-border bg-surface focus-visible:outline-accent block min-w-0 rounded-xl border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="border-border bg-surface focus-visible:outline-accent block min-w-0 rounded-lg border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-text font-medium break-words">
@@ -254,13 +249,22 @@ export default async function NewPaymentPage({
   );
 }
 
-function BackLink() {
+/**
+ * Back to the loan chooser.
+ *
+ * The four short "this loan cannot take a payment" panels on this page are
+ * not full screens and carry no banner, so they keep a plain back link — the
+ * same text link `PageHeader` renders above its banner, so the two read
+ * identically wherever the reader meets them.
+ */
+function ChooseDifferentLoan() {
   return (
     <Link
       href={`${ROUTES.payments}/new`}
-      className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="text-text-muted hover:text-accent inline-flex min-h-8 items-center gap-1.5 text-xs font-medium"
     >
-      ← Choose a different loan
+      <ArrowLeft aria-hidden="true" className="size-4" />
+      Choose a different loan
     </Link>
   );
 }

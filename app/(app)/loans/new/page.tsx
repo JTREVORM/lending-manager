@@ -1,7 +1,8 @@
-import Link from 'next/link';
+import { Banknote } from 'lucide-react';
 
 import { LoanForm } from '@/components/loans/loan-form';
 import { Alert } from '@/components/ui/alert';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { loadLoanFormData } from '@/lib/data/loan-form';
@@ -23,21 +24,15 @@ export default async function NewLoanPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={ROUTES.loans}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Loans
-        </Link>
-        <h1 className="text-text mt-2 text-2xl font-semibold break-words">
-          Start a loan
-        </h1>
-        <p className="text-text-muted mt-1">
-          A loan number is issued when the draft is saved. The amounts are recorded when
-          the loan is approved.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Lending Portfolio"
+        icon={Banknote}
+        back={{ href: ROUTES.loans, label: 'Loans' }}
+        title="Start a loan"
+        description={
+          'A loan number is issued when the draft is saved. The amounts are recorded when the loan is approved.'
+        }
+      />
 
       {data.clients.length === 0 ? (
         <Alert tone="warning">

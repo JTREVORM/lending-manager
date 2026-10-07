@@ -173,6 +173,8 @@ export default async function ReportsPage() {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
+        eyebrow="Insights"
+        icon={ChartColumn}
         title="Reports"
         description="Every figure here is read from the ledger and the schedules. Nothing on these pages changes a record."
       />

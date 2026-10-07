@@ -1,9 +1,10 @@
-import Link from 'next/link';
+import { FileText } from 'lucide-react';
 
 import { notFound } from 'next/navigation';
 
 import { LoanStatementView } from '@/components/reports/loan-statement';
 import { PrintButton } from '@/components/reports/print-button';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
@@ -54,12 +55,14 @@ export default async function PortalLoanPage({
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
-        <Link href={ROUTES.portal} className="text-brand-700 text-sm hover:underline">
-          Back to my account
-        </Link>
-        <PrintButton label="Print statement" />
-      </div>
+      <PageHeader
+        eyebrow="My Loan"
+        icon={FileText}
+        back={{ href: ROUTES.portal, label: 'My account' }}
+        title="Loan statement"
+        description="Where this loan stands today, and every payment recorded against it."
+        secondaryActions={<PrintButton label="Print statement" />}
+      />
 
       <LoanStatementView
         statement={statement}

@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react';
+import { Lock, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Alert } from '@/components/ui/alert';
@@ -49,6 +49,8 @@ export default async function SettingsPage() {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
+        eyebrow="Business Rules"
+        icon={Settings}
         title="Settings"
         description="What the business is configured to do. These are the values the loan, schedule and penalty engines read."
         status={<Badge tone="neutral">Read-only</Badge>}

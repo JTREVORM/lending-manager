@@ -2,7 +2,7 @@
 
 import { Printer } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/page-header';
 
 /**
  * Print this page.
@@ -19,10 +19,12 @@ import { Button } from '@/components/ui/button';
  */
 export function PrintButton({ label = 'Print' }: { readonly label?: string }) {
   return (
-    <Button
-      type="button"
+    // `ActionButton` rather than a bespoke button, so this and `ExportLink`
+    // beside it are the same control at the same height — the two always
+    // appear as a pair under a report's banner, and before this they were a
+    // `Button size="sm"` next to a hand-rolled link, which did not match.
+    <ActionButton
       variant="secondary"
-      size="sm"
       onClick={() => {
         window.print();
       }}
@@ -30,6 +32,6 @@ export function PrintButton({ label = 'Print' }: { readonly label?: string }) {
     >
       <Printer aria-hidden="true" className="size-4" />
       {label}
-    </Button>
+    </ActionButton>
   );
 }

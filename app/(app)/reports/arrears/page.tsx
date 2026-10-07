@@ -1,7 +1,10 @@
+import { AlertTriangle } from 'lucide-react';
+
 import { ArrearsReportView } from '@/components/reports/arrears-report-view';
 import { ExportLink } from '@/components/reports/export-link';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportFilters } from '@/components/reports/report-filters';
+import { PageHeader } from '@/components/ui/page-header';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
@@ -72,27 +75,30 @@ export default async function ArrearsReportPage({
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold">Arrears</h1>
-            <p className="text-text-muted mt-1 text-sm">
-              As at <DateValue value={today} /> · {branding.companyName}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
+      <PageHeader
+        eyebrow="Delinquency Report"
+        icon={AlertTriangle}
+        back={{ href: ROUTES.reports, label: 'All reports' }}
+        title="Arrears"
+        description={
+          <>
+            As at <DateValue value={today} /> · {branding.companyName}
+            <span className="mt-1.5 block">
+              Past unpaid is what was due before today. Current due adds today&rsquo;s
+              collection. Missed collections and days late are different measures: three
+              missed collections on an every-three-days loan are nine days.
+            </span>
+          </>
+        }
+        secondaryActions={
+          <>
             <PrintButton />
             <ExportLink
               href={`${ROUTES.reports}/arrears/export${query === '' ? '' : `?${query}`}`}
             />
-          </div>
-        </div>
-        <p className="text-text-muted text-sm">
-          Past unpaid is what was due before today. Current due adds today&rsquo;s
-          collection. Missed collections and days late are different measures: three
-          missed collections on an every-three-days loan are nine days.
-        </p>
-      </header>
+          </>
+        }
+      />
 
       <ReportFilters
         filters={[

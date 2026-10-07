@@ -213,7 +213,7 @@ export function OverdueList({
           <ul className="min-w-0 space-y-2 md:hidden">
             {loans.map((loan) => (
               <li key={loan.loanId} className="min-w-0">
-                <div className="border-border bg-surface focus-within:outline-accent relative min-w-0 rounded-xl border p-3 focus-within:outline-2 focus-within:outline-offset-2">
+                <div className="record-surface focus-within:outline-accent relative min-w-0 rounded-lg p-3 focus-within:outline-2 focus-within:outline-offset-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <RowLink
                       href={`${ROUTES.loans}/${loan.loanId}`}

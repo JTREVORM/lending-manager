@@ -1,3 +1,4 @@
+import { UserCog } from 'lucide-react';
 import { UserDirectory } from '@/components/users/user-directory';
 import { Alert } from '@/components/ui/alert';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
@@ -47,6 +48,8 @@ export default async function UsersPage({
   return (
     <div className="space-y-5">
       <PageHeader
+        eyebrow="Access Control"
+        icon={UserCog}
         title="Users"
         description="Staff and client accounts, their roles and their access."
         primaryAction={

@@ -1,9 +1,11 @@
-import Link from 'next/link';
+import { Users } from 'lucide-react';
+
 import { notFound } from 'next/navigation';
 
 import { ClientForm } from '@/components/clients/client-form';
 import { ClientIdentityForm } from '@/components/clients/client-identity-form';
 import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -42,17 +44,12 @@ export default async function EditClientPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={`${ROUTES.clients}/${client.id}`}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← {client.clientNumber}
-        </Link>
-        <h1 className="text-text mt-2 text-2xl font-semibold break-words">
-          Edit {client.fullName}
-        </h1>
-      </div>
+      <PageHeader
+        eyebrow="Borrower Register"
+        icon={Users}
+        back={{ href: `${ROUTES.clients}/${client.id}`, label: client.clientNumber }}
+        title={`Edit ${client.fullName}`}
+      />
 
       <ClientForm
         client={client}

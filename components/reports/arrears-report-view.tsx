@@ -149,40 +149,58 @@ export function ArrearsReportView({
           {
             key: 'remark',
             header: 'Latest note',
+            // Prose: the one column on this report that may wrap, with the
+            // room to do it in two or three lines rather than thirteen.
+            width: 22,
+            wrap: true,
             cell: (row: ArrearsReportRow) =>
               row.latestRemark === null ? (
                 canAddRemark ? (
                   <Link
                     href={`${ROUTES.clients}/${row.clientId}#remarks`}
-                    className="text-brand-700 text-sm hover:underline"
+                    className="text-accent hover:underline"
                   >
                     Add a note
                   </Link>
                 ) : (
-                  <span className="text-text-muted text-sm">No notes</span>
+                  <span className="text-text-muted">No notes</span>
                 )
               ) : (
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-text min-w-0 text-sm break-words">
+                  {/* Two lines, with the whole note on hover and in the CSV.
+                      A remark can run to a paragraph, and one long one used to
+                      set the height of every row in the table — the reference
+                      caps a prose cell and offers the rest rather than letting
+                      it push the rows apart. */}
+                  <span
+                    title={row.latestRemark.body}
+                    className="text-text line-clamp-2 min-w-0 break-words"
+                  >
                     {row.latestRemark.body}
                   </span>
-                  <span className="text-text-muted text-xs">
-                    {isRemarkCategory(row.latestRemark.category)
-                      ? REMARK_CATEGORY_LABELS[row.latestRemark.category]
-                      : row.latestRemark.category}{' '}
-                    · {row.latestRemark.createdByLabel} ·{' '}
-                    <DateValue
-                      value={row.latestRemark.createdAt}
-                      variant="datetime"
-                      timeZone={timeZone}
-                    />
+                  {/* The attribution and the link share a line: this cell
+                      sets the height of its whole row, and three stacked
+                      lines under a note put 40px of white space beside every
+                      figure on the report. */}
+                  <span className="text-text-muted flex flex-wrap items-center gap-x-1.5 text-[10px]">
+                    <span>
+                      {isRemarkCategory(row.latestRemark.category)
+                        ? REMARK_CATEGORY_LABELS[row.latestRemark.category]
+                        : row.latestRemark.category}{' '}
+                      · {row.latestRemark.createdByLabel} ·{' '}
+                      <DateValue
+                        value={row.latestRemark.createdAt}
+                        variant="datetime"
+                        timeZone={timeZone}
+                      />
+                    </span>
+                    <Link
+                      href={`${ROUTES.clients}/${row.clientId}#remarks`}
+                      className="text-accent hover:underline"
+                    >
+                      All notes
+                    </Link>
                   </span>
-                  <Link
-                    href={`${ROUTES.clients}/${row.clientId}#remarks`}
-                    className="text-brand-700 text-xs hover:underline"
-                  >
-                    All notes
-                  </Link>
                 </span>
               ),
           },

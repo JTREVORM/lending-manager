@@ -153,7 +153,7 @@ export function ErrorState({
       role="alert"
       data-error-state={kind}
       className={cn(
-        'border-border bg-surface flex flex-col items-start gap-3 rounded-xl border p-5 sm:flex-row sm:items-center',
+        'border-border bg-surface flex flex-col items-start gap-3 rounded-lg border p-5 sm:flex-row sm:items-center',
         className,
       )}
     >
@@ -234,7 +234,7 @@ export function LoadingBlock({
       role="status"
       aria-live="polite"
       className={cn(
-        'border-border text-text-muted flex items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-10 text-sm',
+        'border-border text-text-muted flex items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-sm',
         className,
       )}
     >

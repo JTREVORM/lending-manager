@@ -1,3 +1,4 @@
+import { Banknote } from 'lucide-react';
 import { LoanRegister } from '@/components/loans/loan-register';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
@@ -43,6 +44,8 @@ export default async function LoansPage({
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
+        eyebrow="Lending Portfolio"
+        icon={Banknote}
         title="Loans"
         description="Search by loan number, client name or client number."
         primaryAction={

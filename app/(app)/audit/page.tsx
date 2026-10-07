@@ -1,7 +1,10 @@
+import { ScrollText } from 'lucide-react';
+
 import { AuditLog } from '@/components/audit/audit-log';
 import { Alert } from '@/components/ui/alert';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { ReportPagination } from '@/components/reports/report-pagination';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import {
@@ -82,16 +85,20 @@ export default async function AuditPage({
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="min-w-0">
-        <h1>Audit trail</h1>
-        <p className="text-text-muted mt-1 text-sm">
-          Who did what, and when. Records cannot be edited or deleted by anyone, including
-          the Owner.{' '}
-          {resolved === null
-            ? 'Showing the most recent first.'
-            : `Showing ${describeRange(resolved.range, formatBusinessDate)}.`}
-        </p>
-      </header>
+      <PageHeader
+        eyebrow="Compliance"
+        icon={ScrollText}
+        title="Audit trail"
+        description={
+          <>
+            Who did what, and when. Records cannot be edited or deleted by anyone,
+            including the Owner.{' '}
+            {resolved === null
+              ? 'Showing the most recent first.'
+              : `Showing ${describeRange(resolved.range, formatBusinessDate)}.`}
+          </>
+        }
+      />
 
       {resolved?.error !== undefined && resolved.error !== null ? (
         <Alert tone="warning" title="That range could not be used">

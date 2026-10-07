@@ -1,6 +1,7 @@
-import Link from 'next/link';
+import { UserPlus } from 'lucide-react';
 
 import { ClientForm } from '@/components/clients/client-form';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -20,20 +21,13 @@ export default async function NewClientPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={ROUTES.clients}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Clients
-        </Link>
-        <h1 className="text-text mt-2 text-2xl font-semibold break-words">
-          Register a client
-        </h1>
-        <p className="text-text-muted mt-1">
-          A client number is issued automatically when the record is saved.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Borrower Register"
+        icon={UserPlus}
+        back={{ href: ROUTES.clients, label: 'Clients' }}
+        title="Register a client"
+        description="A client number is issued automatically when the record is saved."
+      />
 
       <ClientForm
         canRecordNin={contextCan(context, 'clients:view_nin')}

@@ -1,5 +1,6 @@
 import { Download } from 'lucide-react';
-import Link from 'next/link';
+
+import { ActionLink } from '@/components/ui/page-header';
 
 /**
  * Download the current report as CSV.
@@ -27,13 +28,12 @@ export function ExportLink({
   readonly label?: string;
 }) {
   return (
-    <Link
-      href={href}
-      prefetch={false}
-      className="min-h-touch border-border-strong bg-surface text-text hover:bg-surface-raised focus-visible:outline-brand-600 inline-flex items-center gap-2 rounded-lg border px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 print:hidden"
-    >
+    // The banner's secondary action shape, matching `PrintButton` beside it.
+    // `prefetch={false}` stays: this href is a file download, and prefetching
+    // it would generate the CSV on hover.
+    <ActionLink href={href} prefetch={false} variant="secondary" className="print:hidden">
       <Download aria-hidden="true" className="size-4" />
       {label}
-    </Link>
+    </ActionLink>
   );
 }

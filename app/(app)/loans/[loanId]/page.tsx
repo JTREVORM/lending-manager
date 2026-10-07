@@ -1,3 +1,5 @@
+import { Banknote } from 'lucide-react';
+
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -40,6 +42,7 @@ import { formatCalendarDate, formatRecordedDate, maskNin } from '@/lib/domain/cl
 import { toUgx } from '@/lib/domain/money';
 import { formatBps, toBps } from '@/lib/domain/rate';
 import { PhoneValue } from '@/components/ui/data-value';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 
 export const metadata = { title: 'Loan' };
 
@@ -150,52 +153,41 @@ export default async function LoanDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={ROUTES.loans}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Loans
-        </Link>
-
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold break-words">
-              {loan.clientName}
-            </h1>
-            <p className="text-text-muted font-mono">{loan.loanNumber}</p>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <LoanStatusBadge status={loan.status} />
+      <PageHeader
+        eyebrow="Lending Portfolio"
+        icon={Banknote}
+        back={{ href: ROUTES.loans, label: 'Loans' }}
+        title={loan.clientName}
+        status={<LoanStatusBadge status={loan.status} />}
+        description={
+          <>
+            <span className="font-mono">{loan.loanNumber}</span>
+            <span className="mt-1.5 block">{LOAN_STATUS_DESCRIPTIONS[loan.status]}</span>
+          </>
+        }
+        secondaryActions={
+          <>
             {/* Phase 8. A statement is a rendering of this loan, so it needs no
                 capability beyond the one that opened this page — and it is the
                 document staff print for a borrower who asks where they stand.
                 Only offered once the loan has a schedule to state. */}
             {loan.status === 'active' || loan.status === 'cleared' ? (
-              <Link
+              <ActionLink
                 href={`${ROUTES.loans}/${loan.id}/statement`}
-                className="border-border text-text focus-visible:outline-accent inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+                variant="secondary"
               >
                 Statement
-              </Link>
+              </ActionLink>
             ) : null}
             {termsAreEditable(loan.status) &&
             contextCan(context, 'loans:update_draft') ? (
-              <Link
-                href={`${ROUTES.loans}/${loan.id}/edit`}
-                className="border-border text-text focus-visible:outline-accent inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
+              <ActionLink href={`${ROUTES.loans}/${loan.id}/edit`} variant="secondary">
                 Edit draft
-              </Link>
+              </ActionLink>
             ) : null}
-          </div>
-        </div>
-
-        <p className="text-text-muted mt-2 text-sm">
-          {LOAN_STATUS_DESCRIPTIONS[loan.status]}
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {breakdownProblem !== null ? (
         <Alert tone="danger">
@@ -539,7 +531,7 @@ export default async function LoanDetailPage({
             {guarantorSnapshots.map((guarantor) => (
               <li
                 key={guarantor.id}
-                className="border-border bg-surface min-w-0 rounded-xl border p-4"
+                className="border-border bg-surface min-w-0 rounded-lg border p-4"
               >
                 <p className="text-text font-medium break-words">{guarantor.fullName}</p>
                 <dl className="mt-2 grid min-w-0 gap-3 text-sm sm:grid-cols-2">

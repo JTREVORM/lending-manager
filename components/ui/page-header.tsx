@@ -39,7 +39,16 @@ import { cn } from '@/lib/utils/cn';
  * should say so in review rather than inventing one inline.
  */
 export interface PageHeaderProps {
-  readonly title: string;
+  /**
+   * The page's heading.
+   *
+   * A node, not a string: the payment detail page's heading *is* the amount,
+   * rendered through `Money` so the currency stays on the same line as the
+   * figure and a reversed payment is struck through. A heading that had to be
+   * a plain string would mean that page hand-rolling its own `<h1>` and
+   * losing the banner.
+   */
+  readonly title: ReactNode;
   readonly description?: ReactNode;
   /** Where "back" goes, and what it is called. */
   readonly back?: { readonly href: string; readonly label: string };

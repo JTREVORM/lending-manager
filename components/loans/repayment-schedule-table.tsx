@@ -110,7 +110,7 @@ export function RepaymentScheduleTable({
           return (
             <li
               key={row.id}
-              className="border-border bg-surface min-w-0 rounded-xl border p-3"
+              className="border-border bg-surface min-w-0 rounded-lg border p-3"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-text font-medium">

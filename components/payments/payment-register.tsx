@@ -205,7 +205,7 @@ export function PaymentRegister({
               <li key={payment.id} className="min-w-0">
                 <RowLink
                   href={`${ROUTES.payments}/${payment.id}`}
-                  className="border-border bg-surface focus-visible:outline-accent block min-w-0 rounded-xl border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="record-surface focus-visible:outline-accent block min-w-0 rounded-lg p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-text font-medium break-words">

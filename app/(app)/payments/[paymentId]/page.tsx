@@ -1,3 +1,5 @@
+import { Receipt } from 'lucide-react';
+
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -16,6 +18,7 @@ import { getLoan } from '@/lib/data/loans';
 import { formatInstant } from '@/lib/domain/datetime';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/domain/payment';
 import { DateValue } from '@/components/ui/data-value';
+import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata = { title: 'Payment' };
 
@@ -76,32 +79,25 @@ export default async function PaymentDetailPage({
         />
       ) : null}
 
-      <div className="min-w-0">
-        <Link
-          href={ROUTES.payments}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Payments
-        </Link>
-
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold break-words">
-              {/* Struck through when the payment has been reversed, the way
-                  the register and the borrower's own history show it. This
-                  page is where a staff member comes to look at a reversal,
-                  so it is the worst place for the figure to read as though
-                  the money were still received. */}
-              <Money amount={payment.amount} struck={isReversed} />
-            </h1>
-            <p className="text-text-muted font-mono">{payment.paymentNumber}</p>
-          </div>
-
+      <PageHeader
+        eyebrow="Collections"
+        icon={Receipt}
+        back={{ href: ROUTES.payments, label: 'Payments' }}
+        title={
+          /* Struck through when the payment has been reversed, the way the
+             register and the borrower's own history show it. This page is
+             where a staff member comes to look at a reversal, so it is the
+             worst place for the figure to read as though the money were still
+             received. */
+          <Money amount={payment.amount} struck={isReversed} />
+        }
+        status={
           <Badge tone={isReversed ? 'danger' : 'success'}>
             {PAYMENT_STATUS_LABELS[payment.status]}
           </Badge>
-        </div>
-      </div>
+        }
+        description={<span className="font-mono">{payment.paymentNumber}</span>}
+      />
 
       {/* --- The record ------------------------------------------------- */}
       <section aria-labelledby="record-heading" className="min-w-0 space-y-3">

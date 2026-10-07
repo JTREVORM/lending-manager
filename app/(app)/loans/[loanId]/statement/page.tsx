@@ -1,7 +1,10 @@
+import { FileText } from 'lucide-react';
+
 import { notFound } from 'next/navigation';
 
 import { LoanStatementView } from '@/components/reports/loan-statement';
 import { PrintButton } from '@/components/reports/print-button';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
@@ -44,9 +47,14 @@ export default async function LoanStatementPage({
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex justify-end print:hidden">
-        <PrintButton label="Print statement" />
-      </div>
+      <PageHeader
+        eyebrow="Borrower Document"
+        icon={FileText}
+        back={{ href: `${ROUTES.loans}/${loanId}`, label: 'Loan' }}
+        title="Loan statement"
+        description="Where this loan stands, as a document to hand to the borrower."
+        secondaryActions={<PrintButton label="Print statement" />}
+      />
 
       <LoanStatementView
         statement={statement}

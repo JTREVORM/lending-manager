@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import { UserCog } from 'lucide-react';
+
 import { notFound } from 'next/navigation';
 
 import { UserAdminPanel } from '@/components/users/user-admin-panel';
@@ -12,6 +13,7 @@ import { assignableRoles, getUser } from '@/lib/data/users';
 import { formatInstant } from '@/lib/domain/datetime';
 import { ROLES } from '@/lib/permissions';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
+import { PageHeader } from '@/components/ui/page-header';
 import type { ReactNode } from 'react';
 
 export const metadata = { title: 'User' };
@@ -35,18 +37,20 @@ export default async function UserDetailPage({
 
   return (
     <div className="space-y-5">
-      <header>
-        <Link href={ROUTES.users} className="text-text-muted text-sm hover:underline">
-          ← Back to users
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="min-w-0 break-words">{user.fullName}</h1>
-          <UserStatusBadge status={user.status} />
-          {user.mustChangePassword ? (
-            <Badge tone="warning">Temporary password in force</Badge>
-          ) : null}
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Access Control"
+        icon={UserCog}
+        back={{ href: ROUTES.users, label: 'Users' }}
+        title={user.fullName}
+        status={
+          <>
+            <UserStatusBadge status={user.status} />
+            {user.mustChangePassword ? (
+              <Badge tone="warning">Temporary password in force</Badge>
+            ) : null}
+          </>
+        }
+      />
 
       <Card>
         <CardHeader title="Details" />

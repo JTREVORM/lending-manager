@@ -1,3 +1,5 @@
+import { HeartHandshake } from 'lucide-react';
+
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -19,6 +21,7 @@ import {
   maskNin,
 } from '@/lib/domain/client';
 import { PhoneValue } from '@/components/ui/data-value';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 
 export const metadata = { title: 'Guarantor' };
 
@@ -63,29 +66,22 @@ export default async function GuarantorDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={ROUTES.guarantors}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Guarantors
-        </Link>
-
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-text min-w-0 text-2xl font-semibold break-words">
-            {guarantor.fullName}
-          </h1>
-
-          {contextCan(context, 'guarantors:update') ? (
-            <Link
+      <PageHeader
+        eyebrow="Loan Security"
+        icon={HeartHandshake}
+        back={{ href: ROUTES.guarantors, label: 'Guarantors' }}
+        title={guarantor.fullName}
+        secondaryActions={
+          contextCan(context, 'guarantors:update') ? (
+            <ActionLink
               href={`${ROUTES.guarantors}/${guarantor.id}/edit`}
-              className="border-border text-text focus-visible:outline-accent inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+              variant="secondary"
             >
               Edit
-            </Link>
-          ) : null}
-        </div>
-      </div>
+            </ActionLink>
+          ) : null
+        }
+      />
 
       <section aria-labelledby="guarantor-profile" className="min-w-0 space-y-3">
         <h2 id="guarantor-profile" className="text-text text-lg font-semibold">
@@ -163,7 +159,7 @@ export default async function GuarantorDetailPage({
             {active.map((link) => (
               <li
                 key={link.linkId}
-                className="border-border bg-surface min-w-0 rounded-xl border p-4"
+                className="border-border bg-surface min-w-0 rounded-lg border p-4"
               >
                 <Link
                   href={`${ROUTES.clients}/${link.clientId}`}
@@ -182,7 +178,7 @@ export default async function GuarantorDetailPage({
         )}
 
         {previous.length > 0 ? (
-          <details className="border-border bg-surface rounded-xl border p-4">
+          <details className="border-border bg-surface rounded-lg border p-4">
             <summary className="text-text min-h-11 cursor-pointer text-sm font-medium">
               Previously guaranteed ({String(previous.length)})
             </summary>

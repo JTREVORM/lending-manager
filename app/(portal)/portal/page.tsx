@@ -1,4 +1,4 @@
-import { Construction } from 'lucide-react';
+import { Construction, UserCircle } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
@@ -14,6 +14,7 @@ import { listClientLoans } from '@/lib/data/reports';
 import { signedDocumentUrl } from '@/lib/storage/documents';
 import { formatRecordedDate } from '@/lib/domain/client';
 import { PhoneValue } from '@/components/ui/data-value';
+import { PageHeader } from '@/components/ui/page-header';
 
 export const metadata = { title: 'My account' };
 
@@ -96,10 +97,12 @@ export default async function PortalPage() {
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="min-w-0">
-        <h1 className="break-words">Welcome, {firstName}</h1>
-        <p className="text-text-muted mt-1 text-sm">Your account with us.</p>
-      </header>
+      <PageHeader
+        eyebrow="My Account"
+        icon={UserCircle}
+        title={`Welcome, ${firstName}`}
+        description="Your loans with us, and what you owe on each."
+      />
 
       {client !== null ? (
         <Card className="min-w-0">

@@ -1,3 +1,5 @@
+import { UserCircle } from 'lucide-react';
+
 import { OwnDetailsForm } from '@/components/auth/own-details-form';
 import { InstallCard } from '@/components/pwa/install-card';
 import { UserStatusBadge } from '@/components/users/user-status-badge';
@@ -23,7 +25,12 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="My account" description="Your details and access." />
+      <PageHeader
+        eyebrow="My Profile"
+        icon={UserCircle}
+        title="My account"
+        description="Your details and access."
+      />
 
       {/* Renders nothing unless the browser has offered to install. Placed
           here rather than as a banner: a prompt over the screen is a prompt

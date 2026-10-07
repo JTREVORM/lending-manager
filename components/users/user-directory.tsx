@@ -124,7 +124,7 @@ export function UserDirectory({
               <li key={user.id}>
                 <RowLink
                   href={`/users/${user.id}`}
-                  className="bg-surface border-border hover:bg-surface-raised block rounded-xl border p-4 transition-colors"
+                  className="record-surface hover:bg-surface-hover block rounded-lg p-4 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

@@ -101,7 +101,7 @@ export function ServiceWorkerProvider() {
   return (
     <div
       role="status"
-      className="border-border bg-surface fixed inset-x-0 bottom-0 z-30 mx-auto mb-[max(4.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] flex w-[min(28rem,calc(100%-2rem))] items-center gap-3 rounded-xl border p-3 shadow-lg md:mb-4 print:hidden"
+      className="border-border bg-surface fixed inset-x-0 bottom-0 z-30 mx-auto mb-[max(4.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] flex w-[min(28rem,calc(100%-2rem))] items-center gap-3 rounded-lg border p-3 shadow-lg md:mb-4 print:hidden"
     >
       <RefreshCw aria-hidden="true" className="text-accent size-5 shrink-0" />
       <p className="text-text min-w-0 flex-1 text-sm">

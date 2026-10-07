@@ -62,7 +62,7 @@ export function PaymentRecorded({
   return (
     <section
       aria-labelledby="payment-recorded-heading"
-      className="border-success/30 bg-success-surface rounded-xl border p-4 sm:p-5 print:hidden"
+      className="border-success/30 bg-success-surface rounded-lg border p-4 sm:p-5 print:hidden"
     >
       <div className="flex items-start gap-3">
         <CheckCircle2

@@ -128,7 +128,7 @@ export function LoanRegister({
               <li key={loan.id}>
                 <RowLink
                   href={`/loans/${loan.id}`}
-                  className="border-border bg-surface focus-visible:outline-accent block rounded-xl border p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="record-surface focus-visible:outline-accent block rounded-lg p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

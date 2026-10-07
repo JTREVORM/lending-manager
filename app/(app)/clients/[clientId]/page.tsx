@@ -1,3 +1,5 @@
+import { Users } from 'lucide-react';
+
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -27,6 +29,7 @@ import {
   maskNin,
 } from '@/lib/domain/client';
 import { PhoneValue } from '@/components/ui/data-value';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 
 export const metadata = { title: 'Client' };
 
@@ -90,35 +93,21 @@ export default async function ClientDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={ROUTES.clients}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Clients
-        </Link>
-
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold break-words">
-              {client.fullName}
-            </h1>
-            <p className="text-text-muted font-mono">{client.clientNumber}</p>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <ClientStatusBadge status={client.status} />
-            {contextCan(context, 'clients:update') ? (
-              <Link
-                href={`${ROUTES.clients}/${client.id}/edit`}
-                className="border-border text-text focus-visible:outline-accent inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Edit
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Borrower Register"
+        icon={Users}
+        back={{ href: ROUTES.clients, label: 'Clients' }}
+        title={client.fullName}
+        status={<ClientStatusBadge status={client.status} />}
+        description={<span className="font-mono">{client.clientNumber}</span>}
+        secondaryActions={
+          contextCan(context, 'clients:update') ? (
+            <ActionLink href={`${ROUTES.clients}/${client.id}/edit`} variant="secondary">
+              Edit
+            </ActionLink>
+          ) : null
+        }
+      />
 
       {client.status === 'blacklisted' || client.status === 'suspended' ? (
         <Alert tone={client.status === 'blacklisted' ? 'danger' : 'warning'}>

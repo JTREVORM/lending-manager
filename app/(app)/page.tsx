@@ -1,4 +1,4 @@
-import { CirclePlus, Search, UserPlus } from 'lucide-react';
+import { CirclePlus, LayoutDashboard, Search, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 
 import { Alert } from '@/components/ui/alert';
@@ -153,42 +153,50 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      {/* A strong navy context panel — the Chetu-style hero. "Dashboard" is
-          the eyebrow; the greeting is the page's heading. */}
-      <section
-        aria-labelledby="dash-greeting"
-        className="relative overflow-hidden rounded-xl p-6 text-white sm:p-8"
-        style={{
-          background: 'linear-gradient(135deg, #1a3c66 0%, #112c4d 55%, #0c2340 100%)',
-        }}
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-16 -right-10 size-56 rounded-full opacity-40 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #0e8aa6 0%, transparent 70%)' }}
-        />
+      {/*
+        The dashboard's banner.
+
+        The same `.page-banner` every other screen opens with, rather than the
+        bespoke navy gradient this page used to carry — one product does not
+        have two hero treatments, and the dashboard is the screen a reader sees
+        first, so a private gradient here made every page after it look like a
+        different system.
+
+        The reference's eyebrow / title / description arrangement holds, with
+        the greeting as the eyebrow and the person's name as the heading, since
+        that is what this screen is actually for.
+      */}
+      <section aria-labelledby="dash-greeting" className="page-banner p-5 sm:p-6">
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[0.6875rem] font-semibold tracking-[0.14em] text-white/55 uppercase">
-              Dashboard
+            <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
+              <LayoutDashboard aria-hidden="true" className="size-3.5 text-amber-400" />
+              {greeting}
             </p>
-            <p className="mt-2 text-sm text-white/70">{greeting},</p>
-            <h1
-              id="dash-greeting"
-              className="text-2xl font-semibold text-white sm:text-3xl"
-            >
+            <h1 id="dash-greeting" className="t-page-title text-white">
               {firstName}
             </h1>
-            <p className="mt-2 max-w-xl text-sm text-white/85">{attention}</p>
+            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
+              {attention}
+            </p>
           </div>
-          <div className="shrink-0 text-right text-sm text-white/70">
-            <p className="font-semibold text-white">{roleLabel}</p>
+
+          {/*
+            On its own translucent panel, and in white rather than `blue-100`.
+
+            This block sits at the right-hand end of the banner, which is where
+            the gradient warms towards amber — pale blue text on that stretch
+            fails contrast, and the panel keeps the whole group legible wherever
+            the gradient happens to land behind it at a given width.
+          */}
+          <div className="shrink-0 rounded-lg bg-black/15 px-3 py-2 text-right text-[12px] text-white">
+            <p className="text-[12px] font-bold">{roleLabel}</p>
             <p className="max-w-[12rem] truncate">{branding.companyName}</p>
-            <p className="mt-0.5">
+            <p className="mt-0.5 text-white/90">
               <DateValue value={today} />
             </p>
             {environment !== 'production' ? (
-              <span className="mt-2 inline-flex rounded-full bg-white/10 px-2 py-0.5 text-[0.6875rem] font-medium text-white/80">
+              <span className="mt-2 inline-flex rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold text-white">
                 {environment}
               </span>
             ) : null}

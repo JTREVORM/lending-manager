@@ -1,7 +1,10 @@
+import { HeartHandshake } from 'lucide-react';
+
 import Link from 'next/link';
 
 import { GuarantorForm } from '@/components/guarantors/guarantor-form';
 import { Alert } from '@/components/ui/alert';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -39,30 +42,29 @@ export default async function NewGuarantorPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={
-            attachTo === undefined ? ROUTES.guarantors : `${ROUTES.clients}/${attachTo}`
-          }
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Back
-        </Link>
-        <h1 className="text-text mt-2 text-2xl font-semibold break-words">
-          Register a guarantor
-        </h1>
-        <p className="text-text-muted mt-1">
-          Check the{' '}
-          <Link
-            href={ROUTES.guarantors}
-            className="text-accent underline-offset-2 hover:underline"
-          >
-            directory
-          </Link>{' '}
-          first. If this person already guarantees another client, attach the existing
-          record instead of making a second one.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Loan Security"
+        icon={HeartHandshake}
+        back={{
+          href:
+            attachTo === undefined ? ROUTES.guarantors : `${ROUTES.clients}/${attachTo}`,
+          label: 'Back',
+        }}
+        title="Register a guarantor"
+        description={
+          <>
+            Check the{' '}
+            <Link
+              href={ROUTES.guarantors}
+              className="font-semibold text-white underline decoration-amber-300 underline-offset-4 hover:text-amber-200"
+            >
+              directory
+            </Link>{' '}
+            first. If this person already guarantees another client, attach the existing
+            record instead of making a second one.
+          </>
+        }
+      />
 
       {attachTo !== undefined && !canLink ? (
         <Alert tone="warning">

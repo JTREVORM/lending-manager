@@ -133,19 +133,19 @@ export function LoanBreakdownTable({
       </Card>
 
       <dl className="grid min-w-0 gap-3 sm:grid-cols-3">
-        <div className="border-border bg-surface min-w-0 rounded-xl border p-3">
+        <div className="border-border bg-surface min-w-0 rounded-lg border p-3">
           <dt className="text-text-muted text-sm">Principal</dt>
           <dd className="text-text text-lg font-semibold tabular-nums">
             <Money amount={toUgx(principal)} />
           </dd>
         </div>
-        <div className="border-border bg-surface min-w-0 rounded-xl border p-3">
+        <div className="border-border bg-surface min-w-0 rounded-lg border p-3">
           <dt className="text-text-muted text-sm">Total interest</dt>
           <dd className="text-text text-lg font-semibold tabular-nums">
             <Money amount={toUgx(totalInterest)} />
           </dd>
         </div>
-        <div className="border-accent/40 bg-accent/5 min-w-0 rounded-xl border p-3">
+        <div className="border-accent/40 bg-accent/5 min-w-0 rounded-lg border p-3">
           <dt className="text-text-muted text-sm">
             {provisional ? 'Total repayable (preview)' : 'Total repayable'}
           </dt>

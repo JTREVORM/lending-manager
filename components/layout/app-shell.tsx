@@ -83,8 +83,17 @@ export async function AppShell({
               <ShieldCheck aria-hidden="true" className="text-accent size-6" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-2">
-                <span className="truncate text-xs font-black tracking-wider uppercase">
+              <span className="flex items-start justify-between gap-2">
+                {/*
+                  Two lines, not one with an ellipsis. The reference's own
+                  mark is the single word "CHETU", so a `truncate` costs it
+                  nothing; a real company name is "Kyanja Credit Services",
+                  which truncates to "KYANJA CREDIT SE…" — the brand block
+                  is the one place in the product that must never abbreviate
+                  the business's own name. `tracking-wide` rather than
+                  `tracking-wider` buys back most of the width.
+                */}
+                <span className="line-clamp-2 text-xs leading-tight font-black tracking-wide uppercase">
                   {branding.companyName}
                 </span>
                 {/* The reference's version chip: amber on near-black. */}

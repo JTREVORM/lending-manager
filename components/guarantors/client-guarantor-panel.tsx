@@ -54,7 +54,7 @@ export function ClientGuarantorPanel({
           {active.map((link) => (
             <li
               key={link.linkId}
-              className="border-border bg-surface min-w-0 rounded-xl border p-4"
+              className="border-border bg-surface min-w-0 rounded-lg border p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -80,7 +80,7 @@ export function ClientGuarantorPanel({
       )}
 
       {detached.length > 0 ? (
-        <details className="border-border bg-surface rounded-xl border p-4">
+        <details className="border-border bg-surface rounded-lg border p-4">
           <summary className="text-text min-h-11 cursor-pointer text-sm font-medium">
             Previous guarantors ({String(detached.length)})
           </summary>

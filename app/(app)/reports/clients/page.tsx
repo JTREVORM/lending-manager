@@ -1,3 +1,5 @@
+import { Users } from 'lucide-react';
+
 import Link from 'next/link';
 
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
@@ -6,6 +8,7 @@ import { ExportLink } from '@/components/reports/export-link';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportFilters } from '@/components/reports/report-filters';
+import { PageHeader } from '@/components/ui/page-header';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { ROUTES } from '@/config/app';
@@ -140,26 +143,29 @@ export default async function ClientReportPage({
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold">Clients</h1>
-            <p className="text-text-muted mt-1 text-sm">
-              As at <DateValue value={today} /> · {branding.companyName}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
+      <PageHeader
+        eyebrow="Borrower Report"
+        icon={Users}
+        back={{ href: ROUTES.reports, label: 'All reports' }}
+        title="Clients"
+        description={
+          <>
+            As at <DateValue value={today} /> · {branding.companyName}
+            <span className="mt-1.5 block">
+              Outstanding is the total across every loan the client has. Identification
+              numbers are never shown in a report or an export.
+            </span>
+          </>
+        }
+        secondaryActions={
+          <>
             <PrintButton />
             <ExportLink
               href={`${ROUTES.reports}/clients/export${query === '' ? '' : `?${query}`}`}
             />
-          </div>
-        </div>
-        <p className="text-text-muted text-sm">
-          Outstanding is the total across every loan the client has. Identification
-          numbers are never shown in a report or an export.
-        </p>
-      </header>
+          </>
+        }
+      />
 
       <ReportFilters
         filters={[

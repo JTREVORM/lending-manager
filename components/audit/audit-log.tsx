@@ -50,7 +50,7 @@ export function AuditLog({
     <>
       {/* Phones: one compact card per entry. Three lines, not a bordered
           block with a heading. */}
-      <ul className="divide-border border-border bg-surface min-w-0 divide-y rounded-xl border md:hidden">
+      <ul className="divide-border border-border bg-surface min-w-0 divide-y rounded-lg border md:hidden">
         {entries.map((entry) => (
           <li key={entry.id} className="min-w-0 p-3">
             <div className="flex items-start justify-between gap-2">

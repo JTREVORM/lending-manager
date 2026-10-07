@@ -209,7 +209,7 @@ export function CollectionReportView({
       </p>
 
       {report.byDay.length > 1 ? (
-        <section className="border-border bg-surface min-w-0 rounded-xl border p-4 sm:p-5">
+        <section className="border-border bg-surface min-w-0 rounded-lg border p-4 sm:p-5">
           {/* The same `report.byDay` rows the table below renders, drawn to
               scale. Nothing is summed here: a chart that computed its own
               totals could disagree with the table beside it, and the table is

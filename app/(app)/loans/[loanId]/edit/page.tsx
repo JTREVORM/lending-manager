@@ -1,8 +1,10 @@
-import Link from 'next/link';
+import { Banknote } from 'lucide-react';
+
 import { notFound, redirect } from 'next/navigation';
 
 import { LoanForm } from '@/components/loans/loan-form';
 import { Alert } from '@/components/ui/alert';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getLoan } from '@/lib/data/loans';
@@ -39,17 +41,12 @@ export default async function EditLoanPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <div className="min-w-0">
-        <Link
-          href={`${ROUTES.loans}/${loan.id}`}
-          className="text-accent focus-visible:outline-accent text-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← {loan.loanNumber}
-        </Link>
-        <h1 className="text-text mt-2 text-2xl font-semibold break-words">
-          Edit draft {loan.loanNumber}
-        </h1>
-      </div>
+      <PageHeader
+        eyebrow="Lending Portfolio"
+        icon={Banknote}
+        back={{ href: `${ROUTES.loans}/${loan.id}`, label: loan.loanNumber }}
+        title={`Edit draft ${loan.loanNumber}`}
+      />
 
       {loan.reviewNote !== null ? (
         <Alert tone="warning">

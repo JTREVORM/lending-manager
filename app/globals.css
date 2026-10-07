@@ -680,6 +680,13 @@
 @layer components {
   .brand-gradient {
     background-image: linear-gradient(135deg, #0b4394 0%, #2c5da6 55%, #f6c256 140%);
+    /* See `.page-banner` below for why the same stops are repeated in oklab. */
+    background-image: linear-gradient(
+      135deg in oklab,
+      #0b4394 0%,
+      #2c5da6 55%,
+      #f6c256 140%
+    );
   }
 
   /* Page banner: the heading block every screen opens with. */
@@ -688,11 +695,37 @@
     overflow: hidden;
     border-radius: 0.75rem;
     color: #fff;
-    /* The amber stop sits inside the visible range, otherwise the right-hand
-       end desaturates to grey instead of reading as the sign-in screen's warm
-       edge. */
+    /*
+      The reference's stops, exactly.
+
+      The amber stop sits inside the visible range, otherwise the right-hand
+      end desaturates to grey instead of reading as the sign-in screen's warm
+      edge.
+
+      The declaration is then repeated with `in oklab`, and this is worth
+      explaining because it looks like a duplicate. A gradient interpolates in
+      sRGB by default, and the path from the blue `#3d76bd` to the amber
+      `#d9a441` passes straight through grey — so on a wide banner (a table
+      screen at 1440px, where the reference's own pages are `max-w-5xl`) the
+      last third of the panel washes out to a muddy tan. Interpolating in oklab
+      walks the same two colours through a saturated path instead. The stops
+      are identical; only the route between them changes.
+
+      Two declarations rather than `@supports`, because there is no way to
+      feature-query a gradient's interpolation method. A browser that does not
+      understand `in oklab` drops the second declaration as invalid and keeps
+      the first — which is the reference's own gradient — so the banner is
+      never left without a background and its text never lands on white.
+    */
     background-image: linear-gradient(
       110deg,
+      #0b4394 0%,
+      #14509e 40%,
+      #3d76bd 72%,
+      #d9a441 118%
+    );
+    background-image: linear-gradient(
+      110deg in oklab,
       #0b4394 0%,
       #14509e 40%,
       #3d76bd 72%,
@@ -956,6 +989,23 @@
 
   /* One record as a pale blue panel of "Label :Value" lines — the shape the
      reference's tables take on a phone. */
+  /*
+    The fill a record sits on, on its own.
+
+    The reference turns every table row into a `#eaf1f8` panel below `md`, and
+    that pale blue is the surface it uses wherever a record is shown as a
+    block rather than as a table row. `.record-surface` is just the fill, for
+    the registers that lay their own rows out; `.record-panel` below adds the
+    reference's radius, padding and "Label :Value" typography for the ones
+    that want the pattern whole.
+
+    No border: in the reference the fill is what separates one record from the
+    next, and a border on top of it reads as a second edge.
+  */
+  .record-surface {
+    background: var(--color-record);
+  }
+
   .record-panel {
     border-radius: var(--radius-lg);
     background: var(--color-record);
@@ -970,6 +1020,9 @@
   }
 
   @media (prefers-color-scheme: dark) {
+    /* There is no pale blue on a dark page, so a record lifts by lightness
+       instead — the same step the reference's own dark `--card` takes. */
+    .record-surface,
     .record-panel {
       background: var(--color-surface-raised);
     }

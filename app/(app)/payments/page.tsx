@@ -1,3 +1,4 @@
+import { Receipt } from 'lucide-react';
 import { PaymentRegister } from '@/components/payments/payment-register';
 import { Card } from '@/components/ui/card';
 import { Money } from '@/components/ui/money';
@@ -69,6 +70,8 @@ export default async function PaymentsPage({
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
+        eyebrow="Collections"
+        icon={Receipt}
         title="Payments"
         description="Every payment recorded, including reversed ones."
         primaryAction={

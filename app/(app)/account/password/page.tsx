@@ -1,6 +1,9 @@
+import { KeyRound } from 'lucide-react';
+
 import { ChangePasswordForm } from '@/components/auth/change-password-form';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardHeader } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 
@@ -19,9 +22,13 @@ export default async function ChangePasswordPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <header>
-        <h1>Change password</h1>
-      </header>
+      <PageHeader
+        eyebrow="Account Security"
+        icon={KeyRound}
+        back={{ href: ROUTES.account, label: 'My account' }}
+        title="Change password"
+        description="Choose something only you know. You will stay signed in on this device."
+      />
 
       {context.mustChangePassword ? (
         <Alert tone="warning" title="Choose your own password">

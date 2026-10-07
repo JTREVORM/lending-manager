@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react';
 import { OverdueList } from '@/components/delinquency/overdue-list';
 import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
@@ -75,6 +76,8 @@ export default async function OverduePage({
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
+        eyebrow="Delinquency"
+        icon={AlertTriangle}
         title="Overdue"
         description="Loans with something uncovered: what is due now, how late it is, and whether a late-payment charge applies. Settled loans are not listed."
       />

@@ -13,6 +13,29 @@ export interface ReportColumn<Row> {
   readonly hideOnMobile?: boolean;
   /** Use as the card's heading on mobile rather than as a labelled field. */
   readonly primary?: boolean;
+  /**
+   * A relative width hint for the desktop table, in the reference's own units
+   * — a percentage-like number read as a minimum, not as a share of 100.
+   *
+   * The reference's `MisTable` carries the same idea and the same warning:
+   * the numbers across a wide report routinely add up to well past 100 on
+   * purpose, because they mean "give the note roughly four times the room of
+   * Days late", not "the note takes 40% of the table". They are applied as a
+   * `min-width` under `table-auto`, so a column is never squeezed below its
+   * hint and the table grows past the card instead — which is what the
+   * horizontal scroll on the wrapper is for.
+   *
+   * Without this, auto-layout hands a long prose column whatever is left over.
+   * On the arrears report that was 127px for the latest note, wrapping it to
+   * thirteen lines and making every row in the table 240px tall.
+   */
+  readonly width?: number;
+  /**
+   * Let this cell wrap. Off by default: a figure, a date or a loan number is
+   * read across a row and a wrapped one is harder to follow than a table the
+   * reader scrolls. Prose columns — a note, a reason — set it.
+   */
+  readonly wrap?: boolean;
 }
 
 /**
@@ -35,6 +58,18 @@ export interface ReportColumn<Row> {
  * Totals, where a report has them, go in a `<tfoot>` inside the table so they
  * are read as part of it.
  */
+/**
+ * A column's width hint, in pixels.
+ *
+ * The reference's own conversion: the hint times 12. It is arbitrary and it
+ * is meant to be — the hints are relative to each other, and this is the
+ * factor that turns the set of them into a table that fills a laptop without
+ * overflowing it on the common reports.
+ */
+function columnWidth(hint: number): number {
+  return Math.round(hint * 12);
+}
+
 export function ReportTable<Row>({
   columns,
   rows,
@@ -104,18 +139,37 @@ export function ReportTable<Row>({
         ))}
       </ul>
 
-      {/* Table: tablets and up, and what a printout uses. */}
-      <div className="border-border hidden min-w-0 overflow-x-auto rounded-xl border md:block print:block">
-        <table className="w-full border-collapse text-sm">
+      {/* Table: tablets and up, and what a printout uses.
+
+          The reference's density, which is the whole point of its report
+          screens: 11px body, 10px uppercase headers on the slate fill, cells
+          at `px-2 py-2.5`, rows separated by a hairline and hovering as a
+          unit. Twelve columns of currency fit on a laptop at this size and do
+          not at 14px. */}
+      <div className="border-border scroll-area scroll-x hidden min-w-0 rounded-lg border md:block print:block">
+        <table className="w-full table-auto border-collapse text-left text-[11px]">
           <caption className="sr-only">{caption}</caption>
-          <thead>
-            <tr className="bg-surface-raised">
+          <colgroup>
+            {columns.map((column) => (
+              <col
+                key={column.key}
+                {...(column.width === undefined
+                  ? {}
+                  : { style: { width: `${String(columnWidth(column.width))}px` } })}
+              />
+            ))}
+          </colgroup>
+          <thead className="bg-surface-sunken">
+            <tr>
               {columns.map((column) => (
                 <th
                   key={column.key}
                   scope="col"
+                  {...(column.width === undefined
+                    ? {}
+                    : { style: { minWidth: `${String(columnWidth(column.width))}px` } })}
                   className={cn(
-                    'text-text-muted border-border border-b px-3 py-2 font-medium',
+                    't-th border-border border-b px-2 py-2.5 whitespace-nowrap',
                     column.numeric === true ? 'text-right' : 'text-left',
                   )}
                 >
@@ -124,20 +178,26 @@ export function ReportTable<Row>({
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-border/60 divide-y">
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
                 className={cn(
-                  'border-border border-b last:border-0',
+                  'hover:bg-surface-hover transition-colors',
                   rowTone?.(row) === 'muted' ? 'text-text-muted' : '',
                 )}
               >
                 {columns.map((column) => (
                   <td
                     key={column.key}
+                    {...(column.width === undefined
+                      ? {}
+                      : {
+                          style: { minWidth: `${String(columnWidth(column.width))}px` },
+                        })}
                     className={cn(
-                      'px-3 py-2 align-top',
+                      'px-2 py-2.5 align-top',
+                      column.wrap === true ? undefined : 'whitespace-nowrap',
                       column.numeric === true ? 'text-right tabular-nums' : '',
                     )}
                   >

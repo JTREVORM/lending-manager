@@ -76,7 +76,7 @@ export function PortalPaymentHistory({
           return (
             <li
               key={payment.id}
-              className="border-border bg-surface min-w-0 rounded-xl border p-3"
+              className="border-border bg-surface min-w-0 rounded-lg border p-3"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="text-text font-medium">

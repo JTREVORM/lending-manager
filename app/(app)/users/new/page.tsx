@@ -1,8 +1,9 @@
-import Link from 'next/link';
+import { UserPlus } from 'lucide-react';
 
 import { CreateStaffForm } from '@/components/users/create-staff-form';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardHeader } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { assignableRoles } from '@/lib/data/users';
@@ -16,12 +17,13 @@ export default async function NewUserPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <Link href={ROUTES.users} className="text-text-muted text-sm hover:underline">
-          ← Back to users
-        </Link>
-        <h1 className="mt-2">Add staff member</h1>
-      </header>
+      <PageHeader
+        eyebrow="Access Control"
+        icon={UserPlus}
+        back={{ href: ROUTES.users, label: 'Users' }}
+        title="Add staff member"
+        description="They sign in with the phone number recorded here."
+      />
 
       <Alert tone="info" title="How the password reaches them">
         There is no email or SMS delivery in this system yet, so the temporary password

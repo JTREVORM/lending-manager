@@ -1,3 +1,6 @@
+import { Clock } from 'lucide-react';
+
+import { PageHeader } from '@/components/ui/page-header';
 import { ExportLink } from '@/components/reports/export-link';
 import { PortfolioReportView } from '@/components/reports/portfolio-report-view';
 import { PrintButton } from '@/components/reports/print-button';
@@ -77,25 +80,28 @@ export default async function GracePeriodPage({
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-text text-2xl font-semibold">Grace period</h1>
-            <p className="text-text-muted mt-1 text-sm">
-              As at <DateValue value={today} /> · {branding.companyName}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
+      <PageHeader
+        eyebrow="Grace Period"
+        icon={Clock}
+        back={{ href: ROUTES.reports, label: 'All reports' }}
+        title="Grace period"
+        description={
+          <>
+            As at <DateValue value={today} /> · {branding.companyName}
+            <span className="mt-1.5 block">
+              These loans are past their final collection date and can still be settled in
+              full with no late-payment charge. Loans that have already been charged are
+              on the arrears and charges reports, not here.
+            </span>
+          </>
+        }
+        secondaryActions={
+          <>
             <PrintButton />
             <ExportLink href={`${ROUTES.reports}/grace/export`} />
-          </div>
-        </div>
-        <p className="text-text-muted text-sm">
-          These loans are past their final collection date and can still be settled in
-          full with no late-payment charge. Loans that have already been charged are on
-          the arrears and charges reports, not here.
-        </p>
-      </header>
+          </>
+        }
+      />
 
       <PortfolioReportView
         report={report}
