@@ -95,10 +95,35 @@ function contrastRatio(foreground: Rgb, background: Rgb): number {
  * declared in both has two values and the later one wins inside that media
  * query. Reading the file in halves is what makes "the dark value" a thing
  * this test can talk about.
+ *
+ * The dark half is the media query **and nothing after it**. It used to run
+ * to the end of the file, which was the same thing right up until a component
+ * rule scoped a token to itself — `.record-surface` darkens
+ * `--color-text-muted` on its tinted panel, and a naive "last declaration in
+ * the file" read mistook that for the dark theme's value and reported a
+ * 2.35:1 that no viewer ever sees. A theme value lives in the theme block;
+ * reading only that block is what the test always meant.
  */
 const DARK_MARKER = '@media (prefers-color-scheme: dark)';
+
+/** The `{ … }` block that opens at or after `from`, with its braces matched. */
+function blockAt(source: string, from: number): string {
+  const open = source.indexOf('{', from);
+  let depth = 0;
+
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    else if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(from, i + 1);
+    }
+  }
+
+  throw new Error('Unbalanced braces in app/globals.css.');
+}
+
 const lightSource = CSS.slice(0, CSS.indexOf(DARK_MARKER));
-const darkSource = CSS.slice(CSS.indexOf(DARK_MARKER));
+const darkSource = blockAt(CSS, CSS.indexOf(DARK_MARKER));
 
 function readOklch(source: string, token: string): Rgb {
   // The last declaration wins, which is what the cascade does too.
@@ -239,5 +264,69 @@ describe('the body text and the accent', () => {
         `${name}, text on accent: ${onAccent.toFixed(2)}:1`,
       ).toBeGreaterThanOrEqual(FLOOR);
     }
+  });
+});
+
+describe('muted text on every ground it lands on', () => {
+  /*
+    The gap this closes.
+
+    Muted text was slate-500, which clears AA on white — and the suite only
+    ever checked it on white, because that is where most content sits. It is
+    4.34:1 on the `#F1F5F9` application shell and 4.18:1 on the `#eaf1f8`
+    record panel, so `/offline`, which sits straight on the shell, and the
+    guarantor register's phone panels both failed an axe sweep that the unit
+    tests had passed.
+
+    Muted text is not confined to white surfaces. The floor is now asserted
+    against every ground it is actually used on.
+  */
+  function hexToSrgb(hex: string): Rgb {
+    const value = hex.replace('#', '');
+    return [
+      Number.parseInt(value.slice(0, 2), 16) / 255,
+      Number.parseInt(value.slice(2, 4), 16) / 255,
+      Number.parseInt(value.slice(4, 6), 16) / 255,
+    ];
+  }
+
+  it('clears AA on the application shell', () => {
+    // `.app-shell` paints `#f1f5f9` under every staff screen, and a page with
+    // no card of its own — `/offline`, an empty state — puts text on it.
+    const ratio = contrastRatio(
+      readOklch(lightSource, 'color-text-muted'),
+      hexToSrgb('#f1f5f9'),
+    );
+
+    expect(ratio, `${ratio.toFixed(2)}:1 on the shell`).toBeGreaterThanOrEqual(FLOOR);
+  });
+
+  it('clears AA on the record panel', () => {
+    // The phone rendering of every register: a row becomes a panel on the
+    // reference's `#eaf1f8` tint.
+    const ratio = contrastRatio(
+      readOklch(lightSource, 'color-text-muted'),
+      hexToSrgb('#eaf1f8'),
+    );
+
+    expect(ratio, `${ratio.toFixed(2)}:1 on the record panel`).toBeGreaterThanOrEqual(
+      FLOOR,
+    );
+  });
+
+  it('clears AA on the sunken surface', () => {
+    // Table headers and read-only fields.
+    const ratio = contrastRatio(
+      readOklch(lightSource, 'color-text-muted'),
+      readOklch(lightSource, 'color-surface-sunken'),
+    );
+
+    expect(ratio, `${ratio.toFixed(2)}:1 on the sunken surface`).toBeGreaterThanOrEqual(
+      FLOOR,
+    );
+  });
+
+  it("the record tint is the reference's own", () => {
+    expect(lightSource).toContain('--color-record: #eaf1f8');
   });
 });

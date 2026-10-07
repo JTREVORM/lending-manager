@@ -198,7 +198,21 @@
   --color-border: oklch(0.9288 0.0126 255.508); /* #E2E8F0 slate-200 */
   --color-border-strong: oklch(0.869 0.0198 252.894); /* #CBD5E1 slate-300 */
   --color-text: oklch(0.2077 0.0398 265.755); /* #0F172A */
-  --color-text-muted: oklch(0.5544 0.0407 257.417); /* #64748B */
+  /*
+    Slate-600, not the slate-500 the reference reaches for first.
+
+    Slate-500 is 4.76:1 on white, which is why it passes everywhere content
+    sits in a card — and 4.34:1 on the `#F1F5F9` shell and 4.18:1 on the
+    `#eaf1f8` record panel, which is why `/offline` and the guarantor register
+    failed an axe sweep. Muted text is not confined to white surfaces, so the
+    token has to clear AA on the darkest ground it is used on, not the
+    lightest.
+
+    Slate-600 is the reference's own muted tone on a filled surface — the
+    colour it gives a read-only field and its pagination text — and it is
+    7.58:1 on white, 6.92:1 on the shell and 6.65:1 on the record panel.
+  */
+  --color-text-muted: oklch(0.4455 0.0374 257.281); /* #475569 */
   --color-text-inverse: oklch(1 0 0);
 
   /* -- The navigation rail ------------------------------------------------- */

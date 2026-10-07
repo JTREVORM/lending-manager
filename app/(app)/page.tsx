@@ -163,16 +163,23 @@ export default async function DashboardPage() {
         different system.
 
         The reference's eyebrow / title / description arrangement holds, with
-        the greeting as the eyebrow and the person's name as the heading, since
-        that is what this screen is actually for.
+        the screen's name in the eyebrow and the person greeted in the
+        heading, which is what this screen is actually for.
       */}
       <section aria-labelledby="dash-greeting" className="page-banner p-5 sm:p-6">
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
+            {/* The eyebrow names the screen and the heading greets the
+                person — the arrangement this page already had, and the one
+                the reference's banner expects. The eyebrow is also how a
+                reader (and the browser suite) knows which page this is: the
+                heading is a first name, which identifies nothing on its
+                own. */}
             <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
               <LayoutDashboard aria-hidden="true" className="size-3.5 text-amber-400" />
-              {greeting}
+              Dashboard
             </p>
+            <p className="text-[13px] text-blue-100">{greeting},</p>
             <h1 id="dash-greeting" className="t-page-title text-white">
               {firstName}
             </h1>
