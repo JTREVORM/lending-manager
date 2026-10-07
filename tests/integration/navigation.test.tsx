@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -31,6 +32,28 @@ vi.mock('next/navigation', () => ({
 beforeEach(() => {
   mockPathname.current = '/';
 });
+
+/**
+ * Open every collapsed group in the sidebar.
+ *
+ * The rail is an accordion — the reference project's shape, and the one this
+ * application now wears. A group starts closed unless it holds the page being
+ * viewed, so its destinations are not in the document until it is opened.
+ *
+ * Every assertion about *which* entries the rail offers therefore has to open
+ * the groups first. A test that queries for a link without doing so passes
+ * whether the entry is correctly hidden or merely collapsed, which is the
+ * weaker claim of the two and not the one these tests are making.
+ */
+async function expandAllGroups(): Promise<void> {
+  const user = userEvent.setup();
+
+  for (const label of Object.values(NAV_GROUP_LABELS)) {
+    const header = screen.queryByRole('button', { name: label });
+    if (header === null) continue;
+    if (header.getAttribute('aria-expanded') === 'false') await user.click(header);
+  }
+}
 
 describe('navigation items', () => {
   it('points every entry at a canonical route', () => {
@@ -201,7 +224,7 @@ describe('PrimaryNav', () => {
     expect(current[0]).toHaveAccessibleName('Audit trail');
   });
 
-  it('renders only the entries the viewer may use', () => {
+  it('renders only the entries the viewer may use', async () => {
     mockPathname.current = ROUTES.dashboard;
     render(
       <PrimaryNav
@@ -211,17 +234,54 @@ describe('PrimaryNav', () => {
       />,
     );
 
+    // Opened first, so "not in the document" means filtered out rather than
+    // merely inside a closed group.
+    await expandAllGroups();
+
     expect(screen.queryByRole('link', { name: 'Users' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Audit trail' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
-  it('renders every entry as a link, since each changes the page', () => {
+  it('renders every entry as a link, since each changes the page', async () => {
     mockPathname.current = ROUTES.dashboard;
     render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
 
+    await expandAllGroups();
+
+    // Every destination is a link. The group headers are buttons, and
+    // correctly so — they disclose a panel, they do not navigate — so the
+    // link count is the destination count exactly.
     const links = screen.getAllByRole('link');
     expect(links).toHaveLength(visibleNavItems(NAV_ITEMS, OWNER).length);
+  });
+
+  it('opens the group holding the current page, and leaves the others shut', () => {
+    // Arriving on a screen must never hide where you are, but a rail that
+    // opened everything would be the flat list the accordion replaces.
+    mockPathname.current = ROUTES.audit;
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
+
+    // `Audit trail` is in Insights.
+    expect(
+      screen.getByRole('button', { name: NAV_GROUP_LABELS.insights }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Audit trail' })).toBeInTheDocument();
+
+    expect(
+      screen.getByRole('button', { name: NAV_GROUP_LABELS.administration }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
+  });
+
+  it('keeps the dashboard out of the accordion, as its own row', () => {
+    // The one destination reached often enough that opening a group to find
+    // it would be a cost — so the reference pins it above the groups, and the
+    // Operations group does not carry a second copy.
+    mockPathname.current = ROUTES.clients;
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
+
+    expect(screen.getAllByRole('link', { name: 'Dashboard' })).toHaveLength(1);
   });
 
   it('uses the short labels in the bottom bar and keeps the touch target', () => {

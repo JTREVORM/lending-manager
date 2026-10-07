@@ -12,6 +12,14 @@ export interface PasswordInputProps extends Omit<ComponentProps<'input'>, 'type'
   readonly hint?: ReactNode;
   readonly error?: string;
   readonly required?: boolean;
+  /**
+   * Overrides the label's colour, for the sign-in form — whose card sits on
+   * the brand gradient, where the default dark-on-light label cannot be read.
+   * See `Field` for the same prop and the same reason.
+   */
+  readonly labelClassName?: string;
+  /** The same, for the hint line beneath the control. */
+  readonly hintClassName?: string;
 }
 
 /**
@@ -32,6 +40,8 @@ export function PasswordInput({
   error,
   required = false,
   className,
+  labelClassName,
+  hintClassName,
   ...inputProps
 }: PasswordInputProps) {
   const [revealed, setRevealed] = useState(false);
@@ -48,7 +58,7 @@ export function PasswordInput({
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={inputId} required={required}>
+      <Label htmlFor={inputId} required={required} className={labelClassName}>
         {label}
       </Label>
 
@@ -73,7 +83,7 @@ export function PasswordInput({
           className={cn(
             'absolute inset-y-0 right-0 flex items-center justify-center',
             // 44px wide: a toggle inside a field is still a touch target.
-            'min-h-touch w-11 rounded-r-lg',
+            'min-h-touch w-11 rounded-r-lg md:rounded-r-sm',
             'text-text-muted hover:text-text transition-colors',
           )}
         >
@@ -87,7 +97,7 @@ export function PasswordInput({
       </div>
 
       {hint !== undefined ? (
-        <p id={hintId} className="text-text-muted text-xs">
+        <p id={hintId} className={cn('text-text-muted text-xs', hintClassName)}>
           {hint}
         </p>
       ) : null}

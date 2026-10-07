@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Ellipsis, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Ellipsis, LayoutDashboard, X } from 'lucide-react';
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 
 import { ROUTES } from '@/config/app';
@@ -92,22 +92,158 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
 
   const blocks = groupedNavItems(items, permissions);
 
+  // The dashboard is pinned above the accordion as its own row, which is what
+  // the reference does: it is the one destination you reach often enough that
+  // opening a group to find it would be a cost.
+  const dashboard = items.find(
+    (item) => item.href === ROUTES.dashboard && permissions.includes(item.permission),
+  );
+  const groups = blocks
+    .map((block) => ({
+      ...block,
+      items: block.items.filter((item) => item.href !== ROUTES.dashboard),
+    }))
+    .filter((block) => block.items.length > 0);
+
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
-      {blocks.map((block) => (
-        <div key={block.group}>
-          <p className="text-sidebar-muted mb-1 px-3 text-[0.6875rem] font-semibold tracking-wider uppercase">
-            {NAV_GROUP_LABELS[block.group]}
-          </p>
-          <ul className="flex flex-col gap-0.5">
-            {block.items.map((item) => (
-              <li key={item.href}>
-                <SidebarLink item={item} pathname={pathname} />
-              </li>
-            ))}
-          </ul>
-        </div>
+    // The reference's menu band: `flex-1 min-h-0 scroll-area scroll-y py-2
+    // px-2.5 space-y-1.5 text-xs`. `min-h-0` is what lets it scroll inside a
+    // flex column instead of pushing the user footer off the bottom.
+    <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1.5 px-2.5 py-2 text-xs">
+      {dashboard === undefined ? null : (
+        <SidebarTopLink item={dashboard} pathname={pathname} />
+      )}
+
+      {groups.map((block) => (
+        <SidebarGroup
+          key={block.group}
+          label={NAV_GROUP_LABELS[block.group]}
+          items={block.items}
+          pathname={pathname}
+        />
       ))}
+    </div>
+  );
+}
+
+/**
+ * The pinned dashboard row.
+ *
+ * The reference's active state for it is a solid amber fill with near-black
+ * text at `font-black` — the loudest thing in the rail, and the only place
+ * amber is used as a background rather than an accent.
+ */
+function SidebarTopLink({
+  item,
+  pathname,
+}: {
+  readonly item: NavItem;
+  readonly pathname: string;
+}) {
+  const isActive = isNavItemActive(item.href, pathname);
+  const Icon = item.icon ?? LayoutDashboard;
+
+  return (
+    <Link
+      href={item.href}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition-all',
+        isActive
+          ? 'bg-accent-2 text-brand-900 font-black shadow-md'
+          : 'text-blue-100 hover:bg-blue-800/60 hover:text-white',
+      )}
+    >
+      <Icon aria-hidden="true" className="size-4 shrink-0" />
+      <span>{item.label}</span>
+      <LinkPending className="ml-auto" label={`Opening ${item.label}`} />
+    </Link>
+  );
+}
+
+/**
+ * One accordion group.
+ *
+ * ## Why an accordion rather than the flat labelled blocks
+ *
+ * The reference's rail is thirteen collapsed groups, each opening onto its own
+ * sub-tree. That shape is the design, and it is not arbitrary: a rail that
+ * shows every destination at once is a list you read top to bottom, while a
+ * rail of closed groups is a map you scan. This application has eleven
+ * destinations in three groups, so the groups are the three it already has —
+ * Operations, Insights, Administration — and the capability filter still
+ * decides what appears inside them.
+ *
+ * ## The open state
+ *
+ * A group starts open when it contains the page being viewed, so arriving on
+ * a screen never hides where you are. After that it is the reader's to
+ * control, and the state is intentionally *not* persisted: the reference does
+ * not persist it either, and a rail that remembers a group you opened once a
+ * week is a rail that is always half open.
+ *
+ * The header is a real `<button>` with `aria-expanded` and `aria-controls`,
+ * and the panel it names carries the id — so a screen-reader user hears
+ * "Operations, collapsed, button" rather than meeting four links with no
+ * explanation of why the other nine are missing.
+ */
+function SidebarGroup({
+  label,
+  items,
+  pathname,
+}: {
+  readonly label: string;
+  readonly items: readonly NavItem[];
+  readonly pathname: string;
+}) {
+  const panelId = useId();
+  const containsCurrent = items.some((item) => isNavItemActive(item.href, pathname));
+  const [isOpen, setIsOpen] = useState(containsCurrent);
+
+  // The group holding the current page is open whenever it holds it, even if
+  // the reader collapsed it before navigating into it — otherwise a link in a
+  // collapsed group navigates to a screen whose own menu entry is hidden.
+  const expanded = isOpen || containsCurrent;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => {
+          setIsOpen((open) => !open);
+        }}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        className={cn(
+          'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all md:py-2 md:text-xs',
+          // The reference's active/open group: the amber `#F5A623` fill.
+          expanded
+            ? 'bg-accent-2 text-white shadow-sm'
+            : 'text-white hover:bg-blue-800/60',
+        )}
+      >
+        <span className="flex items-center gap-3 md:gap-2.5">{label}</span>
+        {expanded ? (
+          <ChevronDown aria-hidden="true" className="size-4 shrink-0 md:size-3.5" />
+        ) : (
+          <ChevronRight aria-hidden="true" className="size-4 shrink-0 md:size-3.5" />
+        )}
+      </button>
+
+      {expanded ? (
+        // The reference's sub-tree: indented, with a translucent amber rule
+        // down the left edge standing in for the tree's trunk.
+        <ul
+          id={panelId}
+          className="ml-4 flex flex-col gap-0.5 border-l-2 border-amber-500/40 py-1 pr-1 pl-4"
+        >
+          {items.map((item) => (
+            <li key={item.href}>
+              <SidebarLink item={item} pathname={pathname} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -139,23 +275,23 @@ function SidebarLink({
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'min-h-touch relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150',
+        // The reference's sub-item: 14px touch-sized on a phone, 11px and
+        // tight on the desktop, active on a translucent white fill.
+        'flex items-center gap-3 rounded-md px-2.5 py-2.5 text-[14px] font-normal transition-all',
+        'md:gap-2 md:py-1.5 md:text-[11px] md:font-medium',
         isActive
-          ? 'bg-sidebar-active-surface font-semibold text-white'
-          : 'text-sidebar-muted hover:text-sidebar-foreground hover:bg-white/10',
+          ? 'bg-sidebar-active-surface font-semibold text-white md:font-bold'
+          : 'text-white hover:bg-white/10',
       )}
     >
-      {/* A left indicator bar in the cyan active accent, so the active
-          destination is marked by shape as well as colour — the same
-          belt-and-braces the bottom bar uses. */}
-      {isActive ? (
-        <span
-          aria-hidden="true"
-          className="bg-sidebar-active absolute top-1/2 left-0 h-6 w-1 -translate-y-1/2 rounded-r-full"
-        />
-      ) : null}
-      <Icon aria-hidden="true" className="size-5 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      {/* Amber on the desktop, plain white on a phone — the reference tints
+          the tree's leaf icons to match the trunk rule beside them, and drops
+          the tint at the larger mobile size where it would read as disabled. */}
+      <Icon
+        aria-hidden="true"
+        className="size-[18px] shrink-0 text-white/90 md:size-3 md:text-amber-300"
+      />
+      <span className="leading-snug md:truncate">{item.label}</span>
       {/* The application carries no full-page loading spinner — see
           `LinkPending` for why — so the feedback for a tap lives in the thing
           that was tapped. */}
@@ -184,7 +320,7 @@ function BottomBarLink({
         // The active destination is marked twice over: colour, and a bar
         // across the top of the cell. Colour alone fails for a colour-blind
         // reader and in bright daylight, which is where this is used.
-        isActive ? 'text-accent' : 'text-text-muted hover:text-text',
+        isActive ? 'text-accent font-bold' : 'text-text-muted hover:text-text',
       )}
     >
       {isActive ? (
@@ -280,9 +416,11 @@ function MoreMenu({
         onClick={(event) => {
           if (event.target === dialogRef.current) close();
         }}
+        // The reference's modal shell: a white panel with its own bordered
+        // header, `shadow-2xl`, over a `slate-900/50` backdrop.
         className={cn(
-          'bg-surface text-text elevation-5 m-0 mt-auto w-full max-w-none rounded-t-xl p-0',
-          'backdrop:bg-black/40',
+          'bg-surface text-text m-0 mt-auto w-full max-w-none rounded-t-xl p-0 shadow-2xl',
+          'backdrop:bg-slate-900/50',
         )}
       >
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
@@ -313,7 +451,7 @@ function MoreMenu({
                   className={cn(
                     'min-h-touch flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium',
                     isActive
-                      ? 'bg-accent-surface text-accent font-semibold'
+                      ? 'bg-accent-surface text-accent font-bold'
                       : 'text-text hover:bg-surface-hover',
                   )}
                 >

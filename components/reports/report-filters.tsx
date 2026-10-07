@@ -3,7 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { SlidersHorizontal } from 'lucide-react';
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { REPORT_PERIODS, REPORT_PERIOD_LABELS } from '@/lib/domain/reporting';
@@ -103,10 +104,15 @@ export function ReportFilters({
   return (
     <form
       onSubmit={apply}
-      className="bg-surface border-border min-w-0 rounded-xl border p-4 print:hidden"
+      // The reference's `MisFilters` card: `rounded-lg border
+      // border-slate-200 bg-white p-4 shadow-xs`, with its controls on a
+      // 1 → 2 → 4 column grid ending `items-end`, so a row of labelled
+      // selects lines up on its controls rather than on its labels — two of
+      // which wrap to a second line and two of which do not.
+      className="bg-surface border-border min-w-0 rounded-lg border p-4 shadow-xs print:hidden"
       noValidate
     >
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-1 items-end gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
         {hasPeriod ? (
           <>
             <div className="min-w-0">
@@ -118,7 +124,7 @@ export function ReportFilters({
                 onChange={(event) => {
                   set('period', event.target.value);
                 }}
-                className="min-h-touch border-border-strong bg-surface text-text mt-1 w-full rounded-lg border px-3 py-2 text-base sm:text-sm"
+                className="form-field mt-1"
               >
                 {REPORT_PERIODS.map((period) => (
                   <option key={period} value={period}>
@@ -177,7 +183,7 @@ export function ReportFilters({
                   onChange={(event) => {
                     set(filter.name, event.target.value);
                   }}
-                  className="min-h-touch border-border-strong bg-surface text-text mt-1 w-full rounded-lg border px-3 py-2 text-base sm:text-sm"
+                  className="form-field mt-1"
                 >
                   <option value="">All</option>
                   {filter.options.map((option) => (
@@ -209,13 +215,20 @@ export function ReportFilters({
         })}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-text-muted text-sm" aria-live="polite">
+      {/* The reference's search row: the summary on the left, and its
+          `SearchButton` on the right — full width and 52px tall on a phone,
+          34px and compact from `sm` up, carrying the sliders glyph. */}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <p className="text-text-muted text-[13px]" aria-live="polite">
           {resultSummary ?? ''}
         </p>
-        <Button type="submit" size="sm">
+        <button
+          type="submit"
+          className="bg-accent hover:bg-accent-hover inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-lg px-4 text-base font-semibold text-white sm:h-[34px] sm:w-auto sm:rounded sm:text-[12px] sm:font-bold"
+        >
+          <SlidersHorizontal aria-hidden="true" className="size-5 sm:size-3.5" />
           Apply
-        </Button>
+        </button>
       </div>
     </form>
   );

@@ -68,8 +68,12 @@ export function SectionTabs({
     <nav
       ref={ref}
       aria-label={label}
+      // The reference's `.chip-row`: one horizontal line, always. It scrolls
+      // if it cannot fit, and a chip is never squeezed into vertical letters —
+      // which is what a wrapping flex row does to "Repayment schedule" at
+      // 320px. Sticky under the fixed 64px header, hence `top-18`.
       className={cn(
-        'surface-inset sticky top-2 z-10 -mx-1 flex gap-1 overflow-x-auto rounded-md p-1 print:hidden',
+        'chip-row border-border bg-surface sticky top-18 z-10 rounded-lg border p-1.5 shadow-xs print:hidden',
         className,
       )}
     >
@@ -83,11 +87,13 @@ export function SectionTabs({
             onClick={() => {
               setActive(tab.id);
             }}
+            // The reference's `.chip`: a 36px pill at 12px/600, filled navy
+            // when it is the one you are on.
             className={cn(
-              'min-h-9 shrink-0 rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-150',
+              'chip',
               isActive
-                ? 'text-accent [box-shadow:var(--elevate-2)] [background:var(--surface-raised-fill)]'
-                : 'text-text-muted hover:text-text',
+                ? 'bg-accent text-accent-contrast shadow-xs'
+                : 'text-text-muted hover:bg-surface-hover hover:text-text',
             )}
           >
             {tab.label}

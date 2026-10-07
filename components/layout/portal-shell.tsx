@@ -39,21 +39,29 @@ export async function PortalShell({
   const branding = await getPortalBranding();
 
   return (
-    <div className="min-h-dvh">
+    // The same `.app-shell` tint the staff side stands on, so a borrower and
+    // a cashier are plainly looking at one product.
+    <div className="app-shell min-h-dvh">
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
-      <header className="border-border bg-surface elevation-1 sticky top-0 z-20 border-b print:hidden">
+      {/* The staff header's geometry: solid white, a 64px row, a slate bottom
+          border and `shadow-xs`. Sticky rather than fixed, because the portal
+          is one short column and a fixed header would need a matching offset
+          on a page that does not otherwise need one. */}
+      <header className="border-border bg-surface sticky top-0 z-20 border-b shadow-xs print:hidden">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 px-4 py-3 sm:px-6">
-          <span className="bg-accent flex size-8 shrink-0 items-center justify-center rounded-md [box-shadow:var(--highlight-top),var(--elevate-1)]">
-            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-4" />
+          {/* The reference's brand mark: the logo on a white tile. Here the
+              tile is the navy, since the portal header is already white. */}
+          <span className="bg-accent flex size-9 shrink-0 items-center justify-center rounded shadow-sm">
+            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">
+            <span className="block truncate text-xs font-black tracking-wider uppercase">
               {branding.companyName}
             </span>
-            <span className="text-text-muted block truncate text-xs">
+            <span className="text-text-muted block truncate text-[11px]">
               {context.fullName}
             </span>
           </span>
@@ -84,7 +92,7 @@ export async function PortalShell({
         // overflow destinations and lives inside this element, so matching on
         // its contents finds every link, not the four in the bar.
         data-nav="bottom-bar"
-        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
+        className="border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-1px_3px_rgba(0,0,0,0.06)] md:hidden print:hidden"
       >
         <PrimaryNav
           variant="bottom-bar"

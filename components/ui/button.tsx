@@ -2,29 +2,51 @@ import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/utils/cn';
 
+/**
+ * Variants ported from the reference's shadcn "new-york" button, with its
+ * palette: `#0B4394` navy as the default fill, the slate-50 secondary, and a
+ * bordered outline. The geometry is the reference's too — `h-9 px-4 py-2`,
+ * `rounded-md`, `text-sm font-medium`, `[&_svg]:size-4`.
+ */
 const VARIANTS = {
-  // Primary — the dark-teal accent, a raised neumorphic key. Hover sinks the
-  // teal a shade; :active presses it in with an inner shadow.
-  primary:
-    'bg-accent text-accent-contrast [box-shadow:var(--elevate-2)] hover:bg-accent-hover active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)] disabled:bg-brand-300 disabled:shadow-none',
-  // Secondary — the reference's neutral raised layer, on the gradient fill.
+  // The reference's primary action: solid navy, `shadow-xs`, darkening on
+  // hover to `#093672`. Used for "New loan product", "Search", every page's
+  // one real action.
+  primary: 'bg-accent text-accent-contrast shadow-xs hover:bg-accent-hover',
+  // The reference's `secondary`: the slate fill, used for a second action in
+  // the same row.
   secondary:
-    'text-text [background:var(--surface-raised-fill)] [box-shadow:var(--elevate-2)] hover:text-accent active:[box-shadow:var(--inset-press)]',
-  // Outline — a quiet second action: a border, no lift.
-  outline: 'bg-transparent text-text border border-border-strong hover:bg-surface-hover',
-  // Ghost — lowest emphasis, no chrome until hovered.
+    'bg-surface-sunken text-text border border-border shadow-xs hover:bg-surface-hover',
+  // The reference's `outline`: a hairline border on the page surface.
+  outline:
+    'border border-border-strong bg-surface text-text shadow-xs hover:bg-surface-hover',
+  // The reference's `ghost`: no chrome until hovered.
   ghost: 'bg-transparent text-text hover:bg-surface-hover',
-  // Destructive — accessible danger fill, same raised/pressed language.
-  danger:
-    'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90 active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)]',
+  // The reference's `destructive`, on its `#D32F2F` red.
+  danger: 'bg-danger text-white shadow-xs hover:bg-danger/90',
+  /**
+   * The reference's amber save button (`.btn-save`): a full-width pill in
+   * `#fbbf24` with near-black text, used at the foot of a form.
+   */
+  save: 'bg-accent-2 text-brand-900 rounded-full font-bold hover:bg-[#f59e0b]',
 } as const;
 
+/**
+ * Sizes ported from the reference: `default h-9 px-4 py-2`, `sm h-8 px-3
+ * text-xs`, `lg h-10 px-8`, `icon h-9 w-9`.
+ *
+ * The one addition is the mobile floor. The reference enforces
+ * `min-height: 2.75rem` on every `button` below `md` through a global rule —
+ * which this application also carries in `globals.css` — so a 36px desktop
+ * button is still a 44px target on a phone. It is expressed here as well so
+ * the intent is visible at the component rather than only in a media query
+ * four files away.
+ */
 const SIZES = {
-  /* Still 44px tall: a "small" button is visually tighter, never harder to
-     tap. Horizontal padding shrinks, the touch target does not. */
-  sm: 'min-h-touch px-3 text-sm',
-  md: 'min-h-touch px-4 text-sm',
-  lg: 'min-h-touch px-6 text-base sm:min-h-12',
+  sm: 'min-h-touch px-3 text-xs md:min-h-8',
+  md: 'min-h-touch px-4 py-2 text-sm md:min-h-9',
+  lg: 'min-h-touch px-8 text-sm md:min-h-10',
+  icon: 'min-h-touch w-11 md:min-h-9 md:w-9',
 } as const;
 
 export interface ButtonProps extends ComponentProps<'button'> {
@@ -62,11 +84,10 @@ export function Button({
       // spinner alone does not.
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md font-medium',
-        // The physical press: scale down a hair on :active, 120ms ease-out,
-        // transform only. `pressable` also transitions background and shadow.
+        'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap',
+        '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         'pressable',
-        'disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
+        'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none',
         VARIANTS[variant],
         SIZES[size],
         className,

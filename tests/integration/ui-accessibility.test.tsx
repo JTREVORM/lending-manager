@@ -368,7 +368,7 @@ describe('reporting accessibility', () => {
     render(<ReportPagination page={2} hasMore rowsShown={25} />);
 
     expect(screen.getByRole('navigation', { name: 'Report pages' })).toBeInTheDocument();
-    expect(screen.getByText('Page 2 · 25 rows shown')).toHaveAttribute(
+    expect(screen.getByText('Showing 25 entries · page 2')).toHaveAttribute(
       'aria-live',
       'polite',
     );
@@ -377,7 +377,10 @@ describe('reporting accessibility', () => {
   it('keeps pagination controls as real buttons at a full touch target', () => {
     render(<ReportPagination page={2} hasMore rowsShown={25} />);
 
-    for (const name of ['Previous', 'Next']) {
+    // Queried by accessible name, not by the visible text: the controls read
+    // "Prev" and "Next" — the reference's labels — and are announced as
+    // "Previous page" and "Next page".
+    for (const name of ['Previous page', 'Next page']) {
       const button = screen.getByRole('button', { name });
       expect(button.tagName).toBe('BUTTON');
       expect(button.className).toContain('min-h-touch');

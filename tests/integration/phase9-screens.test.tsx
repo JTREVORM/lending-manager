@@ -314,7 +314,22 @@ describe('page-level actions', () => {
     render(<SectionHeader title="Business summary" />);
 
     const heading = screen.getByRole('heading', { name: 'Business summary' });
-    expect(heading.className).toMatch(/text-lg|text-xl/);
+
+    // The size is carried by the design system's role class rather than a
+    // pair of text utilities: `.t-section-title` is 1.125rem rising to
+    // 1.25rem at `md`, against `.t-card-title`'s 0.9375rem. Asserting the
+    // role is the stronger claim — a utility can be overridden by the next
+    // class in the string, whereas the role class is the hierarchy itself.
+    expect(heading.className).toContain('t-section-title');
+
+    // And the step is real: the two roles do not resolve to the same size.
+    const css = read('app/globals.css');
+    const sectionSize = /\.t-section-title\s*\{[^}]*font-size:\s*([\d.]+)rem/.exec(css);
+    const cardSize = /\.t-card-title\s*\{[^}]*font-size:\s*([\d.]+)rem/.exec(css);
+
+    expect(sectionSize).not.toBeNull();
+    expect(cardSize).not.toBeNull();
+    expect(Number(sectionSize?.[1])).toBeGreaterThan(Number(cardSize?.[1]));
   });
 });
 

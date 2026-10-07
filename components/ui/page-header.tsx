@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, type LucideIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cn } from '@/lib/utils/cn';
@@ -7,28 +7,37 @@ import { cn } from '@/lib/utils/cn';
 /**
  * The top of every page, and the one place a page-level action is styled.
  *
- * ## Why this exists
+ * ## The reference's page banner
  *
- * Before Phase 9 each page wrote its own header. The results diverged: "Add
- * staff member" was a filled button, "Register client", "New loan" and
- * "Record a payment" were bare text in the same position, and the dashboard's
- * quick actions managed three different button styles side by side. A reader
- * learns what a filled rectangle means on one screen and has to unlearn it on
- * the next.
+ * Every screen in the reference project opens with the same block: a navy →
+ * blue → amber gradient panel (`.page-banner`) carrying a small translucent
+ * "eyebrow" chip, the title in `text-2xl font-bold tracking-tight`, and one
+ * line of explanation in `text-[13px] text-blue-100`. It is the single most
+ * recognisable thing about the design, and it is what makes forty unrelated
+ * screens read as one product. `PageHeader` is that banner.
  *
- * So the pattern is fixed here, and pages supply content rather than styling:
+ * The gradient is defined once in `globals.css`, with the amber stop pushed
+ * to 118% so the right-hand end reads as the sign-in screen's warm edge
+ * rather than desaturating to grey, plus a blurred white bloom in the
+ * top-right corner. In print it collapses to a plain heading with a rule
+ * under it — a block of ink is not a report.
  *
- *   - **Primary action** — one per page at most, a filled accent button. The
- *     thing a person came to this page to do.
- *   - **Secondary actions** — outlined. Export, print, a second route.
- *   - **Back link** — a text link with a left arrow, above the title, never a
- *     button. It navigates; it does not act.
+ * ## Actions
  *
- * `ActionLink` and `ActionButton` below are the only two styles. A page that
- * wants a third is a page that has outgrown this header, and should say so in
- * review rather than inventing one inline.
+ * Actions sit *below* the banner rather than inside it, which is where the
+ * reference puts them (`LoanProducts.tsx`, `Clients.tsx`): full-width and
+ * 52px tall on a phone, auto-width and 40px on the desktop, via
+ * `.page-header-actions`. Three styles exist and no more:
+ *
+ *   - **Primary action** — one per page at most, the navy fill. The thing a
+ *     person came to this page to do.
+ *   - **Secondary actions** — bordered white. Export, print, a second route.
+ *   - **Back link** — a text link with a left arrow, above the banner, never
+ *     a button. It navigates; it does not act.
+ *
+ * A page that wants a fourth is a page that has outgrown this header, and
+ * should say so in review rather than inventing one inline.
  */
-
 export interface PageHeaderProps {
   readonly title: string;
   readonly description?: ReactNode;
@@ -39,6 +48,14 @@ export interface PageHeaderProps {
   readonly secondaryActions?: ReactNode;
   /** A status chip beside the title — a loan's state, an account's status. */
   readonly status?: ReactNode;
+  /**
+   * The small translucent chip above the title, naming the part of the
+   * business this screen belongs to — "Member Register", "Lending Terms".
+   * The reference puts one on every screen.
+   */
+  readonly eyebrow?: string;
+  /** The amber icon inside the eyebrow chip. */
+  readonly icon?: LucideIcon;
   readonly className?: string;
 }
 
@@ -49,42 +66,57 @@ export function PageHeader({
   primaryAction,
   secondaryActions,
   status,
+  eyebrow,
+  icon: Icon,
   className,
 }: PageHeaderProps) {
   const hasActions = primaryAction !== undefined || secondaryActions !== undefined;
 
   return (
-    <div className={cn('mb-5 min-w-0', className)}>
+    <div className={cn('mb-4 min-w-0 space-y-3', className)}>
       {back !== undefined ? (
         <Link
           href={back.href}
-          className="text-text-muted hover:text-text mb-2 inline-flex min-h-8 items-center gap-1.5 text-sm print:hidden"
+          className="text-text-muted hover:text-accent inline-flex min-h-8 items-center gap-1.5 text-xs font-medium print:hidden"
         >
           <ArrowLeft aria-hidden="true" className="size-4" />
           {back.label}
         </Link>
       ) : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-text min-w-0 break-words">{title}</h1>
-            {status}
-          </div>
-          {description !== undefined ? (
-            <p className="text-text-muted mt-1 text-sm sm:text-base">{description}</p>
-          ) : null}
+      {/* The banner. `p-5 sm:p-6` is the reference's own padding. */}
+      <div className="page-banner p-5 sm:p-6">
+        {/* The eyebrow chip: a translucent white pill with an amber icon,
+            naming the area of the business this screen belongs to. */}
+        {eyebrow !== undefined ? (
+          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
+            {Icon === undefined ? null : (
+              <Icon aria-hidden="true" className="size-3.5 text-amber-400" />
+            )}
+            {eyebrow}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="t-page-title min-w-0 break-words text-white">{title}</h1>
+          {status}
         </div>
 
-        {hasActions ? (
-          // `shrink-0` so a long title never squeezes the action into two
-          // lines; the row wraps underneath instead on a narrow screen.
-          <div className="flex shrink-0 flex-wrap items-center gap-2 print:hidden">
-            {secondaryActions}
-            {primaryAction}
-          </div>
+        {description !== undefined ? (
+          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
+            {description}
+          </p>
         ) : null}
       </div>
+
+      {hasActions ? (
+        // `.page-header-actions` is the reference's rule: stacked and
+        // thumb-sized on a phone, inline and compact from `md` up.
+        <div className="page-header-actions print:hidden">
+          {primaryAction}
+          {secondaryActions}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -93,16 +125,20 @@ export function PageHeader({
 // The two action styles
 // ---------------------------------------------------------------------------
 
+/**
+ * The reference's page action, measured off `LoanProducts.tsx`:
+ * `h-[52px] w-full rounded-lg px-5 text-base font-semibold` on a phone,
+ * `h-10 w-auto text-[13px]` from `sm` up. `.page-header-actions` supplies the
+ * width; these supply the height, the type and the fill.
+ */
 const ACTION_BASE =
-  'inline-flex min-h-touch items-center justify-center gap-2 rounded-md px-4 text-sm font-medium pressable';
+  'inline-flex items-center justify-center gap-2 rounded-lg px-5 text-base font-semibold pressable [&_svg]:size-4 [&_svg]:shrink-0 sm:h-10 sm:rounded-md sm:text-[13px]';
 
 const ACTION_VARIANTS = {
-  primary:
-    'bg-accent text-accent-contrast [box-shadow:var(--elevate-2)] hover:bg-accent-hover active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)]',
+  primary: 'bg-accent text-accent-contrast shadow-xs hover:bg-accent-hover',
   secondary:
-    'text-text [background:var(--surface-raised-fill)] [box-shadow:var(--elevate-2)] hover:text-accent active:[box-shadow:var(--inset-press)]',
-  danger:
-    'bg-danger text-white [box-shadow:var(--elevate-2)] hover:bg-danger/90 active:[box-shadow:inset_0_3px_8px_rgba(0,0,0,0.3)]',
+    'bg-surface text-text border border-border-strong shadow-xs hover:bg-surface-hover hover:text-accent',
+  danger: 'bg-danger text-white shadow-xs hover:bg-danger/90',
 } as const;
 
 export interface ActionLinkProps extends ComponentProps<typeof Link> {
@@ -179,18 +215,20 @@ export function SectionHeader({
   return (
     <div className={cn('mb-3 flex min-w-0 items-end justify-between gap-3', className)}>
       <div className="min-w-0">
+        {/* The reference's `MisPageTitle`: `text-lg font-bold text-slate-900
+            md:text-xl`. */}
         <Heading
           {...(id === undefined ? {} : { id })}
-          className="text-text text-lg font-semibold tracking-tight sm:text-xl"
+          className="t-section-title text-text"
         >
           {title}
         </Heading>
         {description !== undefined ? (
-          <p className="text-text-muted mt-0.5 text-sm">{description}</p>
+          <p className="text-text-muted mt-0.5 text-xs">{description}</p>
         ) : null}
       </div>
       {action !== undefined ? (
-        <div className="shrink-0 text-sm print:hidden">{action}</div>
+        <div className="shrink-0 text-xs print:hidden">{action}</div>
       ) : null}
     </div>
   );

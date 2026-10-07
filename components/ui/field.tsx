@@ -2,6 +2,7 @@
 
 import { useId, type ReactNode } from 'react';
 
+import { cn } from '@/lib/utils/cn';
 import { Input, type InputProps } from './input';
 import { Label } from './label';
 
@@ -12,6 +13,14 @@ export interface FieldProps extends Omit<InputProps, 'id' | 'invalid'> {
   /** Validation message. Its presence puts the field into the error state. */
   readonly error?: string;
   readonly required?: boolean;
+  /**
+   * Overrides the label's colour. Needed by exactly one screen: the sign-in
+   * form, whose card sits on the brand gradient, where the default
+   * dark-on-light label is unreadable.
+   */
+  readonly labelClassName?: string;
+  /** The same, for the hint line beneath the control. */
+  readonly hintClassName?: string;
 }
 
 /**
@@ -36,6 +45,8 @@ export function Field({
   hint,
   error,
   required = false,
+  labelClassName,
+  hintClassName,
   ...inputProps
 }: FieldProps) {
   const generatedId = useId();
@@ -50,7 +61,7 @@ export function Field({
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={inputId} required={required}>
+      <Label htmlFor={inputId} required={required} className={labelClassName}>
         {label}
       </Label>
 
@@ -63,7 +74,7 @@ export function Field({
       />
 
       {hint !== undefined ? (
-        <p id={hintId} className="text-text-muted text-xs">
+        <p id={hintId} className={cn('text-text-muted text-xs', hintClassName)}>
           {hint}
         </p>
       ) : null}

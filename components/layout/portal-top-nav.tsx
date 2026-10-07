@@ -41,10 +41,13 @@ export function PortalTopNav({
               <Link
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
+                // The reference's active tab: the navy fill, not a tint — the
+                // portal header has only two entries, so the current one can
+                // afford to be stated loudly.
                 className={cn(
-                  'min-h-touch flex items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors duration-150',
+                  'min-h-touch flex items-center gap-2 rounded-md px-3 text-[13px] font-semibold transition-colors duration-150',
                   isActive
-                    ? 'bg-accent-surface text-accent font-semibold'
+                    ? 'bg-accent text-accent-contrast shadow-xs'
                     : 'text-text-muted hover:bg-surface-hover hover:text-text',
                 )}
               >

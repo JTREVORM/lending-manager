@@ -1,7 +1,7 @@
 'use client';
 
 import { LogOut } from 'lucide-react';
-import { useTransition } from 'react';
+import { useTransition, type ReactNode } from 'react';
 
 import { clearServiceWorkerCaches } from '@/components/pwa/service-worker-provider';
 import { signOutAction } from '@/lib/auth/actions';
@@ -24,9 +24,23 @@ const VARIANTS = {
 export function SignOutButton({
   className,
   variant = 'default',
+  icon,
+  iconOnly = false,
 }: {
   readonly className?: string;
   readonly variant?: keyof typeof VARIANTS;
+  /**
+   * Replaces the default 20px icon. The reference's header and sidebar foot
+   * use different sizes for the same control (24px in the phone icon bar,
+   * 16px in the sidebar foot), so the caller supplies it.
+   */
+  readonly icon?: ReactNode;
+  /**
+   * Drops the visible label, leaving an icon-only control — what the
+   * reference's header and sidebar foot render. The accessible name is kept
+   * on the button either way, so the control is still announced.
+   */
+  readonly iconOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -47,16 +61,23 @@ export function SignOutButton({
         type="submit"
         disabled={pending}
         aria-busy={pending || undefined}
+        // An icon-only control carries its name on the button itself, since
+        // there is no text node left to announce.
+        {...(iconOnly ? { 'aria-label': pending ? 'Signing out' : 'Sign out' } : {})}
+        title={iconOnly ? 'Sign out' : undefined}
         className={cn(
           'min-h-touch',
           VARIANTS[variant],
-          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+          'flex items-center gap-3 rounded-md text-sm font-medium transition-colors',
+          iconOnly ? 'justify-center' : 'w-full px-3 py-2',
           'disabled:cursor-not-allowed disabled:opacity-60',
           className,
         )}
       >
-        <LogOut aria-hidden="true" className="size-5 shrink-0" />
-        <span className="truncate">{pending ? 'Signing out' : 'Sign out'}</span>
+        {icon ?? <LogOut aria-hidden="true" className="size-5 shrink-0" />}
+        {iconOnly ? null : (
+          <span className="truncate">{pending ? 'Signing out' : 'Sign out'}</span>
+        )}
       </button>
     </form>
   );

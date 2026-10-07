@@ -1,321 +1,316 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Design tokens — the lending-manager design system
+   Design tokens — ported from the reference microfinance management system
    ===========================================================================
-   A financial application for non-technical staff, used mostly on phones in
-   bright daylight, and a borrower portal used by clients. The visual language
-   is a restrained, premium fintech one: a warm cream canvas, soft raised and
-   inset surfaces, carefully controlled shadows, and a single dark-teal accent
-   reserved for things that *do* something. It is calm and trustworthy rather
-   than decorative — depth communicates hierarchy, never ornament.
+   Every value in this file is the reference project's own value, carried over
+   rather than approximated. The reference is Tailwind v4 with a CSS-first
+   `@theme` configuration and no `tailwind.config.js`; so is this file, which
+   is why the tokens transfer as values instead of as a translation.
 
-   Everything here is a token. Colour, elevation, radius and motion each have
-   one place they are defined and are consumed by name everywhere else, so the
-   product reads as though one hand designed it and a theme change is one edit
-   rather than a hunt through components.
+   What came across, and from where:
 
-   The redesign is presentation-only: no financial rule, schedule, allocation
-   or report definition changed. Only the surface the numbers are read on did.
+     - Inter, 300–900, from Google Fonts (`src/routes/__root.tsx`).
+     - `--radius: 0.625rem` and its seven-step derived scale (`src/styles.css`).
+     - The shadcn "new-york" slate semantic set, in oklch, light and dark.
+     - The brand ramp (`--color-chetu-*`), ported by value under the neutral
+       name `brand-*` — the hexes are the design system, the company's name
+       is not ours to take.
+     - The deeper working navy the screens actually paint with: `#0B4394`,
+       `#093672`, `#083475`, `#06295E`, the amber `#F5A623` / `#fbbf24`
+       actives, and the `#eaf1f8` mobile record panel.
+     - `--shadow-card`, `--shadow-card-hover`, `--shadow-modal`.
+     - The whole global class layer: `.app-shell`, `.sidebar-gradient`,
+       `.page-banner`, `.brand-gradient`, `.form-field`, `.form-label`,
+       `.form-section-title`, `.btn-save`, `.chip`, `.chip-row`,
+       `.page-header-actions`, `.scroll-area`, `.table-sticky-head`,
+       `.loader`, `.animate-fade-in` and the scrollbar skin.
+
+   Token *names* stay this application's own (`--color-accent`,
+   `--color-surface`, `--color-page`, `--color-text`, `--color-sidebar`, the
+   four status pairs). Around 117 class references and two test suites depend
+   on those spellings; renaming them to the reference's shadcn names would
+   blank out every utility built on them, so the reference's names are added
+   as aliases below and both vocabularies resolve to the same colour.
+
+   Dark mode stays a `prefers-color-scheme` media query rather than the
+   reference's `.dark` class: `tests/unit/colour-contrast.test.ts` splits this
+   file on that exact string to prove WCAG AA on every status pair, and the
+   reference's own `.dark` slate values are what fill it.
+
+   The redesign is presentation-only. No financial rule, schedule, allocation,
+   penalty or report definition changed — only the surface the numbers are
+   read on.
    =========================================================================== */
 
 @theme {
   /* -------------------------------------------------------------------------
-     Brand ramp — enterprise royal blue, deepening to navy.
+     Brand ramp — the reference's `--color-chetu-*` palette, by value.
 
-     A serious financial-software blue (trust, and distinct from the red/amber
-     that mean something is wrong). The light steps carry UI tints; the dark
-     steps (800–950) are the navy the application shell and sidebar are built
-     from, the way an enterprise system like this one reads at a glance. A
-     later phase lets the business set its own brand colour from
-     `company_settings.brand_primary_color` by overriding these in one place.
+     Registered as Tailwind colours, so `bg-brand-600`, `text-brand-navy` and
+     friends exist exactly as `bg-chetu-blue` did in the reference.
      ------------------------------------------------------------------------- */
-  --color-brand-50: oklch(0.97 0.015 256);
-  --color-brand-100: oklch(0.93 0.035 256);
-  --color-brand-200: oklch(0.87 0.065 256);
-  --color-brand-300: oklch(0.78 0.095 256);
-  --color-brand-400: oklch(0.66 0.12 256);
-  --color-brand-500: oklch(0.56 0.13 256);
-  --color-brand-600: oklch(0.4844 0.13 254.5); /* #215FA6 — the interactive blue */
-  --color-brand-700: oklch(0.41 0.115 256);
-  --color-brand-800: oklch(0.3474 0.0809 256); /* #1B3A63 — sidebar hover */
-  --color-brand-900: oklch(0.2852 0.0699 257); /* #112A4C — the navy shell */
-  --color-brand-950: oklch(0.22 0.055 257);
+  --color-brand-50: #f8fafc;
+  --color-brand-100: #f1f5f9;
+  --color-brand-200: #e2e8f0;
+  --color-brand-300: #cbd5e1;
+  --color-brand-400: #94a3b8;
+  --color-brand-500: #64748b;
+  --color-brand-600: #475569;
+  --color-brand-700: #334155;
+  --color-brand-800: #1e293b;
+  --color-brand-900: #0f172a;
 
-  /* ---------------------------------------------------------------------
-     Accent — the interactive colour.
+  /* The brand blues and reds, named as the reference names them. */
+  --color-brand-blue: #1e60d5;
+  --color-brand-darkblue: #154bb2;
+  --color-brand-navy: #0f2962;
+  --color-brand-lightblue: #eff6ff;
+  --color-brand-red: #d32f2f;
+  --color-brand-darkred: #b71c1c;
+  --color-brand-lightred: #fef2f2;
+  --color-brand-gold: #f59e0b;
 
-     A deliberate alias of the brand teal rather than a second hue. Every
-     control that *does* something (a primary action, a link, a selected
-     option, a focus ring) reaches for `accent`; `brand` names the company's
-     colour. Today they are the same value, and when the business sets its own
-     brand colour they can part company without every interactive element
-     following the logo. The values live in `:root` below because the accent
-     has to change between light and dark.
+  /* -------------------------------------------------------------------------
+     The working navy — what the chrome, the banners and the primary buttons
+     are actually painted with in the reference, as literal hex in its
+     components rather than as a token. Named here so it is a token for us.
+     ------------------------------------------------------------------------- */
+  --color-navy: #0b4394;
+  --color-navy-hover: #093672;
+  --color-navy-brand: #083475;
+  --color-navy-deep: #06295e;
 
-     Phase 9 note: these three tokens were referenced 117 times across the
-     application before they existed, and an undefined Tailwind token emits
-     nothing silently — which is why six page actions once rendered as bare
-     text. They are defined, and asserted, so that cannot recur.
-     --------------------------------------------------------------------- */
+  /* The amber the reference uses for an active navigation group, the form
+     section rule and the save button. */
+  --color-amber-active: #f5a623;
+  --color-amber-save: #fbbf24;
+  --color-amber-save-hover: #f59e0b;
 
-  /* Semantic state.
+  /* The pale blue panel a record becomes on a phone. */
+  --color-record: #eaf1f8;
 
-     The four status colours, and the tints they are read on. Each pair is the
-     *text* colour and the *badge background* it sits on, so each pair has to
-     clear 4.5:1 — the badges are 12px, below the large-text threshold, and
-     read on a counter in daylight. The lightnesses are not chosen by eye: they
-     are the values a contrast calculation agreed on, and
-     `tests/unit/colour-contrast.test.ts` recomputes them from this file so
-     they cannot drift back. Retuned for the cool blue-gray surface the badges
-     now sit on; every pair clears AA with margin. */
-  --color-success: oklch(0.5133 0.12 152.2);
-  --color-success-surface: oklch(0.95 0.03 150);
-  --color-warning: oklch(0.545 0.115 71.1);
-  --color-warning-surface: oklch(0.965 0.038 85);
-  --color-danger: oklch(0.545 0.175 27.4);
-  --color-danger-surface: oklch(0.96 0.032 25);
-  --color-info: oklch(0.4844 0.13 254.5);
-  --color-info-surface: oklch(0.95 0.03 255);
+  /* -------------------------------------------------------------------------
+     Status — the reference's ring-pill tones (emerald-700 / amber-800 /
+     red-700 / navy on their 50-level tints), in oklch.
+     ------------------------------------------------------------------------- */
+  --color-success: oklch(0.5081 0.1049 165.612);
+  --color-success-surface: oklch(0.9793 0.0207 166.113);
+  --color-warning: oklch(0.4732 0.1247 46.201);
+  --color-warning-surface: oklch(0.9869 0.0214 95.277);
+  --color-danger: oklch(0.5054 0.1905 27.518);
+  --color-danger-surface: oklch(0.9705 0.0129 17.38);
+  --color-info: oklch(0.4016 0.1446 259.138);
+  --color-info-surface: oklch(0.9705 0.0142 254.604);
 
-  /* Typography — system stack. No webfont download on a slow connection, which
-     for staff on a 3G phone at a counter is a deliberate performance choice,
-     not a shortcut. Hierarchy comes from size, weight and tracking (defined in
-     the typography layer below), not from a display face. */
+  /* -------------------------------------------------------------------------
+     Typography — Inter, exactly as the reference declares it.
+
+     The face is loaded in `app/layout.tsx` from the same Google Fonts
+     stylesheet the reference links, at the same weights (300–900) and with
+     the same `display=swap`. Weights 800 and 900 are not decoration: the
+     reference sets page titles in `font-black` and the sidebar version chip
+     in `font-extrabold`.
+     ------------------------------------------------------------------------- */
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    'Noto Sans', sans-serif;
-  --font-mono:
-    ui-mono, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
-    monospace;
+    var(--font-inter), Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Radius scale — standardised, not arbitrary. Controls are tight, cards are
-     soft, large surfaces are softest, and an inner element is always a step
-     tighter than its container so curves stay concentric. */
-  --radius-xs: 0.25rem; /* 4px — small technical details */
-  --radius-sm: 0.5rem; /* 8px — compact controls, badges */
-  --radius-md: 0.75rem; /* 12px — inputs, buttons, standard controls */
-  --radius-lg: 1rem; /* 16px — cards */
-  --radius-xl: 1.25rem; /* 20px — large surfaces */
-  --radius-2xl: 1.5rem; /* 24px — large dialogs, important surfaces */
+  /* -------------------------------------------------------------------------
+     Radius — `--radius: 0.625rem` (10px) and the reference's derived scale.
+     Its `calc()` steps are resolved here so the values are legible.
+     ------------------------------------------------------------------------- */
+  --radius: 0.625rem;
+  --radius-xs: 0.25rem; /* 4px  — table chips, small technical details */
+  --radius-sm: 0.375rem; /* 6px  — radius - 4px */
+  --radius-md: 0.5rem; /* 8px  — radius - 2px: inputs, buttons */
+  --radius-lg: 0.625rem; /* 10px — radius: cards, panels, banners */
+  --radius-xl: 0.875rem; /* 14px — radius + 4px */
+  --radius-2xl: 1.125rem; /* 18px — radius + 8px: large surfaces */
+  --radius-3xl: 1.375rem; /* 22px — radius + 12px */
+  --radius-4xl: 1.625rem; /* 26px — radius + 16px */
 
-  /* Spacing — the 4 / 8 / 12 / 16 / 24 / 32 / 48 rhythm the layout keeps to.
-     Tailwind's scale already lands on these (1 2 3 4 6 8 12); they are named
-     here so the rhythm is documented rather than tribal. */
-  --spacing-section: 2rem; /* 32px — gap between major page sections */
-  --spacing-gutter: 1rem; /* 16px — the phone side gutter */
+  /* -------------------------------------------------------------------------
+     Chrome dimensions, measured off the reference.
+     ------------------------------------------------------------------------- */
+  --spacing-sidebar: 16rem; /* 256px — `w-64` */
+  --spacing-header: 4rem; /* 64px  — `h-16` */
 
-  /* Minimum comfortable touch target. WCAG 2.5.5 asks for 44px; staff use
-     this one-handed at a counter, so it is the floor for every control. */
+  /* Minimum comfortable touch target. The reference enforces 2.75rem on every
+     button, select, input and textarea below `md`; chips sit at 2.25rem. */
   --spacing-touch: 2.75rem; /* 44px */
+  --spacing-chip: 2.25rem; /* 36px */
 
-  /* Motion — restrained. Durations and easing are tokens so every transition
-     in the app shares one physical feel. The curves are stronger than the CSS
-     built-ins, which lack the punch that makes motion feel intentional; the
-     durations stay under ~220ms because this UI is used all day and a slow
-     animation is a slow app. Enter/exit use ease-out (immediate movement);
-     on-screen morphs use ease-in-out; ease-in is never used — it delays the
-     first frame, the moment the eye is on it. */
+  /* Section rhythm — the `space-y-4`/`5`/`6` the reference's pages keep to. */
+  --spacing-section: 1.25rem;
+  --spacing-gutter: 0.75rem;
+
+  /* -------------------------------------------------------------------------
+     Shadows — the reference's three named card shadows, verbatim.
+     ------------------------------------------------------------------------- */
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover:
+    0 10px 25px -5px rgba(30, 96, 213, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 25px 50px -12px rgba(15, 41, 98, 0.25);
+
+  /* -------------------------------------------------------------------------
+     Motion — the reference's durations: 300ms for the sidebar and header
+     transforms, 220ms for the fade-in, 150ms for colour changes.
+     ------------------------------------------------------------------------- */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-in-out: ease-in-out;
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --duration-press: 120ms;
   --duration-fast: 150ms;
-  --duration-base: 200ms;
+  --duration-base: 220ms;
   --duration-slow: 300ms;
 }
 
 /* ---------------------------------------------------------------------------
-   Semantic surface, accent and elevation tokens, defined for both schemes.
+   Semantic surface, accent and elevation tokens.
 
-   Components reference these rather than picking a grey or a shadow, so dark
-   mode and the whole elevation system are properties of the theme instead of a
-   `dark:` variant and a hand-rolled box-shadow on every element.
+   Light values are the reference's: white cards on a `#f1f5f9` shell, slate
+   borders, `#0F172A` text, `#64748B` muted, and `#0B4394` as the one
+   interactive colour.
    --------------------------------------------------------------------------- */
 :root {
-  /* ----------------------------------------------------------------------
-     The reference palette, to the hex. Expressed in oklch because the
-     contrast test recomputes AA from these declarations; the comment on each
-     names the source hex so the two can never silently drift.
-     ---------------------------------------------------------------------- */
+  /* -- The interactive colour: the reference's working navy ---------------- */
+  --color-accent: oklch(0.4016 0.1446 259.138); /* #0B4394 */
+  --color-accent-contrast: oklch(1 0 0); /* white */
+  --color-accent-surface: oklch(0.9705 0.0142 254.604); /* #EFF6FF */
+  --color-accent-hover: oklch(0.3428 0.1138 257.817); /* #093672 */
 
-  /* Accent — the interactive royal blue #215FA6. Every interactive thing
-     reaches for it; pressed/hover sinks to a darker blue. */
-  --color-accent: oklch(0.4844 0.1301 254.5); /* #215FA6 */
-  --color-accent-contrast: oklch(0.99 0.004 255); /* near-white */
-  --color-accent-surface: oklch(0.93 0.035 255); /* pale blue selection tint */
-  --color-accent-hover: oklch(0.42 0.12 255); /* darker blue, pressed/hover */
-  /* Secondary accent — a cyan-teal #0E8AA6, for a second chart series, a
-     highlight, or the active indicator on the navy sidebar. */
-  --color-accent-2: oklch(0.5863 0.1037 219.3); /* #0E8AA6 */
-  --color-accent-2-surface: oklch(0.93 0.04 219);
+  /* The amber the reference pairs with the navy for active and affirmative
+     states — the sidebar's current group, the save button, the section rule. */
+  --color-accent-2: oklch(0.7837 0.1587 72.991); /* #F5A623 */
+  --color-accent-2-surface: oklch(0.9869 0.0214 95.277);
 
-  /* Enterprise neutral surfaces — a light blue-gray canvas (#EDF1F7), near-
-     white cards (#FBFCFE), a pure-white raised layer and a sunken well
-     (#E6EBF2) for inset controls. One cool hue family (~258) throughout. */
-  --color-page: oklch(0.9568 0.0091 258); /* #EDF1F7 */
-  --color-surface: oklch(0.9909 0.0029 264.5); /* #FBFCFE */
+  /* -- Surfaces ----------------------------------------------------------- */
+  /* The shell is slate-100 with two radial brand tints (see `.app-shell`);
+     every panel on top of it is plain white, which is where the reference
+     reads dense figures. */
+  --color-page: oklch(0.9683 0.0069 247.896); /* #F1F5F9 */
+  --color-surface: oklch(1 0 0); /* white */
   --color-surface-raised: oklch(1 0 0); /* white */
-  --color-surface-sunken: oklch(0.9383 0.0109 256.7); /* #E6EBF2 */
-  --color-surface-hover: oklch(0.965 0.008 258);
-  --color-border: oklch(0.8921 0.0157 257); /* #D5DCE6 */
-  --color-border-strong: oklch(0.8 0.02 257);
-  --color-text: oklch(0.2833 0.039 259.4); /* #1E2A3D — dark navy */
-  --color-text-muted: oklch(0.5033 0.0358 258.9); /* #586579 */
-  --color-text-inverse: oklch(0.99 0.004 255);
+  --color-surface-sunken: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  --color-surface-hover: oklch(0.9842 0.0034 247.858); /* slate-50 row hover */
+  --color-border: oklch(0.9288 0.0126 255.508); /* #E2E8F0 slate-200 */
+  --color-border-strong: oklch(0.869 0.0198 252.894); /* #CBD5E1 slate-300 */
+  --color-text: oklch(0.2077 0.0398 265.755); /* #0F172A */
+  --color-text-muted: oklch(0.5544 0.0407 257.417); /* #64748B */
+  --color-text-inverse: oklch(1 0 0);
 
-  /* The navy application shell — the sidebar and the brand mark. Deep royal
-     navy with light foreground, a brighter cyan active accent, and a
-     translucent hover. Not theme-varying: the shell stays navy in both modes,
-     which is what makes the product read as one enterprise system. */
-  --color-sidebar: oklch(0.2852 0.0699 257); /* #112A4C */
-  --color-sidebar-raised: oklch(0.33 0.075 257);
-  --color-sidebar-hover: color-mix(in oklch, white 8%, transparent);
-  --color-sidebar-foreground: oklch(0.93 0.015 255);
-  --color-sidebar-muted: oklch(0.72 0.025 255);
-  --color-sidebar-active: oklch(0.72 0.11 219); /* cyan */
-  --color-sidebar-active-surface: color-mix(in oklch, white 12%, transparent);
+  /* -- The navigation rail ------------------------------------------------- */
+  /* A gradient in the reference, so these are the stops it is built from; the
+     gradient itself is `.sidebar-gradient`. */
+  --color-sidebar: oklch(0.4016 0.1446 259.138); /* #0B4394 */
+  --color-sidebar-raised: oklch(0.3403 0.121 259.21); /* #083475 brand block */
+  --color-sidebar-deep: oklch(0.2934 0.1026 259.21); /* #06295E strip + foot */
+  --color-sidebar-hover: color-mix(in oklch, #1e40af 60%, transparent);
+  --color-sidebar-foreground: oklch(1 0 0);
+  --color-sidebar-muted: oklch(0.8685 0.0504 254.2); /* blue-200 */
+  --color-sidebar-active: oklch(0.7837 0.1587 72.991); /* #F5A623 amber */
+  --color-sidebar-active-surface: color-mix(in oklch, white 20%, transparent);
+  --color-sidebar-border: color-mix(in oklch, #1e3a8a 80%, transparent);
 
-  /* The raised surface's gradient fill — a cool near-white, lit from the
-     top-left. A var so dark mode can swap it for a flat surface instead of a
-     gradient that reads as a seam on a dark page. */
-  --surface-raised-fill: linear-gradient(145deg, #ffffff, #eef2f8);
+  /* -- Elevation ----------------------------------------------------------- */
+  /* The reference is a flat, bordered system: panels carry `shadow-xs` and a
+     slate hairline, not a neumorphic lift. Levels 1–2 are that hairline
+     shadow; 3–5 are the reference's own card / card-hover / modal shadows,
+     which is what the sidebar (`shadow-2xl`) and modals use. */
+  --elevate-1: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --elevate-2: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --elevate-3: var(--shadow-card);
+  --elevate-4: var(--shadow-card-hover);
+  --elevate-5: var(--shadow-modal);
 
-  /* ----------------------------------------------------------------------
-     Glass layer.
-
-     The restrained enterprise glass: a semi-opaque light surface over a
-     backdrop blur, a thin bright border, a soft cool shadow. Used on the top
-     header, the dashboard hero's inner panels, KPI cards and small summary
-     surfaces — never on a dense table, which stays solid and readable.
-     ---------------------------------------------------------------------- */
-  --glass-bg: color-mix(in oklch, white 72%, transparent);
-  --glass-border: color-mix(in oklch, white 70%, transparent);
-  --glass-blur: 14px;
-  --glass-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 30px rgba(30, 45, 75, 0.1);
-
-  /* ----------------------------------------------------------------------
-     Neumorphic shadow system (light mode).
-
-     Soft-UI depth: every raised surface is lit from the top-left (a near-white
-     highlight) and shadowed to the bottom-right — now with a cool blue-gray
-     shadow rather than the earlier warm beige, so it belongs to the enterprise
-     palette. Inset surfaces invert it. Consumed through the elevation/surface
-     helper classes below — never hand-written per page.
-     ---------------------------------------------------------------------- */
-  --neu-dark: 160, 170, 190; /* cool blue-gray shadow */
-  --neu-light: 255, 255, 255; /* highlight */
-
-  /* Level 1 — near-flat. Deliberately gentle: it is what dense tables and
-     low-priority sections sit on, where the full 5px/12px lift would be too
-     much and hurt scanning. */
-  --elevate-1:
-    2px 2px 6px rgba(var(--neu-dark), 0.35), -2px -2px 6px rgba(var(--neu-light), 0.7);
-  /* Level 2 — the compact "small raised" (3px/7px), for hoverable rows and
-     secondary controls. */
-  --elevate-2:
-    3px 3px 7px rgba(var(--neu-dark), 0.5), -3px -3px 7px rgba(var(--neu-light), 0.85);
-  /* Level 3 — the raised card / KPI surface (7px/15px). The hero lift. */
-  --elevate-3:
-    7px 7px 15px rgba(var(--neu-dark), 0.5), -7px -7px 15px rgba(var(--neu-light), 0.85);
-  /* Level 4 — modal. The raised dual-shadow plus a real drop so it reads as
-     floating above a scrim. */
-  --elevate-4:
-    10px 10px 24px rgba(var(--neu-dark), 0.55),
-    -8px -8px 18px rgba(var(--neu-light), 0.8), 0 16px 40px rgba(30, 45, 75, 0.18);
-  /* Level 5 — popover / floating panel, the strongest. */
-  --elevate-5:
-    8px 8px 18px rgba(var(--neu-dark), 0.55), -6px -6px 14px rgba(var(--neu-light), 0.85),
-    0 20px 48px rgba(30, 45, 75, 0.24);
-
-  /* The dual-shadow already carries its own top-left highlight, so the
-     separate top-rim highlight the previous system layered on is now a no-op;
-     kept as a token so the many `var(--highlight-top),var(--elevate-N)`
-     call-sites stay valid and simply resolve to the neumorphic shadow. */
+  /* The reference has no top light-edge and no inset wells: a field is a
+     bordered white box. Kept as tokens so the component layer compiles, set
+     to the reference's treatment rather than removed. */
   --highlight-top: 0 0 transparent;
+  --surface-raised-fill: #ffffff;
+  --inset-soft: 0 0 transparent;
+  --inset-press: inset 0 1px 2px rgba(11, 67, 148, 0.12);
 
-  /* Inset — the reference's 4px/8px well, for form fields and segmented
-     tracks. `--inset-press` is the deeper 6px/12px pressed state. */
-  --inset-soft:
-    inset 3px 3px 7px rgba(var(--neu-dark), 0.5),
-    inset -3px -3px 7px rgba(var(--neu-light), 0.85);
-  --inset-press:
-    inset 6px 6px 12px rgba(140, 150, 172, 0.6),
-    inset -6px -6px 12px rgba(var(--neu-light), 0.85);
-  --ring-focus: 0 0 0 2px var(--color-page), 0 0 0 4px var(--color-accent);
+  /* The reference's field focus: a 3px navy halo at 15% and a navy border. */
+  --ring-focus: 0 0 0 3px rgba(30, 96, 213, 0.15);
+  --ring-field: 0 0 0 1px rgba(11, 67, 148, 0.4);
+
+  /* Glass is not a reference treatment — its header is solid white. Pointed
+     at that so any remaining `.glass` consumer renders the reference's bar. */
+  --glass-bg: #ffffff;
+  --glass-border: oklch(0.9288 0.0126 255.508);
+  --glass-blur: 0px;
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark mode is a deliberate enterprise equivalent, not an inversion: a
-       deep navy-charcoal with a cool lean, surfaces that lift by lightness,
-       and the royal-blue accent brightened so it still lifts off the page. */
-    --color-page: oklch(0.18 0.015 258);
-    --color-surface: oklch(0.23 0.02 258);
-    --color-surface-raised: oklch(0.27 0.022 258);
-    --color-surface-sunken: oklch(0.2 0.017 258);
-    --color-surface-hover: oklch(0.26 0.021 258);
-    --color-border: oklch(0.33 0.02 258);
-    --color-border-strong: oklch(0.44 0.022 258);
-    --color-text: oklch(0.95 0.005 258);
-    --color-text-muted: oklch(0.72 0.012 258);
-    --color-text-inverse: oklch(0.18 0.015 258);
+    /* The reference's own `.dark` block: slate, lifted by lightness. Its
+       `--background`, `--card` and `--muted` become our page, surface and
+       raised surface; its `--foreground` and `--muted-foreground` our text. */
+    --color-page: oklch(0.129 0.042 264.695);
+    --color-surface: oklch(0.208 0.042 265.755);
+    --color-surface-raised: oklch(0.279 0.041 260.031);
+    --color-surface-sunken: oklch(0.17 0.038 264.5);
+    --color-surface-hover: oklch(0.279 0.041 260.031);
+    --color-border: oklch(0.33 0.035 260);
+    --color-border-strong: oklch(0.44 0.04 260);
+    --color-text: oklch(0.984 0.003 247.858);
+    --color-text-muted: oklch(0.704 0.04 256.788);
+    --color-text-inverse: oklch(0.208 0.042 265.755);
 
-    /* The accent brightens so it lifts off a dark page, and its contrast
-       colour inverts with it. Same royal-blue hue (255) as the light scheme. */
-    --color-accent: oklch(0.68 0.12 255);
-    --color-accent-contrast: oklch(0.17 0.02 258);
-    --color-accent-surface: oklch(0.32 0.06 255);
-    --color-accent-hover: oklch(0.73 0.12 255);
-    --color-accent-2: oklch(0.72 0.09 219);
-    --color-accent-2-surface: oklch(0.32 0.06 219);
+    /* The navy accent brightens so it still lifts off a dark page, keeping
+       the reference's hue. */
+    --color-accent: oklch(0.72 0.13 259);
+    --color-accent-contrast: oklch(0.17 0.03 264);
+    --color-accent-surface: oklch(0.31 0.06 259);
+    --color-accent-hover: oklch(0.78 0.13 259);
+    --color-accent-2: oklch(0.82 0.15 73);
+    --color-accent-2-surface: oklch(0.33 0.06 73);
 
-    /* The navy shell is already dark; in dark mode it only deepens slightly so
-       it still separates from the page behind it. */
-    --color-sidebar: oklch(0.23 0.045 257);
-    --color-sidebar-raised: oklch(0.28 0.05 257);
-    --color-sidebar-foreground: oklch(0.92 0.012 255);
-    --color-sidebar-muted: oklch(0.68 0.02 255);
+    /* The rail is already the deepest surface in the product; in dark mode it
+       only settles slightly so it still separates from the page behind it. */
+    --color-sidebar: oklch(0.2999 0.1062 263.076); /* #0F2962 */
+    --color-sidebar-raised: oklch(0.2934 0.1026 259.21);
+    --color-sidebar-deep: oklch(0.24 0.085 259.21);
 
-    /* No gradient on a dark page — a flat raised surface instead, so the lift
-       comes from the clean drop shadows below rather than a faked light
-       source, exactly as the neumorphism guidance asks for dark mode. */
+    /* Status: the surfaces darken and the text brightens with them, or every
+       badge is dark ink on a dark tint. Hues are the reference's. */
+    --color-success: oklch(0.76 0.14 165.6);
+    --color-success-surface: oklch(0.31 0.05 165.6);
+    --color-warning: oklch(0.82 0.15 73);
+    --color-warning-surface: oklch(0.33 0.06 73);
+    --color-danger: oklch(0.74 0.16 27.5);
+    --color-danger-surface: oklch(0.32 0.07 27.5);
+    --color-info: oklch(0.76 0.11 259);
+    --color-info-surface: oklch(0.31 0.06 259);
+
+    /* Shadows deepen and go nearly neutral on a dark page. */
     --surface-raised-fill: var(--color-surface-raised);
-
-    /* Dark glass: a translucent dark surface rather than a translucent light
-       one, so the blur reads as frosted dark rather than washed out. */
-    --glass-bg: color-mix(in oklch, var(--color-surface) 72%, transparent);
-    --glass-border: color-mix(in oklch, white 14%, transparent);
-    --glass-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 30px rgba(0, 0, 0, 0.4);
-
-    /* Surfaces need more lightness contrast against a dark page than the
-       light-mode tints provide, and the status text has to brighten with them
-       or every badge is dark ink on a dark tint — the Phase 9 defect this
-       whole token set is arithmetically guarded against. */
-    --color-success: oklch(0.66 0.13 150);
-    --color-success-surface: oklch(0.3 0.05 150);
-    --color-warning: oklch(0.72 0.13 85);
-    --color-warning-surface: oklch(0.32 0.06 85);
-    --color-danger: oklch(0.7 0.16 25);
-    --color-danger-surface: oklch(0.31 0.07 25);
-    --color-info: oklch(0.7 0.12 255);
-    --color-info-surface: oklch(0.3 0.05 255);
-
-    /* Shadows go deeper and nearly neutral on a dark page; the top highlight
-       is a faint white edge rather than a bright one. */
     --elevate-1: 0 1px 1px oklch(0 0 0 / 0.3);
     --elevate-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 2px 4px oklch(0 0 0 / 0.3);
     --elevate-3: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 16px oklch(0 0 0 / 0.45);
     --elevate-4: 0 2px 6px oklch(0 0 0 / 0.5), 0 12px 28px oklch(0 0 0 / 0.55);
     --elevate-5: 0 4px 10px oklch(0 0 0 / 0.5), 0 18px 40px oklch(0 0 0 / 0.6);
-    --highlight-top: inset 0 1px 0 oklch(1 0 0 / 0.06);
-    --inset-soft: inset 0 1px 2px oklch(0 0 0 / 0.4), inset 0 1px 1px oklch(0 0 0 / 0.25);
     --inset-press: inset 0 2px 5px oklch(0 0 0 / 0.5);
+    --glass-bg: var(--color-surface);
+    --glass-border: var(--color-border);
+    --glass-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 30px rgba(0, 0, 0, 0.4);
+    --ring-focus: 0 0 0 3px oklch(0.72 0.13 259 / 0.3);
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Export to Tailwind.
+
+   `@theme inline` is what turns a custom property into a utility class, so
+   `bg-accent`, `text-text-muted` and `border-border` exist. Both vocabularies
+   are exported: ours, and the reference's shadcn names aliased onto the same
+   values, so a component written either way resolves.
+   --------------------------------------------------------------------------- */
 @theme inline {
   --color-accent: var(--color-accent);
   --color-accent-contrast: var(--color-accent-contrast);
@@ -335,23 +330,50 @@
   --color-text-inverse: var(--color-text-inverse);
   --color-sidebar: var(--color-sidebar);
   --color-sidebar-raised: var(--color-sidebar-raised);
+  --color-sidebar-deep: var(--color-sidebar-deep);
   --color-sidebar-foreground: var(--color-sidebar-foreground);
   --color-sidebar-muted: var(--color-sidebar-muted);
   --color-sidebar-active: var(--color-sidebar-active);
   --color-sidebar-active-surface: var(--color-sidebar-active-surface);
+  --color-sidebar-border: var(--color-sidebar-border);
+
+  /* The reference's shadcn vocabulary, aliased. */
+  --color-background: var(--color-page);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-accent-contrast);
+  --color-secondary: var(--color-surface-sunken);
+  --color-secondary-foreground: var(--color-text);
+  --color-muted: var(--color-surface-sunken);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--color-text-inverse);
+  --color-input: var(--color-border-strong);
+  --color-ring: var(--color-accent);
 }
 
-/* ---------------------------------------------------------------------------
-   Base layer
-   --------------------------------------------------------------------------- */
+/* ===========================================================================
+   Base layer — the reference's global element styling
+   =========================================================================== */
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   * {
     border-color: var(--color-border);
   }
 
   html {
-    /* Smooth in-page jumps, but respect a reduced-motion preference below. */
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     -webkit-text-size-adjust: 100%;
   }
 
@@ -359,34 +381,70 @@
     background-color: var(--color-page);
     color: var(--color-text);
     font-family: var(--font-sans);
-    /* Long Ugandan names and UGX figures must not force the page sideways on a
-       320px screen. Width is contained structurally; this is the backstop. */
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
     text-rendering: optimizeLegibility;
   }
 
+  /* The reference's overflow guard, verbatim. Long names and UGX figures must
+     not force the page sideways on a 320px screen. */
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  img,
+  svg,
+  video,
+  canvas,
+  iframe {
+    max-width: 100%;
+  }
+
+  /* Long words, NINs and reference numbers wrap at word boundaries — never
+     mid-word, and never letter-per-line, which is what `break-word` produced
+     once a flex item was squeezed on a phone. */
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  span,
+  a,
+  li,
+  td,
+  th,
+  div,
+  label {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+  }
+
+  input,
+  select,
+  textarea {
+    word-break: normal;
+    overflow-wrap: normal;
+  }
+
   /* A visible focus ring on every keyboard-focused control. Never removed:
-     without it the application is unusable without a mouse. Reaches for the
-     accent, so the focus colour is the interactive colour. */
+     without it the application cannot be used without a mouse. */
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    border-radius: 0.25rem;
+    border-radius: var(--radius-xs);
   }
 
-  /* Mouse users do not get a ring, keyboard users always do. */
   :focus:not(:focus-visible) {
     outline: none;
   }
 
   /* -------------------------------------------------------------------------
-     Native form controls, given the design system's look without each form
-     having to adopt a bespoke component. Checkboxes and radios take the teal
-     accent; selects and textareas get the inset well, the 12px radius and the
-     teal focus the shared `Input` has. The real native control stays — its
-     semantics, keyboard behaviour and screen-reader name are untouched — so
-     this is presentation only.
+     Form controls — the reference's treatment: a flat bordered white box with
+     a navy focus halo, not an inset well.
      ------------------------------------------------------------------------- */
   input[type='checkbox'],
   input[type='radio'] {
@@ -397,11 +455,10 @@
 
   select,
   textarea {
-    background-color: var(--color-surface-sunken);
+    background-color: var(--color-surface);
     color: var(--color-text);
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-md);
-    box-shadow: var(--inset-soft);
     transition:
       border-color var(--duration-fast) var(--ease-out),
       box-shadow var(--duration-fast) var(--ease-out);
@@ -410,10 +467,9 @@
   select {
     min-height: var(--spacing-touch);
     padding: 0 2rem 0 0.75rem;
-    /* A teal chevron, so the one piece of chrome a native select shows belongs
-       to the palette rather than the browser's default grey. */
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23215FA6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    /* The reference's one piece of select chrome, in the brand blue. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230B4394' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.625rem center;
   }
@@ -422,23 +478,43 @@
     padding: 0.5rem 0.75rem;
   }
 
-  select:focus-visible,
-  textarea:focus-visible {
-    border-color: var(--color-accent);
-    box-shadow:
-      var(--inset-soft),
-      0 0 0 3px var(--color-accent-surface);
+  /* The reference's exact focus treatment for native controls. */
+  input:focus,
+  select:focus,
+  textarea:focus {
     outline: none;
+    box-shadow: var(--ring-focus);
+    border-color: var(--color-brand-blue);
   }
 
+  /* iOS zooms the page when a focused field's text is under 16px, so phones
+     get 16px and the desktop inherits the component's own size. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    max-width: 100%;
+  }
+
+  @media (min-width: 40rem) {
+    input,
+    select,
+    textarea {
+      font-size: inherit;
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+     Headings — the reference's sizes. Its page titles are 1.5rem (`text-2xl`)
+     at 700–900 weight with tight tracking; section headings step down from
+     there.
+     ------------------------------------------------------------------------- */
   h1,
   h2,
   h3,
   h4 {
-    font-weight: 600;
-    letter-spacing: -0.014em;
-    /* Prevents a long heading from overflowing a narrow phone screen, and
-       keeps the last line from orphaning a single word. */
+    font-weight: 700;
+    letter-spacing: -0.015em;
     overflow-wrap: break-word;
     text-wrap: balance;
   }
@@ -449,27 +525,28 @@
   }
 
   h2 {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
     line-height: 1.3;
   }
 
   h3 {
-    font-size: 1.0625rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  h4 {
+    font-size: 0.8125rem;
     line-height: 1.4;
   }
 
   @media (min-width: 48rem) {
-    h1 {
-      font-size: 1.875rem;
-    }
-
     h2 {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
     }
   }
 
-  /* Monetary figures are read in columns and compared against each other, so
-     they need tabular digits to line up. */
+  /* Monetary figures are read in columns and compared, so they need tabular
+     digits to line up. */
   .tabular {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
@@ -493,101 +570,731 @@
 /* ===========================================================================
    Typography roles
    ===========================================================================
-   One scale, named by role, so a metric value is strong everywhere and a
-   caption is quiet everywhere without each screen re-deciding. Financial
-   values are the loudest thing on the page; labels and captions step back.
-   Applied through these classes rather than ad-hoc text utilities so the
-   hierarchy stays consistent across forty screens.
+   One scale, named by role. Re-tuned to the reference's density: its tables
+   run at 11px, its form labels at 12px, its card titles at 15px and its page
+   titles at 24px. Pages consume these classes rather than re-deciding, which
+   is what keeps forty screens on one hierarchy.
    =========================================================================== */
 @layer components {
+  /* The reference's page banner title: `text-2xl font-bold tracking-tight`,
+     set on the gradient so it is always light-on-dark. */
   .t-page-title {
     font-size: 1.5rem;
     line-height: 1.2;
-    font-weight: 650;
-    letter-spacing: -0.016em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
+  /* `MisPageTitle`: `text-lg font-bold md:text-xl`. */
   .t-section-title {
-    font-size: 1.0625rem;
+    font-size: 1.125rem;
     line-height: 1.35;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    letter-spacing: -0.012em;
   }
 
+  /* A list row's heading in the reference: `text-[15px] font-bold`. */
   .t-card-title {
     font-size: 0.9375rem;
     line-height: 1.4;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.008em;
   }
 
-  /* The headline number on a KPI card or a loan summary. Tabular, tight, and
-     larger than anything around it. */
+  /* The headline figure on a summary card: the reference sets these in
+     `font-black`, tabular, a step above everything around them. */
   .t-metric {
-    font-size: 1.75rem;
-    line-height: 1.1;
-    font-weight: 680;
+    font-size: 1.5rem;
+    line-height: 1.15;
+    font-weight: 900;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
   }
 
   .t-metric-sm {
-    font-size: 1.25rem;
-    line-height: 1.15;
-    font-weight: 660;
-    letter-spacing: -0.015em;
+    font-size: 1rem;
+    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: -0.012em;
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
   }
 
-  /* The quiet label above or below a metric. Uppercase, tracked, muted. */
+  /* The reference's quiet card label: `text-[10px] font-bold uppercase
+     tracking-wide text-slate-500`. */
   .t-label {
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     line-height: 1.3;
-    font-weight: 600;
-    letter-spacing: 0.06em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--color-text-muted);
   }
 
   .t-body {
-    font-size: 0.9375rem;
+    font-size: 0.8125rem;
     line-height: 1.55;
   }
 
   .t-helper {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     line-height: 1.45;
     color: var(--color-text-muted);
   }
 
   .t-caption {
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     line-height: 1.4;
     color: var(--color-text-muted);
   }
 
+  /* The reference's table header: `text-[10px] font-bold uppercase
+     tracking-wide text-slate-500`. */
   .t-th {
-    font-size: 0.6875rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--color-text-muted);
   }
 
   @media (min-width: 48rem) {
-    .t-page-title {
-      font-size: 1.875rem;
+    .t-section-title {
+      font-size: 1.25rem;
     }
+
+    .t-metric {
+      font-size: 1.75rem;
+    }
+  }
+}
+
+/* ===========================================================================
+   Brand surfaces — ported from the reference verbatim
+   ===========================================================================
+   The sign-in screen's navy → blue → amber wash, reused inside the app so the
+   two read as one product. Applied to chrome and page banners only: data
+   tables stay on plain white, where dense figures are easiest to read.
+   =========================================================================== */
+@layer components {
+  .brand-gradient {
+    background-image: linear-gradient(135deg, #0b4394 0%, #2c5da6 55%, #f6c256 140%);
+  }
+
+  /* Page banner: the heading block every screen opens with. */
+  .page-banner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    color: #fff;
+    /* The amber stop sits inside the visible range, otherwise the right-hand
+       end desaturates to grey instead of reading as the sign-in screen's warm
+       edge. */
+    background-image: linear-gradient(
+      110deg,
+      #0b4394 0%,
+      #14509e 40%,
+      #3d76bd 72%,
+      #d9a441 118%
+    );
+    box-shadow: 0 10px 24px -12px rgba(11, 67, 148, 0.55);
+  }
+
+  /* The soft light bloom the sign-in screen has in its top-right corner. */
+  .page-banner::after {
+    content: '';
+    position: absolute;
+    top: -60%;
+    right: -10%;
+    width: 22rem;
+    height: 22rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.12);
+    filter: blur(40px);
+    pointer-events: none;
+  }
+
+  /* Text inside the banner is always on the gradient, so it sets its own
+     colours rather than inheriting the page's. */
+  .page-banner h1,
+  .page-banner h2,
+  .page-banner h3 {
+    color: #fff;
+  }
+
+  /* The navigation rail: the same wash running top to bottom, deepening at
+     the foot so the user/sign-out block still separates from the menu. */
+  .sidebar-gradient {
+    background-image: linear-gradient(180deg, #0b4394 0%, #0d478f 45%, #072f6b 100%);
+  }
+
+  /* The app shell picks up a faint tint of the same wash. */
+  .app-shell {
+    background-color: #f1f5f9;
+    background-image:
+      radial-gradient(46rem 30rem at 88% -8%, rgba(11, 67, 148, 0.1), transparent 60%),
+      radial-gradient(40rem 26rem at -6% 108%, rgba(224, 165, 60, 0.14), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .app-shell {
+      background-color: oklch(0.129 0.042 264.695);
+      background-image:
+        radial-gradient(46rem 30rem at 88% -8%, rgba(11, 67, 148, 0.28), transparent 60%),
+        radial-gradient(40rem 26rem at -6% 108%, rgba(224, 165, 60, 0.1), transparent 60%);
+    }
+
+    .sidebar-gradient {
+      background-image: linear-gradient(180deg, #0a2f68 0%, #0a2e60 45%, #061f47 100%);
+    }
+  }
+
+  /* The sign-in page's "WE WANT / YOUR / FEEDBACK" speech-bubble chips. The
+     pointer is a CSS triangle, so no extra markup is needed per chip. */
+  .feedback-pill {
+    position: relative;
+    border-radius: 0.5rem;
+    background: #0b4394;
+    padding: 0.5rem 1rem;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.03em;
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(11, 67, 148, 0.3);
+  }
+
+  .feedback-pill::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-top-color: #0b4394;
+  }
+}
+
+/* ===========================================================================
+   The shared form language
+   ===========================================================================
+   Ported from the reference: compact bordered fields, small grey labels on
+   desktop, amber section rules and a full-width amber save button.
+
+   Mobile follows the original sizing — roomy, touch-sized controls with a
+   plain dark label above each one. Desktop stays compact so the report tables
+   and their filter rows keep their density.
+   =========================================================================== */
+@layer components {
+  .form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 16px;
+    font-weight: 400;
+    color: #1f2937;
+  }
+
+  .form-field {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    padding: 0.875rem 1rem;
+    font-size: 16px;
+    color: #111827;
+  }
+
+  @media (min-width: 48rem) {
+    .form-label {
+      margin-bottom: 0.25rem;
+      font-size: 12px;
+      font-weight: 500;
+      color: #334155;
+    }
+
+    .form-field {
+      border-radius: 0.25rem;
+      border-color: #cbd5e1;
+      padding: 0.375rem 0.625rem;
+      font-size: 13px;
+      color: #0f172a;
+    }
+  }
+
+  .form-field:focus {
+    outline: none;
+    border-color: #0b4394;
+    box-shadow: var(--ring-field);
+  }
+
+  .form-field:disabled,
+  .form-field[readonly] {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .form-section-title {
+    margin-bottom: 0.75rem;
+    border-left: 4px solid #fbbf24;
+    padding-left: 0.5rem;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+  }
+
+  .btn-save {
+    width: 100%;
+    border-radius: 9999px;
+    background: #fbbf24;
+    padding: 0.625rem 1rem;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .btn-save:hover {
+    background: #f59e0b;
+  }
+
+  .btn-save:disabled {
+    opacity: 0.6;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .form-label {
+      color: var(--color-text);
+    }
+
+    .form-field {
+      background: var(--color-surface);
+      border-color: var(--color-border-strong);
+      color: var(--color-text);
+    }
+
+    .form-field:disabled,
+    .form-field[readonly] {
+      background: var(--color-surface-sunken);
+      color: var(--color-text-muted);
+    }
+
+    .form-section-title {
+      color: var(--color-text);
+    }
+  }
+}
+
+/* ===========================================================================
+   Chips, action rows and record panels
+   ===========================================================================
+   The reference's mobile-first layer: filter chips stay on one horizontal
+   line and scroll rather than being squeezed into vertical letters, and a
+   page's primary actions go full width and thumb-sized on a phone.
+   =========================================================================== */
+@layer components {
+  .chip-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 0.125rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chip-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip-row > * {
+    flex: 0 0 auto;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    flex: 0 0 auto;
+    min-height: var(--spacing-chip);
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transition: all var(--duration-fast) ease;
+  }
+
+  .page-header-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .page-header-actions > * {
+    width: 100%;
+    min-height: var(--spacing-touch);
+    justify-content: center;
+  }
+
+  @media (min-width: 48rem) {
+    .page-header-actions {
+      flex-direction: row;
+      width: auto;
+      align-items: center;
+    }
+
+    .page-header-actions > * {
+      width: auto;
+      min-height: 0;
+    }
+  }
+
+  /* One record as a pale blue panel of "Label :Value" lines — the shape the
+     reference's tables take on a phone. */
+  .record-panel {
+    border-radius: var(--radius-lg);
+    background: var(--color-record);
+    padding: 0.75rem 1rem;
+  }
+
+  .record-panel > p {
+    padding-block: 3px;
+    font-size: 13px;
+    line-height: 1.375;
+    color: #0f172a;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .record-panel {
+      background: var(--color-surface-raised);
+    }
+
+    .record-panel > p {
+      color: var(--color-text);
+    }
+  }
+
+  /* Comfortable tap targets everywhere on touch layouts, and single-column
+     forms — the reference's `max-width: 767px` block. */
+  @media (max-width: 47.9375rem) {
+    button,
+    [role='button'],
+    select,
+    input:not([type='checkbox']):not([type='radio']),
+    textarea {
+      min-height: var(--spacing-touch);
+    }
+
+    button.chip,
+    .chip {
+      min-height: var(--spacing-chip);
+    }
+
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    form .grid,
+    .mobile-stack .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .modal-mobile {
+      max-width: calc(100vw - 1.5rem);
+    }
+  }
+}
+
+/* ===========================================================================
+   Overflow / scrolling system
+   ===========================================================================
+   One implementation for every scrollable region in the app, ported from the
+   reference. `.scroll-area` supplies the behaviour and the scrollbar skin;
+   the axis classes decide which direction actually scrolls.
+   =========================================================================== */
+@layer components {
+  .scroll-area {
+    /* Momentum scrolling + native horizontal swipe on touch devices. */
+    -webkit-overflow-scrolling: touch;
+    /* Stops a nested scroller chaining its scroll to the page once it reaches
+       its own end — the usual cause of "the whole page jumped". */
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .scroll-x {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .scroll-y {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .scroll-both {
+    overflow: auto;
+  }
+
+  .scroll-area::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-area::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+    /* Transparent border + background-clip keeps the thumb visually slim
+       while leaving a full-width hit area for the pointer. */
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .scroll-area:hover::-webkit-scrollbar-thumb {
+    background-color: #94a3b8;
+  }
+
+  .scroll-area::-webkit-scrollbar-thumb:hover {
+    background-color: #64748b;
+  }
+
+  .scroll-area::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Safety net: anything still using a bare Tailwind overflow utility picks
+     up the same scrollbar skin and touch behaviour, so no region can look out
+     of place. `.no-scrollbar` opts out deliberately, hence the `:not()`. */
+  .overflow-auto:not(.no-scrollbar),
+  .overflow-x-auto:not(.no-scrollbar),
+  .overflow-y-auto:not(.no-scrollbar) {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .overflow-auto:not(.no-scrollbar)::-webkit-scrollbar,
+  .overflow-x-auto:not(.no-scrollbar)::-webkit-scrollbar,
+  .overflow-y-auto:not(.no-scrollbar)::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .overflow-auto:not(.no-scrollbar)::-webkit-scrollbar-track,
+  .overflow-x-auto:not(.no-scrollbar)::-webkit-scrollbar-track,
+  .overflow-y-auto:not(.no-scrollbar)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .overflow-auto:not(.no-scrollbar)::-webkit-scrollbar-thumb,
+  .overflow-x-auto:not(.no-scrollbar)::-webkit-scrollbar-thumb,
+  .overflow-y-auto:not(.no-scrollbar)::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Touch devices get a slightly chunkier thumb — a 10px target is hard to
+     hit with a finger, and these panels are swiped more than dragged. */
+  @media (hover: none) {
+    .scroll-area::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    .scroll-area::-webkit-scrollbar-thumb {
+      background-color: #94a3b8;
+    }
+  }
+
+  /* Global thin scrollbar. */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-mobile {
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+  }
+
+  .modal-body-scroll {
+    max-height: calc(100vh - 12rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-cell-limit {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+  }
+}
+
+/* ===========================================================================
+   The loading indicator
+   ===========================================================================
+   The reference's single loader: a "Loading..." wordmark with a sweep that
+   fills the letters left to right. The text lives in ::before so the element
+   itself carries the moving gradient, which is clipped to the glyphs.
+   =========================================================================== */
+@layer components {
+  .loader {
+    width: fit-content;
+    font-weight: bold;
+    font-family: var(--font-mono);
+    font-size: 30px;
+    background: linear-gradient(90deg, #0b4394 50%, #0000 0) right / 200% 100%;
+    animation: l21 2s infinite linear;
+  }
+
+  .loader::before {
+    content: 'Loading...';
+    color: #0000;
+    padding: 0 5px;
+    background: inherit;
+    background-image: linear-gradient(90deg, #fff 50%, #0b4394 0);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  /* Smaller inline variant for table and card bodies. */
+  .loader-sm {
+    font-size: 16px;
+  }
+
+  /* On a dark ground the sweep inverts so the glyphs stay legible. */
+  .loader-on-dark {
+    background: linear-gradient(90deg, #fff 50%, #0000 0) right / 200% 100%;
+  }
+
+  .loader-on-dark::before {
+    background-image: linear-gradient(90deg, #0b4394 50%, #fff 0);
+  }
+
+  /* Full-screen veil used while a manual refresh is in flight. */
+  .loader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(248, 250, 252, 0.82);
+    backdrop-filter: blur(2px);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .loader {
+      background: linear-gradient(90deg, #fff 50%, #0000 0) right / 200% 100%;
+    }
+
+    .loader::before {
+      background-image: linear-gradient(90deg, #0b4394 50%, #fff 0);
+    }
+
+    .loader-overlay {
+      background: oklch(0.129 0.042 264.695 / 0.85);
+    }
+  }
+
+  /* Without motion the sweep would never resolve, so show solid text. */
+  @media (prefers-reduced-motion: reduce) {
+    .loader {
+      animation: none;
+      background: none;
+    }
+
+    .loader::before {
+      color: #0b4394;
+      background: none;
+      -webkit-background-clip: border-box;
+      background-clip: border-box;
+    }
+
+    .loader-on-dark::before {
+      color: #fff;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.22s ease-out forwards;
+  }
+}
+
+@keyframes l21 {
+  100% {
+    background-position: left;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
 /* ===========================================================================
    Surface & elevation helpers
    ===========================================================================
-   The five elevation levels and the two neumorphic treatments, as classes.
-   A component picks a level; it never writes a box-shadow. This is what keeps
-   shadows from scattering and what makes depth mean hierarchy.
+   The five elevation levels as classes. A component picks a level; it never
+   writes a box-shadow. This is what keeps shadows from scattering and what
+   makes depth mean hierarchy.
    =========================================================================== */
 @layer components {
   .elevation-1 {
@@ -606,71 +1313,56 @@
     box-shadow: var(--elevate-5);
   }
 
-  /* The reference's "raised layer": a cream card on the gradient fill, lit
-     from the top-left and shadowed to the bottom-right (Level 3). This is the
-     neumorphic hero surface — KPI cards, key panels, modals. */
+  /* The reference's panel: a white card with a slate hairline and the
+     softest of shadows. Its `rounded-lg border border-slate-200 bg-white
+     shadow-xs`, as one class. */
   .surface-raised-soft {
     background: var(--surface-raised-fill);
-    box-shadow: var(--elevate-3);
+    box-shadow: var(--elevate-2);
   }
 
-  /* The reference's "inset layer": a sunken well for search fields, segmented
-     controls and progress tracks. */
+  /* The reference has no inset wells; a quiet surface is the slate-50 fill it
+     uses for a table header or a read-only field. */
   .surface-inset {
     background-color: var(--color-surface-sunken);
-    box-shadow: var(--inset-soft);
+    border: 1px solid var(--color-border);
   }
 
-  /* The reference's "pressed layer": a deeper inset over the darker surface,
-     for an active toggle or a held control. */
   .surface-pressed {
     background-color: var(--color-surface-sunken);
     box-shadow: var(--inset-press);
   }
 
-  /* Glass: the restrained enterprise frosted surface — a translucent fill over
-     a backdrop blur, a bright hairline border, a soft cool shadow. For the top
-     header, the hero's inner panels, KPI cards and small summaries. A solid
-     fallback is supplied for viewers that block backdrop filters or prefer
-     reduced transparency, so text never lands on a bare blur. */
+  /* The reference's header is solid white with a slate bottom border and
+     `shadow-xs` — not glass. Kept under the old name so existing consumers
+     render the reference's bar. */
   .glass {
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
-  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-    @media not (prefers-reduced-transparency: reduce) {
-      .glass {
-        background-color: var(--glass-bg);
-        border-color: var(--glass-border);
-        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
-        backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
-      }
-    }
-  }
 
-  /* Pressable: the physical click. Scale down a hair and sink on :active.
-     120ms, ease-out, transform only, so it is GPU-cheap and instant. */
+  /* Pressable: a restrained press. The reference transitions colour rather
+     than scaling, so the scale is dropped and the colour change kept. */
   .pressable {
     transition:
-      transform var(--duration-press) var(--ease-out),
-      box-shadow var(--duration-press) var(--ease-out),
-      background-color var(--duration-fast) var(--ease-out);
-  }
-  .pressable:active {
-    transform: scale(0.97);
+      background-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out),
+      opacity var(--duration-fast) var(--ease-out);
   }
 
-  /* A card that lifts slightly on hover, for interactive rows and tiles. */
+  /* A card that lifts on hover, using the reference's own hover shadow. */
   .lift {
     transition:
       transform var(--duration-base) var(--ease-out),
       box-shadow var(--duration-base) var(--ease-out);
   }
+
   @media (hover: hover) {
     .lift:hover {
       transform: translateY(-2px);
-      box-shadow: var(--highlight-top), var(--elevate-4);
+      box-shadow: var(--shadow-card-hover);
     }
   }
 }
@@ -684,7 +1376,16 @@
   table[data-sticky-header] thead th {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 2;
+    background-color: var(--color-surface-sunken);
+  }
+
+  /* The reference's own name for the same thing. */
+  .table-sticky-head thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--color-surface-sunken);
   }
 
   /* Skip link: visually hidden until focused, so a keyboard user can jump
@@ -716,7 +1417,6 @@
     align-items: center;
     width: auto;
     height: auto;
-    /* A keyboard-only control, but it is still a target once revealed. */
     min-height: var(--spacing-touch);
     margin: 0;
     padding: 0.625rem 1rem;
@@ -727,6 +1427,53 @@
     background-color: var(--color-surface);
     color: var(--color-text);
     font-weight: 600;
+  }
+
+  /* The reference's responsive helpers. */
+  .px-responsive {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  @media (max-width: 40rem) {
+    .px-responsive {
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+
+    .w-screen-safe {
+      width: 100vw;
+      max-width: 100vw;
+    }
+  }
+
+  @media (max-width: 23.75rem) {
+    .px-responsive {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+  }
+
+  /* Allow a stat footer (label + amount) to wrap gracefully on narrow
+     phones. */
+  .stat-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .grid-cards {
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+
+  .break-word {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .nowrap {
+    white-space: nowrap;
   }
 }
 
@@ -754,6 +1501,8 @@
     --color-page: #ffffff;
     --color-text: #000000;
     --color-text-muted: #333333;
+    --color-record: #ffffff;
+    --surface-raised-fill: #ffffff;
     --elevate-1: none;
     --elevate-2: none;
     --elevate-3: none;
@@ -761,11 +1510,54 @@
     --elevate-5: none;
     --highlight-top: none;
     --inset-soft: none;
+    --shadow-card: none;
+    --shadow-card-hover: none;
+    --shadow-modal: none;
   }
 
   body {
     background: #ffffff;
     color: #000000;
+  }
+
+  /* The reference's own print rule. */
+  .no-print {
+    display: none !important;
+  }
+
+  body * {
+    overflow: visible !important;
+  }
+
+  /* The gradient banner would print as a block of ink; on paper it becomes a
+     plain heading with a rule under it. */
+  .page-banner,
+  .app-shell,
+  .sidebar-gradient,
+  .brand-gradient {
+    background: #ffffff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+  }
+
+  .page-banner::after {
+    display: none !important;
+  }
+
+  .page-banner h1,
+  .page-banner h2,
+  .page-banner h3,
+  .page-banner p,
+  .page-banner span {
+    color: #000000 !important;
+  }
+
+  .page-banner {
+    border-bottom: 1px solid #000000;
+    border-radius: 0;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   .elevation-1,
@@ -774,13 +1566,15 @@
   .elevation-4,
   .elevation-5,
   .surface-raised-soft,
-  .surface-inset {
+  .surface-inset,
+  .glass,
+  .record-panel {
     box-shadow: none !important;
   }
 
-  /* Tables are the substance of a printed report. Repeating the header on each
-     page is what makes a multi-page report readable, and keeping a row whole
-     stops a figure being split across a page break. */
+  /* Tables are the substance of a printed report. Repeating the header on
+     each page is what makes a multi-page report readable, and keeping a row
+     whole stops a figure being split across a page break. */
   thead {
     display: table-header-group;
   }

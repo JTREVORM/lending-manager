@@ -10,9 +10,19 @@ export interface InputProps extends ComponentProps<'input'> {
 /**
  * A text input.
  *
- * Note the 16px base font size on small screens: iOS Safari zooms the whole
- * page when a focused input's text is smaller than that, which on a form is
- * both jarring and a layout break.
+ * The reference's field, by value. Two things about it are deliberate and
+ * easy to lose:
+ *
+ *   - **It is flat and bordered, not sunken.** A white box with a 1px slate
+ *     border, and a 3px navy halo at 15% opacity on focus. The reference's
+ *     `.form-field` and its shadcn `Input` agree on this.
+ *   - **It changes size at `md`, not just padding.** The reference runs
+ *     `0.875rem 1rem` / 16px / `rounded-lg` on a phone and
+ *     `0.375rem 0.625rem` / 13px / `rounded-sm` on the desktop, because its
+ *     report screens put a filter row above a dense table and a touch-sized
+ *     field there would push the table off the fold. The 16px on phones is
+ *     also the iOS zoom guard: Safari zooms the page when a focused field's
+ *     text is under 16px.
  */
 export function Input({
   className,
@@ -25,17 +35,18 @@ export function Input({
       type={type}
       aria-invalid={invalid || undefined}
       className={cn(
-        // A softly sunken well — the reference's "inset layer" — so a field
-        // reads as somewhere to type into. One subtle inner shadow, not a glow
-        // around every edge.
-        'min-h-touch w-full rounded-md border px-3 py-2',
-        'bg-surface-sunken text-text placeholder:text-text-muted',
-        '[box-shadow:var(--inset-soft)]',
-        'text-base sm:text-sm',
+        'bg-surface text-text placeholder:text-text-muted w-full border',
+        // Phone: roomy and touch-sized.
+        'min-h-touch rounded-lg px-4 py-3.5 text-base',
+        // Desktop: the reference's compact field.
+        'md:min-h-9 md:rounded-sm md:px-2.5 md:py-1.5 md:text-[13px]',
         'transition-[color,background-color,border-color,box-shadow] duration-150',
-        'focus-visible:border-accent focus-visible:[box-shadow:var(--inset-soft),0_0_0_3px_var(--color-accent-surface)]',
-        'disabled:cursor-not-allowed disabled:opacity-60',
-        invalid ? 'border-danger focus-visible:outline-danger' : 'border-border-strong',
+        // The reference's focus: navy border plus a 3px navy halo.
+        'focus-visible:border-accent focus-visible:[box-shadow:var(--ring-focus)] focus-visible:outline-none',
+        // The reference's read-only / disabled fill: slate-100 on slate-600.
+        'disabled:bg-surface-sunken disabled:text-text-muted disabled:cursor-not-allowed',
+        'read-only:bg-surface-sunken',
+        invalid ? 'border-danger' : 'border-border-strong',
         className,
       )}
       {...props}

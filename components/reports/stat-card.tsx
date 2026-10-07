@@ -1,10 +1,16 @@
 import Link from 'next/link';
+import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils/cn';
 import { METRIC_DEFINITIONS, type MetricKey } from '@/lib/domain/reporting';
 
+/**
+ * The reference outlines a card in the status colour it carries rather than
+ * filling it: a bordered white panel stays readable beside eleven others,
+ * where four tinted fills in a row read as an alarm.
+ */
 const TONES = {
   neutral: 'border-border',
   info: 'border-info/40',
@@ -35,6 +41,12 @@ export interface StatCardProps {
   readonly href?: string;
   readonly tone?: keyof typeof TONES;
   readonly badge?: string;
+  /**
+   * The icon for the tile to the left of the figure. The reference puts one on
+   * every summary card — a navy glyph on a navy-at-10% rounded square — which
+   * is what lets a row of four be told apart at a glance rather than read.
+   */
+  readonly icon?: LucideIcon;
 }
 
 /**
@@ -62,33 +74,53 @@ export function StatCard({
   href,
   tone = 'neutral',
   badge,
+  icon,
 }: StatCardProps) {
   const text =
     definition ??
     (metric === undefined ? undefined : METRIC_DEFINITIONS[metric].definition);
 
+  const Icon = icon;
+
   const body = (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <span className="t-label">{label}</span>
-        {badge !== undefined ? (
-          <Badge tone={tone === 'neutral' ? 'neutral' : tone}>{badge}</Badge>
-        ) : null}
+      <div className="flex items-start gap-3">
+        {/* The reference's icon tile: a 40px rounded square in the navy at
+            10% opacity, with the navy icon inside it. */}
+        {Icon === undefined ? null : (
+          <span className="bg-accent/10 text-accent flex size-10 shrink-0 items-center justify-center rounded-xl">
+            <Icon aria-hidden="true" className="size-5" />
+          </span>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <span className="t-label">{label}</span>
+            {badge !== undefined ? (
+              <Badge tone={tone === 'neutral' ? 'neutral' : tone}>{badge}</Badge>
+            ) : null}
+          </div>
+          {/* The headline figure, the loudest thing on the card. The
+              reference sets these in `font-black`. */}
+          <p className="t-metric-sm text-text mt-0.5 break-words">{value}</p>
+          {secondary !== undefined ? (
+            <p className="t-helper mt-1 break-words">{secondary}</p>
+          ) : null}
+        </div>
       </div>
-      {/* The headline figure, the loudest thing on the card. */}
-      <p className="t-metric text-text mt-2 break-words">{value}</p>
-      {secondary !== undefined ? (
-        <p className="t-helper mt-1 break-words">{secondary}</p>
-      ) : null}
+
       {text !== undefined ? (
-        <p className="t-caption mt-2 leading-snug break-words">{text}</p>
+        <p className="t-caption mt-2.5 leading-snug break-words">{text}</p>
       ) : null}
     </>
   );
 
   const classes = cn(
-    // A glass KPI card — translucent, lightly blurred, a soft cool shadow.
-    'glass rounded-lg p-4 min-w-0',
+    // The reference's summary card: `rounded-2xl border border-slate-200
+    // bg-white p-4 shadow-xs`. A flat bordered panel, not a glass one — its
+    // summary strips sit directly under the gradient banner, and a second
+    // translucent surface there muddies both.
+    'bg-surface min-w-0 rounded-2xl border p-4 shadow-xs',
     TONES[tone],
     href !== undefined
       ? 'lift block focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2'

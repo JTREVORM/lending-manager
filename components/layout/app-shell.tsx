@@ -1,4 +1,4 @@
-import { CalendarDays, Search, ShieldCheck } from 'lucide-react';
+import { CalendarDays, LogOut, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -8,19 +8,29 @@ import { getCompanyBranding } from '@/lib/data/company';
 import { ROLES, effectiveRole } from '@/lib/permissions';
 import { SignOutButton } from './sign-out-button';
 import { PrimaryNav } from './primary-nav';
+import { SidebarToggle } from './sidebar-toggle';
 
 /**
- * The authenticated staff shell — an enterprise application frame.
+ * The authenticated staff shell, rebuilt as the reference project's frame.
  *
- * ## Structure
+ * ## Structure, measured off the reference
  *
- *   - **≥ 768px**  a deep-navy fixed sidebar (brand, grouped navigation, the
- *     signed-in person at the foot) plus a glass top header carrying the
- *     business date, a search entry and the current user. A wide working area
- *     sits between them.
- *   - **< 768px**  the Phase 9 phone structure is kept: a compact top header
- *     and a bottom tab bar with four destinations and a More sheet. No attempt
- *     is made to fold the desktop sidebar onto a phone.
+ *   - **Sidebar** — `w-64` (256px), `fixed inset-y-0 left-0 z-40`, the
+ *     `.sidebar-gradient` navy wash (`#0b4394 → #0d478f 45% → #072f6b`),
+ *     `shadow-2xl` and a `border-r` in deep blue. Three bands: a brand block
+ *     on `#083475`, a role strip on `#06295E`, the scrolling accordion menu,
+ *     and the signed-in person on `#06295E` at the foot. Off-canvas below
+ *     `md` (`-translate-x-full` → `translate-x-0`, 300ms ease-in-out) behind
+ *     a `bg-slate-900/50 backdrop-blur-xs` scrim at `z-25`.
+ *   - **Header** — `h-16` (64px), `fixed top-0 right-0 left-0 md:left-64
+ *     z-20`, solid white with a `border-b border-slate-200` and `shadow-xs`.
+ *     Not glass: the reference's header is white, because the dense figures
+ *     below it have to be read against something still.
+ *     Desktop carries the business-day card, a "Live Server" pulse, the
+ *     signed-in person and the icon actions; below `md` it collapses to the
+ *     compact icon bar the reference uses, with the menu button in it.
+ *   - **Main** — `md:ml-64 pt-16 sm:pt-20` with the reference's
+ *     `px-3 sm:px-4 md:px-6 lg:px-8` gutters, on the `.app-shell` tint.
  *
  * ## Role awareness
  *
@@ -28,6 +38,15 @@ import { PrimaryNav } from './primary-nav';
  * makes no database call of its own and the navigation, the role badge and the
  * route guard all read the same resolved context. Capability-driven visibility
  * lives in `PrimaryNav`.
+ *
+ * ## The business day
+ *
+ * The reference's header opens with a bordered card reading
+ * "Business Day : <date> (<status>)" above a branch selector, backed by an
+ * open/close workflow and its own tables. This application has no such
+ * workflow and none is invented here: the card keeps the reference's exact
+ * shape and states the real date in the lending timezone. The structure, not
+ * fake functionality.
  */
 export async function AppShell({
   context,
@@ -42,138 +61,210 @@ export async function AppShell({
   const roleLabel = role === null ? 'No role' : ROLES[role].label;
   const initials = toInitials(context.fullName);
 
-  // The business date, in the lending timezone. A real figure (today's date),
-  // not an invented "business day open/close" workflow this system does not
-  // have — the structure of the Chetu header, not fake functionality.
   const businessDate = new Date().toLocaleDateString('en-GB', {
     timeZone: 'Africa/Kampala',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+    day: '2-digit',
+    month: 'short',
     year: 'numeric',
   });
 
   return (
-    <div className="min-h-dvh">
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
-
-      {/* --- Desktop sidebar (navy) ----------------------------------- */}
-      <nav
-        aria-label="Main navigation"
-        className="bg-sidebar text-sidebar-foreground fixed inset-y-0 left-0 z-30 hidden w-64 flex-col p-3 md:flex print:hidden"
-      >
-        <div className="mb-5 flex items-center gap-3 px-2 pt-2">
-          <span className="bg-sidebar-active flex size-10 shrink-0 items-center justify-center rounded-lg [box-shadow:0_6px_16px_rgba(0,0,0,0.3)]">
-            <ShieldCheck aria-hidden="true" className="size-6 text-[#07233f]" />
-          </span>
-          <span className="min-w-0">
-            <span className="line-clamp-1 block text-sm leading-tight font-semibold">
-              {branding.companyName}
-            </span>
-            <span className="text-sidebar-muted block truncate text-xs">
-              {APP_SHORT_NAME}
-            </span>
-          </span>
-        </div>
-
-        <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
-
-        {/* The signed-in person, at the foot of the shell. */}
-        <div className="mt-2 shrink-0 border-t border-white/10 pt-3">
-          <div className="flex items-center gap-2.5 px-1">
-            <span className="bg-sidebar-raised text-sidebar-foreground flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-              {initials}
+    // `SidebarToggle` is a client island that owns one boolean: whether the
+    // off-canvas rail is open. It renders the menu button, the scrim and the
+    // `<aside>` wrapper, so the shell around it — and the navigation inside
+    // it — stay server components.
+    <SidebarToggle
+      className="app-shell selection:bg-accent flex min-h-dvh overflow-x-hidden selection:text-white"
+      sidebar={
+        <>
+          {/* --- Brand block (#083475) ------------------------------- */}
+          <div className="bg-sidebar-raised flex items-center gap-3 border-b border-blue-800/80 p-4">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded bg-white p-1 shadow-sm">
+              <ShieldCheck aria-hidden="true" className="text-accent size-6" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {context.fullName}
+              <span className="flex items-center justify-between gap-2">
+                <span className="truncate text-xs font-black tracking-wider uppercase">
+                  {branding.companyName}
+                </span>
+                {/* The reference's version chip: amber on near-black. */}
+                <span className="bg-accent-2 text-brand-900 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase">
+                  v1
+                </span>
               </span>
-              <span className="text-sidebar-muted block truncate text-xs">
-                {roleLabel}
+              <span className="text-sidebar-muted mt-0.5 block truncate text-[10px] font-bold tracking-widest uppercase">
+                {APP_SHORT_NAME}
               </span>
             </span>
           </div>
-          <div className="mt-2">
-            <SignOutButton variant="on-dark" />
-          </div>
-        </div>
-      </nav>
 
-      {/* --- Desktop top header (glass) ------------------------------- */}
-      <header className="glass fixed top-0 right-0 left-64 z-20 hidden h-16 items-center gap-4 border-x-0 border-t-0 px-6 md:flex print:hidden">
-        <div className="text-text-muted flex min-w-0 items-center gap-2 text-sm">
-          <CalendarDays aria-hidden="true" className="text-accent size-4 shrink-0" />
-          <span className="truncate font-medium">{businessDate}</span>
-        </div>
-
-        <Link
-          href={ROUTES.clients}
-          className="surface-inset text-text-muted hover:text-text ml-auto flex h-10 w-full max-w-xs items-center gap-2 rounded-md px-3 text-sm transition-colors"
-        >
-          <Search aria-hidden="true" className="size-4 shrink-0" />
-          <span className="truncate">Search clients and loans</span>
-        </Link>
-
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span className="bg-accent text-accent-contrast flex size-9 items-center justify-center rounded-full text-xs font-semibold">
-            {initials}
-          </span>
-          <span className="min-w-0">
-            <span className="text-text block truncate text-sm font-medium">
-              {context.fullName}
+          {/* --- Role strip (#06295E) -------------------------------- */}
+          <div className="bg-sidebar-deep flex items-center justify-between border-b border-blue-800/60 px-3.5 py-2">
+            <span className="flex items-center gap-2">
+              {/* The reference pulses this dot for an administrator and holds
+                  it steady for everyone else. */}
+              <span
+                aria-hidden="true"
+                className="bg-accent-2 size-2.5 rounded-full motion-safe:animate-pulse"
+              />
+              <span className="text-xs font-bold text-blue-100">{roleLabel}</span>
             </span>
-            <span className="text-text-muted block truncate text-xs">{roleLabel}</span>
-          </span>
-        </div>
-      </header>
+          </div>
 
-      {/* --- Mobile header (navy) ------------------------------------- */}
-      <header className="bg-sidebar text-sidebar-foreground sticky top-0 z-20 flex items-center gap-2.5 px-4 py-3 md:hidden print:hidden">
-        <span className="bg-sidebar-active flex size-8 shrink-0 items-center justify-center rounded-md">
-          <ShieldCheck aria-hidden="true" className="size-4 text-[#07233f]" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">
-            {branding.companyName}
-          </span>
-          <span className="text-sidebar-muted block truncate text-xs">
-            {context.fullName} · {roleLabel}
-          </span>
-        </span>
-        <div className="shrink-0">
-          <SignOutButton className="w-auto px-2" variant="on-dark" />
-        </div>
-      </header>
+          {/* --- The menu ------------------------------------------- */}
+          <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
 
-      {/* --- Main region ---------------------------------------------- */}
-      {/* `print:pl-0` matters: the sidebar is hidden when printing, so the
-          main region's left padding would otherwise leave a blank margin down
-          every printed page. `md:pt-16` clears the fixed top header. */}
-      <div className="md:pt-16 md:pl-64 print:pt-0 print:pl-0">
-        <main
-          id="main-content"
-          className="mx-auto w-full max-w-[90rem] px-4 py-5 pb-24 sm:px-6 md:px-8 md:pb-10"
-        >
-          {children}
-        </main>
-      </div>
+          {/* --- The signed-in person (#06295E) --------------------- */}
+          <div className="bg-sidebar-deep border-t border-blue-800/80 p-2.5">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-800/80 bg-blue-950/60 p-2">
+              <Link
+                href={ROUTES.account}
+                title="My account"
+                className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
+              >
+                {/* The reference rings the avatar in amber. */}
+                <span className="bg-sidebar-raised ring-accent-2 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-2">
+                  {initials}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-bold text-white">
+                    {context.fullName}
+                  </span>
+                  <span className="text-sidebar-muted block truncate text-[9px]">
+                    {roleLabel}
+                  </span>
+                </span>
+              </Link>
 
-      {/* --- Mobile bottom bar ---------------------------------------- */}
-      <nav
-        aria-label="Main navigation"
-        data-nav="bottom-bar"
-        className="glass fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-x-0 border-b-0 px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden print:hidden"
-      >
+              <SignOutButton
+                variant="on-dark"
+                className="text-sidebar-muted w-auto shrink-0 rounded p-1.5 hover:bg-red-500/20 hover:text-red-300"
+                icon={<LogOut aria-hidden="true" className="size-4" />}
+                iconOnly
+              />
+            </div>
+          </div>
+        </>
+      }
+      header={
+        <>
+          {/* --- Desktop bar ---------------------------------------- */}
+          <div className="hidden min-w-0 flex-1 items-center gap-4 md:flex">
+            {/* The business-day card. */}
+            <div className="border-border bg-surface flex shrink-0 items-center gap-2.5 rounded-lg border px-3 py-1.5">
+              <CalendarDays aria-hidden="true" className="text-text size-5 shrink-0" />
+              <span className="min-w-0 leading-tight">
+                <span className="text-text block text-[12px] font-bold whitespace-nowrap">
+                  Business Day : {businessDate}
+                </span>
+                <span className="text-text-muted block truncate text-[11px]">
+                  {branding.companyName}
+                </span>
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1" />
+
+            {/* Live status — the pulse doubles as proof the session is
+                alive. */}
+            <span className="hidden shrink-0 items-center gap-2 lg:flex">
+              <span aria-hidden="true" className="relative flex size-2.5">
+                <span className="absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75 motion-safe:animate-ping" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-success text-[15px] font-black">Live</span>
+            </span>
+
+            {/* Who is signed in. */}
+            <Link
+              href={ROUTES.account}
+              title="My account"
+              className="hover:bg-surface-hover hidden shrink-0 items-center gap-2 rounded-lg px-1.5 py-1 leading-tight transition-colors lg:flex"
+            >
+              <span className="bg-accent text-accent-contrast flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold">
+                {initials}
+              </span>
+              <span className="max-w-40 text-right">
+                <span className="text-text block truncate text-[12px] font-bold">
+                  {context.fullName}
+                </span>
+                <span className="text-text-muted block truncate text-[11px]">
+                  ({roleLabel})
+                </span>
+              </span>
+            </Link>
+
+            {/* Actions — only the symbols this system actually has. */}
+            <Link
+              href={ROUTES.clients}
+              title="Search clients and loans"
+              className="text-text-muted hover:bg-surface-hover hover:text-text shrink-0 rounded-lg p-1.5 transition-colors"
+            >
+              <Search aria-hidden="true" className="size-5" />
+              <span className="sr-only">Search clients and loans</span>
+            </Link>
+
+            <Link
+              href={ROUTES.overdue}
+              title="Overdue loans"
+              className="text-danger hover:bg-danger-surface shrink-0 rounded-full p-1 transition-colors"
+            >
+              <RefreshCw aria-hidden="true" className="size-5" strokeWidth={2.5} />
+              <span className="sr-only">Overdue loans</span>
+            </Link>
+
+            <div className="shrink-0">
+              <SignOutButton
+                className="w-auto rounded-lg p-1.5"
+                icon={<LogOut aria-hidden="true" className="size-5" />}
+                iconOnly
+              />
+            </div>
+          </div>
+
+          {/* --- Mobile icon bar ----------------------------------- */}
+          {/* The reference's phone header: the business day on the left, then
+              a tight row of 24px symbols. The menu button itself is rendered
+              by `SidebarToggle`, which owns the open state. */}
+          <div className="flex w-full items-center justify-between md:hidden">
+            <span className="text-text flex items-center gap-1.5">
+              <CalendarDays aria-hidden="true" className="size-6 shrink-0" />
+              <span className="text-[11px] leading-tight font-bold">{businessDate}</span>
+            </span>
+
+            <span className="flex items-center gap-2.5">
+              <Link href={ROUTES.account} className="text-text p-1" title="My account">
+                <ShieldCheck aria-hidden="true" className="size-6" />
+                <span className="sr-only">My account</span>
+              </Link>
+              <Link
+                href={ROUTES.overdue}
+                className="text-danger p-1"
+                title="Overdue loans"
+              >
+                <RefreshCw aria-hidden="true" className="size-6" />
+                <span className="sr-only">Overdue loans</span>
+              </Link>
+              <SignOutButton
+                className="w-auto p-1"
+                icon={<LogOut aria-hidden="true" className="size-6" />}
+                iconOnly
+              />
+            </span>
+          </div>
+        </>
+      }
+      bottomBar={
         <PrimaryNav
           variant="bottom-bar"
           menu="staff"
           permissions={context.permissions}
           sheetFooter={<SignOutButton />}
         />
-      </nav>
-    </div>
+      }
+    >
+      {children}
+    </SidebarToggle>
   );
 }
 

@@ -6,12 +6,14 @@ export function Card({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        // The reference's raised layer: a cream card on the gradient fill,
-        // lit from the top-left and shadowed to the bottom-right, with a
-        // hairline border that keeps it defined in dark mode where the fill
-        // is flat. Radius 16px.
-        'border-border rounded-lg border p-4 [background:var(--surface-raised-fill)] sm:p-5',
-        '[box-shadow:var(--elevate-2)]',
+        // The reference's panel, exactly: `rounded-lg border border-slate-200
+        // bg-white shadow-xs`. A flat, bordered white surface — dense figures
+        // are easiest to read on plain white, which is why the reference keeps
+        // its gradients on the chrome and its banners and never on a panel.
+        'border-border bg-surface rounded-lg border shadow-xs',
+        // Padding follows the reference's filter and list cards: `p-4`,
+        // opening slightly on a wider screen.
+        'p-4 sm:p-5',
         // `min-w-0` matters here. A grid or flex item defaults to
         // `min-width: auto`, so its min-content width can force the track
         // wider than the viewport. Without this, one long unbreakable string
@@ -49,9 +51,11 @@ export function CardHeader({
           ellipsis hides information, and two lines on a small phone is the
           better trade. */}
       <div className="min-w-0">
-        <Heading className="break-words">{title}</Heading>
+        {/* The reference's list-row heading: `text-[15px] font-bold
+            text-slate-900`, with a 12px muted line under it. */}
+        <Heading className="t-card-title text-text break-words">{title}</Heading>
         {description !== undefined ? (
-          <p className="text-text-muted mt-1 text-sm">{description}</p>
+          <p className="text-text-muted mt-0.5 text-xs leading-snug">{description}</p>
         ) : null}
       </div>
       {action !== undefined ? <div className="shrink-0">{action}</div> : null}

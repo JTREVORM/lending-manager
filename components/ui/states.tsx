@@ -57,17 +57,19 @@ export function EmptyState({
   return (
     <div
       data-empty-state=""
+      // The reference's empty panel: a dashed slate border on white, a muted
+      // glyph above the sentence. Dashed rather than solid, because the
+      // outline of something not yet filled in should not look like a
+      // finished surface.
       className={cn(
-        'surface-raised-soft border-border flex flex-col items-center rounded-lg border px-6 py-10 text-center',
+        'border-border-strong bg-surface flex flex-col items-center rounded-lg border border-dashed px-6 py-10 text-center',
         className,
       )}
     >
-      <span className="surface-inset mb-3 flex size-12 items-center justify-center rounded-full">
-        <Icon aria-hidden="true" className={cn('size-5', TONES.neutral.icon)} />
-      </span>
-      <p className="text-text font-medium">{title}</p>
+      <Icon aria-hidden="true" className="text-border-strong mb-2 size-7" />
+      <p className="text-text text-sm font-bold">{title}</p>
       {description !== undefined ? (
-        <p className="text-text-muted mt-1 max-w-prose text-sm">{description}</p>
+        <p className="text-text-muted mt-1 max-w-prose text-[13px]">{description}</p>
       ) : null}
       {action !== undefined ? (
         <ActionLink href={action.href} className="mt-4">

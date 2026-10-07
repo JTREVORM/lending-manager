@@ -765,15 +765,17 @@ describe('pagination', () => {
   it('disables Previous on the first page and Next on the last', () => {
     render(<ReportPagination page={1} hasMore={false} rowsShown={3} />);
     // Neither control is needed at all on a single page.
-    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next page' })).toBeNull();
   });
 
   it('offers Next when there is more, and says what is shown', () => {
     render(<ReportPagination page={2} hasMore rowsShown={25} />);
 
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
-    expect(screen.getByText('Page 2 · 25 rows shown')).toBeInTheDocument();
+    // The controls read "Prev" and "Next" — the reference's labels — and are
+    // announced by their full accessible names.
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled();
+    expect(screen.getByText('Showing 25 entries · page 2')).toBeInTheDocument();
   });
 
   it('has an accessible name on the navigation itself', () => {
@@ -787,7 +789,7 @@ describe('pagination', () => {
     const user = userEvent.setup();
 
     render(<ReportPagination page={2} hasMore rowsShown={25} />);
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
 
     const target = String(replace.mock.calls[0]?.[0]);
     expect(target).toContain('page=3');
