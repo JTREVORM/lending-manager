@@ -216,9 +216,20 @@ function SidebarGroup({
         aria-controls={panelId}
         className={cn(
           'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all md:py-2 md:text-xs',
-          // The reference's active/open group: the amber `#F5A623` fill.
+          /*
+            The reference's active/open group: the amber `#F5A623` fill.
+
+            Its own label on that fill is white, which is 2.03:1 — the axe
+            sweep refuses it, and rightly: this is a navigation label on a
+            screen used outdoors in daylight. The amber is kept, because it is
+            the single most recognisable thing about the rail; the label takes
+            the near-black the reference itself pairs with amber everywhere
+            else, on its active Dashboard link (`bg-amber-500 text-blue-950`)
+            and on its save button (`#fbbf24` on `#0f172a`). That is 8.81:1,
+            and it is the reference's own pairing rather than a substitution.
+          */
           expanded
-            ? 'bg-accent-2 text-white shadow-sm'
+            ? 'bg-accent-2 text-brand-900 shadow-sm'
             : 'text-white hover:bg-blue-800/60',
         )}
       >
