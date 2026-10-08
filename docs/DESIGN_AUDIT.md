@@ -485,15 +485,15 @@ so the next person does not have to rediscover them.
 
 ---
 
-## 12. One pre-existing test defect, left alone
+## 12. One pre-existing test defect, corrected
 
-`tests/e2e/specs/clients.write.spec.ts:91` — *"a duplicate phone number is
-refused with a message, not a crash"* — fails intermittently. It is not a
-consequence of the redesign, and it is reported rather than fixed because
-fixing it properly is a business-logic decision.
+`tests/e2e/specs/clients.write.spec.ts` carried a test called *"a duplicate
+phone number is refused with a message, not a crash"*. It asserted a refusal
+this system does not perform, and it failed intermittently. It was not a
+consequence of the redesign.
 
-**The system does not refuse a duplicate client phone number.** There is no
-such check anywhere:
+**The system does not refuse a duplicate client phone number**, and there is
+no check anywhere that it should:
 
 - `createClientSchema` does not look for one;
 - `createClientAction` handles `23505` for the National Identification
@@ -510,22 +510,18 @@ database immediately afterwards:
 ```
 
 Two clients, one phone, created by the two tests — in a run the suite called
-green. The test asserts `toHaveURL(/\/clients\/new/)` after submitting, and
-that assertion is racing the navigation the successful registration triggers.
-When the assertion wins, the test passes while the duplicate is written;
-when the navigation wins, the test fails. It has never been testing what its
-name says.
+green. The test asserted `toHaveURL(/\/clients\/new/)` after submitting, and
+that assertion races the navigation a successful registration triggers. When
+the assertion won, the test passed while the duplicate was written; when the
+navigation won, it failed. It never tested what its name said.
 
-**Why it is not fixed here.** There are two honest resolutions and both are
-the owner's to choose:
+**The decision.** Client phone numbers stay non-unique. One handset per
+household is ordinary in this market — a wife and husband, or a mother and
+her adult son, borrow separately on the same number — and refusing the second
+registration would mean turning a real borrower away, or inventing a number
+for them, which is worse because then nobody can be reached at all.
 
-1. *The test is right and the product is wrong* — client phone numbers should
-   be unique, which means a unique index, a migration, a pre-check and a
-   message. That is new validation on production data that already contains
-   duplicates, so it needs a decision about what to do with them.
-2. *The product is right and the test is wrong* — two members of a household
-   may share a phone, which is ordinary in this market, and the test should
-   assert what the system does.
-
-Either way it is a change to what the business considers valid, not to how a
-screen is painted, so it sits outside a presentation-only redesign.
+So the test is now **`two clients may share a phone number`**, and it guards
+that policy: the second registration is accepted, lands on its own client
+page, and both people are findable in the directory on the one number. No
+unique constraint was added and no client validation changed.

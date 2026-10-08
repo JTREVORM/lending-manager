@@ -88,9 +88,38 @@ test.describe('registering a client', () => {
     });
   });
 
-  test('a duplicate phone number is refused with a message, not a crash', async ({
-    page,
-  }) => {
+  /**
+   * Two clients may share a phone number, deliberately.
+   *
+   * ## What this replaces
+   *
+   * This test used to be called "a duplicate phone number is refused with a
+   * message, not a crash", and it asserted a refusal that does not exist.
+   * Nothing in the system rejects a repeated phone: `createClientSchema` does
+   * not check for one, `createClientAction` handles `23505` for the National
+   * Identification Number only, and `clients_phone_idx` is a plain btree
+   * index rather than a unique one — the only phone constraints in the
+   * database are the E.164 format checks.
+   *
+   * It passed by accident. After submitting, it asserted the browser was
+   * still on `/clients/new`, which races the navigation a *successful*
+   * registration triggers. When the assertion won, the duplicate was written
+   * and the test reported green anyway; a run in isolation reported
+   * `10 passed` and left two clients on `+256772106673`, one from each test
+   * in this file. When the navigation won, it failed.
+   *
+   * ## Why sharing is allowed
+   *
+   * One handset per household is ordinary in this market: a wife and husband,
+   * or a mother and her adult son, borrow separately and give the same
+   * number. Refusing the second registration would mean turning away a real
+   * borrower, or inventing a number for them — which is worse than a shared
+   * one, because then nobody can be reached at all.
+   *
+   * So the behaviour is the product's and this test guards it: the second
+   * registration goes through, and both people are findable.
+   */
+  test('two clients may share a phone number', async ({ page }) => {
     await page.goto('/clients/new');
 
     await page.getByLabel('Full name').fill(`Nansubuga Second ${STAMP}`);
@@ -103,9 +132,22 @@ test.describe('registering a client', () => {
 
     await page.getByRole('button', { name: /register client/i }).click();
 
-    await expect(page.getByRole('alert').first()).toBeVisible({ timeout: 20_000 });
+    // Accepted, and it lands on the second client's own page — the same
+    // outcome a first registration gets.
+    await page.waitForURL(/\/clients\/[0-9a-f-]{36}/, { timeout: 20_000 });
+    await expect(page.getByText(`Nansubuga Second ${STAMP}`).first()).toBeVisible();
     await expectNoErrorBoundary(page);
-    await expect(page).toHaveURL(/\/clients\/new/);
+
+    // And both of them are in the directory, on the one number. Searching by
+    // the stamp finds the pair this file registered and nothing else.
+    await page.goto('/clients');
+    await searchDirectory(page, STAMP);
+    await expect(visibleInDirectory(page, NEW_CLIENT.fullName).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      visibleInDirectory(page, `Nansubuga Second ${STAMP}`).first(),
+    ).toBeVisible();
   });
 
   test('a missing required field is reported before anything is written', async ({
