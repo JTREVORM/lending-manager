@@ -64,12 +64,18 @@ export interface PrimaryNavProps {
  *
  * The sidebar has room for every destination, so it shows every destination,
  * grouped into Operations / Insights / Administration — eleven flat rows is a
- * list you read, three short blocks is a map you scan.
+ * list you read, three labelled blocks is a map you scan. It is the only
+ * navigation the staff shell has: on a phone or a tablet the same rail slides
+ * in from the left behind the header's menu button, so there is one menu to
+ * learn rather than a sidebar on one screen and a tab bar on another.
  *
- * The bottom bar has 390px. It shows four destinations and a "More" button
- * that opens the rest in a sheet. The previous design put all eleven in the
- * bar and let the labels truncate, which produced `H…`, `Cli…`, `B…` — a
- * navigation you cannot read is not navigation.
+ * The bottom bar is now the borrower portal's alone — the portal has a sticky
+ * header and no drawer, so its two destinations sit in a bar within thumb
+ * reach below `md`. It shows up to four destinations and a "More" button that
+ * opens the rest in a sheet, which is what keeps it readable at 390px: the
+ * design it replaced put every entry in the bar and let the labels truncate
+ * to `H…`, `Cli…`, `B…`, and a navigation you cannot read is not
+ * navigation.
  */
 export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryNavProps) {
   const pathname = usePathname();
@@ -108,8 +114,11 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
   return (
     // The reference's menu band: `flex-1 min-h-0 scroll-area scroll-y py-2
     // px-2.5 space-y-1.5 text-xs`. `min-h-0` is what lets it scroll inside a
-    // flex column instead of pushing the user footer off the bottom.
-    <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1.5 px-2.5 py-2 text-xs">
+    // flex column instead of pushing the user footer off the bottom, and the
+    // bands above and below it are `shrink-0` so this is the only part that
+    // ever gives. `gap-1` rather than `gap-1.5`: with every group open the
+    // rail is a list of a dozen rows, and 6px between blocks reads as loose.
+    <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2 text-xs">
       {dashboard === undefined ? null : (
         <SidebarTopLink item={dashboard} pathname={pathname} />
       )}
@@ -176,11 +185,23 @@ function SidebarTopLink({
  *
  * ## The open state
  *
- * A group starts open when it contains the page being viewed, so arriving on
- * a screen never hides where you are. After that it is the reader's to
- * control, and the state is intentionally *not* persisted: the reference does
- * not persist it either, and a rail that remembers a group you opened once a
- * week is a rail that is always half open.
+ * Groups start **open**, and the group holding the page being viewed stays
+ * open whatever the reader does, so arriving on a screen never hides where
+ * you are.
+ *
+ * Starting shut is what this used to do, and it was wrong in this rail. The
+ * reference has thirteen groups and no room to show them; this application
+ * has three, holding eleven destinations between them. Collapsed, those three
+ * rows plus the pinned dashboard filled about 140px of a rail that is the
+ * full height of the window — on a 900px screen that is some 550px of flat
+ * navy between the last group and the signed-in person at the foot, which is
+ * what the rail actually looked like. Open, the same rail carries its eleven
+ * destinations and reads as a menu rather than as three shut doors above a
+ * void. Collapsing is still the reader's to do, one group at a time.
+ *
+ * The state is intentionally *not* persisted across sessions: the reference
+ * does not persist it either, and a rail that remembers a group you shut once
+ * a week is a rail that is always half closed.
  *
  * The header is a real `<button>` with `aria-expanded` and `aria-controls`,
  * and the panel it names carries the id — so a screen-reader user hears
@@ -198,19 +219,19 @@ function SidebarGroup({
 }) {
   const panelId = useId();
   const containsCurrent = items.some((item) => isNavItemActive(item.href, pathname));
-  const [isOpen, setIsOpen] = useState(containsCurrent);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // The group holding the current page is open whenever it holds it, even if
   // the reader collapsed it before navigating into it — otherwise a link in a
   // collapsed group navigates to a screen whose own menu entry is hidden.
-  const expanded = isOpen || containsCurrent;
+  const expanded = containsCurrent || !isCollapsed;
 
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => {
-          setIsOpen((open) => !open);
+          setIsCollapsed((collapsed) => !collapsed);
         }}
         aria-expanded={expanded}
         aria-controls={panelId}

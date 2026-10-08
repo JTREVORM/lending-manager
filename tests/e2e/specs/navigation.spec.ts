@@ -3,101 +3,148 @@ import { expect, stateFile, test } from './fixtures';
 /**
  * Navigation, at the two widths it has to work at.
  *
- * §5 exists because the phone bar was never looked at: ten destinations
- * across 390px produced labels reading `H…`, `Cli…`, `B…` — seven of ten
- * unreadable. The fix is four destinations and a More sheet, and these are
- * the assertions that stop it regressing: the bar holds five controls, every
- * label is fully rendered rather than clipped, and everything that left the
- * bar is still reachable.
+ * The staff shell has one menu: the rail. From `md` up it is fixed down the
+ * left of every page; below `md` the same rail is a drawer behind the
+ * header's menu button. There is no bottom tab bar — there was, and it is
+ * gone: two navigations for one product meant a phone showed four of eleven
+ * destinations under a thumb and the other seven behind a "More" sheet, while
+ * reserving 96px of every page for the privilege. These are the assertions
+ * that stop both halves of that regressing — that the bar stays gone and the
+ * space it reserved with it, and that the drawer it was replaced by actually
+ * opens, closes and navigates.
  */
 
 test.use({ storageState: stateFile('owner') });
 
-test.describe('the phone bottom bar', () => {
+test.describe('the phone and tablet drawer', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) > 500, 'narrow viewports only');
 
-  test('holds four destinations and a More button', async ({ page }) => {
-    await page.goto('/');
-
-    const bar = page.locator('nav[data-nav="bottom-bar"]');
-    await expect(bar).toBeVisible();
-
-    // Four links plus More. Not ten. Counted among the bar's own children:
-    // the More sheet lives inside this element too, so all eleven
-    // destinations are in its subtree and only four are under a thumb.
-    await expect(bar.locator(':scope > a')).toHaveCount(4);
-    await expect(bar.getByRole('button', { name: /^more$/i })).toBeVisible();
-  });
-
-  test('no label is clipped', async ({ page }) => {
-    await page.goto('/');
-
-    const bar = page.locator('nav[data-nav="bottom-bar"]');
-    const labels = bar.locator(':scope > a span, :scope > button span');
-    const count = await labels.count();
-    expect(count).toBeGreaterThan(0);
-
-    for (let index = 0; index < count; index += 1) {
-      const label = labels.nth(index);
-      if (!(await label.isVisible())) continue;
-
-      const clipped = await label.evaluate(
-        (element) => element.scrollWidth > element.clientWidth + 1,
-      );
-      const text = (await label.textContent())?.trim() ?? '';
-      if (text === '') continue;
-
-      expect(clipped, `"${text}" is clipped in the bottom bar`).toBe(false);
-      // And an ellipsis in the label itself is the same failure written down.
-      expect(text, 'label was truncated to an ellipsis').not.toMatch(/…$/);
+  test('there is no bottom navigation bar', async ({ page }) => {
+    for (const path of ['/', '/clients', '/loans', '/payments', '/reports']) {
+      await page.goto(path);
+      await expect(page.locator('nav[data-nav="bottom-bar"]')).toHaveCount(0);
     }
   });
 
-  test('every destination that left the bar is behind More', async ({ page }) => {
-    await page.goto('/');
-
-    await page.getByRole('button', { name: /^more$/i }).click();
-
-    const sheet = page.getByRole('dialog');
-    await expect(sheet).toBeVisible();
-
-    // The Owner's full menu. Reports, Users, Settings and the audit trail are
-    // the ones the four-slot bar cannot hold.
-    for (const label of ['Reports', 'Users', 'Settings', 'Audit trail', 'Guarantors']) {
-      await expect(
-        sheet.getByRole('link', { name: new RegExp(label, 'i') }),
-      ).toBeVisible();
-    }
-
-    // Signing out belongs here too, on a phone.
-    await expect(sheet.getByRole('button', { name: /sign out/i })).toBeVisible();
-  });
-
-  test('the sheet closes without navigating', async ({ page }) => {
+  test('nothing is reserved at the foot of the page for it', async ({ page }) => {
+    // The bar was 96px of `padding-bottom` on `main` at every narrow width.
+    // With the bar gone that padding is a strip of nothing under the last row
+    // of every list, which is the half of the removal that is easy to forget.
     await page.goto('/clients');
-    await page.getByRole('button', { name: /^more$/i }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page).toHaveURL(/\/clients/);
-  });
-
-  test('content is not hidden behind the bar', async ({ page }) => {
-    // A fixed bar over the last row of a table is how a cashier misses the
-    // bottom entry of a list.
-    await page.goto('/clients');
-
-    const bar = page.locator('nav[data-nav="bottom-bar"]');
-    const barBox = await bar.boundingBox();
-    expect(barBox).not.toBeNull();
 
     const padding = await page.locator('main').evaluate((element) => {
       const style = getComputedStyle(element);
       return Number.parseFloat(style.paddingBottom) || 0;
     });
 
-    expect(padding, 'main leaves room for the fixed bar').toBeGreaterThan(40);
+    expect(padding, 'main still reserves room for a bar that is gone').toBeLessThan(48);
+  });
+
+  test('the menu button opens the rail, and it carries every destination', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+    // Closed, the rail is `invisible` rather than merely translated away, so
+    // it is out of the accessibility tree and out of the tab order too.
+    await expect(rail).toBeHidden();
+
+    await page.getByRole('button', { name: /main menu/i }).click();
+    await expect(rail).toBeVisible();
+
+    // The Owner's full menu, all of it, in one place — not four under a thumb
+    // and seven behind a sheet.
+    for (const label of [
+      'Dashboard',
+      'Clients',
+      'Guarantors',
+      'Loans',
+      'Payments',
+      'Overdue',
+      'Reports',
+      'Users',
+      'Audit trail',
+      'Settings',
+      'My account',
+    ]) {
+      await expect(rail.getByRole('link', { name: label, exact: true })).toBeVisible();
+    }
+  });
+
+  test('the overlay closes it', async ({ page }) => {
+    await page.goto('/clients');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await page.getByRole('button', { name: /main menu/i }).click();
+    await expect(rail).toBeVisible();
+
+    // The scrim's own name. The control inside the drawer answers to
+    // "Close menu", so this cannot click that one by accident.
+    await page.getByRole('button', { name: 'Close navigation' }).click();
+    await expect(rail).toBeHidden();
+    await expect(page).toHaveURL(/\/clients/);
+  });
+
+  test('the close control inside the drawer closes it', async ({ page }) => {
+    await page.goto('/clients');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await page.getByRole('button', { name: /main menu/i }).click();
+    await expect(rail).toBeVisible();
+
+    await rail.getByRole('button', { name: 'Close menu' }).click();
+    await expect(rail).toBeHidden();
+    await expect(page).toHaveURL(/\/clients/);
+  });
+
+  test('Escape closes it', async ({ page }) => {
+    await page.goto('/clients');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await page.getByRole('button', { name: /main menu/i }).click();
+    await expect(rail).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(rail).toBeHidden();
+  });
+
+  test('choosing a destination navigates and closes it', async ({ page }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await page.getByRole('button', { name: /main menu/i }).click();
+    await rail.getByRole('link', { name: 'Payments', exact: true }).click();
+
+    await expect(page).toHaveURL(/\/payments/);
+    // Leaving the menu sitting over the page you just asked for is the
+    // failure this guards.
+    await expect(rail).toBeHidden();
+  });
+
+  test('no destination label is clipped in the rail', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /main menu/i }).click();
+
+    // The menu band only. The brand block clamps a long company name to two
+    // lines and the footer truncates a long person's name on purpose, and
+    // neither is a destination label.
+    const menu = page.locator('nav[aria-label="Main navigation"] .scroll-area');
+    const labels = menu.locator('a span, button span').filter({ visible: true });
+    const count = await labels.count();
+    expect(count).toBeGreaterThan(0);
+
+    for (let index = 0; index < count; index += 1) {
+      const label = labels.nth(index);
+      const text = (await label.textContent())?.trim() ?? '';
+      if (text === '') continue;
+
+      const clipped = await label.evaluate(
+        (element) => element.scrollWidth > element.clientWidth + 1,
+      );
+      expect(clipped, `"${text}" is clipped in the rail`).toBe(false);
+      expect(text, 'label was truncated to an ellipsis').not.toMatch(/…$/);
+    }
   });
 
   test('there is no horizontal page scroll, on any screen', async ({ page }) => {
@@ -158,18 +205,48 @@ test.describe('the desktop sidebar', () => {
   }) => {
     await page.goto('/clients');
 
-    // The bottom bar is `md:hidden` rather than unmounted, so its copy of
-    // the link is in the DOM at this width but `display: none` — and an
-    // element that is not displayed is not in the accessibility tree. The
-    // claim worth asserting is therefore about what a reader can reach.
+    // One menu, so exactly one entry may claim to be the open page. `:visible`
+    // rather than a plain count because a reader reaches what is displayed,
+    // and an element that is not displayed is not in the accessibility tree.
     const current = page.locator('nav a[aria-current="page"]:visible');
     await expect(current).toHaveCount(1);
     await expect(current).toHaveAttribute('href', '/clients');
   });
 
-  test('shows no More button, because there is room', async ({ page }) => {
+  test('shows no More button and no bottom bar', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: /^more$/i })).toHaveCount(0);
+    await expect(page.locator('nav[data-nav="bottom-bar"]')).toHaveCount(0);
+  });
+
+  test('the rail opens its groups rather than showing three shut doors', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+    for (const group of ['Operations', 'Insights', 'Administration']) {
+      await expect(rail.getByRole('button', { name: group })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    }
+
+    // And the space left between the last thing in the menu and the
+    // signed-in person at the foot is a margin, not half the rail.
+    const gap = await page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Main navigation"]');
+      if (nav === null) return null;
+      const band = nav.querySelector('.scroll-area');
+      const footer = nav.lastElementChild;
+      if (band === null || footer === null) return null;
+      const last = band.lastElementChild;
+      if (last === null) return null;
+      return footer.getBoundingClientRect().top - last.getBoundingClientRect().bottom;
+    });
+
+    expect(gap).not.toBeNull();
+    expect(gap ?? 0, 'the rail is mostly empty navy again').toBeLessThan(320);
   });
 });
 

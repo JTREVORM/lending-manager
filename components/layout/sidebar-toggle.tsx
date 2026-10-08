@@ -1,18 +1,71 @@
 'use client';
 
-import { Menu } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import { cn } from '@/lib/utils/cn';
+
+/**
+ * The one thing anything inside the rail may ask of it: close.
+ *
+ * The rail's contents are built by the shell, which is a Server Component, so
+ * a close button in the brand strip cannot be handed an `onClick` — a
+ * function does not cross the server/client boundary. Context does: the
+ * element is created on the server, rendered inside the provider below, and
+ * finds the callback at render time on the client.
+ *
+ * `null` outside the provider, so `SidebarCloseButton` renders nothing rather
+ * than throwing if it is ever used somewhere there is no rail to close.
+ */
+const SidebarContext = createContext<{ readonly close: () => void } | null>(null);
+
+/**
+ * The drawer's own close control, for the widths where the drawer exists.
+ *
+ * Below `md` the rail covers most of a phone and the menu button that opened
+ * it is underneath the scrim, so without this the only ways out are the scrim,
+ * Escape and picking a destination. A drawer with no visible close is a drawer
+ * people learn to distrust. Hidden from `md` up, where the rail is simply the
+ * page furniture and there is nothing to close.
+ */
+export function SidebarCloseButton({ className }: { readonly className?: string }) {
+  const controls = useContext(SidebarContext);
+  if (controls === null) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={controls.close}
+      className={cn(
+        '-my-1 -mr-1.5 flex size-9 shrink-0 items-center justify-center rounded',
+        'text-blue-100 transition-colors hover:bg-blue-800/60 hover:text-white',
+        'md:hidden',
+        className,
+      )}
+    >
+      <X aria-hidden="true" className="size-5" />
+      {/* Not "Close navigation": that is the scrim's name, and two controls
+          answering to one name is a screen reader reading the same label
+          twice and a test that cannot say which it clicked. */}
+      <span className="sr-only">Close menu</span>
+    </button>
+  );
+}
 
 export interface SidebarToggleProps {
   /** The rail's contents: brand block, role strip, menu, user footer. */
   readonly sidebar: ReactNode;
   /** The header's contents, both the desktop row and the phone icon bar. */
   readonly header: ReactNode;
-  /** The phone's bottom tab bar. */
-  readonly bottomBar: ReactNode;
   readonly children: ReactNode;
   readonly className?: string;
 }
@@ -31,8 +84,8 @@ export interface SidebarToggleProps {
  * company's branding and reads the resolved session — so the boolean cannot
  * live there. It lives here instead, in the smallest island that can hold it:
  * this component renders the frame and the menu button, and everything passed
- * in as `sidebar`, `header`, `bottomBar` and `children` stays on the server.
- * Nothing but the open/closed state is shipped to the browser.
+ * in as `sidebar`, `header` and `children` stays on the server. Nothing but
+ * the open/closed state is shipped to the browser.
  *
  * ## The rail's geometry
  *
@@ -44,7 +97,6 @@ export interface SidebarToggleProps {
 export function SidebarToggle({
   sidebar,
   header,
-  bottomBar,
   children,
   className,
 }: SidebarToggleProps) {
@@ -70,9 +122,14 @@ export function SidebarToggle({
     setOpenedOn((current) => (current === pathname ? null : pathname));
   };
 
-  const close = (): void => {
+  // Stable, because it is both the value the provider hands down and the
+  // handler the Escape listener below binds — a new function on every render
+  // would re-run that effect and re-render every consumer for nothing.
+  const close = useCallback((): void => {
     setOpenedOn(null);
-  };
+  }, []);
+
+  const controls = useMemo(() => ({ close }), [close]);
 
   // Escape closes it, which is what a user who has opened an overlay by
   // accident reaches for first. Only bound while it is open.
@@ -87,7 +144,7 @@ export function SidebarToggle({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, close]);
 
   return (
     <div className={className}>
@@ -118,7 +175,7 @@ export function SidebarToggle({
           'md:visible md:translate-x-0',
         )}
       >
-        {sidebar}
+        <SidebarContext.Provider value={controls}>{sidebar}</SidebarContext.Provider>
       </nav>
 
       {/* The scrim, between the rail and the header. */}
@@ -155,33 +212,24 @@ export function SidebarToggle({
 
       {/* --- Main region ---------------------------------------------- */}
       {/* The reference's `main`: `md:ml-64 pt-16 sm:pt-20` with its
-          `px-3 sm:px-4 md:px-6 lg:px-8` gutters. `print:*` resets both,
-          because the rail and the header are hidden on paper and their
-          offsets would otherwise leave a blank margin down every page. */}
+          `px-3 sm:px-4 md:px-6 lg:px-8` gutters. The bottom inset is the
+          same `pb-10` at every width — there is no fixed bar below the
+          content any more, so nothing has to be reserved for one, and a
+          phone-only `pb-24` would be a 96px strip of nothing under the last
+          row of every list. `print:*` resets both offsets, because the rail
+          and the header are hidden on paper and theirs would otherwise leave
+          a blank margin down every page. */}
       <main
         id="main-content"
         className={cn(
-          'min-h-dvh w-full min-w-0 flex-1 pt-16 pb-24 sm:pt-20',
+          'min-h-dvh w-full min-w-0 flex-1 pt-16 pb-10 sm:pt-20',
           'px-3 sm:px-4 md:px-6 lg:px-8',
-          'md:ml-64 md:pb-10',
+          'md:ml-64',
           'print:ml-0 print:px-0 print:pt-0 print:pb-0',
         )}
       >
         <div className="mx-auto w-full max-w-[90rem]">{children}</div>
       </main>
-
-      {/* --- Mobile bottom bar ---------------------------------------- */}
-      <nav
-        aria-label="Quick navigation"
-        data-nav="bottom-bar"
-        className={cn(
-          'border-border bg-surface fixed inset-x-0 bottom-0 z-20 flex gap-0.5 border-t px-1 pt-1',
-          'pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-1px_3px_rgba(0,0,0,0.06)]',
-          'md:hidden print:hidden',
-        )}
-      >
-        {bottomBar}
-      </nav>
     </div>
   );
 }

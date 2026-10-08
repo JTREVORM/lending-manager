@@ -19,7 +19,15 @@ import type { Permission } from '@/lib/permissions';
 export interface NavItem {
   readonly href: string;
   readonly label: string;
-  /** Shorter label for the bottom bar on a phone. */
+  /**
+   * Shorter label for a bottom bar cell.
+   *
+   * Rendered by the borrower portal, which is the only shell with a bottom
+   * bar; the staff shell navigates through its rail at every width. Still
+   * required of every entry, because `splitForBottomBar` is one rule serving
+   * both menus and an entry without a short label would render blank the day
+   * it reached a bar.
+   */
   readonly shortLabel: string;
   readonly icon: LucideIcon;
   /**
@@ -43,11 +51,14 @@ export interface NavItem {
    */
   readonly group: NavGroup;
   /**
-   * Rank in the phone's bottom bar, lowest first. The bar holds four
-   * destinations and a "More" button; everything else lives behind More.
+   * Rank in a bottom bar, lowest first. The bar holds four destinations and a
+   * "More" button; everything else lives behind More.
    *
-   * Undefined means "never in the bar" — it is reachable from More, and from
-   * the sidebar on a larger screen.
+   * Undefined means "never in the bar" — it is reachable from More instead.
+   *
+   * Only the borrower portal renders a bar. The staff ranks are kept because
+   * the staff menu, at eleven entries, is the one that exercises the overflow
+   * branch of `splitForBottomBar`, and that rule is shared with the portal.
    */
   readonly bottomBarRank?: number;
 }
@@ -63,7 +74,7 @@ export const NAV_GROUP_LABELS: Readonly<Record<NavGroup, string>> = {
 };
 
 /**
- * How many destinations the phone's bottom bar holds before "More".
+ * How many destinations a bottom bar holds before "More".
  *
  * Four, not ten. The pre-Phase-9 bar tried to fit every entry across 390px and
  * produced labels reading `H…`, `Cli…`, `B…` — seven of ten unreadable. Four
@@ -239,7 +250,7 @@ export function visibleNavItems(
 }
 
 /**
- * The entries the phone's bottom bar shows, and the ones behind "More".
+ * The entries a bottom bar shows, and the ones behind "More".
  *
  * The bar takes the four highest-ranked destinations this person can reach,
  * in rank order; everything else they can reach goes to the overflow. Both
