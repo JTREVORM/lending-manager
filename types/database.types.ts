@@ -42,6 +42,201 @@ export type Database = {
   public: {
     Tables: {
       /**
+       * Phase 10. A place the business operates from. Cash accounts belong to
+       * a branch; income and expense are sliced by the branch recorded on the
+       * journal entry rather than by cloning accounts per branch.
+       */
+      branches: {
+        Row: {
+          id: string;
+          branch_code: string;
+          name: string;
+          location: string;
+          district: string | null;
+          phone: string | null;
+          email: string | null;
+          manager_profile_id: string | null;
+          status: string;
+          opened_on: string;
+          closed_on: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          branch_code: string;
+          name: string;
+          location: string;
+          district?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          manager_profile_id?: string | null;
+          status?: string;
+          opened_on: string;
+          closed_on?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          branch_code?: string;
+          name?: string;
+          location?: string;
+          district?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          manager_profile_id?: string | null;
+          status?: string;
+          opened_on?: string;
+          closed_on?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 10. The chart of accounts. A row with a `cash_kind` is one of
+       * the four places money physically sits and carries the branch holding
+       * it; every other row is company-wide.
+       */
+      ledger_accounts: {
+        Row: {
+          id: string;
+          code: string;
+          name: string;
+          account_type: string;
+          normal_side: string;
+          cash_kind: string | null;
+          branch_id: string | null;
+          institution: string | null;
+          account_number: string | null;
+          is_postable: boolean;
+          parent_id: string | null;
+          status: string;
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          name: string;
+          account_type: string;
+          normal_side: string;
+          cash_kind?: string | null;
+          branch_id?: string | null;
+          institution?: string | null;
+          account_number?: string | null;
+          is_postable?: boolean;
+          parent_id?: string | null;
+          status?: string;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          name?: string;
+          account_type?: string;
+          normal_side?: string;
+          cash_kind?: string | null;
+          branch_id?: string | null;
+          institution?: string | null;
+          account_number?: string | null;
+          is_postable?: boolean;
+          parent_id?: string | null;
+          status?: string;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 10. The header of a balanced double-entry posting. Append-only:
+       * the only permitted update is stamping the contra entry that reverses
+       * it.
+       */
+      journal_entries: {
+        Row: {
+          id: string;
+          entry_number: string;
+          branch_id: string;
+          entry_date: string;
+          posted_at: string;
+          description: string;
+          source_type: string;
+          source_id: string | null;
+          loan_id: string | null;
+          client_id: string | null;
+          reversed_by_entry_id: string | null;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_number: string;
+          branch_id: string;
+          entry_date: string;
+          posted_at?: string;
+          description: string;
+          source_type: string;
+          source_id?: string | null;
+          loan_id?: string | null;
+          client_id?: string | null;
+          reversed_by_entry_id?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          reversed_by_entry_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 10. One side of one posting. Debits and credits are separate
+       * columns because that is how a trial balance is read. Fully immutable.
+       */
+      journal_lines: {
+        Row: {
+          id: string;
+          entry_id: string;
+          line_number: number;
+          account_id: string;
+          debit: number;
+          credit: number;
+          memo: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_id: string;
+          line_number: number;
+          account_id: string;
+          debit?: number;
+          credit?: number;
+          memo?: string | null;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      /**
        * Phase 9. Fixed-window rate limit counters. The key is a hash, so the
        * table carries no identity; it is readable by nobody and reached only
        * through `consume_rate_limit`.
@@ -1304,6 +1499,67 @@ export type Database = {
      */
     Views: {
       /**
+       * Phase 10. Every account with its debit and credit totals and its
+       * balance, signed the way the account is read.
+       */
+      ledger_account_balances: {
+        Row: {
+          account_id: string;
+          code: string;
+          name: string;
+          account_type: string;
+          normal_side: string;
+          cash_kind: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          institution: string | null;
+          account_number: string | null;
+          status: string;
+          total_debit: number;
+          total_credit: number;
+          balance: number;
+          line_count: number;
+          last_movement_on: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 10. Cash at Hand, the two wallets and the bank, per branch,
+       * with their total. The liquidity cards on the dashboard read this.
+       */
+      branch_cash_position: {
+        Row: {
+          branch_id: string;
+          branch_code: string;
+          branch_name: string;
+          branch_status: string;
+          cash_at_hand: number;
+          mtn_mobile_money: number;
+          airtel_money: number;
+          cash_at_bank: number;
+          total_liquidity: number;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 10. Debit and credit totals per account. The two columns foot to
+       * the same figure when the ledger is sound.
+       */
+      trial_balance: {
+        Row: {
+          code: string;
+          name: string;
+          account_type: string;
+          normal_side: string;
+          total_debit: number;
+          total_credit: number;
+        };
+        Relationships: [];
+      };
+      /**
        * Phase 9. The company's own name, locale, timezone, logo and brand
        * colour — the fields the application shell needs — readable by every
        * signed-in user, borrowers included. SECURITY DEFINER by design; see
@@ -1683,6 +1939,15 @@ export type Database = {
     };
 
     Functions: {
+      /**
+       * Phase 10. Called only by the two deferred constraint triggers on the
+       * journal tables; raises if an entry has fewer than two lines or does
+       * not balance.
+       */
+      journal_assert_balanced: {
+        Args: { p_entry_id: string };
+        Returns: undefined;
+      };
       /**
        * Phase 9. Records one request against a fixed window and reports
        * whether it is within the limit. SECURITY DEFINER; see migration

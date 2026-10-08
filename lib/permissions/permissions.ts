@@ -94,6 +94,24 @@ export const PERMISSIONS = [
   /** Read the audit trail. */
   'audit:view',
 
+  // --- Branch network ------------------------------------------------------
+  /** See the branch network, its branches and their performance. */
+  'branches:view',
+  /** Open a new branch. */
+  'branches:create',
+  /** Change a branch's details, its manager or its status. */
+  'branches:update',
+
+  // --- Financial ledger ----------------------------------------------------
+  // Reading the ledger is separated from posting to it because almost nobody
+  // should post. An operational act — taking a payment, releasing money,
+  // moving cash to the bank — writes its own balanced journal; a person
+  // hand-constructing one is correcting something, and that is the Owner's.
+  /** Read account balances, journals, the general ledger and the trial balance. */
+  'ledger:view',
+  /** Hand-post a journal entry. Corrections only. */
+  'ledger:post',
+
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
   // `permissions` table constrains. Where the Phase 3 specification suggested
@@ -280,6 +298,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'account:update',
     'settings:view',
 
+    // Whoever handles the cash has to be able to see where it is. Reading
+    // the ledger is not an administrative privilege here; it is the thing a
+    // treasurer is for.
+    'branches:view',
+    'ledger:view',
+
     // Operational client work: find a client, check their details, correct a
     // phone number, read the remarks left for them to act on.
     //
@@ -329,6 +353,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'account:update',
     'settings:view',
     'users:view',
+
+    // A Manager runs a branch, so they may correct its details and its
+    // manager, and read the money it holds. Opening a new branch is not
+    // theirs: it is a commercial act with a cash float behind it.
+    'branches:view',
+    'branches:update',
+    'ledger:view',
 
     // The Manager runs lending operations, so clients and guarantors are
     // theirs to register, correct and comment on.
@@ -398,6 +429,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'settings:view',
     'settings:update',
     'users:view',
+
+    'branches:view',
+    'branches:create',
+    'branches:update',
+    'ledger:view',
+    'ledger:post',
     'users:create',
     'users:update',
     'users:disable',

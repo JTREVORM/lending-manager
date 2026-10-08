@@ -70,6 +70,9 @@ describeDb('row level security', () => {
     // is a removal rather than an edit.
     expect(rows.map((row) => `${row.table_name}:${row.privilege_type}`)).toEqual([
       'audit_log:SELECT',
+      // Phase 10. The branch network and the ledger: SELECT only. Nothing writes to a journal through a session; every posting is made by a definer function.
+      'branch_cash_position:SELECT',
+      'branches:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
       // Phase 3. Every table gets SELECT, INSERT and UPDATE except
@@ -106,6 +109,10 @@ describeDb('row level security', () => {
       'guarantors:INSERT',
       'guarantors:SELECT',
       'guarantors:UPDATE',
+      'journal_entries:SELECT',
+      'journal_lines:SELECT',
+      'ledger_account_balances:SELECT',
+      'ledger_accounts:SELECT',
       // Phase 4. The snapshots and the contractual breakdown are read-only to
       // every session: they are written exclusively by `approve_loan`, which
       // runs as the table owner. So nobody can write a snapshot by hand, and
@@ -155,6 +162,7 @@ describeDb('row level security', () => {
       'repayment_frequencies:UPDATE',
       'role_permissions:SELECT',
       'roles:SELECT',
+      'trial_balance:SELECT',
       'user_roles:DELETE',
       'user_roles:INSERT',
       'user_roles:SELECT',
@@ -185,6 +193,10 @@ describeDb('row level security', () => {
 
     expect(rows.map((row) => `${row.tablename}:${row.cmd}`)).toEqual([
       'audit_log:SELECT',
+      // Phase 10. Read policies only: no session role writes a journal,
+      // a ledger account or a branch — every one of those is a definer
+      // function's job.
+      'branches:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
       'client_guarantors:INSERT',
@@ -206,6 +218,9 @@ describeDb('row level security', () => {
       'guarantors:INSERT',
       'guarantors:SELECT',
       'guarantors:UPDATE',
+      'journal_entries:SELECT',
+      'journal_lines:SELECT',
+      'ledger_accounts:SELECT',
       // Phase 4. SELECT only on the breakdown and the snapshots: they are
       // written exclusively by `approve_loan`, which runs as the table owner.
       // No DELETE policy anywhere — a loan is cancelled, never deleted.
@@ -495,6 +510,8 @@ describeDb('views', () => {
         // data with no caller to be read on behalf of, so Row Level Security
         // cannot apply to it at all. Phase 7 noted one might help a larger
         // portfolio; Phase 8 declines it for that reason.
+        // Phase 10. The three ledger views.
+        'branch_cash_position',
         'collections_today',
         // Phase 9. The company's own identity, readable by every signed-in
         // user including borrowers. The only SECURITY DEFINER view in the
@@ -502,6 +519,7 @@ describeDb('views', () => {
         'company_identity',
         'dashboard_collection_summary',
         'dashboard_portfolio_summary',
+        'ledger_account_balances',
         // Phase 6. Balances are derived rather than stored, so a reversal
         // changes every figure the instant it commits.
         'loan_balances',
@@ -516,6 +534,7 @@ describeDb('views', () => {
         'loan_portfolio_report',
         'payment_collection_totals',
         'payment_register',
+        'trial_balance',
       ]);
     });
   });
@@ -554,11 +573,12 @@ describeDb('views', () => {
     // And every view is readable by a signed-in caller, so the revoke did not
     // go too far.
     // One row per view: three from Phase 6, three from Phase 7, five from
-    // Phase 8's reporting layer, one from Phase 9. Counted here because the
-    // names are already enumerated above; what this assertion is for is the
-    // *privilege*, and the count catches a view that arrived with more than
-    // SELECT.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(12);
+    // Phase 8's reporting layer, one from Phase 9, three from Phase 10.
+    // Counted here because the names are already enumerated above; what this
+    // assertion is for is the *privilege*, and the count catches a view that
+    // arrived with more than SELECT — which is exactly what the Phase 10
+    // views did in their first draft, until this assertion said so.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(15);
   });
 });
 
@@ -645,6 +665,11 @@ describeDb('privileged functions', () => {
       'generate_loan_schedule',
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
+      // Phase 10. The journal guards. All four run as the table owner because no session role may write a journal at all.
+      'journal_assert_balanced',
+      'journal_entries_assert_balanced',
+      'journal_entries_guard_update',
+      'journal_lines_assert_balanced',
       'link_client_profile',
       // Phase 6. `loan_outstanding` is deliberately NOT here: it is SECURITY
       // INVOKER, so a session reading a balance sees only what Row Level

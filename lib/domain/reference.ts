@@ -37,7 +37,14 @@
 import { businessReferenceYear } from './datetime';
 
 /** Entity kinds that carry a reference number. */
-export const REFERENCE_SCOPES = ['client', 'loan', 'payment'] as const;
+export const REFERENCE_SCOPES = [
+  'client',
+  'loan',
+  'payment',
+  // Phase 10.
+  'branch',
+  'journal',
+] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
 
 export interface ReferenceFormat {
@@ -58,6 +65,9 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   client: { scope: 'client', prefix: 'CL', padding: 3 },
   loan: { scope: 'loan', prefix: 'LN', padding: 4 },
   payment: { scope: 'payment', prefix: 'PAY', padding: 4 },
+  branch: { scope: 'branch', prefix: 'BR', padding: 2 },
+  // 'JV' for journal voucher, the name the printed ledger uses.
+  journal: { scope: 'journal', prefix: 'JV', padding: 5 },
 } as const;
 
 export class ReferenceError extends Error {

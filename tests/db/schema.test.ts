@@ -28,6 +28,8 @@ if (!hasDatabase) {
 describeDb('tables', () => {
   const EXPECTED_TABLES = [
     'audit_log',
+    // Phase 10: the branch network and the double-entry ledger.
+    'branches',
     'business_settings',
     // Phase 3: the lending-business customer record, its sensitive half, the
     // guarantors who vouch for them, the association between the two, and the
@@ -39,6 +41,11 @@ describeDb('tables', () => {
     'company_settings',
     'guarantor_identities',
     'guarantors',
+    // Phase 10: the double-entry ledger. The header carries the branch, the
+    // date and what caused the posting; the lines carry the two sides.
+    'journal_entries',
+    'journal_lines',
+    'ledger_accounts',
     // Phase 4: the loan agreement, its contractual monthly breakdown, and the
     // three snapshots that make it evidence rather than a view over today's
     // records.
@@ -195,6 +202,14 @@ describeDb('foreign keys', () => {
     // corrupt the books. Archiving replaces deletion.
     expect(actual).toEqual([
       'audit_log.actor_profile_id -> profiles (r)',
+      // Phase 10. The branch network and the ledger. RESTRICT throughout on
+      // anything a posting points at — a branch, an account, a loan or a
+      // client that has been posted against cannot be removed, because the
+      // journal referring to it is evidence. `c` on a journal line, because
+      // a line is part of its entry and has no meaning without it; `n` on
+      // provenance, as everywhere else.
+      'branches.created_by -> profiles (n)',
+      'branches.manager_profile_id -> profiles (n)',
       'business_settings.default_repayment_frequency -> repayment_frequencies (r)',
       'business_settings.updated_by -> profiles (r)',
       // Phase 3. `c` cascades: a client's identity row, remarks and guarantor
@@ -218,6 +233,15 @@ describeDb('foreign keys', () => {
       'company_settings.updated_by -> profiles (r)',
       'guarantor_identities.guarantor_id -> guarantors (c)',
       'guarantors.created_by -> profiles (n)',
+      'journal_entries.branch_id -> branches (r)',
+      'journal_entries.client_id -> clients (r)',
+      'journal_entries.created_by -> profiles (n)',
+      'journal_entries.loan_id -> loans (r)',
+      'journal_entries.reversed_by_entry_id -> journal_entries (r)',
+      'journal_lines.account_id -> ledger_accounts (r)',
+      'journal_lines.entry_id -> journal_entries (c)',
+      'ledger_accounts.branch_id -> branches (r)',
+      'ledger_accounts.parent_id -> ledger_accounts (r)',
       // Phase 4. `c` cascades: a loan's breakdown and snapshots are parts of
       // that loan. `r` restricts: the client and the guarantors a loan was
       // issued against cannot be removed while it references them, because

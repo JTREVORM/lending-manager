@@ -560,10 +560,13 @@ describeDb('payment row level security', () => {
       // logo, no borrower, no money and no row choice. The reason is stated
       // in full in tests/db/security.test.ts, which asserts its column list.
       expect(rows.map((row) => row.relname)).toEqual([
+        // Phase 10 adds the three ledger views.
+        'branch_cash_position',
         'collections_today',
         'company_identity',
         'dashboard_collection_summary',
         'dashboard_portfolio_summary',
+        'ledger_account_balances',
         'loan_balances',
         'loan_delinquency',
         'loan_installment_coverage',
@@ -572,6 +575,7 @@ describeDb('payment row level security', () => {
         'loan_portfolio_report',
         'payment_collection_totals',
         'payment_register',
+        'trial_balance',
       ]);
 
       for (const row of rows) {

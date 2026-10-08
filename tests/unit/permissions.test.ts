@@ -193,6 +193,18 @@ describe('authorization matrix', () => {
     'settings:update': ['owner_admin'],
     'audit:view': ['owner_admin'],
 
+    // --- Phase 10: branch network and the financial ledger ------------------
+    // Everyone who works here may see where the money is; a treasurer most of
+    // all, since they are the one holding it. Opening a branch and
+    // hand-posting a journal are the Owner's, for the same reason disbursing
+    // and reversing are: they are the two acts that can move money without an
+    // operational event behind them.
+    'branches:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'branches:create': ['owner_admin'],
+    'branches:update': ['manager', 'owner_admin'],
+    'ledger:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'ledger:post': ['owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

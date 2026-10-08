@@ -333,6 +333,12 @@ describe('column type discipline', () => {
       'user_roles',
       'role_permissions',
       'client_remarks',
+      // Phase 10. A journal line is never edited: UPDATE and DELETE are both
+      // refused by trigger and the privilege is not granted. A posting is
+      // corrected by a contra entry, so an `updated_at` here would be a
+      // timestamp that can never advance. Its parent `journal_entries` does
+      // carry one, because being reversed stamps a column on it.
+      'journal_lines',
       // Phase 4. All four are append-only in the same way audit_log is:
       // UPDATE is refused by a statement-level trigger and the privilege is
       // not granted. A snapshot that could be edited would not be a snapshot,
@@ -614,6 +620,10 @@ describe('types stay in step with the schema', () => {
       'audit_settings_change',
       // Called only by other SECURITY DEFINER functions, never over the API.
       'assert_owner_admin_remains',
+      // Phase 10. Trigger functions on the journal tables.
+      'journal_lines_assert_balanced',
+      'journal_entries_assert_balanced',
+      'journal_entries_guard_update',
 
       // --- Phase 3 ----------------------------------------------------------
       'clients_assign_client_number',
