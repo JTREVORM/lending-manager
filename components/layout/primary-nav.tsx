@@ -64,12 +64,34 @@ export interface PrimaryNavProps {
  *
  * The sidebar has room for every destination, so it shows every destination,
  * grouped into Operations / Insights / Administration — eleven flat rows is a
- * list you read, three short blocks is a map you scan.
+ * list you read, three labelled blocks is a map you scan. It is the only
+ * navigation the staff shell has: on a phone or a tablet the same rail slides
+ * in from the left behind the header's menu button, so there is one menu to
+ * learn rather than a sidebar on one screen and a tab bar on another.
  *
- * The bottom bar has 390px. It shows four destinations and a "More" button
- * that opens the rest in a sheet. The previous design put all eleven in the
- * bar and let the labels truncate, which produced `H…`, `Cli…`, `B…` — a
- * navigation you cannot read is not navigation.
+ * ## Two breakpoints, deliberately
+ *
+ * The shell switches the rail from drawer to fixed at `md` (768px). The rows
+ * inside it switch from touch-sized to compact at **`lg`** (1024px). They are
+ * not the same question.
+ *
+ * Whether the rail can sit beside the content is about **width**: at 768px
+ * there is room for a 256px rail and a usable column next to it. Whether a
+ * row should be 11px type with 6px of padding is about **what is pointing at
+ * it**, and everything between 768px and 1024px is a tablet — a touch device,
+ * held at arm's length, often in portrait. Giving it the laptop's density
+ * made a 1112px-tall rail hold 460px of menu and 450px of nothing, and asked
+ * a thumb to hit a 26px row.
+ *
+ * So from `md` the rail is furniture, and from `lg` it is dense furniture.
+ *
+ * The bottom bar is now the borrower portal's alone — the portal has a sticky
+ * header and no drawer, so its two destinations sit in a bar within thumb
+ * reach below `md`. It shows up to four destinations and a "More" button that
+ * opens the rest in a sheet, which is what keeps it readable at 390px: the
+ * design it replaced put every entry in the bar and let the labels truncate
+ * to `H…`, `Cli…`, `B…`, and a navigation you cannot read is not
+ * navigation.
  */
 export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryNavProps) {
   const pathname = usePathname();
@@ -108,8 +130,11 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
   return (
     // The reference's menu band: `flex-1 min-h-0 scroll-area scroll-y py-2
     // px-2.5 space-y-1.5 text-xs`. `min-h-0` is what lets it scroll inside a
-    // flex column instead of pushing the user footer off the bottom.
-    <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1.5 px-2.5 py-2 text-xs">
+    // flex column instead of pushing the user footer off the bottom, and the
+    // bands above and below it are `shrink-0` so this is the only part that
+    // ever gives. `gap-1` rather than `gap-1.5`: with every group open the
+    // rail is a list of a dozen rows, and 6px between blocks reads as loose.
+    <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2 text-xs">
       {dashboard === undefined ? null : (
         <SidebarTopLink item={dashboard} pathname={pathname} />
       )}
@@ -176,11 +201,23 @@ function SidebarTopLink({
  *
  * ## The open state
  *
- * A group starts open when it contains the page being viewed, so arriving on
- * a screen never hides where you are. After that it is the reader's to
- * control, and the state is intentionally *not* persisted: the reference does
- * not persist it either, and a rail that remembers a group you opened once a
- * week is a rail that is always half open.
+ * Groups start **open**, and the group holding the page being viewed stays
+ * open whatever the reader does, so arriving on a screen never hides where
+ * you are.
+ *
+ * Starting shut is what this used to do, and it was wrong in this rail. The
+ * reference has thirteen groups and no room to show them; this application
+ * has three, holding eleven destinations between them. Collapsed, those three
+ * rows plus the pinned dashboard filled about 140px of a rail that is the
+ * full height of the window — on a 900px screen that is some 550px of flat
+ * navy between the last group and the signed-in person at the foot, which is
+ * what the rail actually looked like. Open, the same rail carries its eleven
+ * destinations and reads as a menu rather than as three shut doors above a
+ * void. Collapsing is still the reader's to do, one group at a time.
+ *
+ * The state is intentionally *not* persisted across sessions: the reference
+ * does not persist it either, and a rail that remembers a group you shut once
+ * a week is a rail that is always half closed.
  *
  * The header is a real `<button>` with `aria-expanded` and `aria-controls`,
  * and the panel it names carries the id — so a screen-reader user hears
@@ -198,24 +235,24 @@ function SidebarGroup({
 }) {
   const panelId = useId();
   const containsCurrent = items.some((item) => isNavItemActive(item.href, pathname));
-  const [isOpen, setIsOpen] = useState(containsCurrent);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // The group holding the current page is open whenever it holds it, even if
   // the reader collapsed it before navigating into it — otherwise a link in a
   // collapsed group navigates to a screen whose own menu entry is hidden.
-  const expanded = isOpen || containsCurrent;
+  const expanded = containsCurrent || !isCollapsed;
 
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => {
-          setIsOpen((open) => !open);
+          setIsCollapsed((collapsed) => !collapsed);
         }}
         aria-expanded={expanded}
         aria-controls={panelId}
         className={cn(
-          'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all md:py-2 md:text-xs',
+          'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all lg:py-2 lg:text-xs',
           /*
             The reference's active/open group: the amber `#F5A623` fill.
 
@@ -233,11 +270,11 @@ function SidebarGroup({
             : 'text-white hover:bg-blue-800/60',
         )}
       >
-        <span className="flex items-center gap-3 md:gap-2.5">{label}</span>
+        <span className="flex items-center gap-3 lg:gap-2.5">{label}</span>
         {expanded ? (
-          <ChevronDown aria-hidden="true" className="size-4 shrink-0 md:size-3.5" />
+          <ChevronDown aria-hidden="true" className="size-4 shrink-0 lg:size-3.5" />
         ) : (
-          <ChevronRight aria-hidden="true" className="size-4 shrink-0 md:size-3.5" />
+          <ChevronRight aria-hidden="true" className="size-4 shrink-0 lg:size-3.5" />
         )}
       </button>
 
@@ -286,23 +323,24 @@ function SidebarLink({
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        // The reference's sub-item: 14px touch-sized on a phone, 11px and
-        // tight on the desktop, active on a translucent white fill.
+        // The reference's sub-item: 14px touch-sized up to `lg`, 11px and
+        // tight from `lg`, active on a translucent white fill.
         'flex items-center gap-3 rounded-md px-2.5 py-2.5 text-[14px] font-normal transition-all',
-        'md:gap-2 md:py-1.5 md:text-[11px] md:font-medium',
+        'lg:gap-2 lg:py-1.5 lg:text-[11px] lg:font-medium',
         isActive
-          ? 'bg-sidebar-active-surface font-semibold text-white md:font-bold'
+          ? 'bg-sidebar-active-surface font-semibold text-white lg:font-bold'
           : 'text-white hover:bg-white/10',
       )}
     >
-      {/* Amber on the desktop, plain white on a phone — the reference tints
-          the tree's leaf icons to match the trunk rule beside them, and drops
-          the tint at the larger mobile size where it would read as disabled. */}
+      {/* Amber at the compact size, plain white at the touch size — the
+          reference tints the tree's leaf icons to match the trunk rule beside
+          them, and drops the tint at the larger size where it would read as
+          disabled. */}
       <Icon
         aria-hidden="true"
-        className="size-[18px] shrink-0 text-white/90 md:size-3 md:text-amber-300"
+        className="size-[18px] shrink-0 text-white/90 lg:size-3 lg:text-amber-300"
       />
-      <span className="leading-snug md:truncate">{item.label}</span>
+      <span className="leading-snug lg:truncate">{item.label}</span>
       {/* The application carries no full-page loading spinner — see
           `LinkPending` for why — so the feedback for a tap lives in the thing
           that was tapped. */}

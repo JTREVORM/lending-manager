@@ -8,7 +8,7 @@ import { getCompanyBranding } from '@/lib/data/company';
 import { ROLES, effectiveRole } from '@/lib/permissions';
 import { SignOutButton } from './sign-out-button';
 import { PrimaryNav } from './primary-nav';
-import { SidebarToggle } from './sidebar-toggle';
+import { SidebarCloseButton, SidebarToggle } from './sidebar-toggle';
 
 /**
  * The authenticated staff shell, rebuilt as the reference project's frame.
@@ -78,7 +78,7 @@ export async function AppShell({
       sidebar={
         <>
           {/* --- Brand block (#083475) ------------------------------- */}
-          <div className="bg-sidebar-raised flex items-center gap-3 border-b border-blue-800/80 p-4">
+          <div className="bg-sidebar-raised flex shrink-0 items-center gap-3 border-b border-blue-800/80 px-4 py-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded bg-white p-1 shadow-sm">
               <ShieldCheck aria-hidden="true" className="text-accent size-6" />
             </span>
@@ -108,23 +108,29 @@ export async function AppShell({
           </div>
 
           {/* --- Role strip (#06295E) -------------------------------- */}
-          <div className="bg-sidebar-deep flex items-center justify-between border-b border-blue-800/60 px-3.5 py-2">
-            <span className="flex items-center gap-2">
+          <div className="bg-sidebar-deep flex shrink-0 items-center justify-between gap-2 border-b border-blue-800/60 px-3.5 py-1.5">
+            <span className="flex min-w-0 items-center gap-2">
               {/* The reference pulses this dot for an administrator and holds
                   it steady for everyone else. */}
               <span
                 aria-hidden="true"
-                className="bg-accent-2 size-2.5 rounded-full motion-safe:animate-pulse"
+                className="bg-accent-2 size-2.5 shrink-0 rounded-full motion-safe:animate-pulse"
               />
-              <span className="text-xs font-bold text-blue-100">{roleLabel}</span>
+              <span className="truncate text-xs font-bold text-blue-100">
+                {roleLabel}
+              </span>
             </span>
+
+            {/* Closes the drawer. Renders nothing from `md` up, where the
+                rail is not a drawer. */}
+            <SidebarCloseButton />
           </div>
 
           {/* --- The menu ------------------------------------------- */}
           <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
 
           {/* --- The signed-in person (#06295E) --------------------- */}
-          <div className="bg-sidebar-deep border-t border-blue-800/80 p-2.5">
+          <div className="bg-sidebar-deep shrink-0 border-t border-blue-800/80 p-2">
             <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-800/80 bg-blue-950/60 p-2">
               <Link
                 href={ROUTES.account}
@@ -266,14 +272,6 @@ export async function AppShell({
             </span>
           </div>
         </>
-      }
-      bottomBar={
-        <PrimaryNav
-          variant="bottom-bar"
-          menu="staff"
-          permissions={context.permissions}
-          sheetFooter={<SignOutButton />}
-        />
       }
     >
       {children}

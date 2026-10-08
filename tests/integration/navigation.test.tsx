@@ -34,16 +34,14 @@ beforeEach(() => {
 });
 
 /**
- * Open every collapsed group in the sidebar.
+ * Open any collapsed group in the sidebar.
  *
  * The rail is an accordion — the reference project's shape, and the one this
- * application now wears. A group starts closed unless it holds the page being
- * viewed, so its destinations are not in the document until it is opened.
- *
- * Every assertion about *which* entries the rail offers therefore has to open
- * the groups first. A test that queries for a link without doing so passes
- * whether the entry is correctly hidden or merely collapsed, which is the
- * weaker claim of the two and not the one these tests are making.
+ * application wears. Groups now start *open*, so in practice this is a no-op;
+ * it stays because what these tests assert is which entries the rail offers,
+ * and that claim must not quietly become "which entries happen to be expanded
+ * by today's default". If the default ever changes back, these tests keep
+ * testing the thing they were written to test rather than silently weakening.
  */
 async function expandAllGroups(): Promise<void> {
   const user = userEvent.setup();
@@ -256,22 +254,43 @@ describe('PrimaryNav', () => {
     expect(links).toHaveLength(visibleNavItems(NAV_ITEMS, OWNER).length);
   });
 
-  it('opens the group holding the current page, and leaves the others shut', () => {
-    // Arriving on a screen must never hide where you are, but a rail that
-    // opened everything would be the flat list the accordion replaces.
+  it('starts every group open, so the rail is a menu rather than three shut doors', () => {
+    // Collapsed by default left about 140px of content in a rail the height
+    // of the window, and the rest of it was flat navy above the signed-in
+    // person at the foot. Three groups holding eleven destinations is a menu;
+    // show it.
+    mockPathname.current = ROUTES.dashboard;
+    render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
+
+    for (const label of Object.values(NAV_GROUP_LABELS)) {
+      expect(screen.getByRole('button', { name: label }), label).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    }
+  });
+
+  it('lets a group be collapsed, but never the one holding the current page', async () => {
+    // Arriving on a screen must never hide where you are: the group that
+    // holds the open page stays expanded however the reader has toggled it,
+    // or a link in a collapsed group would navigate to a screen whose own
+    // menu entry is missing.
+    const user = userEvent.setup();
     mockPathname.current = ROUTES.audit;
     render(<PrimaryNav variant="sidebar" menu="staff" permissions={OWNER} />);
 
-    // `Audit trail` is in Insights.
-    expect(
-      screen.getByRole('button', { name: NAV_GROUP_LABELS.insights }),
-    ).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('link', { name: 'Audit trail' })).toBeInTheDocument();
-
-    expect(
-      screen.getByRole('button', { name: NAV_GROUP_LABELS.administration }),
-    ).toHaveAttribute('aria-expanded', 'false');
+    const administration = screen.getByRole('button', {
+      name: NAV_GROUP_LABELS.administration,
+    });
+    await user.click(administration);
+    expect(administration).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
+
+    // `Audit trail` is in Insights, which is the open page's group.
+    const insights = screen.getByRole('button', { name: NAV_GROUP_LABELS.insights });
+    await user.click(insights);
+    expect(insights).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Audit trail' })).toBeInTheDocument();
   });
 
   it('keeps the dashboard out of the accordion, as its own row', () => {

@@ -1110,6 +1110,35 @@
 }
 
 /* ===========================================================================
+   The service-worker update notice
+   ===========================================================================
+   It is fixed to the bottom of the window, so what it has to clear is
+   whatever else is fixed there — and that is no longer the same in both
+   shells. The staff shell has nothing at the bottom any more: its navigation
+   is the rail, reached on a phone through the header's menu button. The
+   borrower portal still carries a bottom bar below `md`, because it has a
+   sticky header, no drawer and two destinations.
+
+   The notice is a sibling of both shells and cannot be told which it is
+   under, so it asks the page instead. Keeping the offset here rather than in
+   utility classes on the element is deliberate: both rules then sit in one
+   layer, and the conditional one wins by being more specific and later,
+   rather than by out-specifying a Tailwind utility it would otherwise lose
+   to whatever its selector looked like.
+   =========================================================================== */
+@layer components {
+  .sw-update-notice {
+    margin-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  @media (max-width: 767px) {
+    body:has(nav[data-nav='bottom-bar']) .sw-update-notice {
+      margin-bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 4.5rem));
+    }
+  }
+}
+
+/* ===========================================================================
    Overflow / scrolling system
    ===========================================================================
    One implementation for every scrollable region in the app, ported from the

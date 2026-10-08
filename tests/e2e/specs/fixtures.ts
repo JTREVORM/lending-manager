@@ -99,15 +99,21 @@ export async function signIn(page: Page, who: Who): Promise<void> {
 }
 
 export async function signOut(page: Page): Promise<void> {
-  // The sign-out control lives in the sidebar on a wide screen and inside the
-  // More sheet on a narrow one.
-  const direct = page.getByRole('button', { name: /sign out/i });
-  if (await direct.isVisible().catch(() => false)) {
-    await direct.click();
-  } else {
-    await page.getByRole('button', { name: /^more$/i }).click();
-    await page.getByRole('button', { name: /sign out/i }).click();
+  // There is more than one sign-out control in the document at once — the
+  // staff rail carries one under the signed-in person and the phone header
+  // carries its own, because below `md` the rail is a closed drawer. Only one
+  // of them is ever on screen, so this picks the visible one rather than
+  // asserting which shell is rendered.
+  const visible = page.getByRole('button', { name: /sign out/i }).filter({
+    visible: true,
+  });
+
+  if ((await visible.count()) === 0) {
+    // Nothing on screen: the control is inside the drawer. Open it.
+    await page.getByRole('button', { name: /main menu/i }).click();
   }
+
+  await visible.first().click();
   await page.waitForURL(/\/login/, { timeout: 20_000 });
 }
 

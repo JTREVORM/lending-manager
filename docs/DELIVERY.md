@@ -270,21 +270,30 @@ separately" is how a figure ends up formatted two ways on one screen.
 
 ### Navigation
 
-Eleven destinations do not fit across 390px. The previous design tried and
-produced labels reading `H…`, `Cli…`, `B…` — a navigation you cannot read is
-not navigation.
+Eleven destinations do not fit across 390px, so the staff shell does not try
+to put them there. There is **one** menu — the rail — and it is the same rail
+at every width.
 
-- **Phone:** four destinations in the bottom bar plus a **More** sheet holding
-  the rest. Four cells leaves roughly 78px each, which fits "Payments" at the
-  bar's type size. Asserted: the bar holds exactly four links, no label is
-  clipped or ellipsised, and everything that left the bar is reachable from
-  More.
-- **Laptop:** every destination, grouped into Operations / Insights /
-  Administration. Eleven flat rows is a list you read; three short blocks is a
-  map you scan.
+- **Laptop and tablet (`md` and up):** the rail is fixed down the left of
+  every page, every destination grouped into Operations / Insights /
+  Administration. The groups start open: eleven destinations in three labelled
+  blocks is a map you scan, and three shut doors above half a screen of empty
+  navy is not. Any group can be collapsed, except the one holding the page you
+  are on.
+- **Phone and tablet (below `md`):** the same rail, off-canvas. The header's
+  menu button slides it in; the overlay, the close control in its header,
+  Escape, or choosing a destination slides it out. Nothing is fixed to the
+  bottom of the screen and no page reserves room for anything there.
 
-Both are filtered by capability at render time from one definition, so a
-hidden entry and a protected route cannot disagree. Hiding an entry is never
+There was a bottom tab bar on phones, carrying four destinations and a
+**More** sheet for the other seven. It is gone: two navigations for one
+product is two things to learn, the sheet hid more than the bar showed, and
+the bar cost every page 96px of reserved space at the width with the least of
+it. The borrower portal keeps a bottom bar, because it has a sticky header,
+no drawer and exactly two destinations.
+
+Both menus are filtered by capability at render time from one definition, so
+a hidden entry and a protected route cannot disagree. Hiding an entry is never
 the protection — the route guard and Row Level Security are — it is the
 courtesy that stops staff clicking into a refusal.
 
