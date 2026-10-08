@@ -685,7 +685,7 @@ export const METRIC_DEFINITIONS = {
   cash_received: {
     label: 'Cash received',
     definition:
-      'Cash payments posted today. Money received by that method — not cash at hand, which this system does not track.',
+      'Cash payments posted today. Money received by that method — not the Cash at Hand balance, which branch_cash_position answers.',
     source: "payment_register where payment_method = 'cash'",
   },
   mtn_received: {
@@ -697,6 +697,12 @@ export const METRIC_DEFINITIONS = {
     label: 'Airtel received',
     definition: 'Airtel Money payments posted today. Not a wallet balance.',
     source: "payment_register where payment_method = 'airtel_money'",
+  },
+  bank_received: {
+    label: 'Bank received',
+    definition:
+      'Bank transfers posted today. Not the Cash at Bank balance, which branch_cash_position answers.',
+    source: "payment_register where payment_method = 'bank'",
   },
   reversed_today_amount: {
     label: 'Reversed today',

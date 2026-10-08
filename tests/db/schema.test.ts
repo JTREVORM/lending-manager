@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, inject, it } from 'vitest';
 
 import { REFERENCE_FORMAT_DEFAULTS, REFERENCE_SCOPES } from '@/lib/domain/reference';
 import { PROFILE_STATUSES } from '@/lib/domain/status';
@@ -227,6 +227,8 @@ describeDb('foreign keys', () => {
       'client_remarks.client_id -> clients (c)',
       'client_remarks.created_by -> profiles (r)',
       'client_remarks.retracts_remark_id -> client_remarks (r)',
+      // Phase 10. A branch that has clients or loans cannot be removed.
+      'clients.branch_id -> branches (r)',
       'clients.created_by -> profiles (n)',
       'clients.profile_id -> profiles (r)',
       'clients.status_changed_by -> profiles (n)',
@@ -280,6 +282,7 @@ describeDb('foreign keys', () => {
       'loan_schedules.loan_id -> loans (c)',
       'loan_schedules.repayment_frequency -> repayment_frequencies (r)',
       'loans.approved_by -> profiles (n)',
+      'loans.branch_id -> branches (r)',
       'loans.cancelled_by -> profiles (n)',
       // Phase 6. `r`, not `n`: the loan says who settled it, and that
       // attribution is evidence rather than provenance.
@@ -590,12 +593,22 @@ describeDb('seeded reference data matches the application constants', () => {
   });
 
   it('seeds no audit record of its own', async () => {
-    // Every audit row in a freshly seeded database would have to come from the
-    // seed itself. Scoped to the settings and role actions the seed could
-    // plausibly produce, so test fixtures elsewhere do not affect it.
+    // Every audit row written before any test ran came from the migrations
+    // and the seed, because nothing else had run yet. `seedAuditBoundary` is
+    // the highest audit id at that moment, published by the global setup
+    // immediately after it rebuilds the database.
+    //
+    // The bound is what makes this assertion mean what it says. Counting the
+    // whole table instead made the result depend on file order:
+    // `createTestUser` grants a role, which writes `user.role_granted`, so
+    // whether this passed came down to whether another file's fixtures had
+    // been torn down yet. The claim was never about those rows.
+    const boundary = inject('seedAuditBoundary');
+
     const row = await queryOne<{ count: string }>(
       `select count(*)::text as count from public.audit_log
-        where action in ('settings.updated', 'user.role_granted')`,
+        where id <= $1 and action in ('settings.updated', 'user.role_granted')`,
+      [boundary],
     );
 
     expect(row.count).toBe('0');

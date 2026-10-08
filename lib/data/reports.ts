@@ -172,6 +172,7 @@ export interface DayTotals {
   readonly cash: UgxAmount;
   readonly mtn: UgxAmount;
   readonly airtel: UgxAmount;
+  readonly bank: UgxAmount;
   readonly reversedAmount: UgxAmount;
   readonly reversedCount: number;
 }
@@ -319,6 +320,7 @@ function bucket(
         cash: totals.byMethod.cash,
         mtn: totals.byMethod.mtn_mobile_money,
         airtel: totals.byMethod.airtel_money,
+        bank: totals.byMethod.bank,
         reversedAmount: totals.reversedAmount,
         reversedCount: totals.reversedCount,
       };

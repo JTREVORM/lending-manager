@@ -63,9 +63,10 @@ metric in the code appears here, so the two cannot drift.
 | `collected_today` | Collected today | Posted payments received today in the business timezone, reversals excluded. Includes money applied to arrears or to future collections. | `dashboard_collection_summary.collected_today` |
 | `remaining_today` | Still due today | The uncovered part of today's scheduled collections, right now. Not expected minus collected: a payment today may settle an older collection instead. | `loan_delinquency.due_today_amount` |
 | `clients_due_today` | Clients due today | Distinct borrowers with a collection due today that was not already covered before today. | `collections_today` |
-| `cash_received` | Cash received | Cash payments posted today. Money received by that method — not cash at hand, which this system does not track. | `payment_register where payment_method = 'cash'` |
+| `cash_received` | Cash received | Cash payments posted today. Money received by that method — not the Cash at Hand balance, which branch_cash_position answers. | `payment_register where payment_method = 'cash'` |
 | `mtn_received` | MTN received | MTN Mobile Money payments posted today. Not a wallet balance. | `payment_register where payment_method = 'mtn_mobile_money'` |
 | `airtel_received` | Airtel received | Airtel Money payments posted today. Not a wallet balance. | `payment_register where payment_method = 'airtel_money'` |
+| `bank_received` | Bank received | Bank transfers posted today. Not the Cash at Bank balance, which branch_cash_position answers. | `payment_register where payment_method = 'bank'` |
 | `reversed_today_amount` | Reversed today | Payments withdrawn today, by the date of the reversal rather than of the payment. Excluded from every collection total. | `payment_register where status = reversed` |
 
 ### Three further definitions the screens rely on
@@ -101,13 +102,18 @@ profit would be an accounting claim it cannot support. The executive summary
 says so out loud: *"Neither is profit — this system records no costs, so it
 cannot tell you what the business earned."*
 
-**Cash at hand.** `cash_received` is cash that came in today. The business also
-spends and banks money, and this system records neither, so there is no cash
-position to report. The labels say *received* and the definitions say *not cash
-at hand*.
+**Cash at hand.** `cash_received` is cash that came in today, and it is still
+not a position. What changed in Phase 10 is that the position now exists:
+`branch_cash_position` reports Cash at Hand, the two wallets and the bank per
+branch, from a double-entry ledger. So the labels still say *received*, and the
+definitions still open with *not the Cash at Hand balance* — they simply now
+finish the sentence by naming where that balance is, instead of claiming it is
+not tracked.
 
 **Wallet balance.** Likewise for the mobile money figures: MTN received and
-Airtel received are payments, not balances.
+Airtel received are payments, not balances. Bank received, added with the
+ledger in Phase 10, is the same: a day's transfers in, not the account
+balance.
 
 And one distinction that is not a word but a column: **assessed is not
 collected.** `penalty_assessed` is a charge raised against a borrower;

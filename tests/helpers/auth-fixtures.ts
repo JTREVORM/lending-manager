@@ -117,6 +117,14 @@ export async function deleteTestUsers(): Promise<void> {
     // references it with `on delete restrict` — a charge's payment history
     // must not cascade away — so the ledger goes before the penalties.
     { table: 'loan_penalties', trigger: 'loan_penalties_no_delete' },
+    // Phase 10. The journals reference loans and clients with
+    // `on delete restrict`, on purpose: in production nothing deletes a loan
+    // that has been posted against. A test database still has to come apart,
+    // so they are cleared here through the same owner-level exemption the
+    // rest of this list uses.
+    { table: 'journal_lines', trigger: 'journal_lines_no_delete' },
+    { table: 'journal_entries', trigger: 'journal_entries_no_delete' },
+    { table: 'journal_entries', trigger: 'journal_entries_guard_update' },
     { table: 'loan_installments', trigger: 'loan_installments_no_delete' },
     { table: 'loan_schedules', trigger: 'loan_schedules_no_delete' },
     // Phase 4. The loan snapshots and the contractual breakdown are
@@ -135,6 +143,12 @@ export async function deleteTestUsers(): Promise<void> {
 
   try {
     await query(`delete from public.audit_log`);
+
+    // The reversal pointer self-references with `on delete restrict`, so an
+    // entry and its contra cannot both go in one statement. Unstamping first
+    // is why the update guard is suspended above.
+    await query(`update public.journal_entries set reversed_by_entry_id = null`);
+    await query(`delete from public.journal_entries`);
 
     // Phase 4 rows first: `loans.client_id` is `on delete restrict`, so loans
     // go before the clients they belong to, and the snapshots before the

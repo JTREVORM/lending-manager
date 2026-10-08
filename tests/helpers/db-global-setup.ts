@@ -16,8 +16,28 @@ import { join } from 'node:path';
  *
  * Skipped when `DATABASE_URL` points somewhere other than the local throwaway
  * cluster, so this can never drop a database it did not create.
+ *
+ * ## The seed-era boundary
+ *
+ * After the rebuild, every audit row in the database came from the migrations
+ * and the seed, because nothing else has run yet. The highest id at that
+ * moment is therefore the line between "written by the seed" and "written by
+ * a test", and it is published here for the one assertion that needs it.
+ *
+ * Without it, `schema.test.ts`'s claim that the seed writes no audit record
+ * was order-dependent: `createTestUser` grants a role, which writes a
+ * `user.role_granted` row, so whether the assertion passed depended on
+ * whether some other file's fixtures had run and torn down yet. The claim was
+ * always about the seed; this makes the measurement match it.
  */
-export default function setup(): void {
+// Typed structurally rather than against a Vitest type: the name of the
+// global-setup context has moved between major versions, and this is the one
+// member used.
+interface SetupContext {
+  readonly provide: (key: 'seedAuditBoundary', value: number) => void;
+}
+
+export default function setup({ provide }: SetupContext): void {
   const databaseUrl = process.env.DATABASE_URL?.trim();
 
   if (databaseUrl === undefined || databaseUrl === '') return;
@@ -40,5 +60,32 @@ export default function setup(): void {
       `Could not rebuild the test database before the suite.\n${detail}\n\n` +
         'Run `npm run db:local:setup` first, then export DATABASE_URL.',
     );
+  }
+
+  // Read through psql rather than opening a pool: global setup runs in its
+  // own process and a pool here would outlive it.
+  const highest = execFileSync(
+    'bash',
+    [
+      '-c',
+      `psql "${databaseUrl}" -qtA -c "select coalesce(max(id), 0) from public.audit_log"`,
+    ],
+    { encoding: 'utf8', env: { ...process.env, PATH: pgPath() } },
+  ).trim();
+
+  provide('seedAuditBoundary', Number(highest));
+}
+
+/** The PostgreSQL binaries `pg-local.sh` just used, so `psql` resolves. */
+function pgPath(): string {
+  const bin = execFileSync('bash', ['-c', 'ls -d /usr/lib/postgresql/*/bin | head -1'], {
+    encoding: 'utf8',
+  }).trim();
+  return bin === '' ? (process.env.PATH ?? '') : `${bin}:${process.env.PATH ?? ''}`;
+}
+
+declare module 'vitest' {
+  interface ProvidedContext {
+    readonly seedAuditBoundary: number;
   }
 }

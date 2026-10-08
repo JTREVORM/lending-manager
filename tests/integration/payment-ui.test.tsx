@@ -223,13 +223,32 @@ describe('the payment form', () => {
     expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
   });
 
-  it('offers exactly the three confirmed methods', () => {
+  it('offers exactly the four confirmed methods', () => {
     render(<PaymentForm {...FORM_PROPS} />);
 
     expect(screen.getByText('Cash')).toBeInTheDocument();
     expect(screen.getByText('MTN Mobile Money')).toBeInTheDocument();
     expect(screen.getByText('Airtel Money')).toBeInTheDocument();
-    expect(screen.queryByText(/Bank/i)).toBeNull();
+    // Phase 10. Bank arrived with the ledger, which needed a fourth cash
+    // account; an account money can reach is an account a payment can land in.
+    expect(screen.getByText('Bank Transfer')).toBeInTheDocument();
+    // And nothing beyond them. A cheque is not a method this system records.
+    expect(screen.queryByText(/cheque/i)).toBeNull();
+  });
+
+  it('will not go forward on a bank transfer until its reference is entered', async () => {
+    // The same rule as Mobile Money, asked for in the words of where the
+    // number comes from: a bank transfer has no network transaction id, and
+    // asking for one would send a cashier looking in the wrong place.
+    const user = userEvent.setup();
+    render(<PaymentForm {...FORM_PROPS} />);
+
+    await user.click(screen.getByText('Bank Transfer'));
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+    expect(screen.queryByLabelText(/Transaction reference/i)).toBeNull();
+
+    await user.type(screen.getByLabelText(/Transfer reference/i), 'FT26100800123');
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
   });
 
   // =======================================================================

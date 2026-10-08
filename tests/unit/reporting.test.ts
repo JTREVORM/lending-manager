@@ -468,11 +468,24 @@ describe('metric definitions', () => {
   });
 
   it('says plainly that the method figures are not a balance', () => {
-    expect(METRIC_DEFINITIONS.cash_received.definition).toMatch(/not cash at hand/i);
+    // Each of the four says what it is not, and now says where the balance
+    // *is*: before Phase 10 the answer was "this system does not track it",
+    // and `branch_cash_position` has made that false.
+    expect(METRIC_DEFINITIONS.cash_received.definition).toMatch(
+      /not the Cash at Hand balance/i,
+    );
     expect(METRIC_DEFINITIONS.mtn_received.definition).toMatch(/not a wallet balance/i);
     expect(METRIC_DEFINITIONS.airtel_received.definition).toMatch(
       /not a wallet balance/i,
     );
+    expect(METRIC_DEFINITIONS.bank_received.definition).toMatch(
+      /not the Cash at Bank balance/i,
+    );
+    for (const key of ['cash_received', 'bank_received'] as const) {
+      expect(METRIC_DEFINITIONS[key].definition, key).toMatch(
+        /branch_cash_position answers/i,
+      );
+    }
   });
 
   it('says plainly that interest collected is not profit', () => {

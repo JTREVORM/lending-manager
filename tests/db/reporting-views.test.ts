@@ -213,6 +213,7 @@ describeDb('the reporting views', () => {
       const today = await queryOne<Record<string, string>>(
         `select expected_today::text, collected_today::text, remaining_today::text,
                 cash_received::text, mtn_received::text, airtel_received::text,
+                bank_received::text,
                 loans_due_today::text, clients_due_today::text
            from public.dashboard_collection_summary`,
       );
@@ -473,7 +474,8 @@ describeDb('the reporting views', () => {
       const { summary, register } = await atClock(at, async (exec) => {
         const summaryRows = await exec(
           `select collected_today::text, payments_today::text,
-                  mtn_received::text, cash_received::text, airtel_received::text
+                  mtn_received::text, cash_received::text, airtel_received::text,
+                  bank_received::text
              from public.dashboard_collection_summary`,
         );
         const registerRows = await exec(
@@ -488,12 +490,16 @@ describeDb('the reporting views', () => {
       expect(summary?.collected_today).toBe(register?.effective);
       expect(summary?.payments_today).toBe(register?.effective_rows);
 
-      // And the three method figures add up to the collected total, because
-      // every payment has exactly one method.
+      // And the method figures add up to the collected total, because every
+      // payment has exactly one method. Phase 10 added a fourth — `bank` —
+      // and this sum is what would have caught its omission: before
+      // 20261010000400 the view split three ways, so a bank transfer counted
+      // in `collected_today` and in none of the method columns.
       const methods =
         Number(summary?.cash_received) +
         Number(summary?.mtn_received) +
-        Number(summary?.airtel_received);
+        Number(summary?.airtel_received) +
+        Number(summary?.bank_received);
       expect(methods).toBe(Number(summary?.collected_today));
     });
 

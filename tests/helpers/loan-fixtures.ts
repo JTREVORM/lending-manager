@@ -253,6 +253,17 @@ export async function cancelLoan(
  */
 export async function deleteTestLoans(): Promise<void> {
   const GUARDS: readonly { readonly table: string; readonly trigger: string }[] = [
+    // Phase 10. The ledger goes first: `journal_entries` references `loans`
+    // and `clients` with `on delete restrict`, deliberately — in production
+    // nothing deletes a loan that has been posted against, and that is the
+    // guarantee worth having. A test database still has to be tearable down,
+    // so the journals its fixtures produced are removed here, through the
+    // same owner-level trigger exemption every other append-only table in
+    // this list uses. `journal_lines` cascade from their entry; their own
+    // guard is suspended because a cascade is still a DELETE.
+    { table: 'journal_lines', trigger: 'journal_lines_no_delete' },
+    { table: 'journal_entries', trigger: 'journal_entries_no_delete' },
+    { table: 'journal_entries', trigger: 'journal_entries_guard_update' },
     // Phase 5. Listed first because the installments reference `loan_periods`,
     // so they have to go before it.
     // Phase 6. The payment ledger is append-only, and its allocations
@@ -280,6 +291,12 @@ export async function deleteTestLoans(): Promise<void> {
   }
 
   try {
+    // The reversal pointer is a self-reference with `on delete restrict`, so
+    // an entry and the contra entry that cancels it cannot both go in one
+    // statement. Unstamping first is why `journal_entries_guard_update` is
+    // in the list above.
+    await query(`update public.journal_entries set reversed_by_entry_id = null`);
+    await query(`delete from public.journal_entries`);
     await query(`delete from public.payment_allocations`);
     await query(`delete from public.loan_payments`);
     await query(`delete from public.loan_penalties`);

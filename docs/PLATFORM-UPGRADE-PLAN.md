@@ -197,3 +197,57 @@ rebuilding it rather than extending it.
    them?** Writing journal lines inside `post_payment` and `disburse_loan`
    makes the ledger impossible to skip, but edits two functions that handle
    real money and carry 1,056 database tests.
+
+### How they were answered
+
+The four were put to the owner and answered before a line of Phase 1 was
+written. Each answer is now a property of the schema rather than a note here.
+
+1. **Per-branch.** Cash accounts carry a `branch_id`; income and expense
+   accounts do not, and are sliced by the branch on the journal entry. The
+   reasoning, and why the alternative produces "Interest Income — Nansana" as
+   a separate account from "Interest Income", is at the head of migration
+   `20261010000100`.
+2. **A dated Capital Introduced journal, mathematically derived.** Not a
+   round figure chosen to flatter the dashboard: 21,449,163 is the exact
+   depth of the deepest point the cash position reaches when every
+   disbursement and every cash movement is replayed in timestamp order, so
+   Cash at Hand touches zero at its lowest point and never goes below it. The
+   derivation is in migration `20261010000200` and re-proved by a test.
+3. **One branch, Head Office**, opened the day before the first disbursement.
+   All 28 clients and 33 loans belong to it. New clients and loans are
+   stamped by a trigger, so nothing that creates them today had to change.
+4. **Inside.** `disburse_loan`, `post_payment` and `reverse_payment` each
+   post their own journal, so a money mutation that commits without its
+   ledger entry is not a reachable state. The three functions were re-emitted
+   from `pg_get_functiondef` with one `perform` added to each rather than
+   retyped — a transcription slip inside three hundred lines of allocation
+   arithmetic being the most expensive kind of mistake available there.
+
+Penalty *charging* posts nothing, which is a consequence of (2)'s accounting
+model rather than an omission: income is recognised when collected, so a
+penalty reaches the books through the `allocated_penalty` component of the
+repayment that settles it. `ensure_penalty_applied` therefore needed no
+ledger wiring.
+
+---
+
+## 5. Status
+
+| Phase | State |
+| --- | --- |
+| 1 — Branches and the financial ledger | **Complete.** Migrations `20261010000100`–`20261010000300`, applied live and reconciled. See `UPGRADE-PHASE-1-REPORT.md`. |
+| 2 — Money movement | Not started |
+| 3 — Settings expansion | Not started |
+| 4 — Loan management reorganisation | Not started |
+| 5 — Collections and Debt & Security | Bank payment method delivered early, in Phase 1, because the ledger needed the fourth cash account anyway. The rest not started. |
+| 6 — Notifications | Not started |
+| 7 — Reports Center | Not started |
+| 8 — Dashboard | Not started |
+| 9 — Demo data enrichment | Not started |
+
+Phase 1 shipped as `financial_accounts` → `ledger_accounts` and without a
+separate `account_balances` table: balances are a view over the lines
+(`ledger_account_balances`), because a stored balance is a second source of
+truth for a figure the lines already determine, and keeping the two in step
+is work that buys nothing at this size.

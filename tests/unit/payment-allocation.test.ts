@@ -28,6 +28,7 @@ import {
   describePaymentFailure,
   inAllocationOrder,
   isMobileMoney,
+  requiresExternalReference,
   isPaymentMethod,
   isPaymentStatus,
   minimumAcceptablePayment,
@@ -153,8 +154,13 @@ function contractObligations(
 // ---------------------------------------------------------------------------
 
 describe('the payment vocabulary', () => {
-  it('names exactly the three confirmed methods', () => {
-    expect([...PAYMENT_METHODS]).toEqual(['cash', 'mtn_mobile_money', 'airtel_money']);
+  it('names exactly the four confirmed methods', () => {
+    expect([...PAYMENT_METHODS]).toEqual([
+      'cash',
+      'mtn_mobile_money',
+      'airtel_money',
+      'bank',
+    ]);
   });
 
   it('labels every method', () => {
@@ -162,6 +168,7 @@ describe('the payment vocabulary', () => {
       expect(PAYMENT_METHOD_LABELS[method]).toBeTruthy();
     }
     expect(PAYMENT_METHOD_LABELS.mtn_mobile_money).toBe('MTN Mobile Money');
+    expect(PAYMENT_METHOD_LABELS.bank).toBe('Bank Transfer');
   });
 
   it('rejects a free-text method', () => {
@@ -170,11 +177,24 @@ describe('the payment vocabulary', () => {
     }
   });
 
-  it('knows which methods carry a network reference', () => {
+  it('knows which methods came through a mobile network', () => {
     expect([...MOBILE_MONEY_METHODS]).toEqual(['mtn_mobile_money', 'airtel_money']);
     expect(isMobileMoney('cash')).toBe(false);
     expect(isMobileMoney('mtn_mobile_money')).toBe(true);
     expect(isMobileMoney('airtel_money')).toBe(true);
+    // A bank transfer is not Mobile Money, and the two questions are kept
+    // apart: this one decides the wording on the form, the next one decides
+    // whether the reference is demanded at all.
+    expect(isMobileMoney('bank')).toBe(false);
+  });
+
+  it("demands the other side's reference for everything but cash", () => {
+    // The same rule `post_payment` applies, stated as "not cash" on both
+    // sides rather than as two lists that have to be kept in step.
+    expect(requiresExternalReference('cash')).toBe(false);
+    for (const method of PAYMENT_METHODS.filter((candidate) => candidate !== 'cash')) {
+      expect(requiresExternalReference(method), method).toBe(true);
+    }
   });
 
   it('declares only the two statuses this phase can reach', () => {

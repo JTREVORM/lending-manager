@@ -631,6 +631,9 @@ describeDb('privileged functions', () => {
       'audit_profile_change',
       'audit_settings_change',
       'audit_user_role_change',
+      // Phase 10. The branch network and the ledger. Every one runs as the table owner because no session role may write a journal, and the two stamping triggers fill a column the session never supplies.
+      'backfill_ledger_history',
+      'branch_cash_account',
       // Phase 7. SECURITY DEFINER so the clock gate it consults is callable
       // whatever the session's privileges — see migration 20261007000200.
       'business_now',
@@ -643,6 +646,7 @@ describeDb('privileged functions', () => {
       'client_remarks_stamp_author',
       'clients_assign_client_number',
       'clients_guard_privileged_columns',
+      'clients_stamp_branch',
       'clients_stamp_provenance',
       'confirm_password_change',
       // Phase 9. The rate limiter. SECURITY DEFINER because its counter table
@@ -670,6 +674,7 @@ describeDb('privileged functions', () => {
       'journal_entries_assert_balanced',
       'journal_entries_guard_update',
       'journal_lines_assert_balanced',
+      'ledger_account_by_code',
       'link_client_profile',
       // Phase 6. `loan_outstanding` is deliberately NOT here: it is SECURITY
       // INVOKER, so a session reading a balance sees only what Row Level
@@ -680,9 +685,14 @@ describeDb('privileged functions', () => {
       'loans_assign_loan_number',
       'loans_enforce_active_limit',
       'loans_guard_transition',
+      'loans_stamp_branch',
       'next_reference',
+      'post_disbursement_journal',
+      'post_journal',
       // Phase 6: the two trusted ledger paths.
       'post_payment',
+      'post_repayment_journal',
+      'post_reversal_journal',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
@@ -809,6 +819,8 @@ describeDb('privileged functions', () => {
       'loan_total_outstanding',
       'mask_nin',
       'payment_business_date',
+      // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.
+      'payment_method_cash_kind',
       // Phase 6. The two trusted ledger paths. Each re-checks the caller's
       // capability inside, because SECURITY DEFINER means the grant alone
       // decides nothing.

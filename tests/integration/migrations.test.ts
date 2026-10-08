@@ -624,6 +624,10 @@ describe('types stay in step with the schema', () => {
       'journal_lines_assert_balanced',
       'journal_entries_assert_balanced',
       'journal_entries_guard_update',
+      // Phase 10. The two branch-stamping triggers, which fill a column
+      // nothing that creates a client or a loan supplies yet.
+      'clients_stamp_branch',
+      'loans_stamp_branch',
 
       // --- Phase 3 ----------------------------------------------------------
       'clients_assign_client_number',

@@ -1789,6 +1789,7 @@ export type Database = {
           penalty_collected: number;
           reversed_today_amount: number;
           reversed_today_count: number;
+          bank_received: number;
         };
         Relationships: [];
       };
@@ -1939,6 +1940,73 @@ export type Database = {
     };
 
     Functions: {
+      /**
+       * Phase 10. The account a payment by this method lands in. Pure
+       * mapping; the only ledger helper a signed-in caller may execute.
+       */
+      payment_method_cash_kind: {
+        Args: { p_method: string };
+        Returns: string;
+      };
+
+      /** Phase 10. The branch's account of a given kind. Raises if absent. */
+      branch_cash_account: {
+        Args: { p_branch_id: string; p_cash_kind: string };
+        Returns: string;
+      };
+
+      /** Phase 10. A chart row by its code. Raises if absent. */
+      ledger_account_by_code: {
+        Args: { p_code: string };
+        Returns: string;
+      };
+
+      /** Phase 10. The only way a journal is written. */
+      post_journal: {
+        Args: {
+          p_branch_id: string;
+          p_entry_date: string;
+          p_description: string;
+          p_source_type: string;
+          p_source_id: string | null;
+          p_loan_id: string | null;
+          p_client_id: string | null;
+          p_lines: Json;
+          p_posted_at?: string | null;
+          p_created_by?: string | null;
+          p_created_by_label?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Phase 10. Dr Loans Receivable, Cr the branch Cash at Hand. */
+      post_disbursement_journal: {
+        Args: { p_loan_id: string };
+        Returns: string;
+      };
+
+      /** Phase 10. Dr the receiving account, Cr receivable and the income accounts. */
+      post_repayment_journal: {
+        Args: { p_payment_id: string };
+        Returns: string;
+      };
+
+      /** Phase 10. The contra of a repayment journal. */
+      post_reversal_journal: {
+        Args: { p_payment_id: string };
+        Returns: string;
+      };
+
+      /** Phase 10. Derives journals for events already recorded. Idempotent. */
+      backfill_ledger_history: {
+        Args: Record<string, never>;
+        Returns: {
+          opening: number;
+          disbursements: number;
+          repayments: number;
+          reversals: number;
+        }[];
+      };
       /**
        * Phase 10. Called only by the two deferred constraint triggers on the
        * journal tables; raises if an entry has fewer than two lines or does

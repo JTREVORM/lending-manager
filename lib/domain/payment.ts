@@ -50,8 +50,17 @@ import { sumUgx, toUgx, type UgxAmount } from '@/lib/domain/money';
  * the business reconciles its cash against.
  *
  * Phase 6 records these manually. No MTN or Airtel API is called.
+ *
+ * Phase 10 adds `bank`. It arrived with the ledger rather than with
+ * Collections because the ledger needed a fourth cash account — Cash at
+ * Bank — and an account money can reach is an account a payment can land in.
  */
-export const PAYMENT_METHODS = ['cash', 'mtn_mobile_money', 'airtel_money'] as const;
+export const PAYMENT_METHODS = [
+  'cash',
+  'mtn_mobile_money',
+  'airtel_money',
+  'bank',
+] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -65,6 +74,7 @@ export const PAYMENT_METHOD_LABELS: Readonly<Record<PaymentMethod, string>> = {
   cash: 'Cash',
   mtn_mobile_money: 'MTN Mobile Money',
   airtel_money: 'Airtel Money',
+  bank: 'Bank Transfer',
 };
 
 /** Methods that arrive with a transaction reference from the network. */
@@ -75,6 +85,24 @@ export const MOBILE_MONEY_METHODS: readonly PaymentMethod[] = [
 
 export function isMobileMoney(method: PaymentMethod): boolean {
   return MOBILE_MONEY_METHODS.includes(method);
+}
+
+/**
+ * Whether this method arrives with somebody else's reference on it.
+ *
+ * Everything but cash does: a network transaction id, or the reference on a
+ * bank statement. Without it a posting cannot be matched back to the other
+ * side's record, which is the whole of reconciliation — so `post_payment`
+ * refuses the payment, and the form asks for it before the staff member can
+ * submit.
+ *
+ * Stated as "not cash" rather than as a list, because that is how the
+ * database states it and a second list would be a second rule to keep in
+ * step. `isMobileMoney` remains separate: it answers a different question —
+ * which methods came through a mobile network — and a bank transfer did not.
+ */
+export function requiresExternalReference(method: PaymentMethod): boolean {
+  return method !== 'cash';
 }
 
 /**
