@@ -7,16 +7,16 @@
   },
   "borrower": "+256772110008",
   "clients": {
-    "arrears": "f08ece9b-d388-4efa-a1bb-9bc4cc9cc578",
-    "current": "fc92597d-461f-46f0-b283-ee3ea5f3fe4d"
+    "arrears": "3462d85b-ca51-46da-804b-41e3d980d69d",
+    "current": "740784a3-d62a-4e53-9ba4-2168d8f82731"
   },
   "loans": {
-    "current": "18c67e52-49f0-4e55-b43d-a09d299e5467",
-    "arrears": "13278a4c-a64e-45a1-835e-ce2c60b1ee29",
-    "charged": "fe40392c-4747-43e4-b03b-5a50042c1b08",
-    "grace": "76453cdd-006c-40f6-953f-53ce8f09df13",
-    "pending": "e9c1f569-d70f-4aa7-a3f1-4600e151c151",
-    "draft": "c2a6aaf8-7977-4c64-a95d-0b688f93e8d2",
-    "approvedNotDisbursed": "701a4f8b-2c4b-48f6-8de8-99d24292de9f"
+    "current": "385ee6dc-9794-475c-a6c8-5075807d394a",
+    "arrears": "f940965c-4622-4676-b34a-7ac2939ed018",
+    "charged": "895bafe9-c2dd-4e13-a5b5-c9e11b472bb8",
+    "grace": "0276a64c-c8ae-4b51-b89c-cda710f354f9",
+    "pending": "caacbfa5-2984-4db4-85c6-a055756aa7b5",
+    "draft": "644a555a-72f5-47cd-acac-070394113f6f",
+    "approvedNotDisbursed": "da452928-2eca-4db8-8d46-49543662258f"
   }
 }
