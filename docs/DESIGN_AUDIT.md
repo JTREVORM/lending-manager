@@ -482,3 +482,50 @@ so the next person does not have to rediscover them.
   390×844. All 26 page loads return 200 with no console errors.
 - The Playwright suite, including its axe WCAG 2.1 AA sweep of every staff
   screen, the borrower portal and the sign-in page, passes at both viewports.
+
+---
+
+## 12. One pre-existing test defect, left alone
+
+`tests/e2e/specs/clients.write.spec.ts:91` — *"a duplicate phone number is
+refused with a message, not a crash"* — fails intermittently. It is not a
+consequence of the redesign, and it is reported rather than fixed because
+fixing it properly is a business-logic decision.
+
+**The system does not refuse a duplicate client phone number.** There is no
+such check anywhere:
+
+- `createClientSchema` does not look for one;
+- `createClientAction` handles `23505` for the National Identification
+  Number only, and inserts the phone without a pre-query;
+- the database has `clients_phone_idx`, a plain btree index — `CREATE INDEX`,
+  not `CREATE UNIQUE INDEX` — and the only phone constraints are the E.164
+  format checks and `clients_alternative_phone_differs`.
+
+**The proof.** The spec was run in isolation and reported `10 passed`. The
+database immediately afterwards:
+
+```
+ +256772106673 | 2 | Kabaale Testimony ahgghd | Nansubuga Second ahgghd
+```
+
+Two clients, one phone, created by the two tests — in a run the suite called
+green. The test asserts `toHaveURL(/\/clients\/new/)` after submitting, and
+that assertion is racing the navigation the successful registration triggers.
+When the assertion wins, the test passes while the duplicate is written;
+when the navigation wins, the test fails. It has never been testing what its
+name says.
+
+**Why it is not fixed here.** There are two honest resolutions and both are
+the owner's to choose:
+
+1. *The test is right and the product is wrong* — client phone numbers should
+   be unique, which means a unique index, a migration, a pre-check and a
+   message. That is new validation on production data that already contains
+   duplicates, so it needs a decision about what to do with them.
+2. *The product is right and the test is wrong* — two members of a household
+   may share a phone, which is ordinary in this market, and the test should
+   assert what the system does.
+
+Either way it is a change to what the business considers valid, not to how a
+screen is painted, so it sits outside a presentation-only redesign.
