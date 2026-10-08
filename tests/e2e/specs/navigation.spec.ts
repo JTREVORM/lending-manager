@@ -81,7 +81,15 @@ test.describe('the phone and tablet drawer', () => {
 
     // The scrim's own name. The control inside the drawer answers to
     // "Close menu", so this cannot click that one by accident.
-    await page.getByRole('button', { name: 'Close navigation' }).click();
+    //
+    // The position is not decoration. The scrim is `inset-0`, so it spans the
+    // whole viewport and its centre sits *underneath* the 256px drawer, which
+    // is above it in the stack — a default click aims at that centre and is
+    // intercepted by the rail. What a person taps is the strip of overlay
+    // beside the drawer, so that is what this taps.
+    await page
+      .getByRole('button', { name: 'Close navigation' })
+      .click({ position: { x: 330, y: 400 } });
     await expect(rail).toBeHidden();
     await expect(page).toHaveURL(/\/clients/);
   });
