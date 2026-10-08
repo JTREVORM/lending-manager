@@ -245,7 +245,7 @@ emitted.
 
 ## 13. Commit
 
-See the branch's final commit on `claude/eager-keller-jhxehu`.
+`8823e1d` on `claude/eager-keller-jhxehu`.
 
 ---
 
