@@ -44,15 +44,25 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Deliberately NOT maximum-scale=1 or user-scalable=no. Blocking zoom is a
   // WCAG failure, and staff reading small UGX figures in daylight need it.
-  colorScheme: 'light dark',
+  // `light`, not `light dark`.
+  //
+  // This is not a duplicate of the stylesheet's own light default. It tells
+  // the browser which schemes the page supports, and the browser uses it for
+  // the parts the stylesheet does not own: the canvas behind the document,
+  // scrollbars, and the default rendering of form controls. Declaring
+  // `light dark` while painting a light workspace gave staff on a dark-mode
+  // device a white page with dark native selects and a dark scrollbar down
+  // the side of it.
+  //
+  // It becomes `light dark` again on the day a deliberate theme switch ships
+  // — the palette for it is already in `globals.css` under
+  // `[data-theme="dark"]`.
+  colorScheme: 'light',
 
   // The reference declares a single `theme-color` of `#0B4394` — the navy the
-  // sidebar, the banners and the primary buttons are built from. Both schemes
-  // are given it, because the navy chrome is the same in either.
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#0B4394' },
-    { media: '(prefers-color-scheme: dark)', color: '#0F2962' },
-  ],
+  // sidebar, the banners and the primary buttons are built from. One value,
+  // because there is one scheme.
+  themeColor: '#0B4394',
 };
 
 /**

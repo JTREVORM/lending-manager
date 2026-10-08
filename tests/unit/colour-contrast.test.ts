@@ -91,20 +91,32 @@ function contrastRatio(foreground: Rgb, background: Rgb): number {
 /**
  * Split the stylesheet into its light block and its dark block.
  *
- * Dark mode is a `@media (prefers-color-scheme: dark)` override, so a token
- * declared in both has two values and the later one wins inside that media
- * query. Reading the file in halves is what makes "the dark value" a thing
- * this test can talk about.
+ * Dark mode is an override, so a token declared in both has two values.
+ * Reading the file in halves is what makes "the dark value" a thing this test
+ * can talk about, and every assertion below depends on finding the right
+ * half.
  *
- * The dark half is the media query **and nothing after it**. It used to run
+ * The dark half is the palette block **and nothing after it**. It used to run
  * to the end of the file, which was the same thing right up until a component
  * rule scoped a token to itself — `.record-surface` darkens
  * `--color-text-muted` on its tinted panel, and a naive "last declaration in
  * the file" read mistook that for the dark theme's value and reported a
  * 2.35:1 that no viewer ever sees. A theme value lives in the theme block;
  * reading only that block is what the test always meant.
+ *
+ * The marker is the palette's own selector. It was
+ * `@media (prefers-color-scheme: dark)` until the palette stopped being
+ * applied from the system preference and became opt-in under
+ * `data-theme="dark"`. The old string still occurs in the file — in the
+ * comment explaining that change — and `blockAt` would still have landed on
+ * the right block from there, by luck. Matching the selector is the same
+ * assertion made deliberately instead of by coincidence, and it does not
+ * survive someone rewording a comment.
+ *
+ * Nothing else here changed: the palette is still held to WCAG AA on every
+ * pair, whether or not anything switches it on today.
  */
-const DARK_MARKER = '@media (prefers-color-scheme: dark)';
+const DARK_MARKER = ":root[data-theme='dark'] {";
 
 /** The `{ … }` block that opens at or after `from`, with its braces matched. */
 function blockAt(source: string, from: number): string {

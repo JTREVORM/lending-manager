@@ -352,12 +352,21 @@ something the task says to preserve. Nothing here is a design compromise; all
 are either naming or legal/branding.
 
 1. **Dark-mode mechanism.** The reference uses a `.dark` class
-   (`@custom-variant dark`). The Lending Manager uses
-   `@media (prefers-color-scheme: dark)`, and `tests/unit/colour-contrast.test.ts`
-   parses `app/globals.css` by splitting on that exact string to prove WCAG AA
-   on every status pair. Switching to a class variant deletes a passing
-   accessibility guard. **Kept the media query**, and populated it with the
-   reference's `.dark` slate values.
+   (`@custom-variant dark`). This application now keys its dark palette to
+   `:root[data-theme="dark"]` — the same idea, an explicit opt-in — holding
+   the reference's own `.dark` slate values.
+
+   It was briefly wired to `@media (prefers-color-scheme: dark)`, which was a
+   mistake: it handed a dark workspace to any member of staff whose device
+   was set to dark mode, whatever the product intended. The product is a navy
+   rail beside a white working area, read in daylight and printed, so a
+   system preference set for reading at night has no business restyling a
+   ledger. Nothing sets `data-theme` today, so the staff interface is light
+   everywhere, always; `app/layout.tsx` declares `colorScheme: 'light'` and
+   `:root` carries `color-scheme: light` so native selects and scrollbars
+   follow. The palette is kept, and `tests/unit/colour-contrast.test.ts`
+   still holds every value in it to WCAG AA, ready for a deliberate theme
+   switch.
 
 2. **Token names.** Token *values* are the reference's; token *names* stay the
    Lending Manager's (`--color-accent`, `--color-surface`, `--color-page`,

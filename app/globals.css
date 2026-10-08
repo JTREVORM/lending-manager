@@ -33,10 +33,12 @@
    blank out every utility built on them, so the reference's names are added
    as aliases below and both vocabularies resolve to the same colour.
 
-   Dark mode stays a `prefers-color-scheme` media query rather than the
-   reference's `.dark` class: `tests/unit/colour-contrast.test.ts` splits this
-   file on that exact string to prove WCAG AA on every status pair, and the
-   reference's own `.dark` slate values are what fill it.
+   Dark mode is **opt-in**, not automatic. The palette holds the reference's
+   own `.dark` slate values and is keyed to `data-theme="dark"` on the root
+   element; nothing sets that attribute, so the staff interface is light
+   everywhere. It was previously wired to `prefers-color-scheme: dark`, which
+   handed a dark workspace to anyone whose device was set to dark mode — see
+   the palette block below for why that is the wrong default for a ledger.
 
    The redesign is presentation-only. No financial rule, schedule, allocation,
    penalty or report definition changed — only the surface the numbers are
@@ -175,6 +177,19 @@
    interactive colour.
    --------------------------------------------------------------------------- */
 :root {
+  /*
+    The document is light, and says so to the browser.
+
+    `color-scheme` is what the user agent reads to decide how to paint the
+    parts no stylesheet owns: the canvas behind the document, scrollbars, and
+    the default rendering of native form controls. Saying `light` here keeps a
+    `<select>` and the scrollbar light on a device set to dark mode, which is
+    the half of the problem that tokens alone cannot reach. The matching
+    `colorScheme` in `app/layout.tsx` sets the same thing through a meta tag;
+    this is the stylesheet stating it for itself.
+  */
+  color-scheme: light;
+
   /* -- The interactive colour: the reference's working navy ---------------- */
   --color-accent: oklch(0.4016 0.1446 259.138); /* #0B4394 */
   --color-accent-contrast: oklch(1 0 0); /* white */
@@ -259,62 +274,79 @@
   --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* The reference's own `.dark` block: slate, lifted by lightness. Its
+/* ---------------------------------------------------------------------------
+   The dark palette — defined, contrast-guarded, and OPT-IN ONLY.
+
+   This used to sit inside `@media (prefers-color-scheme: dark)`, which meant
+   any member of staff whose laptop or phone was set to dark mode got a dark
+   workspace, whatever the product intended. That is the wrong default here:
+   the reference design — and this application — is a navy rail beside a white
+   working area, and the figures on it are read in daylight and printed. A
+   system-wide preference set for reading at night should not restyle a
+   ledger.
+
+   So the palette is keyed to `data-theme="dark"` on the root element. Nothing
+   sets that attribute today, so the staff interface is light everywhere,
+   always. The values are kept — and `tests/unit/colour-contrast.test.ts`
+   still holds every one of them to WCAG AA — so that a deliberate theme
+   switch, when someone builds one, has a palette ready and already proven
+   rather than a fresh set of guesses.
+   --------------------------------------------------------------------------- */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* The reference's own `.dark` block: slate, lifted by lightness. Its
        `--background`, `--card` and `--muted` become our page, surface and
        raised surface; its `--foreground` and `--muted-foreground` our text. */
-    --color-page: oklch(0.129 0.042 264.695);
-    --color-surface: oklch(0.208 0.042 265.755);
-    --color-surface-raised: oklch(0.279 0.041 260.031);
-    --color-surface-sunken: oklch(0.17 0.038 264.5);
-    --color-surface-hover: oklch(0.279 0.041 260.031);
-    --color-border: oklch(0.33 0.035 260);
-    --color-border-strong: oklch(0.44 0.04 260);
-    --color-text: oklch(0.984 0.003 247.858);
-    --color-text-muted: oklch(0.704 0.04 256.788);
-    --color-text-inverse: oklch(0.208 0.042 265.755);
+  --color-page: oklch(0.129 0.042 264.695);
+  --color-surface: oklch(0.208 0.042 265.755);
+  --color-surface-raised: oklch(0.279 0.041 260.031);
+  --color-surface-sunken: oklch(0.17 0.038 264.5);
+  --color-surface-hover: oklch(0.279 0.041 260.031);
+  --color-border: oklch(0.33 0.035 260);
+  --color-border-strong: oklch(0.44 0.04 260);
+  --color-text: oklch(0.984 0.003 247.858);
+  --color-text-muted: oklch(0.704 0.04 256.788);
+  --color-text-inverse: oklch(0.208 0.042 265.755);
 
-    /* The navy accent brightens so it still lifts off a dark page, keeping
+  /* The navy accent brightens so it still lifts off a dark page, keeping
        the reference's hue. */
-    --color-accent: oklch(0.72 0.13 259);
-    --color-accent-contrast: oklch(0.17 0.03 264);
-    --color-accent-surface: oklch(0.31 0.06 259);
-    --color-accent-hover: oklch(0.78 0.13 259);
-    --color-accent-2: oklch(0.82 0.15 73);
-    --color-accent-2-surface: oklch(0.33 0.06 73);
+  --color-accent: oklch(0.72 0.13 259);
+  --color-accent-contrast: oklch(0.17 0.03 264);
+  --color-accent-surface: oklch(0.31 0.06 259);
+  --color-accent-hover: oklch(0.78 0.13 259);
+  --color-accent-2: oklch(0.82 0.15 73);
+  --color-accent-2-surface: oklch(0.33 0.06 73);
 
-    /* The rail is already the deepest surface in the product; in dark mode it
+  /* The rail is already the deepest surface in the product; in dark mode it
        only settles slightly so it still separates from the page behind it. */
-    --color-sidebar: oklch(0.2999 0.1062 263.076); /* #0F2962 */
-    --color-sidebar-raised: oklch(0.2934 0.1026 259.21);
-    --color-sidebar-deep: oklch(0.24 0.085 259.21);
+  --color-sidebar: oklch(0.2999 0.1062 263.076); /* #0F2962 */
+  --color-sidebar-raised: oklch(0.2934 0.1026 259.21);
+  --color-sidebar-deep: oklch(0.24 0.085 259.21);
 
-    /* Status: the surfaces darken and the text brightens with them, or every
+  /* Status: the surfaces darken and the text brightens with them, or every
        badge is dark ink on a dark tint. Hues are the reference's. */
-    --color-success: oklch(0.76 0.14 165.6);
-    --color-success-surface: oklch(0.31 0.05 165.6);
-    --color-warning: oklch(0.82 0.15 73);
-    --color-warning-surface: oklch(0.33 0.06 73);
-    --color-danger: oklch(0.74 0.16 27.5);
-    --color-danger-surface: oklch(0.32 0.07 27.5);
-    --color-info: oklch(0.76 0.11 259);
-    --color-info-surface: oklch(0.31 0.06 259);
+  --color-success: oklch(0.76 0.14 165.6);
+  --color-success-surface: oklch(0.31 0.05 165.6);
+  --color-warning: oklch(0.82 0.15 73);
+  --color-warning-surface: oklch(0.33 0.06 73);
+  --color-danger: oklch(0.74 0.16 27.5);
+  --color-danger-surface: oklch(0.32 0.07 27.5);
+  --color-info: oklch(0.76 0.11 259);
+  --color-info-surface: oklch(0.31 0.06 259);
 
-    /* Shadows deepen and go nearly neutral on a dark page. */
-    --surface-raised-fill: var(--color-surface-raised);
-    --elevate-1: 0 1px 1px oklch(0 0 0 / 0.3);
-    --elevate-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 2px 4px oklch(0 0 0 / 0.3);
-    --elevate-3: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 16px oklch(0 0 0 / 0.45);
-    --elevate-4: 0 2px 6px oklch(0 0 0 / 0.5), 0 12px 28px oklch(0 0 0 / 0.55);
-    --elevate-5: 0 4px 10px oklch(0 0 0 / 0.5), 0 18px 40px oklch(0 0 0 / 0.6);
-    --inset-press: inset 0 2px 5px oklch(0 0 0 / 0.5);
-    --glass-bg: var(--color-surface);
-    --glass-border: var(--color-border);
-    --glass-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 30px rgba(0, 0, 0, 0.4);
-    --ring-focus: 0 0 0 3px oklch(0.72 0.13 259 / 0.3);
-  }
+  /* Shadows deepen and go nearly neutral on a dark page. */
+  --surface-raised-fill: var(--color-surface-raised);
+  --elevate-1: 0 1px 1px oklch(0 0 0 / 0.3);
+  --elevate-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 2px 4px oklch(0 0 0 / 0.3);
+  --elevate-3: 0 1px 2px oklch(0 0 0 / 0.4), 0 6px 16px oklch(0 0 0 / 0.45);
+  --elevate-4: 0 2px 6px oklch(0 0 0 / 0.5), 0 12px 28px oklch(0 0 0 / 0.55);
+  --elevate-5: 0 4px 10px oklch(0 0 0 / 0.5), 0 18px 40px oklch(0 0 0 / 0.6);
+  --inset-press: inset 0 2px 5px oklch(0 0 0 / 0.5);
+  --glass-bg: var(--color-surface);
+  --glass-border: var(--color-border);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 30px rgba(0, 0, 0, 0.4);
+  --ring-focus: 0 0 0 3px oklch(0.72 0.13 259 / 0.3);
 }
 
 /* ---------------------------------------------------------------------------
@@ -785,17 +817,16 @@
     background-attachment: fixed;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .app-shell {
-      background-color: oklch(0.129 0.042 264.695);
-      background-image:
-        radial-gradient(46rem 30rem at 88% -8%, rgba(11, 67, 148, 0.28), transparent 60%),
-        radial-gradient(40rem 26rem at -6% 108%, rgba(224, 165, 60, 0.1), transparent 60%);
-    }
+  /* Opt-in dark only — see the palette block near the top of this file. */
+  :root[data-theme='dark'] .app-shell {
+    background-color: oklch(0.129 0.042 264.695);
+    background-image:
+      radial-gradient(46rem 30rem at 88% -8%, rgba(11, 67, 148, 0.28), transparent 60%),
+      radial-gradient(40rem 26rem at -6% 108%, rgba(224, 165, 60, 0.1), transparent 60%);
+  }
 
-    .sidebar-gradient {
-      background-image: linear-gradient(180deg, #0a2f68 0%, #0a2e60 45%, #061f47 100%);
-    }
+  :root[data-theme='dark'] .sidebar-gradient {
+    background-image: linear-gradient(180deg, #0a2f68 0%, #0a2e60 45%, #061f47 100%);
   }
 
   /* The sign-in page's "WE WANT / YOUR / FEEDBACK" speech-bubble chips. The
@@ -908,26 +939,25 @@
     opacity: 0.6;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .form-label {
-      color: var(--color-text);
-    }
+  /* Opt-in dark only — see the palette block near the top of this file. */
+  :root[data-theme='dark'] .form-label {
+    color: var(--color-text);
+  }
 
-    .form-field {
-      background: var(--color-surface);
-      border-color: var(--color-border-strong);
-      color: var(--color-text);
-    }
+  :root[data-theme='dark'] .form-field {
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
 
-    .form-field:disabled,
-    .form-field[readonly] {
-      background: var(--color-surface-sunken);
-      color: var(--color-text-muted);
-    }
+  :root[data-theme='dark'] .form-field:disabled,
+  :root[data-theme='dark'] .form-field[readonly] {
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+  }
 
-    .form-section-title {
-      color: var(--color-text);
-    }
+  :root[data-theme='dark'] .form-section-title {
+    color: var(--color-text);
   }
 }
 
@@ -1033,17 +1063,16 @@
     color: #0f172a;
   }
 
-  @media (prefers-color-scheme: dark) {
-    /* There is no pale blue on a dark page, so a record lifts by lightness
-       instead — the same step the reference's own dark `--card` takes. */
-    .record-surface,
-    .record-panel {
-      background: var(--color-surface-raised);
-    }
+  /* There is no pale blue on a dark page, so a record lifts by lightness
+     instead — the same step the reference's own dark `--card` takes.
+     Opt-in dark only — see the palette block near the top of this file. */
+  :root[data-theme='dark'] .record-surface,
+  :root[data-theme='dark'] .record-panel {
+    background: var(--color-surface-raised);
+  }
 
-    .record-panel > p {
-      color: var(--color-text);
-    }
+  :root[data-theme='dark'] .record-panel > p {
+    color: var(--color-text);
   }
 
   /* Comfortable tap targets everywhere on touch layouts, and single-column
@@ -1300,18 +1329,17 @@
     backdrop-filter: blur(2px);
   }
 
-  @media (prefers-color-scheme: dark) {
-    .loader {
-      background: linear-gradient(90deg, #fff 50%, #0000 0) right / 200% 100%;
-    }
+  /* Opt-in dark only — see the palette block near the top of this file. */
+  :root[data-theme='dark'] .loader {
+    background: linear-gradient(90deg, #fff 50%, #0000 0) right / 200% 100%;
+  }
 
-    .loader::before {
-      background-image: linear-gradient(90deg, #0b4394 50%, #fff 0);
-    }
+  :root[data-theme='dark'] .loader::before {
+    background-image: linear-gradient(90deg, #0b4394 50%, #fff 0);
+  }
 
-    .loader-overlay {
-      background: oklch(0.129 0.042 264.695 / 0.85);
-    }
+  :root[data-theme='dark'] .loader-overlay {
+    background: oklch(0.129 0.042 264.695 / 0.85);
   }
 
   /* Without motion the sweep would never resolve, so show solid text. */
