@@ -69,6 +69,22 @@ export interface PrimaryNavProps {
  * in from the left behind the header's menu button, so there is one menu to
  * learn rather than a sidebar on one screen and a tab bar on another.
  *
+ * ## Two breakpoints, deliberately
+ *
+ * The shell switches the rail from drawer to fixed at `md` (768px). The rows
+ * inside it switch from touch-sized to compact at **`lg`** (1024px). They are
+ * not the same question.
+ *
+ * Whether the rail can sit beside the content is about **width**: at 768px
+ * there is room for a 256px rail and a usable column next to it. Whether a
+ * row should be 11px type with 6px of padding is about **what is pointing at
+ * it**, and everything between 768px and 1024px is a tablet — a touch device,
+ * held at arm's length, often in portrait. Giving it the laptop's density
+ * made a 1112px-tall rail hold 460px of menu and 450px of nothing, and asked
+ * a thumb to hit a 26px row.
+ *
+ * So from `md` the rail is furniture, and from `lg` it is dense furniture.
+ *
  * The bottom bar is now the borrower portal's alone — the portal has a sticky
  * header and no drawer, so its two destinations sit in a bar within thumb
  * reach below `md`. It shows up to four destinations and a "More" button that
@@ -236,7 +252,7 @@ function SidebarGroup({
         aria-expanded={expanded}
         aria-controls={panelId}
         className={cn(
-          'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all md:py-2 md:text-xs',
+          'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all lg:py-2 lg:text-xs',
           /*
             The reference's active/open group: the amber `#F5A623` fill.
 
@@ -254,11 +270,11 @@ function SidebarGroup({
             : 'text-white hover:bg-blue-800/60',
         )}
       >
-        <span className="flex items-center gap-3 md:gap-2.5">{label}</span>
+        <span className="flex items-center gap-3 lg:gap-2.5">{label}</span>
         {expanded ? (
-          <ChevronDown aria-hidden="true" className="size-4 shrink-0 md:size-3.5" />
+          <ChevronDown aria-hidden="true" className="size-4 shrink-0 lg:size-3.5" />
         ) : (
-          <ChevronRight aria-hidden="true" className="size-4 shrink-0 md:size-3.5" />
+          <ChevronRight aria-hidden="true" className="size-4 shrink-0 lg:size-3.5" />
         )}
       </button>
 
@@ -307,23 +323,24 @@ function SidebarLink({
       href={item.href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        // The reference's sub-item: 14px touch-sized on a phone, 11px and
-        // tight on the desktop, active on a translucent white fill.
+        // The reference's sub-item: 14px touch-sized up to `lg`, 11px and
+        // tight from `lg`, active on a translucent white fill.
         'flex items-center gap-3 rounded-md px-2.5 py-2.5 text-[14px] font-normal transition-all',
-        'md:gap-2 md:py-1.5 md:text-[11px] md:font-medium',
+        'lg:gap-2 lg:py-1.5 lg:text-[11px] lg:font-medium',
         isActive
-          ? 'bg-sidebar-active-surface font-semibold text-white md:font-bold'
+          ? 'bg-sidebar-active-surface font-semibold text-white lg:font-bold'
           : 'text-white hover:bg-white/10',
       )}
     >
-      {/* Amber on the desktop, plain white on a phone — the reference tints
-          the tree's leaf icons to match the trunk rule beside them, and drops
-          the tint at the larger mobile size where it would read as disabled. */}
+      {/* Amber at the compact size, plain white at the touch size — the
+          reference tints the tree's leaf icons to match the trunk rule beside
+          them, and drops the tint at the larger size where it would read as
+          disabled. */}
       <Icon
         aria-hidden="true"
-        className="size-[18px] shrink-0 text-white/90 md:size-3 md:text-amber-300"
+        className="size-[18px] shrink-0 text-white/90 lg:size-3 lg:text-amber-300"
       />
-      <span className="leading-snug md:truncate">{item.label}</span>
+      <span className="leading-snug lg:truncate">{item.label}</span>
       {/* The application carries no full-page loading spinner — see
           `LinkPending` for why — so the feedback for a tap lives in the thing
           that was tapped. */}
