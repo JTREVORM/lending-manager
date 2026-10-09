@@ -127,10 +127,21 @@ describe('row level security', () => {
   it('uses USING (true) only on the non-sensitive lookup tables', () => {
     // A permissive policy on financial or personal data would defeat the
     // entire security model, so each one is enumerated deliberately.
-    // All three are vocabulary: role names, capability names, and which role
-    // grants which. None holds personal or financial data, and none says
+    // The first three are vocabulary: role names, capability names, and which
+    // role grants which. None holds personal or financial data, and none says
     // anything about a particular person.
-    const PERMITTED = new Set(['roles', 'permissions', 'role_permissions']);
+    //
+    // Phase 13 adds the guarantor undertaking, which is the business's own
+    // published document and names nobody. The people most entitled to
+    // re-read it are the guarantors who signed it — who hold a borrower's
+    // portal login and nothing more — so gating it on a staff capability
+    // would hide a contract from the person bound by it.
+    const PERMITTED = new Set([
+      'roles',
+      'permissions',
+      'role_permissions',
+      'guarantor_consent_terms',
+    ]);
 
     const policies = [
       ...executableSql.matchAll(
@@ -678,6 +689,19 @@ describe('types stay in step with the schema', () => {
 
       // --- Phase 7 ----------------------------------------------------------
       'audit_penalty_applied',
+
+      // --- Phase 13 ---------------------------------------------------------
+      // The application's guards: what a draft may change, who may act as a
+      // guarantor, what becomes evidence, and the audit record of the
+      // freeze. None is callable over the API.
+      'loan_application_details_guard',
+      'loan_application_details_stamp_actor',
+      'loan_guarantors_check_eligibility',
+      'loan_guarantors_guard_removal',
+      'loan_guarantors_guard_snapshot',
+      'loan_guarantors_stamp_actor',
+      'guarantor_consent_terms_guard',
+      'audit_loan_guarantors_frozen',
 
       // --- Phase 12 ---------------------------------------------------------
       // Three triggers on `loan_products`: the guard rail that keeps a

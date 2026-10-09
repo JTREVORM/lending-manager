@@ -103,6 +103,16 @@ export async function createDraftLoan(
     readonly principal?: number;
     readonly termMonths?: number;
     readonly frequency?: string;
+    /**
+     * Phase 13. Leave the application with no guarantors of its own, to drive
+     * the `insufficient_guarantors` rule.
+     */
+    readonly withoutLoanGuarantors?: boolean;
+    /**
+     * Phase 13. Attach the guarantors but take no consent, to drive the
+     * `guarantor_consent_missing` rule.
+     */
+    readonly withoutConsent?: boolean;
   },
 ): Promise<string> {
   const row = await queryOne<{ id: string }>(
@@ -121,7 +131,57 @@ export async function createDraftLoan(
     ],
   );
 
+  if (options?.withoutLoanGuarantors !== true) {
+    await attachClientGuarantorsToLoan(row.id, clientId, {
+      consent: options?.withoutConsent !== true,
+    });
+  }
+
   return row.id;
+}
+
+/**
+ * Attach the client's active guarantors to an application, signed.
+ *
+ * Phase 13 moved a loan's guarantors onto the loan: approval counts
+ * `loan_guarantors`, not the client's register, and refuses an unsigned
+ * undertaking. That is what the application screen does — offer the client's
+ * known backers, attach the chosen ones, take each consent — so the fixture
+ * does the same thing rather than reaching past the rule it is meant to
+ * exercise.
+ *
+ * Written as the table owner, which is what lets it set `consented_at`
+ * directly. A real consent is taken through the server action; what these
+ * tests need is a loan that *has* one.
+ */
+export async function attachClientGuarantorsToLoan(
+  loanId: string,
+  clientId: string,
+  options?: { readonly consent?: boolean },
+): Promise<void> {
+  const signed = options?.consent !== false;
+
+  await query(
+    `insert into public.loan_guarantors
+       (loan_id, guarantor_id, relationship_to_client,
+        consent_terms_id, consent_version, consented_at,
+        signature_name, witness_name, witness_phone, consent_place)
+     select
+       $1, cg.guarantor_id, cg.relationship_to_client,
+       case when $2 then t.id end,
+       case when $2 then t.version end,
+       case when $2 then pg_catalog.now() end,
+       case when $2 then g.full_name end,
+       case when $2 then 'Fixture Witness' end,
+       case when $2 then '+256700000900' end,
+       case when $2 then 'Kampala' end
+     from public.client_guarantors cg
+     join public.guarantors g on g.id = cg.guarantor_id
+     left join public.guarantor_consent_terms t on t.is_current
+     where cg.client_id = $3 and cg.active
+     on conflict do nothing`,
+    [loanId, signed, clientId],
+  );
 }
 
 /**
@@ -298,6 +358,15 @@ export async function deleteTestLoans(): Promise<void> {
     // snapshot does: in production a loan that has been approved is not
     // deleted, and the frozen terms are the evidence of what was agreed.
     { table: 'loan_product_snapshots', trigger: 'loan_product_snapshots_no_delete' },
+    // Phase 13. A loan's own guarantors, its product-specific answers, and
+    // the guards that make all three evidence rather than working notes: a
+    // guarantor cannot be removed from a loan past draft, and the
+    // application details cannot be touched at all. Every one of those rules
+    // is asserted elsewhere in this directory, which is why suspending them
+    // here is an exemption rather than a hole.
+    { table: 'loan_guarantors', trigger: 'loan_guarantors_guard_removal' },
+    { table: 'loan_salary_details', trigger: 'loan_salary_details_guard' },
+    { table: 'loan_business_details', trigger: 'loan_business_details_guard' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -325,6 +394,9 @@ export async function deleteTestLoans(): Promise<void> {
     await query(`delete from public.loan_guarantor_snapshots`);
     await query(`delete from public.loan_identity_snapshots`);
     await query(`delete from public.loan_product_snapshots`);
+    await query(`delete from public.loan_guarantors`);
+    await query(`delete from public.loan_salary_details`);
+    await query(`delete from public.loan_business_details`);
     await query(`delete from public.loans`);
   } finally {
     for (const { table, trigger } of GUARDS) {

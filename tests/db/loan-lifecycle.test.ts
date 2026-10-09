@@ -425,18 +425,51 @@ describeDb('the loan lifecycle', () => {
       },
     );
 
-    it('refuses when the guarantor was detached after drafting', async () => {
+    it('refuses an application with no guarantor of its own', async () => {
+      // Phase 13 moved the rule: approval counts the guarantors on the
+      // *application*, not the client's register. Detaching a register entry
+      // after drafting no longer changes what the loan relies on — the loan
+      // recorded it — and that is the point of the move. What still refuses
+      // an approval is an application nobody agreed to back.
+      const own = await createLoanScenario();
+      const loanId = await createDraftLoan(own.clientId, {
+        withoutLoanGuarantors: true,
+      });
+      await submitLoan(loanId, own);
+
+      await expect(approveAs(own.owner, loanId)).rejects.toThrow(
+        /insufficient_guarantors/,
+      );
+    });
+
+    it('refuses an application whose guarantor has not signed', async () => {
+      // A guarantor who has not signed the undertaking is somebody the
+      // business cannot hold to anything, so this stops the approval rather
+      // than being noted on it.
+      const own = await createLoanScenario();
+      const loanId = await createDraftLoan(own.clientId, { withoutConsent: true });
+      await submitLoan(loanId, own);
+
+      await expect(approveAs(own.owner, loanId)).rejects.toThrow(
+        /guarantor_consent_missing/,
+      );
+    });
+
+    it('refuses when a guarantor stopped being eligible after drafting', async () => {
+      // The same race the client check loses safely: a guarantor archived
+      // between drafting and approval must stop the approval, because the
+      // business would otherwise be relying on somebody it has struck off.
       const own = await createLoanScenario();
       const loanId = await createDraftLoan(own.clientId);
       await submitLoan(loanId, own);
 
       await query(
-        `update public.client_guarantors set active = false where client_id = $1`,
-        [own.clientId],
+        `update public.guarantors set archived_at = pg_catalog.now() where id = $1`,
+        [own.guarantorId],
       );
 
       await expect(approveAs(own.owner, loanId)).rejects.toThrow(
-        /insufficient_guarantors/,
+        /guarantor_ineligible/,
       );
     });
 
@@ -560,7 +593,7 @@ describeDb('the loan lifecycle', () => {
         `select
            (select count(*) from public.loan_periods where loan_id = $1)::text as periods,
            (select count(*) from public.loan_client_snapshots where loan_id = $1)::text as client_snap,
-           (select count(*) from public.loan_guarantor_snapshots where loan_id = $1)::text as guarantor_snap,
+           (select count(*) from public.loan_guarantor_evidence where loan_id = $1)::text as guarantor_snap,
            (select count(*) from public.loan_identity_snapshots where loan_id = $1)::text as identity_snap`,
         [loanId],
       );

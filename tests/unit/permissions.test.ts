@@ -231,6 +231,10 @@ describe('authorization matrix', () => {
     'products:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'products:manage': ['owner_admin'],
 
+    // Phase 13. The words a guarantor signs are the Owner's to change, for
+    // the same reason pricing is: somebody has to answer for them.
+    'guarantor_terms:manage': ['owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

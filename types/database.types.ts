@@ -1649,6 +1649,257 @@ export type Database = {
         Relationships: [];
       };
 
+      /**
+       * Phase 13. The versioned undertaking a guarantor signs. A version that
+       * has been signed cannot be reworded — a trigger refuses it — so a new
+       * version is appended instead.
+       */
+      guarantor_consent_terms: {
+        Row: {
+          id: string;
+          version: string;
+          title: string;
+          body: string;
+          effective_from: string;
+          is_current: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          version: string;
+          title: string;
+          body: string;
+          effective_from: string;
+          is_current?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          version?: string;
+          title?: string;
+          body?: string;
+          effective_from?: string;
+          is_current?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. What a business product asks for, one row per loan. Same
+       * lifecycle as the salary details.
+       */
+      loan_business_details: {
+        Row: {
+          loan_id: string;
+          business_name: string;
+          business_type: string;
+          business_location: string;
+          trading_since: string | null;
+          monthly_turnover: number;
+          loan_purpose: string;
+          employee_count: number | null;
+          premises_ownership: string | null;
+          trading_licence_number: string | null;
+          trading_licence_path: string | null;
+          bank_statement_path: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          loan_id: string;
+          business_name: string;
+          business_type: string;
+          business_location: string;
+          trading_since?: string | null;
+          monthly_turnover: number;
+          loan_purpose: string;
+          employee_count?: number | null;
+          premises_ownership?: string | null;
+          trading_licence_number?: string | null;
+          trading_licence_path?: string | null;
+          bank_statement_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          loan_id?: string;
+          business_name?: string;
+          business_type?: string;
+          business_location?: string;
+          trading_since?: string | null;
+          monthly_turnover?: number;
+          loan_purpose?: string;
+          employee_count?: number | null;
+          premises_ownership?: string | null;
+          trading_licence_number?: string | null;
+          trading_licence_path?: string | null;
+          bank_statement_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. Who guaranteed a particular loan, and the consent they
+       * signed. Exactly one of `guarantor_id` (an external person) and
+       * `guarantor_client_id` (an existing client) is set. The `snapshot_*`
+       * columns are the person's details frozen at approval, write-once.
+       */
+      loan_guarantors: {
+        Row: {
+          id: string;
+          loan_id: string;
+          guarantor_id: string | null;
+          guarantor_client_id: string | null;
+          relationship_to_client: string;
+          consent_terms_id: string | null;
+          consent_version: string | null;
+          consented_at: string | null;
+          signature_name: string | null;
+          signature_path: string | null;
+          witness_name: string | null;
+          witness_phone: string | null;
+          consent_place: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          snapshot_full_name: string | null;
+          snapshot_phone: string | null;
+          snapshot_alternative_phone: string | null;
+          snapshot_sex: string | null;
+          snapshot_date_of_birth: string | null;
+          snapshot_occupation: string | null;
+          snapshot_location: string | null;
+          snapshot_district: string | null;
+          snapshot_had_identification: boolean | null;
+          snapshot_had_photograph: boolean | null;
+          snapshot_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          guarantor_id?: string | null;
+          guarantor_client_id?: string | null;
+          relationship_to_client: string;
+          consent_terms_id?: string | null;
+          consent_version?: string | null;
+          consented_at?: string | null;
+          signature_name?: string | null;
+          signature_path?: string | null;
+          witness_name?: string | null;
+          witness_phone?: string | null;
+          consent_place?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          snapshot_full_name?: string | null;
+          snapshot_phone?: string | null;
+          snapshot_alternative_phone?: string | null;
+          snapshot_sex?: string | null;
+          snapshot_date_of_birth?: string | null;
+          snapshot_occupation?: string | null;
+          snapshot_location?: string | null;
+          snapshot_district?: string | null;
+          snapshot_had_identification?: boolean | null;
+          snapshot_had_photograph?: boolean | null;
+          snapshot_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          guarantor_id?: string | null;
+          guarantor_client_id?: string | null;
+          relationship_to_client?: string;
+          consent_terms_id?: string | null;
+          consent_version?: string | null;
+          consented_at?: string | null;
+          signature_name?: string | null;
+          signature_path?: string | null;
+          witness_name?: string | null;
+          witness_phone?: string | null;
+          consent_place?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          snapshot_full_name?: string | null;
+          snapshot_phone?: string | null;
+          snapshot_alternative_phone?: string | null;
+          snapshot_sex?: string | null;
+          snapshot_date_of_birth?: string | null;
+          snapshot_occupation?: string | null;
+          snapshot_location?: string | null;
+          snapshot_district?: string | null;
+          snapshot_had_identification?: boolean | null;
+          snapshot_had_photograph?: boolean | null;
+          snapshot_at?: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. What a salary product asks for, one row per loan. Writable
+       * only while the loan is a draft.
+       */
+      loan_salary_details: {
+        Row: {
+          loan_id: string;
+          employer_name: string;
+          employer_contact: string | null;
+          job_title: string;
+          staff_number: string | null;
+          net_monthly_salary: number;
+          salary_pay_day: number;
+          employment_started_on: string | null;
+          payslip_path: string | null;
+          employment_letter_path: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          loan_id: string;
+          employer_name: string;
+          employer_contact?: string | null;
+          job_title: string;
+          staff_number?: string | null;
+          net_monthly_salary: number;
+          salary_pay_day: number;
+          employment_started_on?: string | null;
+          payslip_path?: string | null;
+          employment_letter_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          loan_id?: string;
+          employer_name?: string;
+          employer_contact?: string | null;
+          job_title?: string;
+          staff_number?: string | null;
+          net_monthly_salary?: number;
+          salary_pay_day?: number;
+          employment_started_on?: string | null;
+          payslip_path?: string | null;
+          employment_letter_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
       loan_schedules: {
         Row: {
           loan_id: string;
@@ -2343,6 +2594,106 @@ export type Database = {
         Relationships: [];
       };
       /**
+       * Phase 13. One row per loan: the product it was taken under, the
+       * questions that product asks, and whether they are answered.
+       */
+      loan_application_profile: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          status: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          application_profile: string | null;
+          requires_supporting_documents: boolean | null;
+          details_present: boolean | null;
+          employer_name: string | null;
+          job_title: string | null;
+          net_monthly_salary: number | null;
+          salary_pay_day: number | null;
+          has_payslip: boolean | null;
+          business_name: string | null;
+          business_type: string | null;
+          monthly_turnover: number | null;
+          loan_purpose: string | null;
+          has_trading_licence: boolean | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. Who guaranteed a loan, as frozen at approval: from
+       * `loan_guarantors` for loans approved from Phase 13 onward, and from
+       * `loan_guarantor_snapshots` for the ones before it. `source` says
+       * which.
+       */
+      loan_guarantor_evidence: {
+        Row: {
+          loan_id: string | null;
+          subject_kind: string | null;
+          guarantor_id: string | null;
+          guarantor_client_id: string | null;
+          full_name: string | null;
+          phone: string | null;
+          alternative_phone: string | null;
+          sex: string | null;
+          date_of_birth: string | null;
+          occupation: string | null;
+          location: string | null;
+          district: string | null;
+          relationship_to_client: string | null;
+          had_photograph: boolean | null;
+          had_identification: boolean | null;
+          consent_version: string | null;
+          consented_at: string | null;
+          signature_name: string | null;
+          witness_name: string | null;
+          captured_at: string | null;
+          source: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. A loan's guarantors with their details resolved from
+       * whichever record holds them, and whether each has signed.
+       */
+      loan_guarantor_register: {
+        Row: {
+          id: string | null;
+          loan_id: string | null;
+          loan_number: string | null;
+          loan_status: string | null;
+          client_id: string | null;
+          subject_kind: string | null;
+          guarantor_id: string | null;
+          guarantor_client_id: string | null;
+          full_name: string | null;
+          phone: string | null;
+          alternative_phone: string | null;
+          sex: string | null;
+          date_of_birth: string | null;
+          occupation: string | null;
+          location: string | null;
+          district: string | null;
+          client_number: string | null;
+          relationship_to_client: string | null;
+          consent_terms_id: string | null;
+          consent_version: string | null;
+          consented_at: string | null;
+          signature_name: string | null;
+          has_signature_image: boolean | null;
+          witness_name: string | null;
+          witness_phone: string | null;
+          consent_place: string | null;
+          consent_signed: boolean | null;
+          has_identification: boolean | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
        * Phase 12. Every product with its configuration, the branches that may
        * sell it and how many loans have been written against it. `branch_ids`
        * is null when the product is sold everywhere.
@@ -2795,6 +3146,15 @@ export type Database = {
       assert_cash_available: {
         Args: { p_account_id: string; p_amount: number };
         Returns: undefined;
+      };
+
+      /**
+       * Phase 13. Refuses an application awaiting approval. Terminal and
+       * reasoned, and distinguishable from a withdrawal by `closure_kind`.
+       */
+      reject_loan: {
+        Args: { p_loan_id: string; p_reason: string };
+        Returns: string;
       };
 
       /** Phase 11. Refuses an account that is not an active cash account. */

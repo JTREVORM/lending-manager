@@ -377,9 +377,13 @@ describeDb('loan row level security', () => {
       );
       expect(periods.rows.length).toBe(3);
 
+      // Phase 13: the loan's own guarantors, frozen at approval. Read through
+      // the view a reader actually uses, which covers both eras — and still
+      // through the Secretary's own policies, so this is the capability
+      // check it always was.
       const guarantors = await asUser(
         scenario.secretary,
-        `select full_name from public.loan_guarantor_snapshots where loan_id = $1`,
+        `select full_name from public.loan_guarantor_evidence where loan_id = $1`,
         [activeLoan],
       );
       expect(guarantors.rows.length).toBe(1);
@@ -503,13 +507,23 @@ describeDb('loan row level security', () => {
       // written only by `post_payment` and `reverse_payment`. DELETE appears
       // nowhere.
       expect(rows.map((row) => `${row.table_name}:${row.privilege_type}`)).toEqual([
+        'loan_application_profile:SELECT',
         // Phase 6 adds derived balance views under this prefix. They carry no
         // policy of their own — a view cannot — and reach the loan through
         // `security_invoker`, so their access is the loans policy's.
         'loan_balances:SELECT',
+        'loan_business_details:INSERT',
+        'loan_business_details:SELECT',
+        'loan_business_details:UPDATE',
         'loan_client_snapshots:SELECT',
         'loan_delinquency:SELECT',
+        'loan_guarantor_evidence:SELECT',
+        'loan_guarantor_register:SELECT',
         'loan_guarantor_snapshots:SELECT',
+        'loan_guarantors:DELETE',
+        'loan_guarantors:INSERT',
+        'loan_guarantors:SELECT',
+        'loan_guarantors:UPDATE',
         'loan_identity_snapshots:SELECT',
         'loan_installment_coverage:SELECT',
         'loan_installments:SELECT',
@@ -542,6 +556,9 @@ describeDb('loan row level security', () => {
         'loan_products:INSERT',
         'loan_products:SELECT',
         'loan_products:UPDATE',
+        'loan_salary_details:INSERT',
+        'loan_salary_details:SELECT',
+        'loan_salary_details:UPDATE',
         'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',
@@ -601,8 +618,15 @@ describeDb('loan row level security', () => {
       );
 
       expect(rows.map((row) => `${row.tablename}:${row.cmd}`)).toEqual([
+        'loan_business_details:INSERT',
+        'loan_business_details:SELECT',
+        'loan_business_details:UPDATE',
         'loan_client_snapshots:SELECT',
         'loan_guarantor_snapshots:SELECT',
+        'loan_guarantors:DELETE',
+        'loan_guarantors:INSERT',
+        'loan_guarantors:SELECT',
+        'loan_guarantors:UPDATE',
         'loan_identity_snapshots:SELECT',
         // Phase 5 adds two more loan tables to this prefix, and Phase 6 a
         // third. SELECT only: none of them has a write policy or a write
@@ -623,6 +647,9 @@ describeDb('loan row level security', () => {
         'loan_products:INSERT',
         'loan_products:SELECT',
         'loan_products:UPDATE',
+        'loan_salary_details:INSERT',
+        'loan_salary_details:SELECT',
+        'loan_salary_details:UPDATE',
         'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',

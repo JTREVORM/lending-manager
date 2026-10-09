@@ -115,6 +115,9 @@ describeDb('row level security', () => {
       'finance_settings:SELECT',
       'finance_settings:UPDATE',
       'general_ledger:SELECT',
+      'guarantor_consent_terms:INSERT',
+      'guarantor_consent_terms:SELECT',
+      'guarantor_consent_terms:UPDATE',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
@@ -126,6 +129,7 @@ describeDb('row level security', () => {
       'journal_lines:SELECT',
       'ledger_account_balances:SELECT',
       'ledger_accounts:SELECT',
+      'loan_application_profile:SELECT',
       // Phase 4. The snapshots and the contractual breakdown are read-only to
       // every session: they are written exclusively by `approve_loan`, which
       // runs as the table owner. So nobody can write a snapshot by hand, and
@@ -134,11 +138,20 @@ describeDb('row level security', () => {
       // `authenticated`. Every privilege is named in the REVOKE because
       // Supabase's ALTER DEFAULT PRIVILEGES grants them all on a new view.
       'loan_balances:SELECT',
+      'loan_business_details:INSERT',
+      'loan_business_details:SELECT',
+      'loan_business_details:UPDATE',
       'loan_client_snapshots:SELECT',
       // Phase 7. Three derived views, SELECT only, each `security_invoker` so
       // it is read under the caller's own policies.
       'loan_delinquency:SELECT',
+      'loan_guarantor_evidence:SELECT',
+      'loan_guarantor_register:SELECT',
       'loan_guarantor_snapshots:SELECT',
+      'loan_guarantors:DELETE',
+      'loan_guarantors:INSERT',
+      'loan_guarantors:SELECT',
+      'loan_guarantors:UPDATE',
       'loan_identity_snapshots:SELECT',
       'loan_installment_coverage:SELECT',
       // Phase 5. SELECT and nothing else: the collection schedule is written
@@ -172,6 +185,9 @@ describeDb('row level security', () => {
       'loan_products:INSERT',
       'loan_products:SELECT',
       'loan_products:UPDATE',
+      'loan_salary_details:INSERT',
+      'loan_salary_details:SELECT',
+      'loan_salary_details:UPDATE',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
@@ -251,6 +267,9 @@ describeDb('row level security', () => {
       'expenses:SELECT',
       'finance_settings:SELECT',
       'finance_settings:UPDATE',
+      'guarantor_consent_terms:INSERT',
+      'guarantor_consent_terms:SELECT',
+      'guarantor_consent_terms:UPDATE',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
@@ -260,6 +279,9 @@ describeDb('row level security', () => {
       'journal_entries:SELECT',
       'journal_lines:SELECT',
       'ledger_accounts:SELECT',
+      'loan_business_details:INSERT',
+      'loan_business_details:SELECT',
+      'loan_business_details:UPDATE',
       // Phase 4. SELECT only on the breakdown and the snapshots: they are
       // written exclusively by `approve_loan`, which runs as the table owner.
       // No DELETE policy anywhere — a loan is cancelled, never deleted.
@@ -270,6 +292,10 @@ describeDb('row level security', () => {
       // `views` block below asserts every one of them sets it.
       'loan_client_snapshots:SELECT',
       'loan_guarantor_snapshots:SELECT',
+      'loan_guarantors:DELETE',
+      'loan_guarantors:INSERT',
+      'loan_guarantors:SELECT',
+      'loan_guarantors:UPDATE',
       'loan_identity_snapshots:SELECT',
       // Phase 5. SELECT and nothing else: the collection schedule is written
       // only by generate_loan_schedule, which runs as the table owner, so no
@@ -289,6 +315,9 @@ describeDb('row level security', () => {
       'loan_products:INSERT',
       'loan_products:SELECT',
       'loan_products:UPDATE',
+      'loan_salary_details:INSERT',
+      'loan_salary_details:SELECT',
+      'loan_salary_details:UPDATE',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
@@ -338,19 +367,42 @@ describeDb('row level security', () => {
       `select tablename, qual from pg_policies where schemaname = 'public'`,
     );
 
-    // The only tables a signed-in user may read without qualification are the
-    // three vocabularies: role names, capability names, and the mapping
-    // between them. None names a person or an amount.
+    // The tables a signed-in user may read without qualification: the three
+    // vocabularies — role names, capability names, and the mapping between
+    // them — and, as of Phase 13, the guarantor undertaking. None names a
+    // person or an amount.
+    //
+    // The undertaking belongs in this set for the same reason the
+    // vocabularies do: it is the business's own published document, with no
+    // personal data in it, and the people most entitled to re-read it are
+    // the guarantors who signed it — who hold a borrower's portal login and
+    // nothing more. Gating it on a capability would hide a contract from the
+    // person bound by it.
     const unconditional = rows
       .filter((row) => row.qual === 'true')
       .map((row) => row.tablename)
       .sort();
 
     expect([...new Set(unconditional)]).toEqual([
+      'guarantor_consent_terms',
       'permissions',
       'role_permissions',
       'roles',
     ]);
+
+    // And the claim that it carries nothing personal, asserted rather than
+    // assumed: a column named after a person or a sum would make the policy
+    // above wrong.
+    const columns = await query<{ column_name: string }>(
+      `select column_name from information_schema.columns
+        where table_schema = 'public' and table_name = 'guarantor_consent_terms'`,
+    );
+
+    for (const { column_name } of columns) {
+      expect(column_name, 'guarantor_consent_terms column').not.toMatch(
+        /name$|phone|nin|amount|salary|balance/i,
+      );
+    }
   });
 
   it('gates every other read policy on a capability or on the caller themselves', async () => {
@@ -363,7 +415,8 @@ describeDb('row level security', () => {
          from pg_policies
         where schemaname = 'public'
           and cmd = 'SELECT'
-          and tablename not in ('permissions', 'role_permissions', 'roles')`,
+          and tablename not in
+              ('permissions', 'role_permissions', 'roles', 'guarantor_consent_terms')`,
     );
 
     expect(rows.length).toBeGreaterThan(0);
@@ -587,6 +640,7 @@ describeDb('views', () => {
         'general_ledger',
         'income_register',
         'ledger_account_balances',
+        'loan_application_profile',
         // Phase 6. Balances are derived rather than stored, so a reversal
         // changes every figure the instant it commits.
         'loan_balances',
@@ -595,6 +649,8 @@ describeDb('views', () => {
         // the ledger and the business date, so no process has to run and no
         // column can go stale.
         'loan_delinquency',
+        'loan_guarantor_evidence',
+        'loan_guarantor_register',
         'loan_installment_coverage',
         'loan_obligations',
         'loan_penalty_coverage',
@@ -646,12 +702,14 @@ describeDb('views', () => {
     // One row per view: three from Phase 6, three from Phase 7, five from
     // Phase 8's reporting layer, one from Phase 9, three from Phase 10 and
     // five from Phase 11 — four document registers and the general ledger —
-    // and one from Phase 12, the product catalogue.
+    // one from Phase 12, the product catalogue, and three from Phase 13: the
+    // application profile, a loan's guarantor register and the frozen
+    // guarantor evidence.
     // Counted here because the names are already enumerated above; what this
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(21);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(24);
   });
 });
 
@@ -686,6 +744,9 @@ describeDb('privileged functions', () => {
       'audit_guarantor_change',
       'audit_guarantor_identity_change',
       'audit_loan_change',
+      // Phase 13. Records that a loan's guarantor evidence was frozen at
+      // approval — the kind and the row count, never the contents.
+      'audit_loan_guarantors_frozen',
       // Phase 12. A product holds the rate the business lends at, so a
       // change to one is audited the way a change to business_settings is.
       'audit_loan_product_change',
@@ -726,6 +787,7 @@ describeDb('privileged functions', () => {
       'disburse_loan',
       'ensure_penalty_applied',
       'generate_loan_schedule',
+      'guarantor_consent_terms_guard',
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
       'journal_assert_balanced',
@@ -735,6 +797,12 @@ describeDb('privileged functions', () => {
       'ledger_account_balance',
       'ledger_account_by_code',
       'link_client_profile',
+      'loan_application_details_guard',
+      'loan_application_details_stamp_actor',
+      'loan_guarantors_check_eligibility',
+      'loan_guarantors_guard_removal',
+      'loan_guarantors_guard_snapshot',
+      'loan_guarantors_stamp_actor',
       'loan_payments_assign_number',
       'loan_payments_guard_mutation',
       'loan_products_stamp_actor',
@@ -763,6 +831,7 @@ describeDb('privileged functions', () => {
       'record_sign_in',
       'record_transfer',
       'reject_expense',
+      'reject_loan',
       'reject_reconciliation',
       'reject_transfer',
       'repayment_frequencies_guard_identity',
@@ -912,6 +981,7 @@ describeDb('privileged functions', () => {
       'record_sign_in',
       'record_transfer',
       'reject_expense',
+      'reject_loan',
       'reject_reconciliation',
       'reject_transfer',
       'reverse_expense',

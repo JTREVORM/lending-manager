@@ -146,6 +146,16 @@ export const PERMISSIONS = [
   /** Add or retire a ledger account, including an expense or income category. */
   'finance:accounts',
 
+  // --- Phase 13 -----------------------------------------------------------
+  /**
+   * Publish a new version of the undertaking a guarantor signs.
+   *
+   * The Owner's alone. A guarantor's liability is defined by the words they
+   * signed, and the person who may change those words is the person who
+   * answers for them.
+   */
+  'guarantor_terms:manage',
+
   // --- Loan products -------------------------------------------------------
   // Phase 12. Reading the catalogue is ordinary work — a loan officer has to
   // know what the business sells. Changing it is pricing, which is the
@@ -529,6 +539,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'finance:accounts',
     'products:view',
     'products:manage',
+    // Phase 13. The words a guarantor signs.
+    'guarantor_terms:manage',
 
     'users:create',
     'users:update',

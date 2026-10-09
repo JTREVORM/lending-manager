@@ -48,6 +48,10 @@ describeDb('tables', () => {
     // Phase 11: approval thresholds, the overdraft rule and the low-float
     // levels. Separate from `business_settings`, which is about lending.
     'finance_settings',
+    // Phase 13: the versioned undertaking a guarantor signs. A new version is
+    // appended; one in force is never reworded, because a signature points
+    // at words.
+    'guarantor_consent_terms',
     'guarantor_identities',
     'guarantors',
     // Phase 10: the double-entry ledger. The header carries the branch, the
@@ -55,11 +59,15 @@ describeDb('tables', () => {
     'journal_entries',
     'journal_lines',
     'ledger_accounts',
+    // Phase 13: the product-specific answers an application gives, and the
+    // guarantors of a particular loan with the undertaking each one signed.
+    'loan_business_details',
     // Phase 4: the loan agreement, its contractual monthly breakdown, and the
     // three snapshots that make it evidence rather than a view over today's
     // records.
     'loan_client_snapshots',
     'loan_guarantor_snapshots',
+    'loan_guarantors',
     'loan_identity_snapshots',
     // Phase 5: the collection plan — one generation record per loan, and the
     // scheduled collections that allocate the contractual breakdown.
@@ -75,6 +83,7 @@ describeDb('tables', () => {
     'loan_product_branches',
     'loan_product_snapshots',
     'loan_products',
+    'loan_salary_details',
     'loan_schedules',
     'loans',
     // Phase 11: fees and income that is not interest or a penalty. Those two
@@ -278,6 +287,7 @@ describeDb('foreign keys', () => {
       'expenses.reversal_entry_id -> journal_entries (r)',
       'expenses.reversed_by -> profiles (n)',
       'finance_settings.updated_by -> profiles (n)',
+      'guarantor_consent_terms.created_by -> profiles (n)',
       'guarantor_identities.guarantor_id -> guarantors (c)',
       'guarantors.created_by -> profiles (n)',
       'journal_entries.branch_id -> branches (r)',
@@ -289,6 +299,13 @@ describeDb('foreign keys', () => {
       'journal_lines.entry_id -> journal_entries (c)',
       'ledger_accounts.branch_id -> branches (r)',
       'ledger_accounts.parent_id -> ledger_accounts (r)',
+      // Phase 13. The application's own answers and its own guarantors, all
+      // `r` on the loan and on the people they name: an application is the
+      // evidence a decision was made on, so nothing it points at may be
+      // deleted from under it. `n` only on `created_by`, which is
+      // attribution rather than substance.
+      'loan_business_details.created_by -> profiles (n)',
+      'loan_business_details.loan_id -> loans (r)',
       // Phase 4. `c` cascades: a loan's breakdown and snapshots are parts of
       // that loan. `r` restricts: the client and the guarantors a loan was
       // issued against cannot be removed while it references them, because
@@ -297,8 +314,18 @@ describeDb('foreign keys', () => {
       // and the audit trail holds the authoritative record either way.
       'loan_client_snapshots.client_id -> clients (r)',
       'loan_client_snapshots.loan_id -> loans (c)',
+      // Phase 13. `r`, never `n`: SET NULL on an append-only table is
+      // implemented as an UPDATE, and the guard here is statement-level, so
+      // a SET NULL reference would make deleting any client fail.
+      'loan_guarantor_snapshots.consent_terms_id -> guarantor_consent_terms (r)',
       'loan_guarantor_snapshots.guarantor_id -> guarantors (r)',
       'loan_guarantor_snapshots.loan_id -> loans (c)',
+      'loan_guarantor_snapshots.subject_client_id -> clients (r)',
+      'loan_guarantors.consent_terms_id -> guarantor_consent_terms (r)',
+      'loan_guarantors.created_by -> profiles (n)',
+      'loan_guarantors.guarantor_client_id -> clients (r)',
+      'loan_guarantors.guarantor_id -> guarantors (r)',
+      'loan_guarantors.loan_id -> loans (r)',
       'loan_identity_snapshots.loan_id -> loans (c)',
       // Phase 5. `c` cascades for the same reason: a collection schedule is
       // part of its loan, and an installment is part of the contractual month
@@ -335,6 +362,8 @@ describeDb('foreign keys', () => {
       'loan_products.created_by -> profiles (n)',
       'loan_products.default_repayment_frequency -> repayment_frequencies (r)',
       'loan_products.updated_by -> profiles (n)',
+      'loan_salary_details.created_by -> profiles (n)',
+      'loan_salary_details.loan_id -> loans (r)',
       'loan_schedules.generated_by -> profiles (r)',
       'loan_schedules.loan_id -> loans (c)',
       'loan_schedules.repayment_frequency -> repayment_frequencies (r)',

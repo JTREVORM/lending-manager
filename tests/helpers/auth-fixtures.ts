@@ -158,6 +158,13 @@ export async function deleteTestUsers(): Promise<void> {
     // Phase 12. The product terms a loan was approved under, append-only for
     // the same reason the other snapshots are.
     { table: 'loan_product_snapshots', trigger: 'loan_product_snapshots_no_delete' },
+    // Phase 13. A loan's own guarantors and the product-specific answers,
+    // both of which reference the loan and the people behind it with
+    // `on delete restrict`, and both of which refuse a write once the
+    // application has been submitted.
+    { table: 'loan_guarantors', trigger: 'loan_guarantors_guard_removal' },
+    { table: 'loan_salary_details', trigger: 'loan_salary_details_guard' },
+    { table: 'loan_business_details', trigger: 'loan_business_details_guard' },
     { table: 'loans', trigger: 'loans_guard_transition' },
     { table: 'loans', trigger: 'audit_loan_change' },
   ];
@@ -197,6 +204,9 @@ export async function deleteTestUsers(): Promise<void> {
     await query(`delete from public.loan_installments`);
     await query(`delete from public.loan_schedules`);
     await query(`delete from public.loan_periods`);
+    await query(`delete from public.loan_guarantors`);
+    await query(`delete from public.loan_salary_details`);
+    await query(`delete from public.loan_business_details`);
     await query(`delete from public.loan_client_snapshots`);
     await query(`delete from public.loan_guarantor_snapshots`);
     await query(`delete from public.loan_identity_snapshots`);
