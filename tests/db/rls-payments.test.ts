@@ -549,7 +549,9 @@ describeDb('payment row level security', () => {
 
       // Phase 6 added three; Phase 7 adds `loan_penalty_coverage`,
       // `loan_obligations` and `loan_delinquency`; Phase 8 adds the five
-      // reporting views; Phase 9 adds `company_identity`. Named rather than
+      // reporting views; Phase 9 adds `company_identity`; Phase 10 adds the
+      // three ledger views; Phase 11 adds four document registers and the
+      // general ledger. Named rather than
       // counted, so a new view cannot be waved through by bumping a number —
       // and the loop below requires every one that touches a borrower or a
       // figure to set `security_invoker`, which is what keeps a reporting view
@@ -566,6 +568,9 @@ describeDb('payment row level security', () => {
         'company_identity',
         'dashboard_collection_summary',
         'dashboard_portfolio_summary',
+        'expense_register',
+        'general_ledger',
+        'income_register',
         'ledger_account_balances',
         'loan_balances',
         'loan_delinquency',
@@ -575,6 +580,8 @@ describeDb('payment row level security', () => {
         'loan_portfolio_report',
         'payment_collection_totals',
         'payment_register',
+        'reconciliation_register',
+        'transfer_register',
         'trial_balance',
       ]);
 

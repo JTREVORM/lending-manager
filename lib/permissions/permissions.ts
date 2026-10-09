@@ -112,6 +112,40 @@ export const PERMISSIONS = [
   /** Hand-post a journal entry. Corrections only. */
   'ledger:post',
 
+  // --- Money movement ------------------------------------------------------
+  // Phase 11. Recording a movement and agreeing to it are separate
+  // capabilities throughout, because an approval step where the same person
+  // holds both is not a control, it is paperwork. `record_transfer` and
+  // `record_expense` additionally refuse an approval from the person who
+  // asked for it, so holding both capabilities still does not let one person
+  // move money above the threshold alone.
+  /** See transfers between the company's own accounts. */
+  'transfers:view',
+  /** Move money between the company's own accounts. */
+  'transfers:create',
+  /** Approve, reject or reverse a transfer. */
+  'transfers:approve',
+  /** See what the business has spent. */
+  'expenses:view',
+  /** Record an expense. */
+  'expenses:create',
+  /** Approve, reject or reverse an expense. */
+  'expenses:approve',
+  /** See non-loan income. */
+  'income:view',
+  /** Record a fee or other non-loan income. */
+  'income:create',
+  /** See account reconciliations and their differences. */
+  'reconciliation:view',
+  /** Count an account and record what was found. */
+  'reconciliation:perform',
+  /** Approve a reconciliation difference, writing it off to Cash Over and Short. */
+  'reconciliation:approve',
+  /** Change approval thresholds, overdraft policy and low-balance levels. */
+  'finance:settings',
+  /** Add or retire a ledger account, including an expense or income category. */
+  'finance:accounts',
+
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
   // `permissions` table constrains. Where the Phase 3 specification suggested
@@ -304,6 +338,20 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'branches:view',
     'ledger:view',
 
+    // Phase 11. The treasurer is the person who physically moves the money,
+    // so they record transfers, expenses, fees and the daily count. They
+    // approve none of it: the threshold exists precisely so that a second
+    // person sees anything large, and `reconciliation:approve` is what turns
+    // a counted difference into a write-off.
+    'transfers:view',
+    'transfers:create',
+    'expenses:view',
+    'expenses:create',
+    'income:view',
+    'income:create',
+    'reconciliation:view',
+    'reconciliation:perform',
+
     // Operational client work: find a client, check their details, correct a
     // phone number, read the remarks left for them to act on.
     //
@@ -360,6 +408,24 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'branches:view',
     'branches:update',
     'ledger:view',
+
+    // Phase 11. A Manager is the second pair of eyes on money movement, and
+    // may also record it — the posting functions refuse an approval from the
+    // person who asked, so holding both does not collapse the control.
+    // `finance:settings` and `finance:accounts` are not theirs: changing a
+    // threshold or adding an account would let a Manager widen what they may
+    // approve without asking.
+    'transfers:view',
+    'transfers:create',
+    'transfers:approve',
+    'expenses:view',
+    'expenses:create',
+    'expenses:approve',
+    'income:view',
+    'income:create',
+    'reconciliation:view',
+    'reconciliation:perform',
+    'reconciliation:approve',
 
     // The Manager runs lending operations, so clients and guarantors are
     // theirs to register, correct and comment on.
@@ -435,6 +501,21 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'branches:update',
     'ledger:view',
     'ledger:post',
+
+    'transfers:view',
+    'transfers:create',
+    'transfers:approve',
+    'expenses:view',
+    'expenses:create',
+    'expenses:approve',
+    'income:view',
+    'income:create',
+    'reconciliation:view',
+    'reconciliation:perform',
+    'reconciliation:approve',
+    'finance:settings',
+    'finance:accounts',
+
     'users:create',
     'users:update',
     'users:disable',

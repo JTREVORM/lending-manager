@@ -218,3 +218,100 @@ better and the figure arbitrary.
 MTN and Airtel never go negative at any point in the history, and the bank
 account has no historical movement, so none of the three carries an opening
 entry.
+
+---
+
+# Money movement
+
+Phase 2 of the upgrade adds the four ways money moves that are not a loan.
+Every one of them posts through the ledger above, and none of them can move a
+shilling without doing so.
+
+| Document | Posting |
+| --- | --- |
+| `account_transfers` | Dr the destination cash account, Cr the source |
+| `expenses` | Dr the expense category, Cr the account it was paid from |
+| `other_income` | Dr the receiving account, Cr the fee or income account |
+| `account_reconciliations` | Dr/Cr Cash Over and Short against the counted account, **only** when an approved difference is written off |
+
+## Categories are accounts
+
+There is no `expense_categories` table. An expense category *is* a row in
+`ledger_accounts` with `account_type = 'expense'`, grouped under the `5000`
+heading; an income category is the same under `4000`. A category and the
+account it posts to are one fact, and splitting them would create two places
+to add "Fuel" and two ways for them to disagree. Adding a category therefore
+makes it appear in the picker, in the trial balance and in the general ledger
+at the same moment, with nothing to wire up.
+
+Interest Income (`4100`) and Penalty Income (`4200`) are refused by
+`record_other_income`. Those two are written by the lending functions from a
+payment's own allocation components, and a hand-typed fee landing in either
+would break the reconciliation that proves interest income equals interest
+collected.
+
+## Approval
+
+`finance_settings` carries a threshold per document kind. Above it, the
+document is written with status `pending_approval` and **no journal at all**:
+nothing has moved, so there is nothing to post, and writing a journal to
+reverse on rejection would put two entries in the books for an event that
+never happened.
+
+Approving posts. Rejecting records a reason and posts nothing. Neither can be
+done by the person who asked — `approve_transfer` and `approve_expense`
+refuse the initiator, because separation of duties is the only thing an
+approval step buys.
+
+Income has no approval step. The money has already arrived, and holding it in
+a pending state would leave cash in a drawer the books do not know about.
+
+## Overdraft
+
+`assert_cash_available` refuses to take more out of a cash account than it
+holds, unless `finance_settings.allow_negative_cash` says otherwise. It reads
+the setting itself rather than taking an argument, so no caller can opt out.
+The check runs at the moment of posting, not at submission: between a form
+rendering and a button being pressed, somebody at the counter may have taken
+200,000 out of the same drawer.
+
+## Reconciliation
+
+A count is evidence, not an instruction. `submit_reconciliation` freezes what
+the ledger said and what was counted; if they agree the record is `balanced`
+and nothing posts. If they differ, the record is `submitted` and **the ledger
+is not touched** — it keeps saying what it said until somebody with
+`reconciliation:approve` writes the difference off through an explicit journal
+to `5950 Cash Over and Short`, or rejects it, in which case the difference
+stays outstanding and visible.
+
+One count per account per business date, enforced by a unique index: a second
+count of the same drawer on the same day is a correction to the first, not a
+new fact.
+
+## Branch visibility
+
+`profiles.branch_id` and `user_can_see_branch(uuid)` arrive with this module
+and are applied to the finance tables *and* to `clients` and `loans`, so there
+is one rule rather than two. A profile with no branch is unrestricted, which
+is how every account stands today, so nothing visible changed — the rule is in
+place for the day somebody is assigned to a branch.
+
+## Who may do what
+
+| Capability | Owner | Manager | Secretary / Treasurer |
+| --- | --- | --- | --- |
+| `transfers:view` / `:create` | ✓ | ✓ | ✓ |
+| `transfers:approve` | ✓ | ✓ | |
+| `expenses:view` / `:create` | ✓ | ✓ | ✓ |
+| `expenses:approve` | ✓ | ✓ | |
+| `income:view` / `:create` | ✓ | ✓ | ✓ |
+| `reconciliation:view` / `:perform` | ✓ | ✓ | ✓ |
+| `reconciliation:approve` | ✓ | ✓ | |
+| `finance:settings` | ✓ | | |
+| `finance:accounts` | ✓ | | |
+
+The treasurer moves the money and counts it; the Manager is the second pair of
+eyes; the thresholds and the chart are the Owner's, because a Manager who
+could raise a threshold could approve their own work by making approval
+unnecessary.

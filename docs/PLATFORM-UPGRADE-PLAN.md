@@ -237,7 +237,7 @@ ledger wiring.
 | Phase | State |
 | --- | --- |
 | 1 — Branches and the financial ledger | **Complete.** Migrations `20261010000100`–`20261010000300`, applied live and reconciled. See `UPGRADE-PHASE-1-REPORT.md`. |
-| 2 — Money movement | Not started |
+| 2 — Money movement | **Complete.** Migrations `20261011000100`–`20261011000240`, applied live. Transfers, expenses, other income and daily reconciliation, all posting through the Phase 1 ledger. |
 | 3 — Settings expansion | Not started |
 | 4 — Loan management reorganisation | Not started |
 | 5 — Collections and Debt & Security | Bank payment method delivered early, in Phase 1, because the ledger needed the fourth cash account anyway. The rest not started. |

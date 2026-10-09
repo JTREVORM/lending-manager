@@ -41,6 +41,360 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      account_transfers: {
+        Row: {
+          id: string;
+          transfer_number: string;
+          branch_id: string;
+          from_account_id: string;
+          to_account_id: string;
+          amount: number;
+          transfer_date: string;
+          occurred_at: string;
+          external_reference: string | null;
+          description: string;
+          status: string;
+          initiated_by: string | null;
+          initiated_by_label: string;
+          approved_by: string | null;
+          approved_by_label: string | null;
+          approved_at: string | null;
+          decision_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          transfer_number: string;
+          branch_id: string;
+          from_account_id: string;
+          to_account_id: string;
+          amount: number;
+          transfer_date: string;
+          occurred_at?: string;
+          external_reference?: string | null;
+          description: string;
+          status?: string;
+          initiated_by?: string | null;
+          initiated_by_label?: string;
+          approved_by?: string | null;
+          approved_by_label?: string | null;
+          approved_at?: string | null;
+          decision_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          transfer_number?: string;
+          branch_id?: string;
+          from_account_id?: string;
+          to_account_id?: string;
+          amount?: number;
+          transfer_date?: string;
+          occurred_at?: string;
+          external_reference?: string | null;
+          description?: string;
+          status?: string;
+          initiated_by?: string | null;
+          initiated_by_label?: string;
+          approved_by?: string | null;
+          approved_by_label?: string | null;
+          approved_at?: string | null;
+          decision_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      expenses: {
+        Row: {
+          id: string;
+          expense_number: string;
+          branch_id: string;
+          expense_account_id: string;
+          payment_account_id: string;
+          amount: number;
+          expense_date: string;
+          occurred_at: string;
+          payee: string | null;
+          description: string;
+          external_reference: string | null;
+          receipt_path: string | null;
+          status: string;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          approved_by: string | null;
+          approved_by_label: string | null;
+          approved_at: string | null;
+          decision_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          expense_number: string;
+          branch_id: string;
+          expense_account_id: string;
+          payment_account_id: string;
+          amount: number;
+          expense_date: string;
+          occurred_at?: string;
+          payee?: string | null;
+          description: string;
+          external_reference?: string | null;
+          receipt_path?: string | null;
+          status?: string;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          approved_by?: string | null;
+          approved_by_label?: string | null;
+          approved_at?: string | null;
+          decision_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          expense_number?: string;
+          branch_id?: string;
+          expense_account_id?: string;
+          payment_account_id?: string;
+          amount?: number;
+          expense_date?: string;
+          occurred_at?: string;
+          payee?: string | null;
+          description?: string;
+          external_reference?: string | null;
+          receipt_path?: string | null;
+          status?: string;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          approved_by?: string | null;
+          approved_by_label?: string | null;
+          approved_at?: string | null;
+          decision_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      other_income: {
+        Row: {
+          id: string;
+          income_number: string;
+          branch_id: string;
+          income_account_id: string;
+          receiving_account_id: string;
+          amount: number;
+          income_date: string;
+          occurred_at: string;
+          payer: string | null;
+          client_id: string | null;
+          loan_id: string | null;
+          description: string;
+          external_reference: string | null;
+          status: string;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          decision_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          income_number: string;
+          branch_id: string;
+          income_account_id: string;
+          receiving_account_id: string;
+          amount: number;
+          income_date: string;
+          occurred_at?: string;
+          payer?: string | null;
+          client_id?: string | null;
+          loan_id?: string | null;
+          description: string;
+          external_reference?: string | null;
+          status?: string;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          decision_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          income_number?: string;
+          branch_id?: string;
+          income_account_id?: string;
+          receiving_account_id?: string;
+          amount?: number;
+          income_date?: string;
+          occurred_at?: string;
+          payer?: string | null;
+          client_id?: string | null;
+          loan_id?: string | null;
+          description?: string;
+          external_reference?: string | null;
+          status?: string;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          decision_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      account_reconciliations: {
+        Row: {
+          id: string;
+          reconciliation_number: string;
+          branch_id: string;
+          account_id: string;
+          business_date: string;
+          system_balance: number;
+          counted_balance: number;
+          variance: number;
+          explanation: string | null;
+          status: string;
+          performed_by: string | null;
+          performed_by_label: string;
+          performed_at: string;
+          reviewed_by: string | null;
+          reviewed_by_label: string | null;
+          reviewed_at: string | null;
+          review_notes: string | null;
+          adjustment_entry_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          reconciliation_number: string;
+          branch_id: string;
+          account_id: string;
+          business_date: string;
+          system_balance: number;
+          counted_balance: number;
+          variance?: number;
+          explanation?: string | null;
+          status?: string;
+          performed_by?: string | null;
+          performed_by_label?: string;
+          performed_at?: string;
+          reviewed_by?: string | null;
+          reviewed_by_label?: string | null;
+          reviewed_at?: string | null;
+          review_notes?: string | null;
+          adjustment_entry_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          reconciliation_number?: string;
+          branch_id?: string;
+          account_id?: string;
+          business_date?: string;
+          system_balance?: number;
+          counted_balance?: number;
+          variance?: number;
+          explanation?: string | null;
+          status?: string;
+          performed_by?: string | null;
+          performed_by_label?: string;
+          performed_at?: string;
+          reviewed_by?: string | null;
+          reviewed_by_label?: string | null;
+          reviewed_at?: string | null;
+          review_notes?: string | null;
+          adjustment_entry_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      finance_settings: {
+        Row: {
+          id: number;
+          transfer_approval_threshold: number | null;
+          expense_approval_threshold: number | null;
+          allow_negative_cash: boolean;
+          reconciliation_requires_review: boolean;
+          low_balance_cash_at_hand: number;
+          low_balance_mtn_mobile_money: number;
+          low_balance_airtel_money: number;
+          low_balance_bank: number;
+          created_at: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: number;
+          transfer_approval_threshold?: number | null;
+          expense_approval_threshold?: number | null;
+          allow_negative_cash?: boolean;
+          reconciliation_requires_review?: boolean;
+          low_balance_cash_at_hand?: number;
+          low_balance_mtn_mobile_money?: number;
+          low_balance_airtel_money?: number;
+          low_balance_bank?: number;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: number;
+          transfer_approval_threshold?: number | null;
+          expense_approval_threshold?: number | null;
+          allow_negative_cash?: boolean;
+          reconciliation_requires_review?: boolean;
+          low_balance_cash_at_hand?: number;
+          low_balance_mtn_mobile_money?: number;
+          low_balance_airtel_money?: number;
+          low_balance_bank?: number;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       /**
        * Phase 10. A place the business operates from. Cash accounts belong to
        * a branch; income and expense are sliced by the branch recorded on the
@@ -739,6 +1093,7 @@ export type Database = {
           must_change_password: boolean;
           password_set_at: string | null;
           last_sign_in_at: string | null;
+          branch_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -753,6 +1108,7 @@ export type Database = {
           must_change_password?: boolean;
           password_set_at?: string | null;
           last_sign_in_at?: string | null;
+          branch_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -767,6 +1123,7 @@ export type Database = {
           must_change_password?: boolean;
           password_set_at?: string | null;
           last_sign_in_at?: string | null;
+          branch_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1498,6 +1855,174 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      transfer_register: {
+        Row: {
+          id: string | null;
+          transfer_number: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          transfer_date: string | null;
+          occurred_at: string | null;
+          amount: number | null;
+          status: string | null;
+          from_account_id: string | null;
+          from_account_code: string | null;
+          from_account_name: string | null;
+          from_cash_kind: string | null;
+          to_account_id: string | null;
+          to_account_code: string | null;
+          to_account_name: string | null;
+          to_cash_kind: string | null;
+          external_reference: string | null;
+          description: string | null;
+          initiated_by: string | null;
+          initiated_by_label: string | null;
+          approved_by: string | null;
+          approved_by_label: string | null;
+          approved_at: string | null;
+          decision_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_at: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      expense_register: {
+        Row: {
+          id: string | null;
+          expense_number: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          expense_date: string | null;
+          occurred_at: string | null;
+          amount: number | null;
+          status: string | null;
+          expense_account_id: string | null;
+          category_code: string | null;
+          category_name: string | null;
+          payment_account_id: string | null;
+          payment_account_code: string | null;
+          payment_account_name: string | null;
+          payment_cash_kind: string | null;
+          payee: string | null;
+          description: string | null;
+          external_reference: string | null;
+          receipt_path: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string | null;
+          approved_by: string | null;
+          approved_by_label: string | null;
+          approved_at: string | null;
+          decision_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_at: string | null;
+          created_at: string | null;
+          effective_amount: number | null;
+        };
+        Relationships: [];
+      };
+      income_register: {
+        Row: {
+          id: string | null;
+          income_number: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          income_date: string | null;
+          occurred_at: string | null;
+          amount: number | null;
+          status: string | null;
+          income_account_id: string | null;
+          category_code: string | null;
+          category_name: string | null;
+          receiving_account_id: string | null;
+          receiving_account_code: string | null;
+          receiving_account_name: string | null;
+          receiving_cash_kind: string | null;
+          payer: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          client_name: string | null;
+          loan_id: string | null;
+          loan_number: string | null;
+          description: string | null;
+          external_reference: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_at: string | null;
+          created_at: string | null;
+          effective_amount: number | null;
+        };
+        Relationships: [];
+      };
+      reconciliation_register: {
+        Row: {
+          id: string | null;
+          reconciliation_number: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          account_id: string | null;
+          account_code: string | null;
+          account_name: string | null;
+          cash_kind: string | null;
+          business_date: string | null;
+          system_balance: number | null;
+          counted_balance: number | null;
+          variance: number | null;
+          status: string | null;
+          explanation: string | null;
+          performed_by: string | null;
+          performed_by_label: string | null;
+          performed_at: string | null;
+          reviewed_by: string | null;
+          reviewed_by_label: string | null;
+          reviewed_at: string | null;
+          review_notes: string | null;
+          adjustment_entry_id: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      general_ledger: {
+        Row: {
+          line_id: string | null;
+          entry_id: string | null;
+          entry_number: string | null;
+          entry_date: string | null;
+          posted_at: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          source_type: string | null;
+          source_id: string | null;
+          entry_description: string | null;
+          loan_id: string | null;
+          client_id: string | null;
+          created_by: string | null;
+          created_by_label: string | null;
+          reversed_by_entry_id: string | null;
+          line_number: number | null;
+          account_id: string | null;
+          account_code: string | null;
+          account_name: string | null;
+          account_type: string | null;
+          normal_side: string | null;
+          cash_kind: string | null;
+          account_branch_id: string | null;
+          debit: number | null;
+          credit: number | null;
+          signed_amount: number | null;
+          memo: string | null;
+        };
+        Relationships: [];
+      };
       /**
        * Phase 10. Every account with its debit and credit totals and its
        * balance, signed the way the account is read.
@@ -1940,6 +2465,170 @@ export type Database = {
     };
 
     Functions: {
+      // --- Phase 11: money movement ------------------------------------------
+      // Each of these writes its document and its journal in one transaction.
+      // None of them takes a debit, a credit or an approval decision as an
+      // argument: the legs are derived from the document and the threshold is
+      // read from `finance_settings`, so a caller cannot opt out of either.
+
+      /**
+       * Phase 11. Refuses to take more out of a cash account than it holds,
+       * unless `finance_settings` says an account may go overdrawn. Reads the
+       * setting itself, so no caller can opt out.
+       */
+      assert_cash_available: {
+        Args: { p_account_id: string; p_amount: number };
+        Returns: undefined;
+      };
+
+      /** Phase 11. Refuses an account that is not an active cash account. */
+      assert_cash_account: {
+        Args: { p_account_id: string; p_role: string };
+        Returns: undefined;
+      };
+
+      /**
+       * Phase 11. Refuses a heading, an inactive account, the wrong type, and
+       * Interest or Penalty Income — those are posted by the lending
+       * functions from a payment's own allocation components.
+       */
+      assert_postable_account: {
+        Args: { p_account_id: string; p_type: string; p_role: string };
+        Returns: undefined;
+      };
+
+      /** Phase 11. Dr the destination, Cr the source. Called by the two transfer paths. */
+      post_transfer_journal: {
+        Args: { p_transfer_id: string };
+        Returns: string;
+      };
+
+      /** Phase 11. Dr the category, Cr the paying account. */
+      post_expense_journal: {
+        Args: { p_expense_id: string };
+        Returns: string;
+      };
+
+      /**
+       * Phase 11. Whether the signed-in person may see data belonging to this
+       * branch. True for everybody not assigned to one.
+       */
+      user_can_see_branch: {
+        Args: { p_branch_id: string };
+        Returns: boolean;
+      };
+
+      /** Phase 11. One account's balance, signed the way the account is read. */
+      ledger_account_balance: {
+        Args: { p_account_id: string };
+        Returns: number;
+      };
+
+      /** Phase 11. Move money between two of the company's cash accounts. */
+      record_transfer: {
+        Args: {
+          p_from_account_id: string;
+          p_to_account_id: string;
+          p_amount: number;
+          p_transfer_date: string;
+          p_description: string;
+          p_external_reference?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Phase 11. Approve a waiting transfer, which is what posts it. */
+      approve_transfer: {
+        Args: { p_transfer_id: string };
+        Returns: string;
+      };
+
+      /** Phase 11. Reject a waiting transfer. Nothing is posted. */
+      reject_transfer: {
+        Args: { p_transfer_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /** Phase 11. Cancel a posted transfer with a contra entry. */
+      reverse_transfer: {
+        Args: { p_transfer_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /** Phase 11. Dr the expense category, Cr the account it was paid from. */
+      record_expense: {
+        Args: {
+          p_expense_account_id: string;
+          p_payment_account_id: string;
+          p_amount: number;
+          p_expense_date: string;
+          p_description: string;
+          p_payee?: string | null;
+          p_external_reference?: string | null;
+          p_receipt_path?: string | null;
+        };
+        Returns: string;
+      };
+
+      approve_expense: {
+        Args: { p_expense_id: string };
+        Returns: string;
+      };
+
+      reject_expense: {
+        Args: { p_expense_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      reverse_expense: {
+        Args: { p_expense_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /** Phase 11. Dr the receiving account, Cr the fee account. */
+      record_other_income: {
+        Args: {
+          p_income_account_id: string;
+          p_receiving_account_id: string;
+          p_amount: number;
+          p_income_date: string;
+          p_description: string;
+          p_payer?: string | null;
+          p_client_id?: string | null;
+          p_loan_id?: string | null;
+          p_external_reference?: string | null;
+        };
+        Returns: string;
+      };
+
+      reverse_other_income: {
+        Args: { p_income_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /** Phase 11. Record what was counted against what the ledger says. */
+      submit_reconciliation: {
+        Args: {
+          p_account_id: string;
+          p_business_date: string;
+          p_counted_balance: number;
+          p_explanation?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Phase 11. Write an approved difference off to Cash Over and Short. */
+      approve_reconciliation: {
+        Args: { p_reconciliation_id: string; p_notes: string | null };
+        Returns: string;
+      };
+
+      /** Phase 11. Decline to write a difference off. The ledger is unchanged. */
+      reject_reconciliation: {
+        Args: { p_reconciliation_id: string; p_reason: string };
+        Returns: string;
+      };
+
       /**
        * Phase 10. The account a payment by this method lands in. Pure
        * mapping; the only ledger helper a signed-in caller may execute.

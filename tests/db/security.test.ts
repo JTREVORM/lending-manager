@@ -69,6 +69,13 @@ describeDb('row level security', () => {
     // system, and `user_roles` is the single exception because revoking a role
     // is a removal rather than an edit.
     expect(rows.map((row) => `${row.table_name}:${row.privilege_type}`)).toEqual([
+      // Phase 11. The money-movement documents and their registers: SELECT
+      // only, for the same reason the ledger is. Every one of them is
+      // written by a definer function that posts the journal in the same
+      // transaction, so a session with INSERT could create a document with
+      // no posting behind it.
+      'account_reconciliations:SELECT',
+      'account_transfers:SELECT',
       'audit_log:SELECT',
       // Phase 10. The branch network and the ledger: SELECT only. Nothing writes to a journal through a session; every posting is made by a definer function.
       'branch_cash_position:SELECT',
@@ -103,12 +110,17 @@ describeDb('row level security', () => {
       'company_settings:UPDATE',
       'dashboard_collection_summary:SELECT',
       'dashboard_portfolio_summary:SELECT',
+      'expense_register:SELECT',
+      'expenses:SELECT',
+      'finance_settings:SELECT',
+      'general_ledger:SELECT',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
       'guarantors:INSERT',
       'guarantors:SELECT',
       'guarantors:UPDATE',
+      'income_register:SELECT',
       'journal_entries:SELECT',
       'journal_lines:SELECT',
       'ledger_account_balances:SELECT',
@@ -150,6 +162,7 @@ describeDb('row level security', () => {
       'loans:UPDATE',
       // Phase 6. The payment ledger: SELECT only. post_payment and
       // reverse_payment are the only writers, and they run as the table owner.
+      'other_income:SELECT',
       'payment_allocations:SELECT',
       'payment_collection_totals:SELECT',
       'payment_register:SELECT',
@@ -157,11 +170,13 @@ describeDb('row level security', () => {
       'profiles:INSERT',
       'profiles:SELECT',
       'profiles:UPDATE',
+      'reconciliation_register:SELECT',
       'repayment_frequencies:INSERT',
       'repayment_frequencies:SELECT',
       'repayment_frequencies:UPDATE',
       'role_permissions:SELECT',
       'roles:SELECT',
+      'transfer_register:SELECT',
       'trial_balance:SELECT',
       'user_roles:DELETE',
       'user_roles:INSERT',
@@ -192,6 +207,11 @@ describeDb('row level security', () => {
     );
 
     expect(rows.map((row) => `${row.tablename}:${row.cmd}`)).toEqual([
+      // Phase 11. Read policies only, for the same reason the ledger has
+      // none that write: every money-movement document is written by a
+      // definer function that posts its journal in the same transaction.
+      'account_reconciliations:SELECT',
+      'account_transfers:SELECT',
       'audit_log:SELECT',
       // Phase 10. Read policies only: no session role writes a journal,
       // a ledger account or a branch — every one of those is a definer
@@ -212,6 +232,8 @@ describeDb('row level security', () => {
       'clients:UPDATE',
       'company_settings:SELECT',
       'company_settings:UPDATE',
+      'expenses:SELECT',
+      'finance_settings:SELECT',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
@@ -247,6 +269,7 @@ describeDb('row level security', () => {
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      'other_income:SELECT',
       'payment_allocations:SELECT',
       'permissions:SELECT',
       'profiles:INSERT',
@@ -511,6 +534,8 @@ describeDb('views', () => {
         // cannot apply to it at all. Phase 7 noted one might help a larger
         // portfolio; Phase 8 declines it for that reason.
         // Phase 10. The three ledger views.
+        // Phase 11. Five more: one register per money-movement document, and
+        // the general ledger every financial drill-down reads.
         'branch_cash_position',
         'collections_today',
         // Phase 9. The company's own identity, readable by every signed-in
@@ -519,6 +544,9 @@ describeDb('views', () => {
         'company_identity',
         'dashboard_collection_summary',
         'dashboard_portfolio_summary',
+        'expense_register',
+        'general_ledger',
+        'income_register',
         'ledger_account_balances',
         // Phase 6. Balances are derived rather than stored, so a reversal
         // changes every figure the instant it commits.
@@ -534,6 +562,8 @@ describeDb('views', () => {
         'loan_portfolio_report',
         'payment_collection_totals',
         'payment_register',
+        'reconciliation_register',
+        'transfer_register',
         'trial_balance',
       ]);
     });
@@ -573,12 +603,13 @@ describeDb('views', () => {
     // And every view is readable by a signed-in caller, so the revoke did not
     // go too far.
     // One row per view: three from Phase 6, three from Phase 7, five from
-    // Phase 8's reporting layer, one from Phase 9, three from Phase 10.
+    // Phase 8's reporting layer, one from Phase 9, three from Phase 10 and
+    // five from Phase 11 — four document registers and the general ledger.
     // Counted here because the names are already enumerated above; what this
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(15);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(20);
   });
 });
 
@@ -596,16 +627,21 @@ describeDb('privileged functions', () => {
     // so a function gaining it by accident gains the ability to ignore every
     // policy in the system.
     expect(rows.map((row) => row.proname)).toEqual([
-      // Phase 7. The sweep and the materialiser both write `loan_penalties`,
-      // which no session role may write at all, and neither takes an amount,
-      // a rate, a basis or a date from its caller. Neither is granted to
-      // `authenticated`.
       'apply_eligible_penalties',
-      // Phase 4 lifecycle functions. Each is SECURITY DEFINER because it
-      // writes snapshot tables no session may write, and each checks the
-      // caller's capability inside before doing so.
+      'approve_expense',
       'approve_loan',
+      'approve_reconciliation',
+      'approve_transfer',
+      // Phase 11. The money-movement module. The three `assert_*` helpers
+      // and the two `post_*_journal` writers are definer because they read
+      // and write the ledger on behalf of a caller who may not touch it
+      // directly; none is granted to `authenticated`. The `record_*`,
+      // `approve_*`, `reject_*`, `reverse_*` and `submit_*` functions are
+      // granted, and every one re-checks the caller's capability inside.
+      'assert_cash_account',
+      'assert_cash_available',
       'assert_owner_admin_remains',
+      'assert_postable_account',
       'audit_actor_label',
       'audit_client_change',
       'audit_client_guarantor_change',
@@ -613,33 +649,19 @@ describeDb('privileged functions', () => {
       'audit_client_remark_added',
       'audit_guarantor_change',
       'audit_guarantor_identity_change',
-      // Phase 6 replaced this function rather than adding a second trigger:
-      // it now distinguishes a reopening from a disbursement and records the
-      // balance that justified a clearance.
       'audit_loan_change',
-      // Phase 5: one event per generated schedule.
       'audit_loan_schedule_generated',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',
-      // Phase 6: the payment ledger's trail.
       'audit_payment_allocated',
       'audit_payment_change',
-      // Phase 7: the penalty's trail. Records no actor, because a business
-      // rule applied the charge and naming the staff member whose payment
-      // transaction it happened inside would be a false record.
       'audit_penalty_applied',
       'audit_profile_change',
       'audit_settings_change',
       'audit_user_role_change',
-      // Phase 10. The branch network and the ledger. Every one runs as the table owner because no session role may write a journal, and the two stamping triggers fill a column the session never supplies.
       'backfill_ledger_history',
       'branch_cash_account',
-      // Phase 7. SECURITY DEFINER so the clock gate it consults is callable
-      // whatever the session's privileges — see migration 20261007000200.
       'business_now',
-      // Reads `company_settings`, which needs `settings:view` — so a derived
-      // view that looked the timezone up directly would return no rows at all
-      // for a borrower, and their own arrears would silently vanish.
       'business_timezone',
       'cancel_loan',
       'client_guarantors_guard_detach',
@@ -649,37 +671,23 @@ describeDb('privileged functions', () => {
       'clients_stamp_branch',
       'clients_stamp_provenance',
       'confirm_password_change',
-      // Phase 9. The rate limiter. SECURITY DEFINER because its counter table
-      // is readable by nobody: a caller who could read it could tell whether
-      // a given phone number has been attempted, and one who could write it
-      // could clear their own budget. It takes a hash, not an identity.
       'consume_rate_limit',
       'current_profile_id',
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
       'disburse_loan',
-      // Phase 7. The only writer of `loan_penalties`, with no execute grant to
-      // any session role — the same posture as `generate_loan_schedule`. The
-      // charge, its basis, its rate and its dates are all derived inside.
       'ensure_penalty_applied',
-      // Phase 5. SECURITY DEFINER for the usual reason — it writes tables no
-      // session may write — and additionally with no execute grant at all,
-      // so it is deliberately absent from the grants list below.
       'generate_loan_schedule',
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
-      // Phase 10. The journal guards. All four run as the table owner because no session role may write a journal at all.
       'journal_assert_balanced',
       'journal_entries_assert_balanced',
       'journal_entries_guard_update',
       'journal_lines_assert_balanced',
+      'ledger_account_balance',
       'ledger_account_by_code',
       'link_client_profile',
-      // Phase 6. `loan_outstanding` is deliberately NOT here: it is SECURITY
-      // INVOKER, so a session reading a balance sees only what Row Level
-      // Security allows. Making it DEFINER would have turned the balance
-      // views into a bypass.
       'loan_payments_assign_number',
       'loan_payments_guard_mutation',
       'loans_assign_loan_number',
@@ -688,23 +696,32 @@ describeDb('privileged functions', () => {
       'loans_stamp_branch',
       'next_reference',
       'post_disbursement_journal',
+      'post_expense_journal',
       'post_journal',
-      // Phase 6: the two trusted ledger paths.
       'post_payment',
       'post_repayment_journal',
       'post_reversal_journal',
+      'post_transfer_journal',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
-      // Phase 9. Housekeeping for the rate limit counters. Granted to
-      // `service_role` alone: it deletes rows, and a caller who could run it
-      // on demand could clear their own budget.
       'purge_expired_rate_limits',
       'record_audit_event',
+      'record_expense',
+      'record_other_income',
       'record_security_event',
       'record_sign_in',
+      'record_transfer',
+      'reject_expense',
+      'reject_reconciliation',
+      'reject_transfer',
       'repayment_frequencies_guard_identity',
+      'reverse_expense',
+      'reverse_other_income',
       'reverse_payment',
+      'reverse_transfer',
+      'submit_reconciliation',
+      'user_can_see_branch',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',
@@ -783,7 +800,10 @@ describeDb('privileged functions', () => {
     // reachable only through the server, by `service_role`. See migration
     // 20261002000800 and tests/db/password-change.test.ts.
     expect(rows.map((row) => row.proname)).toEqual([
+      'approve_expense',
       'approve_loan',
+      'approve_reconciliation',
+      'approve_transfer',
       // Phase 7. The business clock and the timezone it is read in. Granted
       // because every screen needs to know what "today" means to the
       // business, and because a date is not sensitive. Neither accepts a
@@ -810,6 +830,10 @@ describeDb('privileged functions', () => {
       'disburse_loan',
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
       // what Row Level Security allows it to.
+      // Phase 11. One account's balance, for the finance screens. A read
+      // of a figure the ledger already publishes through
+      // `ledger_account_balances`, so the grant adds no reach.
+      'ledger_account_balance',
       'loan_outstanding',
       // Phase 7, all three SECURITY INVOKER for the same reason. The as-of
       // balance is a read-only historical figure: no mutation accepts a date,
@@ -825,12 +849,30 @@ describeDb('privileged functions', () => {
       // capability inside, because SECURITY DEFINER means the grant alone
       // decides nothing.
       'post_payment',
+      // Phase 11. The four money-movement writers and their decisions.
+      // Granted for the same reason `post_payment` is: the application
+      // calls them as the signed-in person, and each re-checks the
+      // capability inside, because SECURITY DEFINER means the grant alone
+      // decides nothing. The *_journal helpers are deliberately absent —
+      // they post without writing a document, and nothing but their own
+      // callers should reach them.
+      'record_expense',
+      'record_other_income',
       'record_security_event',
       'record_sign_in',
+      'record_transfer',
+      'reject_expense',
+      'reject_reconciliation',
+      'reject_transfer',
+      'reverse_expense',
+      'reverse_other_income',
       'reverse_payment',
+      'reverse_transfer',
       'storage_path_client_id',
       'storage_path_guarantor_id',
       'storage_path_kind',
+      'submit_reconciliation',
+      'user_can_see_branch',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',

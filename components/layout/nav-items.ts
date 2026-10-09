@@ -1,10 +1,13 @@
 import {
   AlertTriangle,
+  ArrowLeftRight,
   Banknote,
   ChartColumn,
   HeartHandshake,
+  Landmark,
   LayoutDashboard,
   Receipt,
+  Scale,
   ScrollText,
   Settings,
   UserCircle,
@@ -64,11 +67,20 @@ export interface NavItem {
 }
 
 /** The sidebar's three blocks, in the order they are rendered. */
-export const NAV_GROUPS = ['operations', 'insights', 'administration'] as const;
+export const NAV_GROUPS = [
+  'operations',
+  'finance',
+  'insights',
+  'administration',
+] as const;
 export type NavGroup = (typeof NAV_GROUPS)[number];
 
 export const NAV_GROUP_LABELS: Readonly<Record<NavGroup, string>> = {
   operations: 'Operations',
+  // Phase 11. Its own block rather than a tail on Operations: lending work
+  // and the company's own money are different jobs, often different people,
+  // and the capabilities that gate them barely overlap.
+  finance: 'Finance',
   insights: 'Insights',
   administration: 'Administration',
 };
@@ -159,6 +171,64 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: 'delinquency:view',
     phase: 7,
     group: 'operations',
+  },
+  // --- Finance -------------------------------------------------------------
+  // Phase 11. The overview first, because "where is the money" is the
+  // question somebody opens this block to answer; the four ways it moves
+  // after it, in the order a treasurer works through them.
+  {
+    href: ROUTES.finance,
+    label: 'Cash Position',
+    shortLabel: 'Cash',
+    icon: Banknote,
+    permission: 'ledger:view',
+    phase: 11,
+    group: 'finance',
+  },
+  {
+    href: ROUTES.transfers,
+    label: 'Transfers',
+    shortLabel: 'Moves',
+    icon: ArrowLeftRight,
+    permission: 'transfers:view',
+    phase: 11,
+    group: 'finance',
+  },
+  {
+    href: ROUTES.expenses,
+    label: 'Expenses',
+    shortLabel: 'Spend',
+    icon: Receipt,
+    permission: 'expenses:view',
+    phase: 11,
+    group: 'finance',
+  },
+  {
+    href: ROUTES.otherIncome,
+    label: 'Other Income',
+    shortLabel: 'Income',
+    icon: Landmark,
+    permission: 'income:view',
+    phase: 11,
+    group: 'finance',
+  },
+  {
+    href: ROUTES.reconciliation,
+    label: 'Reconciliation',
+    shortLabel: 'Count',
+    icon: Scale,
+    permission: 'reconciliation:view',
+    phase: 11,
+    group: 'finance',
+  },
+  {
+    href: ROUTES.ledger,
+    label: 'General Ledger',
+    shortLabel: 'Ledger',
+    icon: ScrollText,
+    permission: 'ledger:view',
+    phase: 11,
+    group: 'finance',
   },
   {
     href: ROUTES.reports,

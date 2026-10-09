@@ -52,6 +52,13 @@ export type RateLimitedAction =
   | 'payments.reverse'
   | 'loans.approve'
   | 'loans.disburse'
+  | 'finance.transfer'
+  | 'finance.transfer_decision'
+  | 'finance.expense'
+  | 'finance.expense_decision'
+  | 'finance.income'
+  | 'finance.reconciliation'
+  | 'finance.reconciliation_decision'
   | 'reports.export'
   | 'reports.read'
   | 'uploads.document';
@@ -147,6 +154,53 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 3600,
     onStoreFailure: 'closed',
     message: 'Too many disbursements in the last hour. Try again shortly.',
+  },
+  // Phase 11. Recording a movement is ordinary work and fails open, for the
+  // reason payments do: a counter that cannot count usually means a database
+  // that cannot post either, and a second confusing failure helps nobody.
+  // Deciding about one is a decision rather than throughput, so it is slower
+  // and fails closed — the same shape as a reversal or an approval.
+  'finance.transfer': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Transfers are being recorded faster than expected. Try again in a moment.',
+  },
+  'finance.transfer_decision': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many transfer decisions in the last hour. Try again shortly.',
+  },
+  'finance.expense': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Expenses are being recorded faster than expected. Try again in a moment.',
+  },
+  'finance.expense_decision': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many expense decisions in the last hour. Try again shortly.',
+  },
+  'finance.income': {
+    limit: 60,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Income is being recorded faster than expected. Try again in a moment.',
+  },
+  'finance.reconciliation': {
+    limit: 20,
+    windowSeconds: 600,
+    onStoreFailure: 'open',
+    message: 'Too many counts just now. Try again in a few minutes.',
+  },
+  'finance.reconciliation_decision': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many reconciliation decisions in the last hour. Try again shortly.',
   },
   'reports.export': {
     limit: 10,

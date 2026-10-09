@@ -65,7 +65,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  * Delivery phase of this codebase. Used by the UI to label functionality that
  * is deliberately not built yet, so staff are never shown a dead control.
  */
-export const CURRENT_PHASE = 8 as const;
+export const CURRENT_PHASE = 11 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
@@ -79,6 +79,19 @@ export const ROUTES = {
   payments: '/payments',
   overdue: '/overdue',
   reports: '/reports',
+
+  /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
+  finance: '/finance',
+  transfers: '/finance/transfers',
+  newTransfer: '/finance/transfers/new',
+  expenses: '/finance/expenses',
+  newExpense: '/finance/expenses/new',
+  otherIncome: '/finance/income',
+  newIncome: '/finance/income/new',
+  reconciliation: '/finance/reconciliation',
+  newReconciliation: '/finance/reconciliation/new',
+  ledger: '/finance/ledger',
+
   settings: '/settings',
   users: '/users',
   audit: '/audit',

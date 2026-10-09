@@ -205,6 +205,26 @@ describe('authorization matrix', () => {
     'ledger:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'ledger:post': ['owner_admin'],
 
+    // --- Phase 11: money movement -------------------------------------------
+    // Recording and approving are split in every row. The treasurer moves
+    // the money and counts it; the Manager is the second pair of eyes; the
+    // thresholds and the chart of accounts are the Owner's, because a
+    // Manager who could raise the threshold could approve their own work by
+    // making approval unnecessary.
+    'transfers:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'transfers:create': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'transfers:approve': ['manager', 'owner_admin'],
+    'expenses:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'expenses:create': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'expenses:approve': ['manager', 'owner_admin'],
+    'income:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'income:create': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'reconciliation:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'reconciliation:perform': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'reconciliation:approve': ['manager', 'owner_admin'],
+    'finance:settings': ['owner_admin'],
+    'finance:accounts': ['owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

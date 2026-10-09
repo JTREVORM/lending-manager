@@ -27,6 +27,11 @@ if (!hasDatabase) {
 
 describeDb('tables', () => {
   const EXPECTED_TABLES = [
+    // Phase 11: the four ways money moves that are not a loan. Each is a
+    // document that points at the journal it wrote; none of them can exist
+    // without one.
+    'account_reconciliations',
+    'account_transfers',
     'audit_log',
     // Phase 10: the branch network and the double-entry ledger.
     'branches',
@@ -39,6 +44,10 @@ describeDb('tables', () => {
     'client_remarks',
     'clients',
     'company_settings',
+    'expenses',
+    // Phase 11: approval thresholds, the overdraft rule and the low-float
+    // levels. Separate from `business_settings`, which is about lending.
+    'finance_settings',
     'guarantor_identities',
     'guarantors',
     // Phase 10: the double-entry ledger. The header carries the branch, the
@@ -63,6 +72,9 @@ describeDb('tables', () => {
     'loan_periods',
     'loan_schedules',
     'loans',
+    // Phase 11: fees and income that is not interest or a penalty. Those two
+    // are written by the lending functions and refused here.
+    'other_income',
     // Phase 6: the payment ledger. Balances are derived in views rather than
     // stored, so there is no balance table here.
     'payment_allocations',
@@ -201,6 +213,25 @@ describeDb('foreign keys', () => {
     // record is referenced by loans and payments, and deleting it would
     // corrupt the books. Archiving replaces deletion.
     expect(actual).toEqual([
+      // Phase 11. The four money-movement documents. RESTRICT on everything
+      // a posting or a balance depends on — a branch, an account, a journal
+      // entry, a client or a loan a fee was charged against cannot be
+      // removed while a document names it. `n` on provenance, as everywhere
+      // else: an account that no longer exists is less useful than NULL, and
+      // the label column keeps the name the document was recorded under.
+      'account_reconciliations.account_id -> ledger_accounts (r)',
+      'account_reconciliations.adjustment_entry_id -> journal_entries (r)',
+      'account_reconciliations.branch_id -> branches (r)',
+      'account_reconciliations.performed_by -> profiles (n)',
+      'account_reconciliations.reviewed_by -> profiles (n)',
+      'account_transfers.approved_by -> profiles (n)',
+      'account_transfers.branch_id -> branches (r)',
+      'account_transfers.from_account_id -> ledger_accounts (r)',
+      'account_transfers.initiated_by -> profiles (n)',
+      'account_transfers.journal_entry_id -> journal_entries (r)',
+      'account_transfers.reversal_entry_id -> journal_entries (r)',
+      'account_transfers.reversed_by -> profiles (n)',
+      'account_transfers.to_account_id -> ledger_accounts (r)',
       'audit_log.actor_profile_id -> profiles (r)',
       // Phase 10. The branch network and the ledger. RESTRICT throughout on
       // anything a posting points at — a branch, an account, a loan or a
@@ -233,6 +264,15 @@ describeDb('foreign keys', () => {
       'clients.profile_id -> profiles (r)',
       'clients.status_changed_by -> profiles (n)',
       'company_settings.updated_by -> profiles (r)',
+      'expenses.approved_by -> profiles (n)',
+      'expenses.branch_id -> branches (r)',
+      'expenses.expense_account_id -> ledger_accounts (r)',
+      'expenses.journal_entry_id -> journal_entries (r)',
+      'expenses.payment_account_id -> ledger_accounts (r)',
+      'expenses.recorded_by -> profiles (n)',
+      'expenses.reversal_entry_id -> journal_entries (r)',
+      'expenses.reversed_by -> profiles (n)',
+      'finance_settings.updated_by -> profiles (n)',
       'guarantor_identities.guarantor_id -> guarantors (c)',
       'guarantors.created_by -> profiles (n)',
       'journal_entries.branch_id -> branches (r)',
@@ -298,11 +338,24 @@ describeDb('foreign keys', () => {
       // stricter than the loan's own lifecycle columns, which null gracefully
       // because the audit trail holds the authoritative record — a payment's
       // actor is on the receipt a borrower is holding.
+      'other_income.branch_id -> branches (r)',
+      'other_income.client_id -> clients (r)',
+      'other_income.income_account_id -> ledger_accounts (r)',
+      'other_income.journal_entry_id -> journal_entries (r)',
+      'other_income.loan_id -> loans (r)',
+      'other_income.receiving_account_id -> ledger_accounts (r)',
+      'other_income.recorded_by -> profiles (n)',
+      'other_income.reversal_entry_id -> journal_entries (r)',
+      'other_income.reversed_by -> profiles (n)',
       'payment_allocations.installment_id -> loan_installments (r)',
       'payment_allocations.loan_id -> loans (r)',
       'payment_allocations.payment_id -> loan_payments (r)',
       'payment_allocations.penalty_id -> loan_penalties (r)',
       'profiles.auth_user_id -> users (r)',
+      // Phase 11. RESTRICT: a branch with staff assigned to it cannot be
+      // removed while they are. NULL on the column means unrestricted
+      // rather than unassigned — an Owner belongs to the company.
+      'profiles.branch_id -> branches (r)',
       'reference_sequences.scope -> reference_formats (r)',
       // Phase 2. RESTRICT here too: a capability cannot be deleted out from
       // under a role that grants it, and a role cannot vanish while granting
@@ -316,6 +369,10 @@ describeDb('foreign keys', () => {
   });
 
   it('links profiles to auth.users, not to a duplicated user table', async () => {
+    // Named by constraint rather than by "the only foreign key on profiles":
+    // Phase 11 added `branch_id`, and the claim being made here was never
+    // about how many relationships the table has. It is that the *identity*
+    // link points at Supabase Auth.
     const row = await queryOne<{ foreign_schema: string; foreign_table: string }>(
       `select n.nspname as foreign_schema, tgt.relname as foreign_table
          from pg_constraint k
@@ -323,11 +380,24 @@ describeDb('foreign keys', () => {
          join pg_class tgt on tgt.oid = k.confrelid
          join pg_namespace n on n.oid = tgt.relnamespace
         where k.contype = 'f'
-          and src.relname = 'profiles'`,
+          and src.relname = 'profiles'
+          and k.conname = 'profiles_auth_user_id_fkey'`,
     );
 
     expect(row.foreign_schema).toBe('auth');
     expect(row.foreign_table).toBe('users');
+
+    // And there is still no second person table anywhere for a profile to
+    // point at, which is the half of the claim the column name does not
+    // carry on its own.
+    const duplicates = await query<{ relname: string }>(
+      `select c.relname
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'
+          and c.relname in ('users', 'accounts', 'auth_users')`,
+    );
+    expect(duplicates).toEqual([]);
   });
 
   it('stores no credential value, since Supabase Auth owns them', async () => {

@@ -44,6 +44,11 @@ export const REFERENCE_SCOPES = [
   // Phase 10.
   'branch',
   'journal',
+  // Phase 11. The four documents that move money without being a loan.
+  'transfer',
+  'expense',
+  'other_income',
+  'reconciliation',
 ] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
 
@@ -68,6 +73,10 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   branch: { scope: 'branch', prefix: 'BR', padding: 2 },
   // 'JV' for journal voucher, the name the printed ledger uses.
   journal: { scope: 'journal', prefix: 'JV', padding: 5 },
+  transfer: { scope: 'transfer', prefix: 'TF', padding: 5 },
+  expense: { scope: 'expense', prefix: 'EX', padding: 5 },
+  other_income: { scope: 'other_income', prefix: 'OI', padding: 5 },
+  reconciliation: { scope: 'reconciliation', prefix: 'RC', padding: 5 },
 } as const;
 
 export class ReferenceError extends Error {

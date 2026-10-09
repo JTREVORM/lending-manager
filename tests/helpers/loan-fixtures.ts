@@ -261,6 +261,15 @@ export async function deleteTestLoans(): Promise<void> {
     // same owner-level trigger exemption every other append-only table in
     // this list uses. `journal_lines` cascade from their entry; their own
     // guard is suspended because a cascade is still a DELETE.
+    // Phase 11. The four money-movement documents go before the journals
+    // they point at: each holds `journal_entry_id` with `on delete restrict`,
+    // so an entry cannot be removed while a document still names it. They
+    // also reference `clients` and `loans` the same way, which is the other
+    // reason they cannot be left behind.
+    { table: 'account_transfers', trigger: 'account_transfers_no_delete' },
+    { table: 'expenses', trigger: 'expenses_no_delete' },
+    { table: 'other_income', trigger: 'other_income_no_delete' },
+    { table: 'account_reconciliations', trigger: 'account_reconciliations_no_delete' },
     { table: 'journal_lines', trigger: 'journal_lines_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_guard_update' },
@@ -296,6 +305,10 @@ export async function deleteTestLoans(): Promise<void> {
     // statement. Unstamping first is why `journal_entries_guard_update` is
     // in the list above.
     await query(`update public.journal_entries set reversed_by_entry_id = null`);
+    await query(`delete from public.account_transfers`);
+    await query(`delete from public.expenses`);
+    await query(`delete from public.other_income`);
+    await query(`delete from public.account_reconciliations`);
     await query(`delete from public.journal_entries`);
     await query(`delete from public.payment_allocations`);
     await query(`delete from public.loan_payments`);
