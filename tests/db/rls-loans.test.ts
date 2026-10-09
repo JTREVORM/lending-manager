@@ -527,6 +527,21 @@ describeDb('loan row level security', () => {
         // `security_invoker`, so it returns exactly the loans the reader's own
         // policies admit.
         'loan_portfolio_report:SELECT',
+        // Phase 12. The products, where they are sold, and the terms a loan
+        // was approved under. The Owner writes the first two through the
+        // settings surface — `products:manage` — and `loan_products` has no
+        // DELETE at all, because retiring a product is a status change. A
+        // snapshot is written exclusively by
+        // `capture_loan_product_snapshot` inside `approve_loan`, which runs
+        // as the table owner, so it stays SELECT.
+        'loan_product_branches:DELETE',
+        'loan_product_branches:INSERT',
+        'loan_product_branches:SELECT',
+        'loan_product_catalogue:SELECT',
+        'loan_product_snapshots:SELECT',
+        'loan_products:INSERT',
+        'loan_products:SELECT',
+        'loan_products:UPDATE',
         'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',
@@ -597,6 +612,17 @@ describeDb('loan row level security', () => {
         // Phase 7 adds a fourth, on the same terms.
         'loan_penalties:SELECT',
         'loan_periods:SELECT',
+        // Phase 12. The snapshot's policy is the one that differs: a
+        // borrower reads the terms of their own loan, because what they
+        // agreed to is theirs to see. The product's write policies are the
+        // Owner's `products:manage`.
+        'loan_product_branches:DELETE',
+        'loan_product_branches:INSERT',
+        'loan_product_branches:SELECT',
+        'loan_product_snapshots:SELECT',
+        'loan_products:INSERT',
+        'loan_products:SELECT',
+        'loan_products:UPDATE',
         'loan_schedules:SELECT',
         'loans:INSERT',
         'loans:SELECT',

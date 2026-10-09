@@ -59,6 +59,8 @@ export type RateLimitedAction =
   | 'finance.income'
   | 'finance.reconciliation'
   | 'finance.reconciliation_decision'
+  | 'settings.product'
+  | 'settings.update'
   | 'reports.export'
   | 'reports.read'
   | 'uploads.document';
@@ -201,6 +203,25 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 3600,
     onStoreFailure: 'closed',
     message: 'Too many reconciliation decisions in the last hour. Try again shortly.',
+  },
+  // Phase 12. Changing a product changes the rate the business lends at, so
+  // this is a decision rather than throughput: slow, and failing closed. A
+  // counter that cannot count must not become a way to reprice the business
+  // unobserved.
+  // Phase 12. The company's identity, the lending rules and the finance
+  // thresholds. Same shape as a product change and for the same reason: each
+  // is a decision about how the business operates, not throughput.
+  'settings.update': {
+    limit: 30,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many settings changes in the last hour. Try again shortly.',
+  },
+  'settings.product': {
+    limit: 30,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many product changes in the last hour. Try again shortly.',
   },
   'reports.export': {
     limit: 10,

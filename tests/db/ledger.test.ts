@@ -419,9 +419,15 @@ describeDb('balances are derived, never stored', () => {
 
       expect(await settle(client)).toBeNull();
 
+      // Scoped to this file's own `T-` accounts. Every test here runs inside
+      // a rolled-back transaction and creates the chart it posts against, so
+      // whatever a previous file committed and has not yet cleared is not
+      // this assertion's subject — the signing of the accounts it created is.
+      // The trial balance below is deliberately left unscoped: footing is a
+      // whole-ledger claim and holds with other data present.
       const balances = await client.query<{ code: string; balance: string }>(
         `select code, balance::text from public.ledger_account_balances
-          where balance <> 0 order by code`,
+          where balance <> 0 and code like 'T-%' order by code`,
       );
       expect(Object.fromEntries(balances.rows.map((r) => [r.code, r.balance]))).toEqual({
         'T-BANK': '3800000',

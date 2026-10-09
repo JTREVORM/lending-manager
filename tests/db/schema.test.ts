@@ -70,6 +70,11 @@ describeDb('tables', () => {
     // delinquency table for anybody to edit a borrower into or out of.
     'loan_penalties',
     'loan_periods',
+    // Phase 12: what the business sells, where it sells it, and the terms a
+    // loan was actually agreed under.
+    'loan_product_branches',
+    'loan_product_snapshots',
+    'loan_products',
     'loan_schedules',
     'loans',
     // Phase 11: fees and income that is not interest or a penalty. Those two
@@ -318,6 +323,18 @@ describeDb('foreign keys', () => {
       'loan_penalties.client_id -> clients (r)',
       'loan_penalties.loan_id -> loans (c)',
       'loan_periods.loan_id -> loans (c)',
+      // Phase 12. `c` on the branch join table, because a row there is part
+      // of the product rather than a record of its own; `r` everywhere else,
+      // including the snapshot's loan — a loan whose terms were frozen is
+      // evidence of an agreement.
+      'loan_product_branches.branch_id -> branches (r)',
+      'loan_product_branches.product_id -> loan_products (c)',
+      'loan_product_snapshots.loan_id -> loans (r)',
+      'loan_product_snapshots.overridden_by -> profiles (n)',
+      'loan_product_snapshots.product_id -> loan_products (r)',
+      'loan_products.created_by -> profiles (n)',
+      'loan_products.default_repayment_frequency -> repayment_frequencies (r)',
+      'loan_products.updated_by -> profiles (n)',
       'loan_schedules.generated_by -> profiles (r)',
       'loan_schedules.loan_id -> loans (c)',
       'loan_schedules.repayment_frequency -> repayment_frequencies (r)',
@@ -330,6 +347,7 @@ describeDb('foreign keys', () => {
       'loans.client_id -> clients (r)',
       'loans.created_by -> profiles (n)',
       'loans.disbursed_by -> profiles (n)',
+      'loans.loan_product_id -> loan_products (r)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
       // Phase 6. `r` restricts everywhere, with no `c` and no `n`: a payment
@@ -626,9 +644,13 @@ describeDb('seeded reference data matches the application constants', () => {
       locale: string;
     }>(`select * from public.company_settings where id = 1`);
 
-    expect(row.company_name).toBe('Money Lending Management System');
-    // Company registration is still in progress, so these have no value yet.
-    expect(row.legal_name).toBeNull();
+    // Phase 12. The placeholder is gone: the client's registration completed
+    // and migration 20261012000100 wrote the real identity.
+    expect(row.company_name).toBe('Polytos Financial Services Ltd');
+    expect(row.legal_name).toBe('Polytos Financial Services Limited');
+    // Registration and tax numbers are still not held. They are not needed
+    // to lend, and they are the two fields the public identity view most
+    // carefully leaves out, so an empty value is the honest one.
     expect(row.registration_number).toBeNull();
     expect(row.tax_identification_number).toBeNull();
 
@@ -675,13 +697,33 @@ describeDb('seeded reference data matches the application constants', () => {
     // been torn down yet. The claim was never about those rows.
     const boundary = inject('seedAuditBoundary');
 
-    const row = await queryOne<{ count: string }>(
-      `select count(*)::text as count from public.audit_log
-        where id <= $1 and action in ('settings.updated', 'user.role_granted')`,
+    const rows = await query<{
+      action: string;
+      entity_type: string;
+      actor_label: string;
+    }>(
+      `select action, entity_type, actor_label from public.audit_log
+        where id <= $1 and action in ('settings.updated', 'user.role_granted')
+        order by id`,
       [boundary],
     );
 
-    expect(row.count).toBe('0');
+    // No role was granted to anybody by the seed. That half is absolute: a
+    // migration that quietly granted a role would be a migration that
+    // quietly created an administrator.
+    expect(rows.filter((row) => row.action === 'user.role_granted')).toEqual([]);
+
+    // Exactly one settings change, and it is the one Phase 12 made on
+    // purpose: migration 20261012000100 replaced the placeholder company
+    // name with the client's real identity. That row *belongs* in the trail
+    // — the company's own name changing is precisely what an audit log is
+    // for — and suppressing it to keep this assertion at zero would have
+    // been hiding a real change to make a test easier.
+    expect(
+      rows
+        .filter((row) => row.action === 'settings.updated')
+        .map((row) => `${row.entity_type}:${row.actor_label}`),
+    ).toEqual(['company_settings:system']);
   });
 });
 

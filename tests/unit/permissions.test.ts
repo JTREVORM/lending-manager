@@ -225,6 +225,12 @@ describe('authorization matrix', () => {
     'finance:settings': ['owner_admin'],
     'finance:accounts': ['owner_admin'],
 
+    // --- Phase 12: loan products --------------------------------------------
+    // Everybody who sells a loan needs to know what the business offers;
+    // only the Owner sets the price.
+    'products:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'products:manage': ['owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

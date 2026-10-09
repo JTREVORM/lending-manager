@@ -39,7 +39,26 @@ function tsType(dataType, udtName) {
       break;
   }
 
-  if (dataType === 'ARRAY') return 'string[]';
+  // An array's element type is its `udt_name` with a leading underscore:
+  // `_int4` for integer[], `_text` for text[]. Reading only `dataType` here
+  // typed `allowed_term_months integer[]` as `string[]`, which compiles and
+  // is wrong — PostgREST sends integers as numbers.
+  if (dataType === 'ARRAY') {
+    switch (udtName) {
+      case '_int2':
+      case '_int4':
+      case '_int8':
+      case '_float4':
+      case '_float8':
+      case '_numeric':
+        return 'number[]';
+      case '_bool':
+        return 'boolean[]';
+      default:
+        return 'string[]';
+    }
+  }
+
   // uuid, text, varchar, date, timestamptz, inet and the rest all arrive as
   // strings over PostgREST.
   return 'string';

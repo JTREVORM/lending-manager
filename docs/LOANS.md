@@ -196,6 +196,14 @@ approved — but no capability is granted and no interface is exposed.
 All of these come from `business_settings`, read server-side. None is a
 constant in the engine.
 
+> **Phase 12 changed where most of these are read from.** `business_settings`
+> is now the **guard rail**: it bounds what any loan product may offer. A
+> loan's own rate, duration, cadence, grace period, penalty and security
+> requirements come from its **product**, inside that rail, and are snapshotted
+> onto the loan at approval. The one rule below that is still global and only
+> global is `max_active_loans_per_client`. See `LOAN-PRODUCTS.md` for the
+> precedence rules and how the rail is enforced in both directions.
+
 | Rule | Setting | Current |
 | --- | --- | --- |
 | Minimum loan | `min_loan_amount` | UGX 100,000 |

@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { inject } from 'vitest';
 
 import { query, queryOne } from './db';
 
@@ -70,6 +71,21 @@ export async function createTestUser(role: string, status = 'active'): Promise<T
 }
 
 /**
+ * The highest `audit_log` id that existed when the database was rebuilt.
+ *
+ * Zero when the value was never published — the global setup skips the
+ * rebuild when `DATABASE_URL` is not the local throwaway cluster — which
+ * makes the delete below unbounded, exactly as it was before.
+ */
+function seedAuditBoundary(): number {
+  try {
+    return inject('seedAuditBoundary') ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Remove every fixture this suite created.
  *
  * ## Why this has to disable triggers
@@ -122,6 +138,12 @@ export async function deleteTestUsers(): Promise<void> {
     // that has been posted against. A test database still has to come apart,
     // so they are cleared here through the same owner-level exemption the
     // rest of this list uses.
+    // Phase 11. The money-movement documents hold the journals they wrote
+    // with `on delete restrict`, so they go before the journals do.
+    { table: 'account_transfers', trigger: 'account_transfers_no_delete' },
+    { table: 'expenses', trigger: 'expenses_no_delete' },
+    { table: 'other_income', trigger: 'other_income_no_delete' },
+    { table: 'account_reconciliations', trigger: 'account_reconciliations_no_delete' },
     { table: 'journal_lines', trigger: 'journal_lines_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_guard_update' },
@@ -133,6 +155,9 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'loan_client_snapshots', trigger: 'loan_client_snapshots_no_delete' },
     { table: 'loan_guarantor_snapshots', trigger: 'loan_guarantor_snapshots_no_delete' },
     { table: 'loan_identity_snapshots', trigger: 'loan_identity_snapshots_no_delete' },
+    // Phase 12. The product terms a loan was approved under, append-only for
+    // the same reason the other snapshots are.
+    { table: 'loan_product_snapshots', trigger: 'loan_product_snapshots_no_delete' },
     { table: 'loans', trigger: 'loans_guard_transition' },
     { table: 'loans', trigger: 'audit_loan_change' },
   ];
@@ -142,12 +167,25 @@ export async function deleteTestUsers(): Promise<void> {
   }
 
   try {
-    await query(`delete from public.audit_log`);
+    // Only the rows the tests wrote. The migrations write one audit row of
+    // their own — Phase 12 replaced the placeholder company name with the
+    // client's real identity, and the trail records it — and `schema.test.ts`
+    // asserts it is there. Clearing the table outright deleted the seed's own
+    // history, so whether that assertion passed came down to which file had
+    // torn down first. `seedAuditBoundary` is the highest id that existed
+    // immediately after the rebuild, published by the database project's
+    // global setup, so everything above it is a fixture's and nothing at or
+    // below it is.
+    await query(`delete from public.audit_log where id > $1`, [seedAuditBoundary()]);
 
     // The reversal pointer self-references with `on delete restrict`, so an
     // entry and its contra cannot both go in one statement. Unstamping first
     // is why the update guard is suspended above.
     await query(`update public.journal_entries set reversed_by_entry_id = null`);
+    await query(`delete from public.account_transfers`);
+    await query(`delete from public.expenses`);
+    await query(`delete from public.other_income`);
+    await query(`delete from public.account_reconciliations`);
     await query(`delete from public.journal_entries`);
 
     // Phase 4 rows first: `loans.client_id` is `on delete restrict`, so loans
@@ -162,6 +200,7 @@ export async function deleteTestUsers(): Promise<void> {
     await query(`delete from public.loan_client_snapshots`);
     await query(`delete from public.loan_guarantor_snapshots`);
     await query(`delete from public.loan_identity_snapshots`);
+    await query(`delete from public.loan_product_snapshots`);
     await query(`delete from public.loans`);
 
     // Phase 3 rows, innermost first. `client_remarks.created_by` is

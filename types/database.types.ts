@@ -1007,8 +1007,11 @@ export type Database = {
           legal_name: string | null;
           registration_number: string | null;
           tax_identification_number: string | null;
+          tagline: string | null;
           phone: string | null;
+          phone_secondary: string | null;
           email: string | null;
+          postal_address: string | null;
           address_line1: string | null;
           address_line2: string | null;
           city: string | null;
@@ -1030,8 +1033,11 @@ export type Database = {
           legal_name?: string | null;
           registration_number?: string | null;
           tax_identification_number?: string | null;
+          tagline?: string | null;
           phone?: string | null;
+          phone_secondary?: string | null;
           email?: string | null;
+          postal_address?: string | null;
           address_line1?: string | null;
           address_line2?: string | null;
           city?: string | null;
@@ -1053,8 +1059,11 @@ export type Database = {
           legal_name?: string | null;
           registration_number?: string | null;
           tax_identification_number?: string | null;
+          tagline?: string | null;
           phone?: string | null;
+          phone_secondary?: string | null;
           email?: string | null;
+          postal_address?: string | null;
           address_line1?: string | null;
           address_line2?: string | null;
           city?: string | null;
@@ -1406,6 +1415,240 @@ export type Database = {
         };
         Relationships: [];
       };
+      /**
+       * Phase 12. What the business sells. Within the bounds
+       * `business_settings` sets — enforced by a trigger when a product is
+       * saved — a product is the source of truth for a loan's terms.
+       *
+       * `product_code` is typed as writable because the column is, but an
+       * update to it is silently restored by `loan_products_stamp_actor`:
+       * the code appears on every snapshot and export, so renaming it would
+       * relabel history. `created_by` and `updated_by` are stamped from the
+       * session by the same trigger.
+       */
+      loan_products: {
+        Row: {
+          id: string;
+          product_code: string;
+          name: string;
+          description: string | null;
+          status: string;
+          sort_order: number;
+          is_default: boolean;
+          min_amount: number;
+          max_amount: number;
+          default_interest_rate_bps: number;
+          min_interest_rate_bps: number;
+          max_interest_rate_bps: number;
+          interest_method: string;
+          interest_override_allowed: boolean;
+          interest_override_roles: string[];
+          min_term_months: number;
+          max_term_months: number;
+          allowed_term_months: number[] | null;
+          allowed_repayment_frequencies: string[];
+          default_repayment_frequency: string;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          penalty_method: string;
+          guarantor_required: boolean;
+          min_guarantors: number;
+          collateral_required: boolean;
+          early_repayment: string;
+          extra_payment: string;
+          application_profile: string;
+          requires_supporting_documents: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          product_code: string;
+          name: string;
+          description?: string | null;
+          status?: string;
+          sort_order?: number;
+          is_default?: boolean;
+          min_amount: number;
+          max_amount: number;
+          default_interest_rate_bps: number;
+          min_interest_rate_bps: number;
+          max_interest_rate_bps: number;
+          interest_method?: string;
+          interest_override_allowed?: boolean;
+          interest_override_roles?: string[];
+          min_term_months: number;
+          max_term_months: number;
+          allowed_term_months?: number[] | null;
+          allowed_repayment_frequencies: string[];
+          default_repayment_frequency: string;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          penalty_method?: string;
+          guarantor_required?: boolean;
+          min_guarantors?: number;
+          collateral_required?: boolean;
+          early_repayment?: string;
+          extra_payment?: string;
+          application_profile?: string;
+          requires_supporting_documents?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          product_code?: string;
+          name?: string;
+          description?: string | null;
+          status?: string;
+          sort_order?: number;
+          is_default?: boolean;
+          min_amount?: number;
+          max_amount?: number;
+          default_interest_rate_bps?: number;
+          min_interest_rate_bps?: number;
+          max_interest_rate_bps?: number;
+          interest_method?: string;
+          interest_override_allowed?: boolean;
+          interest_override_roles?: string[];
+          min_term_months?: number;
+          max_term_months?: number;
+          allowed_term_months?: number[] | null;
+          allowed_repayment_frequencies?: string[];
+          default_repayment_frequency?: string;
+          grace_period_days?: number;
+          penalty_rate_bps?: number;
+          penalty_method?: string;
+          guarantor_required?: boolean;
+          min_guarantors?: number;
+          collateral_required?: boolean;
+          early_repayment?: string;
+          extra_payment?: string;
+          application_profile?: string;
+          requires_supporting_documents?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 12. Which branches may sell a product. No rows for a product
+       * means every branch.
+       */
+      loan_product_branches: {
+        Row: {
+          product_id: string;
+          branch_id: string;
+          created_at: string;
+        };
+        Insert: {
+          product_id: string;
+          branch_id: string;
+          created_at?: string;
+        };
+        Update: {
+          product_id?: string;
+          branch_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 12. The product configuration as it stood when the loan was
+       * approved. Append-only: `Insert` is typed because
+       * `capture_loan_product_snapshot` writes it, and the update and delete
+       * triggers refuse everything else.
+       */
+      loan_product_snapshots: {
+        Row: {
+          loan_id: string;
+          product_id: string;
+          product_code: string;
+          product_name: string;
+          min_amount: number;
+          max_amount: number;
+          interest_rate_bps: number;
+          interest_method: string;
+          min_term_months: number;
+          max_term_months: number;
+          repayment_frequency: string;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          penalty_method: string;
+          guarantor_required: boolean;
+          min_guarantors: number;
+          collateral_required: boolean;
+          early_repayment: string;
+          extra_payment: string;
+          application_profile: string;
+          interest_rate_overridden: boolean;
+          overridden_by: string | null;
+          overridden_by_label: string | null;
+          captured_at: string;
+        };
+        Insert: {
+          loan_id: string;
+          product_id: string;
+          product_code: string;
+          product_name: string;
+          min_amount: number;
+          max_amount: number;
+          interest_rate_bps: number;
+          interest_method: string;
+          min_term_months: number;
+          max_term_months: number;
+          repayment_frequency: string;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          penalty_method: string;
+          guarantor_required: boolean;
+          min_guarantors: number;
+          collateral_required: boolean;
+          early_repayment: string;
+          extra_payment: string;
+          application_profile: string;
+          interest_rate_overridden?: boolean;
+          overridden_by?: string | null;
+          overridden_by_label?: string | null;
+          captured_at?: string;
+        };
+        Update: {
+          loan_id?: string;
+          product_id?: string;
+          product_code?: string;
+          product_name?: string;
+          min_amount?: number;
+          max_amount?: number;
+          interest_rate_bps?: number;
+          interest_method?: string;
+          min_term_months?: number;
+          max_term_months?: number;
+          repayment_frequency?: string;
+          grace_period_days?: number;
+          penalty_rate_bps?: number;
+          penalty_method?: string;
+          guarantor_required?: boolean;
+          min_guarantors?: number;
+          collateral_required?: boolean;
+          early_repayment?: string;
+          extra_payment?: string;
+          application_profile?: string;
+          interest_rate_overridden?: boolean;
+          overridden_by?: string | null;
+          overridden_by_label?: string | null;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+
       loan_schedules: {
         Row: {
           loan_id: string;
@@ -1475,11 +1718,23 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          /** Phase 12. The product this loan was sold under. */
+          loan_product_id: string;
+          /**
+           * Phase 12. A rate deliberately chosen in place of the product's
+           * own, or null for the standard rate. Distinct from
+           * `interest_rate_bps`, which is NOT NULL and carries a placeholder
+           * until approval writes the agreed rate.
+           */
+          proposed_interest_rate_bps: number | null;
         };
         Insert: {
           id?: string;
           /** Assigned by the loans_assign_loan_number trigger; supplying one is refused. */
           loan_number?: never;
+          /** Phase 12. Supplied by the loans_stamp_product trigger when absent. */
+          loan_product_id?: string;
+          proposed_interest_rate_bps?: number | null;
           client_id: string;
           principal_amount: number;
           interest_rate_bps: number;
@@ -1514,6 +1769,9 @@ export type Database = {
           id?: string;
           loan_number?: string;
           client_id?: string;
+          /** Phase 12. The product, and the rate somebody chose in place of its own. */
+          loan_product_id?: string;
+          proposed_interest_rate_bps?: number | null;
           principal_amount?: number;
           interest_rate_bps?: number;
           interest_method?: string;
@@ -2085,10 +2343,57 @@ export type Database = {
         Relationships: [];
       };
       /**
-       * Phase 9. The company's own name, locale, timezone, logo and brand
-       * colour — the fields the application shell needs — readable by every
-       * signed-in user, borrowers included. SECURITY DEFINER by design; see
-       * migration 20261009000100.
+       * Phase 12. Every product with its configuration, the branches that may
+       * sell it and how many loans have been written against it. `branch_ids`
+       * is null when the product is sold everywhere.
+       */
+      loan_product_catalogue: {
+        Row: {
+          product_id: string;
+          product_code: string;
+          name: string;
+          description: string | null;
+          status: string;
+          sort_order: number;
+          is_default: boolean;
+          min_amount: number;
+          max_amount: number;
+          default_interest_rate_bps: number;
+          min_interest_rate_bps: number;
+          max_interest_rate_bps: number;
+          interest_method: string;
+          interest_override_allowed: boolean;
+          interest_override_roles: string[];
+          min_term_months: number;
+          max_term_months: number;
+          allowed_term_months: number[] | null;
+          allowed_repayment_frequencies: string[];
+          default_repayment_frequency: string;
+          grace_period_days: number;
+          penalty_rate_bps: number;
+          penalty_method: string;
+          guarantor_required: boolean;
+          min_guarantors: number;
+          collateral_required: boolean;
+          early_repayment: string;
+          extra_payment: string;
+          application_profile: string;
+          requires_supporting_documents: boolean;
+          branch_ids: string[] | null;
+          loans_written: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 9, widened in Phase 12. The company's own published identity —
+       * name, tagline, locale, timezone, logo, brand colour and the contact
+       * details a document it issues has to carry — readable by every
+       * signed-in user, borrowers included. SECURITY DEFINER by design; the
+       * registration and tax numbers are deliberately absent. See migrations
+       * 20261009000100 and 20261012000100.
        */
       company_identity: {
         Row: {
@@ -2098,6 +2403,17 @@ export type Database = {
           timezone: string;
           logo_path: string | null;
           brand_primary_color: string | null;
+          // Phase 12. The published identity: what a document the business
+          // hands out has to carry. The registration and tax numbers are
+          // deliberately still absent — see migration 20261012000100.
+          tagline: string | null;
+          phone: string | null;
+          phone_secondary: string | null;
+          postal_address: string | null;
+          address_line1: string | null;
+          address_line2: string | null;
+          city: string | null;
+          country: string | null;
         };
         Relationships: [];
       };

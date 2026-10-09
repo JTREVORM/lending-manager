@@ -11,6 +11,7 @@ import { PortalPaymentHistory } from '@/components/payments/portal-payment-histo
 import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import type { PaymentObligation } from '@/lib/domain/payment';
+import { DOCUMENT_BRANDING } from '../helpers/branding';
 import { getByCompositeText } from '../helpers/text';
 
 /**
@@ -610,10 +611,10 @@ describe('the payment register', () => {
 
 describe('the receipt', () => {
   const RECEIPT = {
-    companyName: 'Kampala Credit Ltd',
-    companyPhone: '+256700000000',
-    receiptHeader: 'Thank you for your business',
-    receiptFooter: 'Keep this receipt safe',
+    // Phase 12: one branding object, rendered by the shared letterhead the
+    // loan statement also uses, in place of the four loose company props the
+    // receipt carried before.
+    branding: DOCUMENT_BRANDING,
     paymentNumber: 'PAY260001',
     receivedAt: '2026-11-01T09:00:00Z',
     clientName: 'Amina Nakato',
@@ -634,7 +635,14 @@ describe('the receipt', () => {
     render(<PaymentReceipt {...RECEIPT} />);
 
     expect(screen.getByText('Kampala Credit Ltd')).toBeInTheDocument();
-    expect(screen.getByText('+256700000000')).toBeInTheDocument();
+    // Phase 12. The letterhead publishes both numbers on one line, the
+    // tagline under the name, and the postal and office addresses — the same
+    // header a loan statement carries, so the two documents a borrower holds
+    // agree about who issued them.
+    expect(screen.getByText('Lending that moves with you')).toBeInTheDocument();
+    expect(screen.getByText('+256700000000 · +256700000001')).toBeInTheDocument();
+    expect(screen.getByText('P.O. Box 1234, Kampala')).toBeInTheDocument();
+    expect(screen.getByText('Plot 5, Kampala Road, Kampala, Uganda')).toBeInTheDocument();
     expect(screen.getByText('PAY260001')).toBeInTheDocument();
     expect(screen.getByText('Amina Nakato')).toBeInTheDocument();
     expect(screen.getByText('CL26001')).toBeInTheDocument();

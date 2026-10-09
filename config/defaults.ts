@@ -15,30 +15,48 @@
  * changes behaviour. See docs/DECISIONS.md (ADR-002, ADR-008).
  */
 
-import {
-  APP_NAME,
-  BUSINESS_TIMEZONE,
-  DEFAULT_CURRENCY_CODE,
-  DEFAULT_LOCALE,
-} from './app';
+import { BUSINESS_TIMEZONE, DEFAULT_CURRENCY_CODE, DEFAULT_LOCALE } from './app';
 
 /**
- * Branding fallbacks. Mirrors the shape of a `company_settings` row, limited
- * to the fields the Phase 1 shell actually renders.
+ * Branding fallbacks — the company, not the software.
+ *
+ * ## Why these are the real details and no longer the product's own name
+ *
+ * Until Phase 12 this held `APP_NAME`, because the client's registration was
+ * in progress and there was no company to name. There is now, and these
+ * values are character-for-character what migration 20261012000100 wrote to
+ * `company_settings`. That agreement is the point: the sign-in screen is
+ * rendered for a caller with no session, `company_settings` is behind
+ * `settings:view`, and so sign-in *cannot* read the row. Before, that showed
+ * a borrower the name of the software where the lender's name belongs.
+ *
+ * `company_settings` remains the single source of truth. Every signed-in
+ * surface reads it, and a business that renames itself changes one row — this
+ * file is the one screen's fallback, not a second configuration.
+ *
+ * The one test that matters here is `tests/db/schema.test.ts`, which asserts
+ * the seeded row and these constants still say the same thing.
  */
 export const COMPANY_DEFAULTS = {
-  companyName: APP_NAME,
-  legalName: null,
+  companyName: 'Polytos Financial Services Ltd',
+  legalName: 'Polytos Financial Services Limited',
+  tagline: 'Empowering Your Business Swiftly',
   currencyCode: DEFAULT_CURRENCY_CODE,
   locale: DEFAULT_LOCALE,
   timezone: BUSINESS_TIMEZONE,
-  phone: null,
+  phone: '+256768735982',
+  phoneSecondary: '+256703587676',
   email: null,
-  addressLine1: null,
+  postalAddress: 'P.O. Box 219933, Kampala',
+  addressLine1: 'Nsumbi, Kyebando',
   addressLine2: null,
-  city: null,
+  city: 'Kampala',
   country: 'Uganda',
-  logoPath: null,
+  /**
+   * The supplied mark, under `public/`. Stored without a leading slash,
+   * which is the shape `company_settings.logo_path`'s CHECK describes.
+   */
+  logoPath: 'brand/polytos-logo.webp',
 } as const;
 
 /**

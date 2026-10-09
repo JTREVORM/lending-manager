@@ -52,6 +52,25 @@ export const REFERENCE_SCOPES = [
 ] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
 
+/**
+ * What each scope numbers, in the words a person would use.
+ *
+ * Phase 12. The settings screen lists the counters so an Owner can see what
+ * numbering is in use, and `other_income` on a screen reads as a column name
+ * rather than as a thing the business does.
+ */
+export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = {
+  client: 'Clients',
+  loan: 'Loans',
+  payment: 'Payments',
+  branch: 'Branches',
+  journal: 'Journal entries',
+  transfer: 'Transfers',
+  expense: 'Expenses',
+  other_income: 'Other income',
+  reconciliation: 'Daily counts',
+};
+
 export interface ReferenceFormat {
   readonly scope: ReferenceScope;
   readonly prefix: string;

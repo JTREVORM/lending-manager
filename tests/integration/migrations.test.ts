@@ -307,6 +307,9 @@ describe('column type discipline', () => {
       // `generated_at` would be two columns holding one value, which is how
       // they eventually come to disagree.
       loan_schedules: 'generated_at',
+      // Phase 12, for the same reason as the Phase 4 snapshots: the row
+      // records the moment the product's terms were fixed onto the loan.
+      loan_product_snapshots: 'captured_at',
     };
 
     /**
@@ -366,6 +369,16 @@ describe('column type discipline', () => {
       // created, and `applied_at` records when. An `updated_at` would be a
       // column that can never advance.
       'loan_penalties',
+      // Phase 12. The terms a loan was approved under, append-only in
+      // exactly the way the Phase 4 snapshots are: UPDATE and DELETE are
+      // both refused by trigger. A product repriced next month must not be
+      // able to rewrite an agreement, so a column implying the row can be
+      // edited would be a lie.
+      'loan_product_snapshots',
+      // Phase 12. A membership row, like `user_roles`: the primary key is
+      // (product_id, branch_id), so there is no non-key column to amend. A
+      // product is offered at a branch or it is not.
+      'loan_product_branches',
     ]);
 
     for (const table of createdTables) {
@@ -665,6 +678,25 @@ describe('types stay in step with the schema', () => {
 
       // --- Phase 7 ----------------------------------------------------------
       'audit_penalty_applied',
+
+      // --- Phase 12 ---------------------------------------------------------
+      // Three triggers on `loan_products`: the guard rail that keeps a
+      // product inside what `business_settings` permits, the actor stamp
+      // that also refuses a renamed product_code, and the audit record.
+      // Plus the trigger that supplies a loan's product when the caller
+      // names none.
+      'loan_products_within_business_rules',
+      'loan_products_stamp_actor',
+      'business_settings_keep_products_valid',
+      'audit_loan_product_change',
+      'loans_stamp_product',
+      // Not a trigger function, and exempt for the same reason
+      // `generate_loan_schedule` is: `capture_loan_product_snapshot` writes
+      // an append-only table, is revoked from `authenticated`, and its only
+      // caller is `approve_loan`, which runs as the table owner. A client
+      // type for it would advertise a call that is always refused. The
+      // revocation is asserted in `tests/db/security.test.ts`.
+      'capture_loan_product_snapshot',
 
       // Not a trigger function, and the one deliberate entry here that is not.
       // `generate_loan_schedule` is revoked from `authenticated` entirely: the

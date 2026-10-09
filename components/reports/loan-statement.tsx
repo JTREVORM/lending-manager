@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { Alert } from '@/components/ui/alert';
+import { DocumentLetterhead } from '@/components/brand/document-letterhead';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
@@ -10,6 +11,7 @@ import { formatInstant } from '@/lib/domain/datetime';
 import { formatUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import { formatBps, toBps } from '@/lib/domain/rate';
+import type { DocumentBranding } from '@/lib/data/company';
 import type {
   LoanStatement,
   StatementPaymentRow,
@@ -61,13 +63,18 @@ import { DateValue, PhoneValue } from '@/components/ui/data-value';
 export function LoanStatementView({
   statement,
   audience,
-  companyName,
+  branding,
   businessDate,
   timeZone,
 }: {
   readonly statement: LoanStatement;
   readonly audience: 'staff' | 'client';
-  readonly companyName: string;
+  /**
+   * The company, for the letterhead. Phase 12: a statement used to carry the
+   * name alone, which made it the one borrower document with no evidence of
+   * who issued it beyond a line of small text.
+   */
+  readonly branding: DocumentBranding;
   readonly businessDate: string;
   readonly timeZone: string;
 }) {
@@ -180,14 +187,18 @@ export function LoanStatementView({
 
   return (
     <div className="min-w-0 space-y-6">
-      <header className="min-w-0 space-y-1">
-        <p className="text-text-muted text-sm">{companyName}</p>
-        <h1 className="text-text text-2xl font-semibold">Loan statement</h1>
+      {/* The same letterhead a receipt carries, for the same reason: this is
+          a document the borrower keeps, and it has to say who issued it. */}
+      <div className="min-w-0">
+        <DocumentLetterhead
+          branding={branding}
+          documentTitle="Loan statement"
+          reference={loan.loanNumber}
+        />
         <p className="text-text-muted text-sm">
-          Loan <span className="font-mono">{loan.loanNumber}</span> · as at{' '}
-          <DateValue value={businessDate} />
+          As at <DateValue value={businessDate} />
         </p>
-      </header>
+      </div>
 
       <Card className="min-w-0">
         <h2 className="text-text text-base font-semibold">Borrower</h2>

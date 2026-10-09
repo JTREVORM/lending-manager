@@ -56,6 +56,12 @@ const ROUTE_PERMISSIONS: readonly {
 }[] = [
   { prefix: ROUTES.users, permission: 'users:view' },
   { prefix: ROUTES.audit, permission: 'audit:view' },
+  // Phase 12. Longest prefix wins, so the product routes are listed before
+  // `/settings` itself. `products:view` is deliberately *not* the same
+  // capability: a Secretary/Treasurer may read the products — they have to,
+  // to answer "what rate is a Salary Loan" — but holds no `settings:view`
+  // and must not reach the company record or the finance thresholds.
+  { prefix: ROUTES.loanProducts, permission: 'products:view' },
   { prefix: ROUTES.settings, permission: 'settings:view' },
   { prefix: ROUTES.clients, permission: 'clients:view' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },

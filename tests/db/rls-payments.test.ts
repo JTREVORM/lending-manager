@@ -578,6 +578,9 @@ describeDb('payment row level security', () => {
         'loan_obligations',
         'loan_penalty_coverage',
         'loan_portfolio_report',
+        // Phase 12. The product catalogue, with each product's terms and how
+        // many loans have been written against it.
+        'loan_product_catalogue',
         'payment_collection_totals',
         'payment_register',
         'reconciliation_register',

@@ -65,7 +65,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  * Delivery phase of this codebase. Used by the UI to label functionality that
  * is deliberately not built yet, so staff are never shown a dead control.
  */
-export const CURRENT_PHASE = 11 as const;
+export const CURRENT_PHASE = 12 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
@@ -93,6 +93,19 @@ export const ROUTES = {
   ledger: '/finance/ledger',
 
   settings: '/settings',
+  /**
+   * Phase 12. Loan products have their own screens under `/settings`.
+   *
+   * Only these two, deliberately. The other six subjects the settings module
+   * covers — company, lending rules, guarantor rules, finance, branches and
+   * references — are sections of `/settings` itself, because each is a single
+   * form or a single list and seven routes would be six redirects and a
+   * breadcrumb. Products are different: a list, a create form and an edit
+   * form, read by roles that hold `products:view` and no `settings:view`.
+   */
+  loanProducts: '/settings/products',
+  newLoanProduct: '/settings/products/new',
+
   users: '/users',
   audit: '/audit',
   guarantors: '/guarantors',

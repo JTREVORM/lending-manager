@@ -293,6 +293,11 @@ export async function deleteTestLoans(): Promise<void> {
       trigger: 'loan_guarantor_snapshots_no_delete',
     },
     { table: 'loan_identity_snapshots', trigger: 'loan_identity_snapshots_no_delete' },
+    // Phase 12. The product terms a loan was approved under, which reference
+    // the loan with `on delete restrict` for the same reason every other
+    // snapshot does: in production a loan that has been approved is not
+    // deleted, and the frozen terms are the evidence of what was agreed.
+    { table: 'loan_product_snapshots', trigger: 'loan_product_snapshots_no_delete' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -319,6 +324,7 @@ export async function deleteTestLoans(): Promise<void> {
     await query(`delete from public.loan_client_snapshots`);
     await query(`delete from public.loan_guarantor_snapshots`);
     await query(`delete from public.loan_identity_snapshots`);
+    await query(`delete from public.loan_product_snapshots`);
     await query(`delete from public.loans`);
   } finally {
     for (const { table, trigger } of GUARDS) {
@@ -343,12 +349,188 @@ export async function deleteTestLoans(): Promise<void> {
  * `_probe` suffix is what keeps this narrow: it can only ever remove a row a
  * test created on purpose, never a seeded cadence.
  */
+/**
+ * Add a repayment cadence the business does not offer, for a test that needs
+ * one the schedule generator will refuse.
+ *
+ * Phase 12 made this two statements rather than one. A loan product names
+ * the cadences it offers, and `approve_loan` refuses one it does not — so a
+ * cadence that exists in `repayment_frequencies` but not on the product is
+ * rejected by the product check *before* the generator ever sees it, and a
+ * test aiming at the generator would get the wrong refusal.
+ *
+ * Adding it to the default product is also what a business would do: a
+ * cadence nobody can sell is not a cadence.
+ */
+export async function addProbeFrequency(
+  key: string,
+  label: string,
+  intervalDays: number,
+  sortOrder: number,
+): Promise<void> {
+  await query(
+    `insert into public.repayment_frequencies (key, label, interval_days, sort_order)
+     values ($1, $2, $3, $4)
+     on conflict (key) do nothing`,
+    [key, label, intervalDays, sortOrder],
+  );
+
+  await query(
+    `update public.loan_products
+        set allowed_repayment_frequencies =
+              array(select distinct unnest(allowed_repayment_frequencies || $1::text))
+      where is_default`,
+    [key],
+  );
+}
+
+/**
+ * Narrow the business's own lending rules, bringing the products with them.
+ *
+ * ## Why a test cannot simply raise the business minimum any more
+ *
+ * Phase 12 made the guard rail hold in both directions. A product has to sit
+ * inside `business_settings` — `loan_products_within_business_rules` enforces
+ * that when a product is saved — and, as of migration 20261012000500,
+ * `business_settings` may not be narrowed so far that it strands an active
+ * product. Raising the business floor to 200,000 while Quick Loans still
+ * lends from 100,000 is refused, by design: the configuration would otherwise
+ * say one thing on the Settings screen and another on the product that
+ * actually decides.
+ *
+ * So this does what an Owner would have to do, in the order the rail
+ * requires: move the products first, then close the rail behind them. It
+ * returns the restore, which goes the other way — open the rail, then put the
+ * products back — because that is the only order that is permitted either.
+ *
+ * The restore is exact rather than reconstructed: every value it puts back
+ * was read before anything changed, so a product whose minimum this never
+ * touched is left exactly as it was.
+ */
+export async function narrowLendingRules(changes: {
+  readonly minLoanAmount?: number;
+  readonly monthlyRateBps?: number;
+  readonly gracePeriodDays?: number;
+  readonly penaltyRateBps?: number;
+}): Promise<() => Promise<void>> {
+  const settingsBefore = await queryOne<{
+    min_loan_amount: string;
+    default_monthly_interest_rate_bps: number;
+    grace_period_days: number;
+    penalty_rate_bps: number;
+  }>(
+    `select min_loan_amount::text as min_loan_amount,
+            default_monthly_interest_rate_bps, grace_period_days, penalty_rate_bps
+       from public.business_settings where id = 1`,
+  );
+
+  const productsBefore = await query<{
+    id: string;
+    min_amount: string;
+    min_interest_rate_bps: number;
+    default_interest_rate_bps: number;
+    max_interest_rate_bps: number;
+  }>(
+    `select id, min_amount::text as min_amount, min_interest_rate_bps,
+            default_interest_rate_bps, max_interest_rate_bps
+       from public.loan_products where status = 'active'`,
+  );
+
+  if (changes.minLoanAmount !== undefined) {
+    await query(
+      `update public.loan_products
+          set min_amount = greatest(min_amount, $1)
+        where status = 'active'`,
+      [changes.minLoanAmount],
+    );
+  }
+
+  if (changes.monthlyRateBps !== undefined) {
+    // The ceiling the rail imposes is twice the standing rate, so lowering
+    // the standing rate can strand a product's own ceiling.
+    await query(
+      `update public.loan_products
+          set max_interest_rate_bps = least(max_interest_rate_bps, $1 * 2),
+              min_interest_rate_bps = least(min_interest_rate_bps, $1 * 2),
+              default_interest_rate_bps = least(default_interest_rate_bps, $1 * 2)
+        where status = 'active'`,
+      [changes.monthlyRateBps],
+    );
+  }
+
+  await query(
+    `update public.business_settings
+        set min_loan_amount = coalesce($1, min_loan_amount),
+            default_monthly_interest_rate_bps =
+              coalesce($2, default_monthly_interest_rate_bps),
+            grace_period_days = coalesce($3, grace_period_days),
+            penalty_rate_bps = coalesce($4, penalty_rate_bps)
+      where id = 1`,
+    [
+      changes.minLoanAmount ?? null,
+      changes.monthlyRateBps ?? null,
+      changes.gracePeriodDays ?? null,
+      changes.penaltyRateBps ?? null,
+    ],
+  );
+
+  return async () => {
+    await query(
+      `update public.business_settings
+          set min_loan_amount = $1,
+              default_monthly_interest_rate_bps = $2,
+              grace_period_days = $3,
+              penalty_rate_bps = $4
+        where id = 1`,
+      [
+        settingsBefore.min_loan_amount,
+        settingsBefore.default_monthly_interest_rate_bps,
+        settingsBefore.grace_period_days,
+        settingsBefore.penalty_rate_bps,
+      ],
+    );
+
+    for (const product of productsBefore) {
+      // The ceiling first and the rest with it: every one of these was read
+      // before anything moved, so the row goes back to exactly what it was
+      // rather than to a reconstruction of it.
+      await query(
+        `update public.loan_products
+            set min_amount = $2,
+                max_interest_rate_bps = $3,
+                min_interest_rate_bps = $4,
+                default_interest_rate_bps = $5
+          where id = $1`,
+        [
+          product.id,
+          product.min_amount,
+          product.max_interest_rate_bps,
+          product.min_interest_rate_bps,
+          product.default_interest_rate_bps,
+        ],
+      );
+    }
+  };
+}
+
 export async function deleteProbeFrequencies(): Promise<void> {
   await query(
     `alter table public.repayment_frequencies disable trigger repayment_frequencies_no_delete`,
   );
 
   try {
+    // Off the product first: a product may not name a cadence that does not
+    // exist, and `loan_products_within_business_rules` would refuse the row
+    // the moment the cadence was removed from under it.
+    await query(
+      `update public.loan_products
+          set allowed_repayment_frequencies =
+                array(select f from unnest(allowed_repayment_frequencies) f
+                       where f not like '%\_probe')
+        where exists (
+          select 1 from unnest(allowed_repayment_frequencies) f where f like '%\_probe'
+        )`,
+    );
     await query(`delete from public.repayment_frequencies where key like '%\_probe'`);
   } finally {
     await query(

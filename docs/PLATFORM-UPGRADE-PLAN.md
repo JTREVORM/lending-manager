@@ -146,10 +146,25 @@ reconciliation test that asserts ledger totals equal
 Transfers, expenses, other income, daily reconciliation. All post through
 Phase 1's journal.
 
-### Phase 3 — Settings expansion
+### Phase 3 — Settings expansion and loan products
 
-Lending rules (interest range, overrides, durations), guarantor rules,
-finance settings, reference formats. Loan application reads them.
+The company's real identity, a configurable product catalogue, and the seven
+settings subjects: company, loan products, lending rules, guarantor rules,
+finance, branches, references.
+
+New tables: `loan_products`, `loan_product_branches`,
+`loan_product_snapshots`. `loans` gains `loan_product_id` (NOT NULL, stamped
+by a trigger) and `proposed_interest_rate_bps`.
+
+Backfill: the 33 existing loans are assigned to an explicitly named,
+**inactive** `IL-LEGACY` product configured with exactly the terms those
+agreements already carry, and every loan past approval gets its snapshot from
+the figures on the loan itself. No historical figure is invented or changed.
+
+Risk: two places now hold lending rules, so the precedence has to be enforced
+rather than documented. Mitigated by a trigger in each direction — a product
+cannot step outside `business_settings`, and `business_settings` cannot be
+narrowed so far that it strands an active product. See `LOAN-PRODUCTS.md`.
 
 ### Phase 4 — Loan management reorganisation
 
@@ -238,7 +253,7 @@ ledger wiring.
 | --- | --- |
 | 1 — Branches and the financial ledger | **Complete.** Migrations `20261010000100`–`20261010000300`, applied live and reconciled. See `UPGRADE-PHASE-1-REPORT.md`. |
 | 2 — Money movement | **Complete.** Migrations `20261011000100`–`20261011000240`, applied live. Transfers, expenses, other income and daily reconciliation, all posting through the Phase 1 ledger. |
-| 3 — Settings expansion | Not started |
+| 3 — Settings expansion and loan products | **Complete.** Migrations `20261012000100`–`20261012000700`, applied live. Polytos Financial Services Ltd replaces the placeholder identity; four configurable products plus the migrated one; the settings module editable across seven subjects. See `LOAN-PRODUCTS.md`. |
 | 4 — Loan management reorganisation | Not started |
 | 5 — Collections and Debt & Security | Bank payment method delivered early, in Phase 1, because the ledger needed the fourth cash account anyway. The rest not started. |
 | 6 — Notifications | Not started |

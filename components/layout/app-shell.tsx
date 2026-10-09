@@ -1,7 +1,8 @@
-import { CalendarDays, LogOut, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { CalendarDays, LogOut, RefreshCw, Search, UserCircle } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { CompanyLogo } from '@/components/brand/company-logo';
 import type { AuthContext } from '@/lib/auth/context';
 import { APP_SHORT_NAME, ROUTES } from '@/config/app';
 import { getCompanyBranding } from '@/lib/data/company';
@@ -79,9 +80,15 @@ export async function AppShell({
         <>
           {/* --- Brand block (#083475) ------------------------------- */}
           <div className="bg-sidebar-raised flex shrink-0 items-center gap-3 border-b border-blue-800/80 px-4 py-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded bg-white p-1 shadow-sm">
-              <ShieldCheck aria-hidden="true" className="text-accent size-6" />
-            </span>
+            {/* Phase 12: the company's own mark in the tile the reference
+                puts here, in place of a glyph from the icon set. Same 36px
+                square, same white ground, same shadow — only the contents
+                change, so the brand block's geometry is untouched. */}
+            <CompanyLogo
+              companyName={branding.companyName}
+              logoPath={branding.logoPath}
+              size="nav"
+            />
             <span className="min-w-0 flex-1">
               <span className="flex items-start justify-between gap-2">
                 {/*
@@ -253,7 +260,11 @@ export async function AppShell({
 
             <span className="flex items-center gap-2.5">
               <Link href={ROUTES.account} className="text-text p-1" title="My account">
-                <ShieldCheck aria-hidden="true" className="size-6" />
+                {/* Phase 12: a person, not a shield. The shield was only ever
+                    standing in for the brand mark, and now that the mark is
+                    the company's own logo in the rail, an account link that
+                    still showed a shield read as a security screen. */}
+                <UserCircle aria-hidden="true" className="size-6" />
                 <span className="sr-only">My account</span>
               </Link>
               <Link

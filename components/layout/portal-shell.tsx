@@ -1,6 +1,6 @@
-import { ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { CompanyLogo } from '@/components/brand/company-logo';
 import type { AuthContext } from '@/lib/auth/context';
 import { getPortalBranding } from '@/lib/data/company';
 import { SignOutButton } from './sign-out-button';
@@ -52,11 +52,17 @@ export async function PortalShell({
           on a page that does not otherwise need one. */}
       <header className="border-border bg-surface sticky top-0 z-20 border-b shadow-xs print:hidden">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 px-4 py-3 sm:px-6">
-          {/* The reference's brand mark: the logo on a white tile. Here the
-              tile is the navy, since the portal header is already white. */}
-          <span className="bg-accent flex size-9 shrink-0 items-center justify-center rounded shadow-sm">
-            <ShieldCheck aria-hidden="true" className="text-accent-contrast size-5" />
-          </span>
+          {/* The reference's brand mark: the logo on a white tile. Phase 12
+              puts the company's own mark in it — a borrower's shell is the
+              one that most needs to say whose system this is. The tile keeps
+              a hairline border, because the portal header is already white
+              and a white tile on white would disappear. */}
+          <CompanyLogo
+            companyName={branding.companyName}
+            logoPath={branding.logoPath}
+            size="nav"
+            className="border-border border"
+          />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-black tracking-wider uppercase">
               {branding.companyName}

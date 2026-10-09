@@ -146,6 +146,16 @@ export const PERMISSIONS = [
   /** Add or retire a ledger account, including an expense or income category. */
   'finance:accounts',
 
+  // --- Loan products -------------------------------------------------------
+  // Phase 12. Reading the catalogue is ordinary work — a loan officer has to
+  // know what the business sells. Changing it is pricing, which is the
+  // Owner's for the same reason `settings:update` is: a Manager who could
+  // reprice a product could lend at a rate nobody agreed.
+  /** See the loan products and their terms. */
+  'products:view',
+  /** Create a loan product, change its terms, or retire it. */
+  'products:manage',
+
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
   // `permissions` table constrains. Where the Phase 3 specification suggested
@@ -351,6 +361,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'income:create',
     'reconciliation:view',
     'reconciliation:perform',
+    'products:view',
 
     // Operational client work: find a client, check their details, correct a
     // phone number, read the remarks left for them to act on.
@@ -426,6 +437,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'reconciliation:view',
     'reconciliation:perform',
     'reconciliation:approve',
+    'products:view',
 
     // The Manager runs lending operations, so clients and guarantors are
     // theirs to register, correct and comment on.
@@ -515,6 +527,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'reconciliation:approve',
     'finance:settings',
     'finance:accounts',
+    'products:view',
+    'products:manage',
 
     'users:create',
     'users:update',

@@ -5,6 +5,7 @@ import {
   approveLoan,
   createDraftLoan,
   createLoanScenario,
+  narrowLendingRules,
   type LoanScenario,
 } from '../helpers/loan-fixtures';
 import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
@@ -237,14 +238,15 @@ describeDb('loan snapshots', () => {
         [own.guarantorId],
       );
 
-      await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 2500,
-                grace_period_days = 14,
-                penalty_rate_bps = 9000,
-                min_loan_amount = 500000
-          where id = 1`,
-      );
+      // Phase 12: the products move with the rail, and the restore puts both
+      // back exactly. The claim is unchanged — the snapshot does not follow
+      // any of it.
+      const restoreRules = await narrowLendingRules({
+        monthlyRateBps: 2_500,
+        gracePeriodDays: 14,
+        penaltyRateBps: 9_000,
+        minLoanAmount: 500_000,
+      });
 
       try {
         const after = await queryOne<typeof before>(
@@ -276,12 +278,7 @@ describeDb('loan snapshots', () => {
         expect(live.phone).toBe('+256700099601');
         expect(live.village_area).toBe('Somewhere Else');
       } finally {
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500, grace_period_days = 3,
-                  penalty_rate_bps = 5000, min_loan_amount = 100000
-            where id = 1`,
-        );
+        await restoreRules();
       }
     });
 
@@ -302,10 +299,7 @@ describeDb('loan snapshots', () => {
       // Hand-checked: 30,000 then 15,000 — the confirmed Case B figures.
       expect(before.map((row) => row.interest)).toEqual(['30000', '15000']);
 
-      await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 2500 where id = 1`,
-      );
+      const restoreRate = await narrowLendingRules({ monthlyRateBps: 2_500 });
 
       try {
         const after = await query<{ interest: string }>(
@@ -316,10 +310,7 @@ describeDb('loan snapshots', () => {
 
         expect(after).toEqual(before);
       } finally {
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500 where id = 1`,
-        );
+        await restoreRate();
       }
     });
 

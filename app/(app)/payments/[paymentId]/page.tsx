@@ -12,7 +12,7 @@ import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
-import { getReceiptBranding } from '@/lib/data/company';
+import { getDocumentBranding } from '@/lib/data/company';
 import { getPayment, getPaymentAllocations } from '@/lib/data/payments';
 import { getLoan } from '@/lib/data/loans';
 import { formatInstant } from '@/lib/domain/datetime';
@@ -56,7 +56,7 @@ export default async function PaymentDetailPage({
 
   const [allocations, branding, loan] = await Promise.all([
     getPaymentAllocations(paymentId),
-    getReceiptBranding(),
+    getDocumentBranding(),
     getLoan(payment.loanId),
   ]);
 
@@ -256,10 +256,7 @@ export default async function PaymentDetailPage({
         </h2>
 
         <PaymentReceipt
-          companyName={branding.companyName}
-          companyPhone={branding.companyPhone}
-          receiptHeader={branding.receiptHeader}
-          receiptFooter={branding.receiptFooter}
+          branding={branding}
           paymentNumber={payment.paymentNumber}
           receivedAt={payment.receivedAt}
           clientName={payment.clientNameAtPayment}

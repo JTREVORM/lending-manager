@@ -12,6 +12,7 @@ import type {
   StatementPaymentRow,
   StatementScheduleRow,
 } from '@/lib/data/reports';
+import { DOCUMENT_BRANDING } from '../helpers/branding';
 import { getByCompositeText } from '../helpers/text';
 
 /**
@@ -293,7 +294,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -316,7 +317,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -332,7 +333,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -354,7 +355,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="staff"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -371,7 +372,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -389,7 +390,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -415,7 +416,7 @@ describe("a borrower's statement", () => {
           }),
         })}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -434,7 +435,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -468,7 +469,7 @@ describe("a borrower's statement", () => {
           },
         })}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -491,13 +492,13 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
     );
 
-    expect(getByCompositeText(/as at 4 Oct 2026/)).toBeInTheDocument();
+    expect(getByCompositeText(/As at 4 Oct 2026/)).toBeInTheDocument();
     expect(
       screen.getByText(/These figures are what our records show today/i),
     ).toBeInTheDocument();
@@ -508,13 +509,19 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
     );
 
-    expect(screen.getByText('Example Lending')).toBeInTheDocument();
+    // Phase 12: the whole letterhead, not the name alone — this is the
+    // document a borrower takes away, and before this phase it was the only
+    // one that could not say where the lender's office is.
+    expect(screen.getByText('Kampala Credit Ltd')).toBeInTheDocument();
+    expect(screen.getByText('Lending that moves with you')).toBeInTheDocument();
+    expect(screen.getByText('+256700000000 · +256700000001')).toBeInTheDocument();
+    expect(screen.getByText('P.O. Box 1234, Kampala')).toBeInTheDocument();
   });
 
   it('shows no internal note, for either audience', () => {
@@ -525,7 +532,7 @@ describe("a borrower's statement", () => {
         <LoanStatementView
           statement={statement()}
           audience={audience}
-          companyName="Example Lending"
+          branding={DOCUMENT_BRANDING}
           businessDate="2026-10-04"
           timeZone={TIMEZONE}
         />,
@@ -544,7 +551,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -558,7 +565,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -574,7 +581,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement()}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,
@@ -590,7 +597,7 @@ describe("a borrower's statement", () => {
       <LoanStatementView
         statement={statement({ payments: [] })}
         audience="client"
-        companyName="Example Lending"
+        branding={DOCUMENT_BRANDING}
         businessDate="2026-10-04"
         timeZone={TIMEZONE}
       />,

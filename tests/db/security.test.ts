@@ -113,6 +113,7 @@ describeDb('row level security', () => {
       'expense_register:SELECT',
       'expenses:SELECT',
       'finance_settings:SELECT',
+      'finance_settings:UPDATE',
       'general_ledger:SELECT',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
@@ -156,6 +157,21 @@ describeDb('row level security', () => {
       'loan_periods:SELECT',
       // Phase 8. Reporting views, SELECT only like every other view.
       'loan_portfolio_report:SELECT',
+      // Phase 12. The catalogue, where each product is sold, and the terms a
+      // loan was approved under. The Owner writes a product and where it is
+      // sold — `products:manage`, nobody else — and a snapshot is written
+      // only by `capture_loan_product_snapshot` inside `approve_loan`, so it
+      // is SELECT and nothing more. No DELETE on `loan_products`: a product
+      // with loans against it is referenced by all of their snapshots, and
+      // retiring is what `status = 'inactive'` is for.
+      'loan_product_branches:DELETE',
+      'loan_product_branches:INSERT',
+      'loan_product_branches:SELECT',
+      'loan_product_catalogue:SELECT',
+      'loan_product_snapshots:SELECT',
+      'loan_products:INSERT',
+      'loan_products:SELECT',
+      'loan_products:UPDATE',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
@@ -234,6 +250,7 @@ describeDb('row level security', () => {
       'company_settings:UPDATE',
       'expenses:SELECT',
       'finance_settings:SELECT',
+      'finance_settings:UPDATE',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
@@ -265,6 +282,13 @@ describeDb('row level security', () => {
       // policy, because no write grant exists to need one.
       'loan_penalties:SELECT',
       'loan_periods:SELECT',
+      'loan_product_branches:DELETE',
+      'loan_product_branches:INSERT',
+      'loan_product_branches:SELECT',
+      'loan_product_snapshots:SELECT',
+      'loan_products:INSERT',
+      'loan_products:SELECT',
+      'loan_products:UPDATE',
       'loan_schedules:SELECT',
       'loans:INSERT',
       'loans:SELECT',
@@ -503,12 +527,27 @@ describeDb('views', () => {
         order by column_name`,
     );
 
+    // Phase 12 widened this, and the reason is worth keeping next to the
+    // list. The registration and tax numbers are still absent and still
+    // behind `settings:view`. What was added is the set of details the
+    // company publishes on its own flyer — the tagline, the two phone
+    // numbers, the postal and physical address — because a receipt that
+    // cannot print the lender's phone number is not a receipt anybody can
+    // act on, and a borrower has to be able to read one.
     expect(rows.map((row) => row.column_name)).toEqual([
+      'address_line1',
+      'address_line2',
       'brand_primary_color',
+      'city',
       'company_name',
+      'country',
       'currency_code',
       'locale',
       'logo_path',
+      'phone',
+      'phone_secondary',
+      'postal_address',
+      'tagline',
       'timezone',
     ]);
   });
@@ -560,6 +599,8 @@ describeDb('views', () => {
         'loan_obligations',
         'loan_penalty_coverage',
         'loan_portfolio_report',
+        // Phase 12. The product catalogue.
+        'loan_product_catalogue',
         'payment_collection_totals',
         'payment_register',
         'reconciliation_register',
@@ -604,12 +645,13 @@ describeDb('views', () => {
     // go too far.
     // One row per view: three from Phase 6, three from Phase 7, five from
     // Phase 8's reporting layer, one from Phase 9, three from Phase 10 and
-    // five from Phase 11 — four document registers and the general ledger.
+    // five from Phase 11 — four document registers and the general ledger —
+    // and one from Phase 12, the product catalogue.
     // Counted here because the names are already enumerated above; what this
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(20);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(21);
   });
 });
 
@@ -632,12 +674,6 @@ describeDb('privileged functions', () => {
       'approve_loan',
       'approve_reconciliation',
       'approve_transfer',
-      // Phase 11. The money-movement module. The three `assert_*` helpers
-      // and the two `post_*_journal` writers are definer because they read
-      // and write the ledger on behalf of a caller who may not touch it
-      // directly; none is granted to `authenticated`. The `record_*`,
-      // `approve_*`, `reject_*`, `reverse_*` and `submit_*` functions are
-      // granted, and every one re-checks the caller's capability inside.
       'assert_cash_account',
       'assert_cash_available',
       'assert_owner_admin_remains',
@@ -650,6 +686,9 @@ describeDb('privileged functions', () => {
       'audit_guarantor_change',
       'audit_guarantor_identity_change',
       'audit_loan_change',
+      // Phase 12. A product holds the rate the business lends at, so a
+      // change to one is audited the way a change to business_settings is.
+      'audit_loan_product_change',
       'audit_loan_schedule_generated',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',
@@ -662,8 +701,16 @@ describeDb('privileged functions', () => {
       'backfill_ledger_history',
       'branch_cash_account',
       'business_now',
+      // Phase 12. The other half of the guard rail: a change to
+      // business_settings that would strand an active product is refused.
+      'business_settings_keep_products_valid',
       'business_timezone',
       'cancel_loan',
+      // Phase 12. Freezing the product terms writes an append-only table no
+      // session may write, and the two trigger functions enforce the
+      // product's own bounds and supply a default. None is granted to
+      // `authenticated`.
+      'capture_loan_product_snapshot',
       'client_guarantors_guard_detach',
       'client_remarks_stamp_author',
       'clients_assign_client_number',
@@ -690,10 +737,13 @@ describeDb('privileged functions', () => {
       'link_client_profile',
       'loan_payments_assign_number',
       'loan_payments_guard_mutation',
+      'loan_products_stamp_actor',
+      'loan_products_within_business_rules',
       'loans_assign_loan_number',
       'loans_enforce_active_limit',
       'loans_guard_transition',
       'loans_stamp_branch',
+      'loans_stamp_product',
       'next_reference',
       'post_disbursement_journal',
       'post_expense_journal',

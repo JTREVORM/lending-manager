@@ -6,6 +6,7 @@ import {
   HeartHandshake,
   Landmark,
   LayoutDashboard,
+  PackageOpen,
   Receipt,
   Scale,
   ScrollText,
@@ -261,6 +262,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: 'audit:view',
     phase: 2,
     group: 'insights',
+  },
+  // Phase 12. Loan products sit beside Settings rather than inside it: they
+  // are read by a Secretary/Treasurer, who holds `products:view` and no
+  // `settings:view` at all, so an entry nested under a Settings link they
+  // cannot open would be an entry they could never reach.
+  {
+    href: ROUTES.loanProducts,
+    label: 'Loan Products',
+    shortLabel: 'Products',
+    icon: PackageOpen,
+    permission: 'products:view',
+    phase: 12,
+    group: 'administration',
   },
   {
     href: ROUTES.settings,

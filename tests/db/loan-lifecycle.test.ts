@@ -7,9 +7,11 @@ import {
   asUserScript,
   deleteTestUsers,
 } from '../helpers/auth-fixtures';
+import { restoreSeededLendingTerms } from '../helpers/delinquency-fixtures';
 import {
   approveLoan,
   cancelLoan,
+  narrowLendingRules,
   createDraftLoan,
   createLoanScenario,
   disburseLoan,
@@ -454,18 +456,18 @@ describeDb('the loan lifecycle', () => {
       });
       await submitLoan(loanId, own);
 
-      await query(
-        `update public.business_settings set min_loan_amount = 200000 where id = 1`,
-      );
+      // Phase 12: raising the floor means raising it on the products too,
+      // because the rail now holds in both directions. `narrowLendingRules`
+      // does it in the order the database permits and hands back the exact
+      // restore.
+      const restore = await narrowLendingRules({ minLoanAmount: 200_000 });
 
       try {
         await expect(query(`select public.approve_loan($1)`, [loanId])).rejects.toThrow(
           /below_minimum/,
         );
       } finally {
-        await query(
-          `update public.business_settings set min_loan_amount = 100000 where id = 1`,
-        );
+        await restore();
       }
     });
 
@@ -503,12 +505,19 @@ describeDb('the loan lifecycle', () => {
       });
       await submitLoan(loanId, own);
 
-      // The documented policy: terms are snapshotted at approval, from the
-      // settings in force then. Approving at a stale rate would mean lending
-      // at a rate the business had already decided to stop offering.
+      // The documented policy: terms are snapshotted at approval, from what
+      // is in force then. Approving at a stale rate would mean lending at a
+      // rate the business had already decided to stop offering.
+      //
+      // Phase 12 moved "what is in force" from `business_settings` to the
+      // loan's product — see the precedence note at the head of migration
+      // 20261012000200 — so the repricing happens there. The claim this test
+      // makes is unchanged: the draft does not fix the rate, approval does.
       await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 1200 where id = 1`,
+        `update public.loan_products
+            set default_interest_rate_bps = 1200,
+                min_interest_rate_bps = least(min_interest_rate_bps, 1200)
+          where is_default`,
       );
 
       try {
@@ -527,10 +536,10 @@ describeDb('the loan lifecycle', () => {
         // Hand-checked at 12%: 72,000 + 48,000 + 24,000 = 144,000.
         expect(row.total_interest).toBe('144000');
       } finally {
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500 where id = 1`,
-        );
+        // Both the business settings and the product, because the db project
+        // runs its files in sequence: a product left at 12% is the rate every
+        // suite after this one would approve at.
+        await restoreSeededLendingTerms();
       }
     });
   });
