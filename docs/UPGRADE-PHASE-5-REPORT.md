@@ -318,3 +318,17 @@ realisation without its receipt would be an impossible history:
 Debits equal credits, difference zero. Journal entries 497 → 498: one entry
 for one payment. Principal collection reduced a receivable and was not
 recorded as revenue; the interest and the penalty were.
+
+## 11. Commit
+
+`695a29cb54c4527535ffa3ad8cb2d706879f3d5d` on `claude/epic-mendel-rpimtt`,
+60 files, +12,116 / −52.
+
+Browser suite: **387 passed** across the desktop and mobile projects, with
+`/recovery` added to the performance budget list and `/recovery`,
+`/recovery?view=risk`, `/guarantors/register` and `/payments/summary` added to
+the accessibility, navigation, shell and content-security sweeps. Two
+accessibility defects in the new screens were found there and fixed: the
+magnitude chart's note was `text-text-muted/70`, which reads at 3.4:1 and
+fails contrast even inside an `aria-hidden` list, and the always-visible slice
+tables scrolled sideways on a phone without being reachable by keyboard.
