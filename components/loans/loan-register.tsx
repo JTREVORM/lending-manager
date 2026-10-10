@@ -8,8 +8,9 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Money } from '@/components/ui/money';
+import { Badge } from '@/components/ui/badge';
 import { LoanStatusBadge } from './loan-status-badge';
-import { LOAN_STATUSES, LOAN_STATUS_LABELS } from '@/lib/domain/loan';
+import { LOAN_WORKFLOW_LABELS } from '@/lib/domain/loan';
 import { formatRecordedDate } from '@/lib/domain/client';
 import { formatUgx, toUgx } from '@/lib/domain/money';
 import { formatBps, toBps } from '@/lib/domain/rate';
@@ -30,9 +31,19 @@ import type { LoanPage } from '@/lib/data/loans';
 export function LoanRegister({
   page,
   filter,
+  products,
 }: {
   readonly page: LoanPage;
-  readonly filter: { readonly query: string; readonly status: string };
+  readonly filter: {
+    readonly query: string;
+    readonly stage: string;
+    readonly productId: string;
+  };
+  /**
+   * Phase 13. The products the register can be sliced by. Read server-side,
+   * so a product nobody may see is a product nobody can filter on.
+   */
+  readonly products: readonly { readonly id: string; readonly name: string }[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -86,20 +97,26 @@ export function LoanRegister({
             />
           </div>
 
+          {/*
+            Phase 13. The product, not the status: the status is what the
+            workflow strip above this card already navigates by, and two
+            controls answering the same question is how a filter row comes to
+            contradict itself.
+          */}
           <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="loan-status">Status</Label>
+            <Label htmlFor="loan-product">Loan product</Label>
             <select
-              id="loan-status"
-              defaultValue={filter.status}
+              id="loan-product"
+              defaultValue={filter.productId}
               onChange={(event) => {
-                apply('status', event.target.value);
+                apply('productId', event.target.value);
               }}
               className="border-border bg-surface text-text focus-visible:outline-accent h-11 w-full rounded-lg border px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              <option value="">All statuses</option>
-              {LOAN_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {LOAN_STATUS_LABELS[status]}
+              <option value="">All products</option>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
                 </option>
               ))}
             </select>
@@ -116,9 +133,9 @@ export function LoanRegister({
       {page.loans.length === 0 ? (
         <Card>
           <p className="text-text-muted">
-            {filter.query === '' && filter.status === ''
+            {filter.query === '' && filter.stage === '' && filter.productId === ''
               ? 'No loans have been recorded yet.'
-              : 'No loans match that search.'}
+              : 'No loans match this view.'}
           </p>
         </Card>
       ) : (
@@ -166,7 +183,18 @@ export function LoanRegister({
                       <dt className="text-text-muted">Started</dt>
                       <dd className="text-text">{formatRecordedDate(loan.createdAt)}</dd>
                     </div>
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-text-muted">Product</dt>
+                      <dd className="text-text break-words">{loan.productName}</dd>
+                    </div>
                   </dl>
+
+                  <p className="text-text-muted mt-2 text-sm">
+                    {LOAN_WORKFLOW_LABELS[loan.workflowStage]}
+                    {loan.arrearsAmount !== null && loan.arrearsAmount > 0
+                      ? ` · ${formatUgx(toUgx(loan.arrearsAmount))} in arrears`
+                      : ''}
+                  </p>
                 </RowLink>
               </li>
             ))}
@@ -184,6 +212,9 @@ export function LoanRegister({
                   </th>
                   <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Client
+                  </th>
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                    Product
                   </th>
                   <th
                     scope="col"
@@ -206,8 +237,11 @@ export function LoanRegister({
                   <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Started
                   </th>
-                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
+                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
                     Status
+                  </th>
+                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
+                    Stage
                   </th>
                 </tr>
               </thead>
@@ -228,6 +262,10 @@ export function LoanRegister({
                         {loan.clientNumber}
                       </span>
                     </td>
+                    <td className="text-text-muted py-3 pr-4">
+                      {loan.productName}
+                      <span className="block font-mono text-xs">{loan.productCode}</span>
+                    </td>
                     <td className="text-text py-3 pr-4 text-right tabular-nums">
                       <Money amount={toUgx(loan.principalAmount)} />
                     </td>
@@ -245,8 +283,21 @@ export function LoanRegister({
                     <td className="text-text-muted py-3 pr-4">
                       {formatRecordedDate(loan.createdAt)}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4">
                       <LoanStatusBadge status={loan.status} />
+                    </td>
+                    <td className="py-3">
+                      <Badge
+                        tone={
+                          loan.workflowStage === 'arrears'
+                            ? 'danger'
+                            : loan.workflowStage === 'grace_period'
+                              ? 'warning'
+                              : 'neutral'
+                        }
+                      >
+                        {LOAN_WORKFLOW_LABELS[loan.workflowStage]}
+                      </Badge>
                     </td>
                   </tr>
                 ))}

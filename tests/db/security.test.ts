@@ -145,6 +145,12 @@ describeDb('row level security', () => {
       // Phase 7. Three derived views, SELECT only, each `security_invoker` so
       // it is read under the caller's own policies.
       'loan_delinquency:SELECT',
+      // Phase 13. The evidence filed with an application: read with
+      // `loans:view`, written and removed with `loans:documents`.
+      'loan_documents:DELETE',
+      'loan_documents:INSERT',
+      'loan_documents:SELECT',
+      'loan_documents:UPDATE',
       'loan_guarantor_evidence:SELECT',
       'loan_guarantor_register:SELECT',
       'loan_guarantor_snapshots:SELECT',
@@ -189,6 +195,9 @@ describeDb('row level security', () => {
       'loan_salary_details:SELECT',
       'loan_salary_details:UPDATE',
       'loan_schedules:SELECT',
+      // Phase 13. The loan module's register. `security_invoker` and SELECT
+      // only, like every other register here.
+      'loan_workflow_register:SELECT',
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
@@ -291,6 +300,11 @@ describeDb('row level security', () => {
       // matters. Their access comes from the base tables' policies, and the
       // `views` block below asserts every one of them sets it.
       'loan_client_snapshots:SELECT',
+      // Phase 13. Read with `loans:view`, written with `loans:documents`.
+      'loan_documents:DELETE',
+      'loan_documents:INSERT',
+      'loan_documents:SELECT',
+      'loan_documents:UPDATE',
       'loan_guarantor_snapshots:SELECT',
       'loan_guarantors:DELETE',
       'loan_guarantors:INSERT',
@@ -657,6 +671,9 @@ describeDb('views', () => {
         'loan_portfolio_report',
         // Phase 12. The product catalogue.
         'loan_product_catalogue',
+        // Phase 13. The loan module's register: the loan, its product, its
+        // collection state and its guarantor count.
+        'loan_workflow_register',
         'payment_collection_totals',
         'payment_register',
         'reconciliation_register',
@@ -709,7 +726,7 @@ describeDb('views', () => {
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(24);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(25);
   });
 });
 
@@ -799,6 +816,9 @@ describeDb('privileged functions', () => {
       'link_client_profile',
       'loan_application_details_guard',
       'loan_application_details_stamp_actor',
+      // Phase 13. Confines a document write to a draft, stamps the uploader,
+      // and keeps a stored document pointing where it was filed.
+      'loan_documents_guard',
       'loan_guarantors_check_eligibility',
       'loan_guarantors_guard_removal',
       'loan_guarantors_guard_snapshot',
@@ -947,6 +967,11 @@ describeDb('privileged functions', () => {
       'current_user_permissions',
       'current_user_role_keys',
       'disburse_loan',
+      // Phase 13. The existing clients who could back an application, each
+      // with the reasons they may not. SECURITY INVOKER, so a caller sees
+      // exactly the clients their own policies admit. Advice only: the
+      // trigger and the approval validator are the enforcement.
+      'guarantor_candidates',
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
       // what Row Level Security allows it to.
       // Phase 11. One account's balance, for the finance screens. A read
@@ -991,6 +1016,9 @@ describeDb('privileged functions', () => {
       'storage_path_client_id',
       'storage_path_guarantor_id',
       'storage_path_kind',
+      // Phase 13. Reads the path of a loan-documents object, for the three
+      // storage policies that gate the bucket.
+      'storage_path_loan_id',
       'submit_reconciliation',
       'user_can_see_branch',
       'user_has_at_least_role',
@@ -1034,7 +1062,7 @@ describeDb('privileged functions', () => {
 });
 
 describeDb('storage buckets', () => {
-  it('creates the three buckets, all private', async () => {
+  it('creates the four buckets, all private', async () => {
     const rows = await query<{
       id: string;
       public: boolean;
@@ -1047,6 +1075,9 @@ describeDb('storage buckets', () => {
       'client-documents',
       'company-assets',
       'guarantor-documents',
+      // Phase 13. The evidence filed with a loan application. Private, like
+      // the other three, and for the same reason.
+      'loan-documents',
     ]);
 
     // A public bucket holding a National ID photograph is a data breach

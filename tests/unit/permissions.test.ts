@@ -269,6 +269,9 @@ describe('authorization matrix', () => {
     'loans:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'loans:create': ['secretary_treasurer', 'manager', 'owner_admin'],
     'loans:update_draft': ['secretary_treasurer', 'manager', 'owner_admin'],
+    // Phase 13. Filing paperwork is clerical work, so it reaches the same
+    // three roles that may edit the draft it belongs to.
+    'loans:documents': ['secretary_treasurer', 'manager', 'owner_admin'],
     'loans:submit': ['secretary_treasurer', 'manager', 'owner_admin'],
     // The Secretary/Treasurer enters loans and decides nothing.
     'loans:approve': ['manager', 'owner_admin'],

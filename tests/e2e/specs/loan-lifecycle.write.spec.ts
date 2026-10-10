@@ -54,20 +54,39 @@ async function registerBorrower(page: Page): Promise<string> {
 
   await page.waitForURL(/\/clients\/[0-9a-f-]{36}/, { timeout: 20_000 });
 
-  // A loan cannot be approved until the borrower has at least one active
-  // guarantor — the policy that makes this lending work, and a rule the loan
-  // form does not pre-empt. So the borrower gets one, the way staff would.
-  const clientId = /\/clients\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
-  await page.goto(`/guarantors/new?clientId=${clientId}`);
+  return fullName;
+}
 
-  await page.getByLabel('Full name').fill(`Ssentongo Backer ${stamp}`);
+/**
+ * Capture a guarantor on the application, and take the undertaking.
+ *
+ * Phase 13 moved a loan's guarantors onto the loan: approval counts
+ * `loan_guarantors` rather than the borrower's register, and refuses an
+ * undertaking nobody signed. The point of the change is that a staff member
+ * never has to leave the application to do it — so this test does not, and
+ * that is the thing it proves.
+ */
+async function captureGuarantor(page: Page, loanUrl: string): Promise<string> {
+  const stamp = String(Date.now())
+    .slice(-6)
+    .split('')
+    .map((digit) => DIGITS_AS_LETTERS[Number(digit)] ?? 'x')
+    .join('');
+  const guarantorName = `Ssentongo Backer ${stamp}`;
+
+  await page.goto(`${loanUrl}/application`);
+  await expectNoErrorBoundary(page);
+
+  await page.getByRole('button', { name: /capture a new guarantor/i }).click();
+
+  await page.getByLabel('Full name').fill(guarantorName);
   await page.getByLabel('Sex').selectOption('female');
   await page.getByLabel('Date of birth').fill('1980-01-15');
-  await page.getByLabel(/^Phone number/).fill(`+25677211${String(Date.now()).slice(-4)}`);
+  await page.getByLabel(/^Phone/).fill(`+25677211${String(Date.now()).slice(-4)}`);
   await page.getByLabel('Location').fill('Kyanja');
   await page.getByLabel('District').fill('Kampala');
   await page.getByLabel('Occupation').fill('Civil servant');
-  await page.getByLabel('Relationship to the client').fill('Business associate');
+  await page.getByLabel('Employer or business').fill('Ministry of Works');
 
   // Approval also requires the guarantor's identification: a guarantor with
   // no NIN is "missing required information" and the loan cannot proceed.
@@ -76,16 +95,42 @@ async function registerBorrower(page: Page): Promise<string> {
     .getByLabel('National Identification Number')
     .fill(`CF${String(Date.now()).slice(-8)}WXYZ`.slice(0, 14));
 
-  await page.getByRole('button', { name: /register guarantor/i }).click();
+  await page.getByLabel(/Relationship to the borrower/).fill('Business associate');
 
-  // Registering a guarantor does not navigate: the form reports the outcome
-  // in place, because the common next step is attaching another one to the
-  // same client rather than reading the record just written.
-  await expect(page.getByText(/is registered/i).first()).toBeVisible({
+  await page.getByRole('button', { name: /add this guarantor/i }).click();
+
+  await expect(page.getByText(/added to this application/i).first()).toBeVisible({
     timeout: 20_000,
   });
 
-  return fullName;
+  // --- the undertaking -------------------------------------------------
+  // A guarantor is agreeing to pay somebody else's debt. What makes that
+  // enforceable is that they were shown the terms, those terms had a
+  // version, and they signed in front of a witness — so the form shows the
+  // words in full and records all four.
+  await page.getByRole('button', { name: /take the undertaking/i }).click();
+
+  await expect(page.getByText(/Guarantor undertaking/i).first()).toBeVisible();
+  await expect(page.getByText(/I agree to act as guarantor/i)).toBeVisible();
+
+  // One checkbox on this form, and it is the act: a signature recorded
+  // against terms nobody accepted would be evidence of something that did
+  // not happen.
+  await page.getByRole('checkbox').first().check();
+  await page.getByLabel('Signed as').fill(guarantorName);
+  await page.getByLabel('Witness name').fill('Nabirye Sarah');
+
+  await page.getByRole('button', { name: /record the undertaking/i }).click();
+
+  // The signed card replaces the form, which is the assertion worth making:
+  // a consent that is recorded is one the screen now reads back as signed,
+  // against the exact version that was shown.
+  await expect(page.getByText('Undertaking version 1.0').first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByText('Undertaking signed').first()).toBeVisible();
+
+  return guarantorName;
 }
 
 test.describe('a new loan', () => {
@@ -97,6 +142,24 @@ test.describe('a new loan', () => {
 
     await page.goto('/loans/new');
     await expectNoErrorBoundary(page);
+
+    // Phase 13 puts the product first: it decides the permitted amounts, the
+    // available periods, the cadences offered and how many guarantors the
+    // application needs. Individual Loans is the business's default and the
+    // one this borrower is applying under.
+    const productSelect = page.getByLabel('Loan product');
+    await expect(productSelect).toBeVisible();
+    const productValue = await productSelect
+      .locator('option')
+      .filter({ hasText: 'Individual Loans' })
+      .first()
+      .getAttribute('value');
+
+    if (productValue === null) {
+      throw new Error('Individual Loans was not offered as a product.');
+    }
+
+    await productSelect.selectOption(productValue);
 
     const clientSelect = page.getByLabel('Client');
     await expect(clientSelect).toBeVisible();
@@ -140,13 +203,17 @@ test.describe('a new loan', () => {
       .getByLabel('Intended disbursement date')
       .fill(new Date().toISOString().slice(0, 10));
 
-    await page.getByRole('button', { name: /start loan draft/i }).click();
+    await page.getByRole('button', { name: /start application/i }).click();
 
     await page.waitForURL(/\/loans\/[0-9a-f-]{36}/, { timeout: 20_000 });
     const loanUrl = page.url();
     await expectNoErrorBoundary(page);
 
+    // --- the guarantor, captured on the application ---------------------
+    const guarantorName = await captureGuarantor(page, loanUrl);
+
     // --- submit for approval -------------------------------------------
+    await page.goto(loanUrl);
     await page.getByRole('button', { name: /submit for approval/i }).click();
     // The status the application shows a person is "Awaiting approval", not
     // the database's `pending_approval`.
@@ -209,6 +276,16 @@ test.describe('a new loan', () => {
     // unformatted figure cannot reach a screen.
     const moneyCells = page.locator('[data-money]');
     expect(await moneyCells.count()).toBeGreaterThan(0);
+
+    // --- and the guarantor evidence the approval froze -------------------
+    // The details the business actually relied on, copied onto the loan at
+    // approval. Changing the guarantor's own record afterwards does not move
+    // them, which is the whole point of freezing them.
+    await expect(
+      page.getByRole('heading', { name: /guarantors, as recorded at approval/i }),
+    ).toBeVisible();
+    await expect(page.getByText(guarantorName).first()).toBeVisible();
+    await expect(page.getByText(/Version 1\.0, signed by/i).first()).toBeVisible();
   });
 
   test('an inactive or blacklisted client is not offered', async ({ page }) => {

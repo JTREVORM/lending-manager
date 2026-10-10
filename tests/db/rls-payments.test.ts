@@ -584,6 +584,9 @@ describeDb('payment row level security', () => {
         // Phase 12. The product catalogue, with each product's terms and how
         // many loans have been written against it.
         'loan_product_catalogue',
+        // Phase 13. The loan module's register: the loan, its product, its
+        // collection state and its guarantor count.
+        'loan_workflow_register',
         'payment_collection_totals',
         'payment_register',
         'reconciliation_register',

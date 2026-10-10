@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 import {
   AlertTriangle,
   Banknote,
@@ -239,7 +239,13 @@ export default async function ReportsPage() {
                 return (
                   <li key={report.href} className="min-w-0">
                     <Card className="lift flex h-full min-w-0 flex-col">
-                      <Link
+                      {/* RowLink, not Link: one of these is rendered per
+                          report and per period chip, and prefetching all
+                          thirteen cost a field officer thirteen report pages
+                          of airtime for the one they open. Measured: 65
+                          requests on this screen, of which 24 were prefetches
+                          nobody asked for. */}
+                      <RowLink
                         href={report.href}
                         className="focus-visible:outline-accent -m-1 flex min-w-0 items-start gap-3 rounded-lg p-1 focus-visible:outline-2"
                       >
@@ -254,18 +260,18 @@ export default async function ReportsPage() {
                             {report.description}
                           </span>
                         </span>
-                      </Link>
+                      </RowLink>
 
                       {report.periods === undefined ? null : (
                         <div className="mt-3 flex flex-wrap gap-1.5 pl-12">
                           {report.periods.map((period) => (
-                            <Link
+                            <RowLink
                               key={period.value}
                               href={`${report.href}?period=${period.value}`}
                               className="border-border text-text-muted hover:border-accent hover:text-accent rounded-full border px-2.5 py-1 text-xs"
                             >
                               {period.label}
-                            </Link>
+                            </RowLink>
                           ))}
                         </div>
                       )}
@@ -295,7 +301,7 @@ function Highlight({
   readonly tone?: 'neutral' | 'warning';
 }) {
   return (
-    <Link
+    <RowLink
       href={href}
       className={cn(
         'surface-raised-soft lift focus-visible:outline-accent block min-w-0 rounded-lg border p-4 focus-visible:outline-2 focus-visible:outline-offset-2',
@@ -307,6 +313,6 @@ function Highlight({
         <Money amount={amount} variant="full" />
       </p>
       <span className="t-caption mt-1 block">{note}</span>
-    </Link>
+    </RowLink>
   );
 }

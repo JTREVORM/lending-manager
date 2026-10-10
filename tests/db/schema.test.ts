@@ -66,6 +66,9 @@ describeDb('tables', () => {
     // three snapshots that make it evidence rather than a view over today's
     // records.
     'loan_client_snapshots',
+    // Phase 13: the evidence filed with an application — payslips, employment
+    // letters, trading licences, a guarantor's identification or signature.
+    'loan_documents',
     'loan_guarantor_snapshots',
     'loan_guarantors',
     'loan_identity_snapshots',
@@ -314,6 +317,12 @@ describeDb('foreign keys', () => {
       // and the audit trail holds the authoritative record either way.
       'loan_client_snapshots.client_id -> clients (r)',
       'loan_client_snapshots.loan_id -> loans (c)',
+      // Phase 13. `r` on both: a document is evidence, so the loan it was
+      // filed against and the guarantor it belongs to cannot be deleted out
+      // from under it.
+      'loan_documents.created_by -> profiles (n)',
+      'loan_documents.loan_guarantor_id -> loan_guarantors (r)',
+      'loan_documents.loan_id -> loans (r)',
       // Phase 13. `r`, never `n`: SET NULL on an append-only table is
       // implemented as an UPDATE, and the guard here is statement-level, so
       // a SET NULL reference would make deleting any client fail.

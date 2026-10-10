@@ -321,6 +321,38 @@ console.log(`${String(clients.length)} clients seeded`);
 // ---------------------------------------------------------------------------
 
 /**
+ * Attach the client's guarantors to an application, signed.
+ *
+ * Phase 13 moved a loan's guarantors onto the loan: `validate_loan_for_approval`
+ * counts `loan_guarantors` and refuses an unsigned undertaking. This is what
+ * the application screen does — offer the borrower's known backers, attach the
+ * chosen ones, take each consent — so the seed does the same rather than
+ * reaching past the rule it would otherwise trip over.
+ *
+ * Written as the table owner, which is what lets it set `consented_at`
+ * directly. A real consent goes through the server action; what the harness
+ * needs is a loan that has one.
+ */
+async function attachGuarantors(loanId, clientId) {
+  await q(
+    `insert into public.loan_guarantors
+       (loan_id, guarantor_id, relationship_to_client,
+        consent_terms_id, consent_version, consented_at,
+        signature_name, witness_name, witness_phone, consent_place)
+     select
+       $1, cg.guarantor_id, cg.relationship_to_client,
+       t.id, t.version, pg_catalog.now(),
+       g.full_name, 'Nabirye Sarah', '+256700000900', 'Nsumbi, Kyebando'
+     from public.client_guarantors cg
+     join public.guarantors g on g.id = cg.guarantor_id
+     left join public.guarantor_consent_terms t on t.is_current
+     where cg.client_id = $2 and cg.active
+     on conflict do nothing`,
+    [loanId, clientId],
+  );
+}
+
+/**
  * Create, approve and disburse a loan, with the disbursement back-dated.
  *
  * The draft, the approval and the schedule all go through the real path. Only
@@ -354,6 +386,12 @@ async function openLoan({
     [client.id, principal, termMonths, frequency, daysAgo, notes ?? null],
   );
   const loanId = draft[0].id;
+
+  // Phase 13. Approval reads the application's own guarantors, not the
+  // client's register, and refuses an undertaking nobody signed. So the seed
+  // does what the application screen does: attach the client's known backers
+  // to this loan and take each consent, before asking for a decision.
+  await attachGuarantors(loanId, client.id);
 
   await asUser(
     secretary,

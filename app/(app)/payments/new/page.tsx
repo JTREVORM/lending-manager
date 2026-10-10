@@ -1,6 +1,6 @@
 import { ArrowLeft, Receipt } from 'lucide-react';
 
-import Link from 'next/link';
+import { RowLink } from '@/components/ui/row-link';
 
 import { PaymentForm } from '@/components/payments/payment-form';
 import { Alert } from '@/components/ui/alert';
@@ -172,6 +172,8 @@ export default async function NewPaymentPage({
   // --- No loan yet: choose one -------------------------------------------
   const { loans } = await listLoans({
     query: query === '' ? null : query,
+    stage: null,
+    productId: null,
     status: 'active',
     clientId: null,
     page: 1,
@@ -223,7 +225,10 @@ export default async function NewPaymentPage({
         <ul className="min-w-0 space-y-2">
           {loans.map((loan) => (
             <li key={loan.id} className="min-w-0">
-              <Link
+              {/* RowLink, not Link: one per loan in the picker, and
+                  prefetching each one downloads a payment screen for every
+                  loan the officer scrolled past. */}
+              <RowLink
                 href={`${ROUTES.payments}/new?loanId=${loan.id}`}
                 className="border-border bg-surface focus-visible:outline-accent block min-w-0 rounded-lg border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
@@ -240,7 +245,7 @@ export default async function NewPaymentPage({
                   <span className="font-mono">{loan.loanNumber}</span>
                   <span>{loan.repaymentFrequency.replace(/_/g, ' ')}</span>
                 </div>
-              </Link>
+              </RowLink>
             </li>
           ))}
         </ul>
@@ -259,12 +264,12 @@ export default async function NewPaymentPage({
  */
 function ChooseDifferentLoan() {
   return (
-    <Link
+    <RowLink
       href={`${ROUTES.payments}/new`}
       className="text-text-muted hover:text-accent inline-flex min-h-8 items-center gap-1.5 text-xs font-medium"
     >
       <ArrowLeft aria-hidden="true" className="size-4" />
       Choose a different loan
-    </Link>
+    </RowLink>
   );
 }

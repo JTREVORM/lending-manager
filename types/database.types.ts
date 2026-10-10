@@ -695,6 +695,9 @@ export type Database = {
           multi_month_min_amount: number;
           min_guarantors_required: number;
           default_interest_method: string;
+          allow_client_as_guarantor: boolean;
+          guarantor_min_age_years: number;
+          guarantor_max_active_loans: number;
         };
         Insert: {
           id?: number;
@@ -713,6 +716,9 @@ export type Database = {
           multi_month_min_amount?: number;
           min_guarantors_required?: number;
           default_interest_method?: string;
+          allow_client_as_guarantor?: boolean;
+          guarantor_min_age_years?: number;
+          guarantor_max_active_loans?: number;
         };
         Update: {
           id?: number;
@@ -731,23 +737,11 @@ export type Database = {
           multi_month_min_amount?: number;
           min_guarantors_required?: number;
           default_interest_method?: string;
+          allow_client_as_guarantor?: boolean;
+          guarantor_min_age_years?: number;
+          guarantor_max_active_loans?: number;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'business_settings_default_repayment_frequency_fkey';
-            columns: ['default_repayment_frequency'];
-            isOneToOne: false;
-            referencedRelation: 'repayment_frequencies';
-            referencedColumns: ['key'];
-          },
-          {
-            foreignKeyName: 'business_settings_updated_by_fkey';
-            columns: ['updated_by'];
-            isOneToOne: false;
-            referencedRelation: 'profiles';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
 
       client_guarantors: {
@@ -965,6 +959,7 @@ export type Database = {
           created_at: string;
           updated_at: string;
           archived_at: string | null;
+          employer_name: string | null;
         };
         Insert: {
           id?: string;
@@ -981,6 +976,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          employer_name?: string | null;
         };
         Update: {
           id?: string;
@@ -997,6 +993,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          employer_name?: string | null;
         };
         Relationships: [];
       };
@@ -1712,6 +1709,8 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          monthly_expenses: number | null;
+          business_contact: string | null;
         };
         Insert: {
           loan_id: string;
@@ -1729,6 +1728,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          monthly_expenses?: number | null;
+          business_contact?: string | null;
         };
         Update: {
           loan_id?: string;
@@ -1743,6 +1744,58 @@ export type Database = {
           trading_licence_number?: string | null;
           trading_licence_path?: string | null;
           bank_statement_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          monthly_expenses?: number | null;
+          business_contact?: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. The evidence filed with a loan application: a payslip, an
+       * employment letter, a trading licence, a bank statement, a business
+       * photograph, or a guarantor's identification, photograph or signature.
+       * Writable while the loan is a draft and frozen from submission, like
+       * every other part of the application.
+       */
+      loan_documents: {
+        Row: {
+          id: string;
+          loan_id: string;
+          loan_guarantor_id: string | null;
+          kind: string;
+          storage_path: string;
+          label: string | null;
+          content_type: string;
+          byte_size: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          loan_guarantor_id?: string | null;
+          kind: string;
+          storage_path: string;
+          label?: string | null;
+          content_type: string;
+          byte_size: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          loan_guarantor_id?: string | null;
+          kind?: string;
+          storage_path?: string;
+          label?: string | null;
+          content_type?: string;
+          byte_size?: number;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1866,6 +1919,8 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          employment_status: string | null;
+          salary_verification: string;
         };
         Insert: {
           loan_id: string;
@@ -1881,6 +1936,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          employment_status?: string | null;
+          salary_verification?: string;
         };
         Update: {
           loan_id?: string;
@@ -1896,6 +1953,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          employment_status?: string | null;
+          salary_verification?: string;
         };
         Relationships: [];
       };
@@ -2617,6 +2676,21 @@ export type Database = {
           monthly_turnover: number | null;
           loan_purpose: string | null;
           has_trading_licence: boolean | null;
+          employer_contact: string | null;
+          staff_number: string | null;
+          employment_started_on: string | null;
+          employment_status: string | null;
+          salary_verification: string | null;
+          has_employment_letter: boolean | null;
+          business_location: string | null;
+          trading_since: string | null;
+          monthly_expenses: number | null;
+          business_contact: string | null;
+          employee_count: number | null;
+          premises_ownership: string | null;
+          trading_licence_number: string | null;
+          has_bank_statement: boolean | null;
+          document_count: number | null;
         };
         Relationships: [];
       };
@@ -2689,6 +2763,67 @@ export type Database = {
           consent_signed: boolean | null;
           has_identification: boolean | null;
           created_at: string | null;
+          employer_name: string | null;
+          has_photograph: boolean | null;
+          evidence_frozen: boolean | null;
+          document_count: number | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. One row per loan carrying its product, its collection
+       * state, its guarantor count and the stage of the loan workflow it sits
+       * at. The backing for every view in the loan module, so the thirteen
+       * the brief names are thirteen filters over one query.
+       */
+      loan_workflow_register: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          client_id: string | null;
+          client_name: string | null;
+          client_number: string | null;
+          client_phone: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          loan_product_id: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          application_profile: string | null;
+          principal_amount: number | null;
+          interest_rate_bps: number | null;
+          interest_method: string | null;
+          loan_term_months: number | null;
+          repayment_frequency: string | null;
+          total_interest: number | null;
+          total_expected_repayment: number | null;
+          status: string | null;
+          closure_kind: string | null;
+          cancellation_reason: string | null;
+          cancelled_at: string | null;
+          review_note: string | null;
+          proposed_disbursement_date: string | null;
+          submitted_at: string | null;
+          approved_at: string | null;
+          disbursed_at: string | null;
+          cleared_at: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+          delinquency_state: string | null;
+          arrears_amount: number | null;
+          days_past_due: number | null;
+          missed_installment_count: number | null;
+          oldest_unpaid_due_date: string | null;
+          contractual_outstanding: number | null;
+          penalty_remaining: number | null;
+          total_outstanding: number | null;
+          installment_count: number | null;
+          scheduled_completion_date: string | null;
+          guarantor_count: number | null;
+          guarantor_consent_count: number | null;
+          document_count: number | null;
+          workflow_stage: string | null;
         };
         Relationships: [];
       };
@@ -3155,6 +3290,43 @@ export type Database = {
       reject_loan: {
         Args: { p_loan_id: string; p_reason: string };
         Returns: string;
+      };
+
+      /**
+       * Phase 13. The loan a `loan-documents` object belongs to, taken from
+       * its path. NULL when the path is not shaped like one, which denies the
+       * three storage policies that gate the bucket.
+       */
+      storage_path_loan_id: {
+        Args: { p_name: string };
+        Returns: string | null;
+      };
+
+      /**
+       * Phase 13. The existing clients who could back a given application,
+       * each with the reasons they may not. Advice for the screen;
+       * `loan_guarantors_check_eligibility` and `validate_loan_for_approval`
+       * remain the enforcement.
+       */
+      guarantor_candidates: {
+        Args: { p_loan_id: string; p_search?: string | null };
+        Returns: {
+          client_id: string;
+          client_number: string;
+          full_name: string;
+          phone: string;
+          occupation: string;
+          location: string;
+          district: string | null;
+          status: string;
+          has_identification: boolean;
+          active_loan_count: number;
+          arrears_amount: number;
+          guaranteeing_count: number;
+          already_attached: boolean;
+          eligible: boolean;
+          reasons: string[];
+        }[];
       };
 
       /** Phase 11. Refuses an account that is not an active cash account. */

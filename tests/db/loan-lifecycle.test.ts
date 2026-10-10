@@ -468,9 +468,7 @@ describeDb('the loan lifecycle', () => {
         [own.guarantorId],
       );
 
-      await expect(approveAs(own.owner, loanId)).rejects.toThrow(
-        /guarantor_ineligible/,
-      );
+      await expect(approveAs(own.owner, loanId)).rejects.toThrow(/guarantor_ineligible/);
     });
 
     it('refuses when the guarantor is missing required information', async () => {

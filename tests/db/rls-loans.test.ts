@@ -517,6 +517,14 @@ describeDb('loan row level security', () => {
         'loan_business_details:UPDATE',
         'loan_client_snapshots:SELECT',
         'loan_delinquency:SELECT',
+        // Phase 13. The evidence filed with an application. Writable, unlike
+        // every snapshot above it, because a document is part of the draft a
+        // staff member is assembling — and DELETE is here for the same
+        // reason: a scan of the wrong page is removed, not amended.
+        'loan_documents:DELETE',
+        'loan_documents:INSERT',
+        'loan_documents:SELECT',
+        'loan_documents:UPDATE',
         'loan_guarantor_evidence:SELECT',
         'loan_guarantor_register:SELECT',
         'loan_guarantor_snapshots:SELECT',
@@ -560,6 +568,10 @@ describeDb('loan row level security', () => {
         'loan_salary_details:SELECT',
         'loan_salary_details:UPDATE',
         'loan_schedules:SELECT',
+        // Phase 13. The backing for every view in the loan module: the loan,
+        // its product, its collection state and its guarantor count.
+        // `security_invoker` and SELECT only, like every other register here.
+        'loan_workflow_register:SELECT',
         'loans:INSERT',
         'loans:SELECT',
         'loans:UPDATE',
@@ -622,6 +634,11 @@ describeDb('loan row level security', () => {
         'loan_business_details:SELECT',
         'loan_business_details:UPDATE',
         'loan_client_snapshots:SELECT',
+        // Phase 13. Read with `loans:view`, written with `loans:documents`.
+        'loan_documents:DELETE',
+        'loan_documents:INSERT',
+        'loan_documents:SELECT',
+        'loan_documents:UPDATE',
         'loan_guarantor_snapshots:SELECT',
         'loan_guarantors:DELETE',
         'loan_guarantors:INSERT',

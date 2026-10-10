@@ -228,6 +228,15 @@ export const PERMISSIONS = [
   'loans:disburse',
   /** Cancel a loan before it is disbursed. */
   'loans:cancel',
+  /**
+   * Attach or remove the supporting documents on a loan application.
+   *
+   * Phase 13. Its own capability rather than part of `loans:update_draft`,
+   * matching `clients:documents`: filing a payslip and agreeing a loan amount
+   * are different acts, and a business may want the first without the second.
+   * Reading what was filed follows `loans:view`.
+   */
+  'loans:documents',
   /** Read the identity snapshots captured against a loan. */
   'loans:view_sensitive',
 
@@ -394,6 +403,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view',
     'loans:create',
     'loans:update_draft',
+    'loans:documents',
     'loans:submit',
 
     // The Secretary/Treasurer collects the money, so the schedule is the
@@ -487,6 +497,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view',
     'loans:create',
     'loans:update_draft',
+    'loans:documents',
     'loans:submit',
     'loans:approve',
     'loans:view_sensitive',
@@ -570,6 +581,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view',
     'loans:create',
     'loans:update_draft',
+    'loans:documents',
     'loans:submit',
     'loans:approve',
     'loans:disburse',

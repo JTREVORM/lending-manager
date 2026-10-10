@@ -291,6 +291,24 @@ export async function disburseApprovedLoan(
   ]);
 }
 
+/**
+ * Refuse an application.
+ *
+ * Phase 13. Separate from `cancelLoan` because the two are different
+ * decisions with different capabilities behind them: a refusal is the
+ * approver's and a withdrawal is the Owner's. Takes the actor explicitly,
+ * since which role performs it is frequently the point.
+ */
+export async function rejectLoan(
+  loanId: string,
+  actor: Pick<TestUser, 'authUserId'>,
+  reason: string,
+): Promise<void> {
+  await runAsCommitted(actor, [
+    { sql: `select public.reject_loan($1, $2)`, params: [loanId, reason] },
+  ]);
+}
+
 /** Cancel a loan. */
 export async function cancelLoan(
   loanId: string,
@@ -365,6 +383,7 @@ export async function deleteTestLoans(): Promise<void> {
     // is asserted elsewhere in this directory, which is why suspending them
     // here is an exemption rather than a hole.
     { table: 'loan_guarantors', trigger: 'loan_guarantors_guard_removal' },
+    { table: 'loan_documents', trigger: 'loan_documents_guard' },
     { table: 'loan_salary_details', trigger: 'loan_salary_details_guard' },
     { table: 'loan_business_details', trigger: 'loan_business_details_guard' },
   ];
@@ -394,6 +413,9 @@ export async function deleteTestLoans(): Promise<void> {
     await query(`delete from public.loan_guarantor_snapshots`);
     await query(`delete from public.loan_identity_snapshots`);
     await query(`delete from public.loan_product_snapshots`);
+    // Phase 13. The documents go before the loan and the guarantor rows they
+    // reference, both of which they hold with `on delete restrict`.
+    await query(`delete from public.loan_documents`);
     await query(`delete from public.loan_guarantors`);
     await query(`delete from public.loan_salary_details`);
     await query(`delete from public.loan_business_details`);

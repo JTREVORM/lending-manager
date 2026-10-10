@@ -17,17 +17,29 @@ import { guardPermission } from '@/lib/auth/guard';
 import {
   getLoan,
   getLoanClientSnapshot,
-  getLoanGuarantorSnapshots,
   getLoanIdentitySnapshots,
   getLoanPeriods,
   loanApprovalFailures,
 } from '@/lib/data/loans';
 import {
+  getLoanApplicationProfile,
+  getLoanDocuments,
+  getLoanGuarantorEvidence,
+  getLoanGuarantors,
+} from '@/lib/data/loan-application';
+import {
+  BusinessDetailsSummary,
+  SalaryDetailsSummary,
+} from '@/components/loans/application-details-form';
+import {
+  LOAN_CLOSURE_DESCRIPTIONS,
+  LOAN_CLOSURE_LABELS,
   LOAN_STATUS_DESCRIPTIONS,
   assertLoanInvariants,
   calculationFromPeriods,
   termsAreEditable,
 } from '@/lib/domain/loan';
+import { LOAN_DOCUMENT_LABELS } from '@/lib/validation/loan-application';
 import { getLoanSchedule, verifyStoredSchedule } from '@/lib/data/schedules';
 import { getLoanPosition, listLoanPayments } from '@/lib/data/payments';
 import { PaymentRegister } from '@/components/payments/payment-register';
@@ -94,10 +106,17 @@ export default async function LoanDetailPage({
     identitySnapshots,
     failures,
     schedule,
+    applicationProfile,
+    loanGuarantors,
+    documents,
   ] = await Promise.all([
     getLoanPeriods(loanId),
     getLoanClientSnapshot(loanId),
-    getLoanGuarantorSnapshots(loanId),
+    // Phase 13. `loan_guarantor_evidence` presents both eras as one list: the
+    // loans approved from this phase onward carry their evidence on
+    // `loan_guarantors`, the ones before it in `loan_guarantor_snapshots`. A
+    // reader never has to know which era a loan is from.
+    getLoanGuarantorEvidence(loanId),
     canSeeSensitive ? getLoanIdentitySnapshots(loanId) : Promise.resolve([]),
     // Only worth asking while a decision is outstanding.
     loan.status === 'draft' || loan.status === 'pending_approval'
@@ -110,6 +129,11 @@ export default async function LoanDetailPage({
     canSeeSchedule && loan.status !== 'draft' && loan.status !== 'pending_approval'
       ? getLoanSchedule(loanId, loan.totalExpectedRepayment)
       : Promise.resolve(null),
+    getLoanApplicationProfile(loanId),
+    // The live guarantor rows, which is what a loan not yet approved has —
+    // the evidence above is frozen at approval and is empty until then.
+    getLoanGuarantors(loanId),
+    getLoanDocuments(loanId),
   ]);
 
   // Phase 6. A balance exists only once there is a schedule to owe against, so
@@ -151,6 +175,21 @@ export default async function LoanDetailPage({
   const ninFor = (subjectId: string): string | null =>
     identitySnapshots.find((snapshot) => snapshot.subjectId === subjectId)?.nin ?? null;
 
+  /**
+   * The identification recorded for a guarantor, whichever kind they are.
+   *
+   * Phase 13 made a guarantor either an external person or an existing client,
+   * and `loan_identity_snapshots` records both under their own subject type —
+   * so the lookup is by whichever id the row actually carries.
+   */
+  const ninForSubject = (guarantor: {
+    readonly guarantorId: string | null;
+    readonly guarantorClientId: string | null;
+  }): string | null => {
+    const subjectId = guarantor.guarantorId ?? guarantor.guarantorClientId;
+    return subjectId === null ? null : ninFor(subjectId);
+  };
+
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -179,6 +218,16 @@ export default async function LoanDetailPage({
                 Statement
               </ActionLink>
             ) : null}
+            {/* Phase 13. The application — the product's own questions, the
+                guarantors, the documents — is its own screen, because "where
+                does this loan stand" and "what did the business collect before
+                it agreed" are different jobs done at different times. */}
+            <ActionLink
+              href={`${ROUTES.loans}/${loan.id}/application`}
+              variant="secondary"
+            >
+              Application
+            </ActionLink>
             {termsAreEditable(loan.status) &&
             contextCan(context, 'loans:update_draft') ? (
               <ActionLink href={`${ROUTES.loans}/${loan.id}/edit`} variant="secondary">
@@ -200,9 +249,20 @@ export default async function LoanDetailPage({
         </Alert>
       ) : null}
 
+      {/* Phase 13. A refusal and a withdrawal end in the same state and are
+          not the same event: one is a credit decision, the other is a change
+          of mind, and only the first belongs in a report about lending
+          standards. The banner says which. */}
       {loan.status === 'cancelled' ? (
         <Alert tone="danger">
-          <span className="font-medium">Cancelled.</span>{' '}
+          <span className="font-medium">
+            {loan.closureKind === null
+              ? 'Cancelled.'
+              : `${LOAN_CLOSURE_LABELS[loan.closureKind]}.`}
+          </span>{' '}
+          {loan.closureKind === null
+            ? ''
+            : `${LOAN_CLOSURE_DESCRIPTIONS[loan.closureKind]} `}
           {loan.cancellationReason ?? 'No reason was recorded.'}
           {loan.cancelledAt !== null ? ` (${formatRecordedDate(loan.cancelledAt)})` : ''}
         </Alert>
@@ -230,6 +290,10 @@ export default async function LoanDetailPage({
             ? [{ id: 'delinquency-heading', label: 'Delinquency' }]
             : []),
           { id: 'client-snapshot-heading', label: 'Parties' },
+          { id: 'guarantor-snapshot-heading', label: 'Guarantors' },
+          ...(documents.length > 0
+            ? [{ id: 'documents-heading', label: 'Documents' }]
+            : []),
           { id: 'lifecycle-heading', label: 'History' },
         ]}
       />
@@ -242,6 +306,12 @@ export default async function LoanDetailPage({
 
         <Card>
           <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <Detail label="Loan product">
+              {loan.productName}
+              <span className="text-text-muted ml-2 font-mono text-sm">
+                {loan.productCode}
+              </span>
+            </Detail>
             <Detail label="Principal">
               <span className="tabular-nums">
                 <Money amount={toUgx(loan.principalAmount)} />
@@ -518,43 +588,73 @@ export default async function LoanDetailPage({
         </section>
       ) : null}
 
-      {guarantorSnapshots.length > 0 ? (
-        <section
-          aria-labelledby="guarantor-snapshot-heading"
-          className="min-w-0 space-y-3"
-        >
+      {/* --- Guarantors and security --------------------------------------
+          Phase 13. One section for both eras and both kinds of subject: the
+          frozen evidence once a loan is past approval, the live rows while it
+          is still an application. The second is what a draft has, and showing
+          nothing there would read as "nobody is backing this loan" when the
+          truth is "nobody has been asked yet". */}
+      <section aria-labelledby="guarantor-snapshot-heading" className="min-w-0 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="guarantor-snapshot-heading" className="text-text text-lg font-semibold">
-            Guarantors, as recorded at approval
+            {guarantorSnapshots.length > 0
+              ? 'Guarantors, as recorded at approval'
+              : 'Guarantors'}
           </h2>
 
+          {contextCan(context, 'guarantors:view') ? (
+            <ActionLink
+              href={`${ROUTES.loans}/${loan.id}/application`}
+              variant="secondary"
+            >
+              Open the application
+            </ActionLink>
+          ) : null}
+        </div>
+
+        {guarantorSnapshots.length > 0 ? (
           <ul className="space-y-3">
             {guarantorSnapshots.map((guarantor) => (
               <li
-                key={guarantor.id}
+                key={`${guarantor.source}-${guarantor.guarantorId ?? guarantor.guarantorClientId ?? guarantor.fullName}`}
                 className="border-border bg-surface min-w-0 rounded-lg border p-4"
               >
-                <p className="text-text font-medium break-words">{guarantor.fullName}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <p className="text-text font-medium break-words">
+                    {guarantor.fullName}
+                  </p>
+                  <span className="text-text-muted shrink-0 text-sm">
+                    {guarantor.subjectKind === 'client'
+                      ? 'Existing client'
+                      : 'External guarantor'}
+                  </span>
+                </div>
                 <dl className="mt-2 grid min-w-0 gap-3 text-sm sm:grid-cols-2">
                   <Detail label="Relationship">{guarantor.relationshipToClient}</Detail>
                   <Detail label="Phone">
                     <PhoneValue value={guarantor.phone} />
                   </Detail>
-                  <Detail label="Occupation">{guarantor.occupation}</Detail>
+                  <Detail label="Occupation">{guarantor.occupation ?? '—'}</Detail>
                   <Detail label="Location">
-                    {guarantor.location}
+                    {guarantor.location ?? '—'}
                     {guarantor.district === null ? '' : `, ${guarantor.district}`}
                   </Detail>
                   <Detail label="Photograph on file">
                     {guarantor.hadPhotograph ? 'Yes' : 'No'}
                   </Detail>
+                  <Detail label="Undertaking">
+                    {guarantor.consentedAt === null
+                      ? 'Signed on paper, before this was recorded'
+                      : `Version ${guarantor.consentVersion ?? '—'}, signed by ${guarantor.signatureName ?? '—'} and witnessed by ${guarantor.witnessName ?? '—'} on ${formatRecordedDate(guarantor.consentedAt)}`}
+                  </Detail>
                   <Detail label="Identification">
                     {!canSeeSensitive ? (
                       <span className="text-text-muted">Restricted.</span>
-                    ) : ninFor(guarantor.guarantorId) === null ? (
+                    ) : ninForSubject(guarantor) === null ? (
                       '—'
                     ) : (
                       <span className="text-text font-mono">
-                        {maskNin(ninFor(guarantor.guarantorId) ?? '')}
+                        {maskNin(ninForSubject(guarantor) ?? '')}
                       </span>
                     )}
                   </Detail>
@@ -562,6 +662,88 @@ export default async function LoanDetailPage({
               </li>
             ))}
           </ul>
+        ) : loanGuarantors.length > 0 ? (
+          <Card>
+            <ul className="min-w-0 space-y-3">
+              {loanGuarantors.map((guarantor) => (
+                <li key={guarantor.id} className="min-w-0">
+                  <p className="text-text font-medium break-words">
+                    {guarantor.fullName}
+                    <span className="text-text-muted ml-2 font-normal">
+                      {guarantor.relationshipToClient}
+                    </span>
+                  </p>
+                  <p className="text-text-muted text-sm">
+                    {guarantor.subjectKind === 'client'
+                      ? 'Existing client'
+                      : 'External guarantor'}
+                    {' · '}
+                    {guarantor.consentSigned
+                      ? `undertaking signed (version ${guarantor.consentVersion ?? '—'})`
+                      : 'undertaking not yet signed'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <p className="text-text-muted mt-3 text-sm">
+              These are the guarantors on the application. Their details are frozen onto
+              the loan when it is approved, and later changes to a guarantor&rsquo;s own
+              record will not alter what is recorded here.
+            </p>
+          </Card>
+        ) : (
+          <Card>
+            <p className="text-text-muted">
+              No guarantor has been recorded on this application yet.
+            </p>
+          </Card>
+        )}
+      </section>
+
+      {/* --- The product's own answers ------------------------------------- */}
+      {applicationProfile !== null &&
+      (applicationProfile.applicationProfile === 'salary' ||
+        applicationProfile.applicationProfile === 'business') ? (
+        <section aria-labelledby="application-heading" className="min-w-0 space-y-3">
+          <h2 id="application-heading" className="text-text text-lg font-semibold">
+            {applicationProfile.applicationProfile === 'salary'
+              ? 'Employment, as stated on the application'
+              : 'The business, as stated on the application'}
+          </h2>
+
+          <Card>
+            {applicationProfile.applicationProfile === 'salary' ? (
+              <SalaryDetailsSummary profile={applicationProfile} />
+            ) : (
+              <BusinessDetailsSummary profile={applicationProfile} />
+            )}
+          </Card>
+        </section>
+      ) : null}
+
+      {/* --- Documents ------------------------------------------------------ */}
+      {documents.length > 0 ? (
+        <section aria-labelledby="documents-heading" className="min-w-0 space-y-3">
+          <h2 id="documents-heading" className="text-text text-lg font-semibold">
+            Documents filed with this application
+          </h2>
+
+          <Card>
+            <ul className="min-w-0 space-y-2">
+              {documents.map((document) => (
+                <li key={document.id} className="text-text min-w-0 text-sm">
+                  <span className="font-medium">
+                    {LOAN_DOCUMENT_LABELS[document.kind]}
+                  </span>
+                  {document.label === null ? '' : ` — ${document.label}`}
+                  <span className="text-text-muted">
+                    {' · '}
+                    {formatRecordedDate(document.createdAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </section>
       ) : null}
 

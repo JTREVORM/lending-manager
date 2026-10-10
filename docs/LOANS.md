@@ -1279,6 +1279,149 @@ because they are promises Phase 8 makes about it:
 The upgrade is fingerprint-identical on loans, installments, periods, payments,
 allocations, charges, balances, snapshots, receipts and the audit trail.
 
+# Phase 13 — the application, and who stands behind it
+
+Phase 4 of the platform upgrade. It changes nothing about what a loan *is* —
+the arithmetic, the schedule, the balances and the ledger postings are
+untouched — and adds the three things a loan file needs before a decision can
+be made on it: the questions its product asks, the people who agreed to back
+it, and the evidence filed with it.
+
+## A refusal is not a withdrawal
+
+Both end as `status = 'cancelled'`, because `status` answers one question the
+whole system branches on — did this loan ever become debt — and the answer is
+no either way. What separates them is whose decision it was, so
+`loans.closure_kind` carries it: `rejected` when the business refused the
+application, `withdrawn` when it or the borrower pulled it. A cancelled loan
+has exactly one, enforced both ways round by a CHECK.
+
+Two verbs, not one with a flag. `reject_loan` applies only to an application
+awaiting a decision and belongs to whoever may approve one; `cancel_loan` can
+also take back a loan already approved and belongs to the Owner. Phase 13
+found that the lifecycle guard underneath them demanded `loans:cancel` for any
+move to `cancelled`, which refused the Manager the function was written for —
+the guard now reads the kind.
+
+A report about lending standards counts refusals. It must not count
+withdrawals, and before this phase it could not tell them apart.
+
+## The questions a product asks
+
+`loan_products.application_profile` says which further questions an
+application carries, and each profile has its own typed table rather than a
+widening row of nullable columns on `loans`:
+
+| Profile | Table | What it asks |
+| --- | --- | --- |
+| `salary` | `loan_salary_details` | employer, contact, job title, staff number, net monthly salary, the day it is paid, how long they have held it, employment status, how the salary was verified |
+| `business` | `loan_business_details` | business name, type, location, contact, trading since, monthly turnover and expenses, people employed, premises, licence number, and what the money is for |
+| `quick`, `individual` | — | nothing beyond the core terms |
+
+Both tables are editable while the loan is a draft and refused afterwards by
+`loan_application_details_guard`, on the Phase 4 discipline applied to the
+application rather than to the terms: a draft is meant to be corrected, and
+everything after submission is evidence of what the decision was made on.
+
+`validate_loan_for_approval` refuses an approval whose product asks a question
+nobody answered — `salary_details_missing`, `business_details_missing`.
+
+## Guarantors belong to the loan
+
+Until Phase 13 a guarantor belonged to a *client*. `client_guarantors` is the
+borrower's directory of backers and remains so; what it cannot say is who
+guaranteed **this** loan, and a borrower with three loans and a changing
+circle of backers has one list that already disagrees with the second loan's
+snapshot.
+
+So `loan_guarantors` is the source of truth for a loan, and a row names
+exactly one of two subjects:
+
+* **an existing client** (`guarantor_client_id`) — referenced, never copied,
+  because a second identity record for the same person is how a register comes
+  to hold two of somebody with different phone numbers;
+* **an external person** (`guarantor_id`) — a row in `guarantors`, captured
+  from inside the application rather than registered first.
+
+A CHECK enforces exactly one. `loan_guarantors_check_eligibility` applies the
+business's rules when the guarantee is taken on: who may act
+(`allow_client_as_guarantor`), how old they must be
+(`guarantor_min_age_years`), how many active loans one person may stand behind
+(`guarantor_max_active_loans`), and that nobody guarantees their own loan.
+`guarantor_candidates(loan_id, search)` is the advisory side of the same
+rules — it returns the clients who match a search *with the reasons they may
+not*, because "cannot be chosen" is useful and "mysteriously absent" sends a
+staff member hunting for somebody standing in front of them.
+
+The rules are asked when the guarantee is taken on, not when the undertaking
+is signed. A guarantor who reaches the concentration limit after being
+attached can still sign; what they cannot do is take on a fourth.
+
+## The undertaking is a document, not a checkbox
+
+A guarantor is agreeing to pay somebody else's debt. What makes that
+enforceable is that they were shown terms, those terms had a version, and they
+signed in front of a witness on a date — so all four are recorded, the terms
+text is a row in `guarantor_consent_terms` rather than a string in a template,
+and the version is copied onto the loan's row.
+
+A version that has been signed may be retired but never reworded
+(`guarantor_consent_terms_guard`), exactly one version is current at a time (a
+partial unique index), and only the Owner may publish a new one
+(`guarantor_terms:manage`). A recorded consent is write-once
+(`loan_guarantors_guard_snapshot`): a correction is a fresh consent taken after
+the guarantor is removed and re-added, which is what happens on paper.
+
+An approval is refused while any guarantor has not signed
+(`guarantor_consent_missing`) or has stopped being eligible
+(`guarantor_ineligible`).
+
+## What approval freezes, and where
+
+Approval copies each guarantor's details onto their own `loan_guarantors` row
+(`snapshot_*`, write-once) rather than into `loan_guarantor_snapshots`. That
+table cannot hold them — its `guarantor_id` is NOT NULL against `guarantors`,
+and half of a loan's guarantors are now existing clients who have no row
+there — and the per-loan row is where this schema already puts per-loan frozen
+facts, as `loans` does with its own terms.
+
+`loan_guarantor_evidence` presents both eras as one list, so a reader never
+has to know whether a loan was approved before or after this phase.
+
+## The evidence filed with an application
+
+`loan_documents` holds everything uploaded against a loan: a payslip, an
+employment letter, a trading licence, a bank statement, a business
+photograph, and a guarantor's identification, photograph or signature. One
+table, because a document is a document and the kind says what it is.
+
+Objects live in the private `loan-documents` bucket under
+`loans/<loan_id>/<kind>/<token>.<ext>`. The filename is generated, never the
+browser's; the type is checked against the file's first bytes, not its
+extension; and a page is handed a sixty-second signed URL rather than a
+permanent one, because a permanent URL is a credential that cannot be
+revoked. Writes are confined to a draft by `loan_documents_guard` and to
+`loans:documents` by policy, on both the row and the object.
+
+## Where a loan sits in the workflow
+
+`loan_workflow_register` gives every loan a `workflow_stage` derived from its
+lifecycle status, its intended disbursement date and its collection position:
+`draft`, `pending_approval`, `approved`, `awaiting_disbursement`, `active`,
+`grace_period`, `arrears`, `cleared`, `rejected`, `withdrawn`.
+
+Nothing is stored, so the passage of midnight moves a loan from `active` to
+`arrears` without any process having to run. *Approved* and *awaiting
+disbursement* are a real distinction rather than a duplicate: the first is
+every loan agreed and not yet paid out, the second the subset whose intended
+date has arrived — the queue somebody works through this morning.
+
+The collection columns come from `loan_delinquency` rather than being
+recomputed, because a second definition of arrears is one that eventually
+disagrees with the Overdue screen. A reader without the capability to see
+collections gets nulls and the stage falls back to the lifecycle status, which
+is honest: that reader genuinely does not know whether the loan is late.
+
 ## Test commands
 
 ```bash

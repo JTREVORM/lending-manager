@@ -702,6 +702,7 @@ describe('types stay in step with the schema', () => {
       'loan_guarantors_stamp_actor',
       'guarantor_consent_terms_guard',
       'audit_loan_guarantors_frozen',
+      'loan_documents_guard',
 
       // --- Phase 12 ---------------------------------------------------------
       // Three triggers on `loan_products`: the guard rail that keeps a

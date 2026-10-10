@@ -254,7 +254,7 @@ ledger wiring.
 | 1 — Branches and the financial ledger | **Complete.** Migrations `20261010000100`–`20261010000300`, applied live and reconciled. See `UPGRADE-PHASE-1-REPORT.md`. |
 | 2 — Money movement | **Complete.** Migrations `20261011000100`–`20261011000240`, applied live. Transfers, expenses, other income and daily reconciliation, all posting through the Phase 1 ledger. |
 | 3 — Settings expansion and loan products | **Complete.** Migrations `20261012000100`–`20261012000700`, applied live. Polytos Financial Services Ltd replaces the placeholder identity; four configurable products plus the migrated one; the settings module editable across seven subjects. See `LOAN-PRODUCTS.md`. |
-| 4 — Loan management reorganisation | Not started |
+| 4 — Loan management reorganisation | **Complete.** Migrations `20261013000100`–`20261013000600`, applied live. A refusal is distinguishable from a withdrawal, a product's own questions are asked and frozen, guarantors are captured on the application with a versioned undertaking, and the register navigates by workflow stage. See `UPGRADE-PHASE-4-REPORT.md`. |
 | 5 — Collections and Debt & Security | Bank payment method delivered early, in Phase 1, because the ledger needed the fourth cash account anyway. The rest not started. |
 | 6 — Notifications | Not started |
 | 7 — Reports Center | Not started |

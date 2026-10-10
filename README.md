@@ -190,6 +190,11 @@ docs/          Architecture, database, decisions, security
 | [docs/INCIDENT-RUNBOOK.md](docs/INCIDENT-RUNBOOK.md) | First actions for sign-in, payment, role, availability, deployment and compromise incidents, and the data-correction policy. |
 | [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) | Launch-day gate, first-day operation, daily operation, and the NO-GO stop conditions. |
 | [docs/PHASE-10-REPORT.md](docs/PHASE-10-REPORT.md) | Phase 10 production-readiness audit: test matrix, financial/RLS/security/recoverability evidence, CI, and the GO / CONDITIONAL-GO / NO-GO decision. |
+| [docs/PLATFORM-UPGRADE-PLAN.md](docs/PLATFORM-UPGRADE-PLAN.md) | The audit, the gap analysis and the phased plan for the move to the full operations platform, with each phase's status. |
+| [docs/LEDGER.md](docs/LEDGER.md) | Branches, the chart of accounts, double-entry journals, cash position and the trial balance. |
+| [docs/LOAN-PRODUCTS.md](docs/LOAN-PRODUCTS.md) | The configurable product catalogue, the guard-rail doctrine between a product and the business's settings, and the terms frozen onto a loan at approval. |
+| [docs/UPGRADE-PHASE-1-REPORT.md](docs/UPGRADE-PHASE-1-REPORT.md) | Upgrade Phase 1: branches and the financial ledger, the historical backfill and the reconciliation evidence. |
+| [docs/UPGRADE-PHASE-4-REPORT.md](docs/UPGRADE-PHASE-4-REPORT.md) | Upgrade Phase 4: the loan module reorganised — a typed closure, product-specific application data, guarantors captured on the application with a versioned undertaking, and the two defects building the screens found. |
 
 Three decisions worth knowing before writing any code here:
 
