@@ -118,6 +118,8 @@ describeDb('row level security', () => {
       'guarantor_consent_terms:INSERT',
       'guarantor_consent_terms:SELECT',
       'guarantor_consent_terms:UPDATE',
+      // Phase 14. The guarantor register, SELECT only.
+      'guarantor_exposure:SELECT',
       'guarantor_identities:INSERT',
       'guarantor_identities:SELECT',
       'guarantor_identities:UPDATE',
@@ -129,6 +131,8 @@ describeDb('row level security', () => {
       'journal_lines:SELECT',
       'ledger_account_balances:SELECT',
       'ledger_accounts:SELECT',
+      // Phase 14. Aging, SELECT only like every other derived view.
+      'loan_aging:SELECT',
       'loan_application_profile:SELECT',
       // Phase 4. The snapshots and the contractual breakdown are read-only to
       // every session: they are written exclusively by `approve_loan`, which
@@ -142,6 +146,15 @@ describeDb('row level security', () => {
       'loan_business_details:SELECT',
       'loan_business_details:UPDATE',
       'loan_client_snapshots:SELECT',
+      // Phase 14. The security a loan is written against. Four privileges,
+      // because an item on an application being assembled is genuinely
+      // editable and genuinely removable — the guard narrows both once the
+      // money has moved, which is a rule a privilege cannot express.
+      'loan_collateral:DELETE',
+      'loan_collateral:INSERT',
+      'loan_collateral:SELECT',
+      'loan_collateral:UPDATE',
+      'loan_collateral_register:SELECT',
       // Phase 7. Three derived views, SELECT only, each `security_invoker` so
       // it is read under the caller's own policies.
       'loan_delinquency:SELECT',
@@ -191,6 +204,14 @@ describeDb('row level security', () => {
       'loan_products:INSERT',
       'loan_products:SELECT',
       'loan_products:UPDATE',
+      // Phase 14. SELECT and INSERT, and deliberately no UPDATE or DELETE:
+      // the table refuses both with statement-level triggers, and a privilege
+      // that only ever leads to a refusal is a promise the schema does not
+      // keep. A mistake is corrected by appending a correction.
+      'loan_recovery_actions:INSERT',
+      'loan_recovery_actions:SELECT',
+      'loan_recovery_register:SELECT',
+      'loan_recovery_status:SELECT',
       'loan_salary_details:INSERT',
       'loan_salary_details:SELECT',
       'loan_salary_details:UPDATE',
@@ -208,6 +229,8 @@ describeDb('row level security', () => {
       'payment_collection_totals:SELECT',
       'payment_register:SELECT',
       'permissions:SELECT',
+      // Phase 14. The PAR aggregate, SELECT only.
+      'portfolio_at_risk:SELECT',
       'profiles:INSERT',
       'profiles:SELECT',
       'profiles:UPDATE',
@@ -300,6 +323,14 @@ describeDb('row level security', () => {
       // matters. Their access comes from the base tables' policies, and the
       // `views` block below asserts every one of them sets it.
       'loan_client_snapshots:SELECT',
+      // Phase 14. Read with `collateral:view`, written with
+      // `collateral:manage`. Four policies, matching the four privileges: the
+      // guard, not the policy, is what narrows editing and removal once the
+      // money has moved.
+      'loan_collateral:DELETE',
+      'loan_collateral:INSERT',
+      'loan_collateral:SELECT',
+      'loan_collateral:UPDATE',
       // Phase 13. Read with `loans:view`, written with `loans:documents`.
       'loan_documents:DELETE',
       'loan_documents:INSERT',
@@ -329,6 +360,11 @@ describeDb('row level security', () => {
       'loan_products:INSERT',
       'loan_products:SELECT',
       'loan_products:UPDATE',
+      // Phase 14. SELECT with `recovery:view`, INSERT with
+      // `recovery:record`, and nothing else — the table refuses UPDATE and
+      // DELETE outright, so there is no write grant for a policy to gate.
+      'loan_recovery_actions:INSERT',
+      'loan_recovery_actions:SELECT',
       'loan_salary_details:INSERT',
       'loan_salary_details:SELECT',
       'loan_salary_details:UPDATE',
@@ -652,12 +688,20 @@ describeDb('views', () => {
         'dashboard_portfolio_summary',
         'expense_register',
         'general_ledger',
+        // Phase 14. The guarantor register: every guarantee with its
+        // exposure, and whether the undertaking still binds.
+        'guarantor_exposure',
         'income_register',
         'ledger_account_balances',
+        // Phase 14. Aging is a presentation of `days_past_due`, bucketed in
+        // one `case` so a screen and a report cannot disagree about which
+        // bucket a loan is in.
+        'loan_aging',
         'loan_application_profile',
         // Phase 6. Balances are derived rather than stored, so a reversal
         // changes every figure the instant it commits.
         'loan_balances',
+        'loan_collateral_register',
         // Phase 7. Delinquency is derived too — arrears, lateness, grace and
         // penalty eligibility are computed on every read from the schedule,
         // the ledger and the business date, so no process has to run and no
@@ -671,11 +715,19 @@ describeDb('views', () => {
         'loan_portfolio_report',
         // Phase 12. The product catalogue.
         'loan_product_catalogue',
+        // Phase 14. The chase, per action and per loan. Whether a promise was
+        // kept is derived from posted payments, so a reversal un-keeps one
+        // without anybody remembering to.
+        'loan_recovery_register',
+        'loan_recovery_status',
         // Phase 13. The loan module's register: the loan, its product, its
         // collection state and its guarantor count.
         'loan_workflow_register',
         'payment_collection_totals',
         'payment_register',
+        // Phase 14. PAR1/7/30/60/90 and the aging buckets, for the whole
+        // active book and sliced by branch and by product.
+        'portfolio_at_risk',
         'reconciliation_register',
         'transfer_register',
         'trial_balance',
@@ -719,14 +771,16 @@ describeDb('views', () => {
     // One row per view: three from Phase 6, three from Phase 7, five from
     // Phase 8's reporting layer, one from Phase 9, three from Phase 10 and
     // five from Phase 11 — four document registers and the general ledger —
-    // one from Phase 12, the product catalogue, and three from Phase 13: the
+    // one from Phase 12, the product catalogue, three from Phase 13 — the
     // application profile, a loan's guarantor register and the frozen
-    // guarantor evidence.
+    // guarantor evidence — and six from Phase 14: aging, the PAR aggregate,
+    // the security register, the recovery register and its per-loan rollup,
+    // and the guarantor exposure register.
     // Counted here because the names are already enumerated above; what this
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(25);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(31);
   });
 });
 
@@ -816,6 +870,10 @@ describeDb('privileged functions', () => {
       'link_client_profile',
       'loan_application_details_guard',
       'loan_application_details_stamp_actor',
+      // Phase 14. Freezes a pledged item's identity once the loan is live,
+      // stamps who released or realised it, and refuses a status that moves
+      // backwards.
+      'loan_collateral_guard',
       // Phase 13. Confines a document write to a draft, stamps the uploader,
       // and keeps a stored document pointing where it was filed.
       'loan_documents_guard',
@@ -827,6 +885,10 @@ describeDb('privileged functions', () => {
       'loan_payments_guard_mutation',
       'loan_products_stamp_actor',
       'loan_products_within_business_rules',
+      // Phase 14. Derives the author from the session, refuses recovery
+      // activity on a loan that was never disbursed, and keeps a correction
+      // on its own loan.
+      'loan_recovery_actions_stamp_author',
       'loans_assign_loan_number',
       'loans_enforce_active_limit',
       'loans_guard_transition',
@@ -854,6 +916,9 @@ describeDb('privileged functions', () => {
       'reject_loan',
       'reject_reconciliation',
       'reject_transfer',
+      // Phase 14. Lets a guarantor out of a live loan, with a reason, provided
+      // the loan keeps the number of guarantors its product requires.
+      'release_loan_guarantor',
       'repayment_frequencies_guard_identity',
       'reverse_expense',
       'reverse_other_income',
@@ -1009,6 +1074,7 @@ describeDb('privileged functions', () => {
       'reject_loan',
       'reject_reconciliation',
       'reject_transfer',
+      'release_loan_guarantor',
       'reverse_expense',
       'reverse_other_income',
       'reverse_payment',

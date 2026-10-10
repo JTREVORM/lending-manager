@@ -1,7 +1,7 @@
 import { HeartHandshake } from 'lucide-react';
 
 import { GuarantorDirectory } from '@/components/guarantors/guarantor-directory';
-import { PageHeader } from '@/components/ui/page-header';
+import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { listGuarantors } from '@/lib/data/guarantors';
@@ -38,6 +38,20 @@ export default async function GuarantorsPage({
         icon={HeartHandshake}
         title="Guarantors"
         description="Search before registering someone new — the same person often stands for more than one client."
+        secondaryActions={
+          /*
+            `prefetch={false}`: searching the directory is what this screen is
+            for, and the register is a supervisor's read that joins the loan
+            book to it.
+          */
+          <ActionLink
+            href={ROUTES.guarantorRegister}
+            variant="secondary"
+            prefetch={false}
+          >
+            Exposure register
+          </ActionLink>
+        }
       />
 
       <GuarantorDirectory page={page} query={filter.query ?? ''} />

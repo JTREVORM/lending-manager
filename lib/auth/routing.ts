@@ -74,6 +74,15 @@ const ROUTE_PERMISSIONS: readonly {
   // Phase 7. Its own capability, not the dashboard's — the mistake Phase 3
   // made with `/clients` and Phase 6 found again on `/payments`.
   { prefix: ROUTES.overdue, permission: 'delinquency:view' },
+  // Phase 14. Debt & Security. `recovery:view` rather than
+  // `delinquency:view`, because the two answer different questions and a
+  // business may want the arrears list open to the counter while the recovery
+  // file — who was called, what was promised, which guarantor was let out —
+  // stays with the people who work it. The guarantor register at
+  // `/guarantors/register` is deliberately *not* listed: it sits under the
+  // `/guarantors` prefix and `guarantors:view` is the right floor for it,
+  // with the page itself checking the narrower capabilities it needs.
+  { prefix: ROUTES.recovery, permission: 'recovery:view' },
   // Phase 8. `reports:view_operational` is the floor for the reporting
   // surface, not `dashboard:view`: §98 is explicit that a dashboard
   // capability must not open a report, which is the third time this project

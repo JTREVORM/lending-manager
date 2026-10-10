@@ -570,10 +570,15 @@ describeDb('payment row level security', () => {
         'dashboard_portfolio_summary',
         'expense_register',
         'general_ledger',
+        // Phase 14. The guarantor register: every guarantee with its exposure.
+        'guarantor_exposure',
         'income_register',
         'ledger_account_balances',
+        // Phase 14. Aging, and the security register beside it.
+        'loan_aging',
         'loan_application_profile',
         'loan_balances',
+        'loan_collateral_register',
         'loan_delinquency',
         'loan_guarantor_evidence',
         'loan_guarantor_register',
@@ -584,11 +589,17 @@ describeDb('payment row level security', () => {
         // Phase 12. The product catalogue, with each product's terms and how
         // many loans have been written against it.
         'loan_product_catalogue',
+        // Phase 14. The chase, per action and per loan.
+        'loan_recovery_register',
+        'loan_recovery_status',
         // Phase 13. The loan module's register: the loan, its product, its
         // collection state and its guarantor count.
         'loan_workflow_register',
         'payment_collection_totals',
         'payment_register',
+        // Phase 14. PAR1/7/30/60/90 and the aging buckets, whole book and
+        // sliced by branch and by product.
+        'portfolio_at_risk',
         'reconciliation_register',
         'transfer_register',
         'trial_balance',

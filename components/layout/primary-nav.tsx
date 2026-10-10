@@ -171,6 +171,7 @@ function SidebarTopLink({
   return (
     <Link
       href={item.href}
+      prefetch={item.prefetch}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-bold transition-all',
@@ -321,6 +322,7 @@ function SidebarLink({
   return (
     <Link
       href={item.href}
+      prefetch={item.prefetch}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         // The reference's sub-item: 14px touch-sized up to `lg`, 11px and
@@ -362,6 +364,7 @@ function BottomBarLink({
   return (
     <Link
       href={item.href}
+      prefetch={item.prefetch}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         'min-h-touch relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5',
@@ -495,6 +498,7 @@ function MoreMenu({
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={item.prefetch}
                   aria-current={isActive ? 'page' : undefined}
                   onClick={close}
                   className={cn(

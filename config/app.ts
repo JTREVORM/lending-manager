@@ -65,7 +65,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  * Delivery phase of this codebase. Used by the UI to label functionality that
  * is deliberately not built yet, so staff are never shown a dead control.
  */
-export const CURRENT_PHASE = 13 as const;
+export const CURRENT_PHASE = 14 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
@@ -79,6 +79,19 @@ export const ROUTES = {
   payments: '/payments',
   overdue: '/overdue',
   reports: '/reports',
+
+  /**
+   * Phase 14. Debt & Security.
+   *
+   * `/overdue` stays what it was — the arrears worklist a collections officer
+   * opens every morning — and `/recovery` is the hub above it: aging, risk,
+   * the chase, the promises and the security. Two routes rather than one
+   * because they answer different questions, and the morning list should not
+   * have to load a portfolio summary to show itself.
+   */
+  recovery: '/recovery',
+  collectionSummary: '/payments/summary',
+  guarantorRegister: '/guarantors/register',
 
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',

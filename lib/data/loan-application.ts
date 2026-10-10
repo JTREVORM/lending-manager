@@ -32,6 +32,16 @@ export interface LoanApplicationProfile {
   readonly requiresSupportingDocuments: boolean;
   readonly detailsPresent: boolean;
   readonly documentCount: number;
+  /**
+   * Phase 14. What the product asks for by way of cover.
+   *
+   * Read here rather than by a second query for the product, because the
+   * security panel's one job beyond listing items is to say "this product
+   * expects security and none is recorded" — and a panel that needed another
+   * round trip to say it would be a panel that quietly stopped saying it.
+   */
+  readonly collateralRequired: boolean;
+  readonly minGuarantors: number;
 
   readonly salary: {
     readonly employerName: string;
@@ -100,6 +110,8 @@ export async function getLoanApplicationProfile(
     requiresSupportingDocuments: data.requires_supporting_documents === true,
     detailsPresent: data.details_present === true,
     documentCount: Number(data.document_count ?? 0),
+    collateralRequired: data.collateral_required === true,
+    minGuarantors: Number(data.min_guarantors ?? 0),
     salary:
       data.employer_name === null || data.employer_name === undefined
         ? null

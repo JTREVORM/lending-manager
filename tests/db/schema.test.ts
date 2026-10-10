@@ -66,6 +66,9 @@ describeDb('tables', () => {
     // three snapshots that make it evidence rather than a view over today's
     // records.
     'loan_client_snapshots',
+    // Phase 14: the security a loan is written against, and the recovery
+    // effort recorded when it goes bad.
+    'loan_collateral',
     // Phase 13: the evidence filed with an application — payslips, employment
     // letters, trading licences, a guarantor's identification or signature.
     'loan_documents',
@@ -86,6 +89,7 @@ describeDb('tables', () => {
     'loan_product_branches',
     'loan_product_snapshots',
     'loan_products',
+    'loan_recovery_actions',
     'loan_salary_details',
     'loan_schedules',
     'loans',
@@ -317,6 +321,15 @@ describeDb('foreign keys', () => {
       // and the audit trail holds the authoritative record either way.
       'loan_client_snapshots.client_id -> clients (r)',
       'loan_client_snapshots.loan_id -> loans (c)',
+      // Phase 14. `r` on the loan: a pledged item is evidence of what the
+      // business agreed to lend against, so the loan cannot be deleted out
+      // from under it. `n` on the three actors, because provenance that has
+      // been archived should degrade to "unknown" rather than make an account
+      // undeletable — the item's own history is in the status and the dates.
+      'loan_collateral.created_by -> profiles (n)',
+      'loan_collateral.loan_id -> loans (r)',
+      'loan_collateral.realised_by -> profiles (n)',
+      'loan_collateral.released_by -> profiles (n)',
       // Phase 13. `r` on both: a document is evidence, so the loan it was
       // filed against and the guarantor it belongs to cannot be deleted out
       // from under it.
@@ -335,6 +348,10 @@ describeDb('foreign keys', () => {
       'loan_guarantors.guarantor_client_id -> clients (r)',
       'loan_guarantors.guarantor_id -> guarantors (r)',
       'loan_guarantors.loan_id -> loans (r)',
+      // Phase 14. `n`, like the other actor columns on this table: a release
+      // keeps its reason and its date whatever becomes of the account that
+      // made it.
+      'loan_guarantors.released_by -> profiles (n)',
       'loan_identity_snapshots.loan_id -> loans (c)',
       // Phase 5. `c` cascades for the same reason: a collection schedule is
       // part of its loan, and an installment is part of the contractual month
@@ -371,6 +388,15 @@ describeDb('foreign keys', () => {
       'loan_products.created_by -> profiles (n)',
       'loan_products.default_repayment_frequency -> repayment_frequencies (r)',
       'loan_products.updated_by -> profiles (n)',
+      // Phase 14. `r` throughout, and `r` on `created_by` specifically — the
+      // same reasoning `client_remarks` records: SET NULL is implemented as an
+      // UPDATE, which this append-only table refuses outright, so a `n`
+      // reference would make deleting any profile fail with a confusing
+      // error. `created_by_label` keeps the author readable after the account
+      // is archived.
+      'loan_recovery_actions.corrects_action_id -> loan_recovery_actions (r)',
+      'loan_recovery_actions.created_by -> profiles (r)',
+      'loan_recovery_actions.loan_id -> loans (r)',
       'loan_salary_details.created_by -> profiles (n)',
       'loan_salary_details.loan_id -> loans (r)',
       'loan_schedules.generated_by -> profiles (r)',

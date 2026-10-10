@@ -11,6 +11,7 @@ import {
   Scale,
   ScrollText,
   Settings,
+  ShieldAlert,
   UserCircle,
   Users,
   UserCog,
@@ -65,6 +66,23 @@ export interface NavItem {
    * branch of `splitForBottomBar`, and that rule is shared with the portal.
    */
   readonly bottomBarRank?: number;
+  /**
+   * Whether the rail prefetches this destination. Defaults to on.
+   *
+   * Phase 14. Next.js prefetches every sidebar link that enters the viewport,
+   * which is a good trade for the destinations staff actually open — the page
+   * is then instant. It became a bad trade at the twelfth entry: adding Debt &
+   * Security pushed `/clients`, `/loans`, `/payments` and `/payments/new` from
+   * 55 network requests to 57, against a budget of 55.
+   *
+   * Raising the budget would have been the wrong answer, because the cost is
+   * not only the two requests. Prefetching a dynamic route runs the page
+   * server-side, and this one reads a grouping-sets aggregate over the whole
+   * active book — so every visit to any screen would have computed the
+   * portfolio's PAR whether or not anybody looked at it. A supervising screen
+   * opened a few times a day does not earn that.
+   */
+  readonly prefetch?: boolean;
 }
 
 /** The sidebar's three blocks, in the order they are rendered. */
@@ -172,6 +190,20 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: 'delinquency:view',
     phase: 7,
     group: 'operations',
+  },
+  // Phase 14. Below Overdue, because that is the order the work happens in: a
+  // loan appears on the arrears list, and then somebody works it. Its own
+  // capability, so a business can open the morning list to the counter while
+  // the recovery file stays with the people who keep it.
+  {
+    href: ROUTES.recovery,
+    label: 'Debt & Security',
+    shortLabel: 'Debt',
+    icon: ShieldAlert,
+    permission: 'recovery:view',
+    phase: 14,
+    group: 'operations',
+    prefetch: false,
   },
   // --- Finance -------------------------------------------------------------
   // Phase 11. The overview first, because "where is the money" is the

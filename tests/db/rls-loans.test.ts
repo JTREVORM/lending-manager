@@ -507,6 +507,10 @@ describeDb('loan row level security', () => {
       // written only by `post_payment` and `reverse_payment`. DELETE appears
       // nowhere.
       expect(rows.map((row) => `${row.table_name}:${row.privilege_type}`)).toEqual([
+        // Phase 14. Aging: a presentation of `days_past_due` bucketed in one
+        // `case`, so a screen and a report cannot disagree about which bucket
+        // a loan is in. A view, so SELECT only and no policy of its own.
+        'loan_aging:SELECT',
         'loan_application_profile:SELECT',
         // Phase 6 adds derived balance views under this prefix. They carry no
         // policy of their own — a view cannot — and reach the loan through
@@ -516,6 +520,17 @@ describeDb('loan row level security', () => {
         'loan_business_details:SELECT',
         'loan_business_details:UPDATE',
         'loan_client_snapshots:SELECT',
+        // Phase 14. The security a loan is written against. All four
+        // privileges, because an item on an application still being assembled
+        // is genuinely editable and genuinely removable — once the money has
+        // moved the guard narrows both, which is a rule a privilege cannot
+        // express. Releasing and realising stay available, because those are
+        // the only things security is for.
+        'loan_collateral:DELETE',
+        'loan_collateral:INSERT',
+        'loan_collateral:SELECT',
+        'loan_collateral:UPDATE',
+        'loan_collateral_register:SELECT',
         'loan_delinquency:SELECT',
         // Phase 13. The evidence filed with an application. Writable, unlike
         // every snapshot above it, because a document is part of the draft a
@@ -564,6 +579,14 @@ describeDb('loan row level security', () => {
         'loan_products:INSERT',
         'loan_products:SELECT',
         'loan_products:UPDATE',
+        // Phase 14. SELECT and INSERT, and deliberately no UPDATE or DELETE:
+        // the table refuses both with statement-level triggers, the way
+        // `audit_log` and `client_remarks` do, and a privilege that only ever
+        // leads to a refusal is a promise the schema does not keep.
+        'loan_recovery_actions:INSERT',
+        'loan_recovery_actions:SELECT',
+        'loan_recovery_register:SELECT',
+        'loan_recovery_status:SELECT',
         'loan_salary_details:INSERT',
         'loan_salary_details:SELECT',
         'loan_salary_details:UPDATE',
@@ -634,6 +657,12 @@ describeDb('loan row level security', () => {
         'loan_business_details:SELECT',
         'loan_business_details:UPDATE',
         'loan_client_snapshots:SELECT',
+        // Phase 14. Read with `collateral:view`, written with
+        // `collateral:manage`. Four policies matching the four privileges.
+        'loan_collateral:DELETE',
+        'loan_collateral:INSERT',
+        'loan_collateral:SELECT',
+        'loan_collateral:UPDATE',
         // Phase 13. Read with `loans:view`, written with `loans:documents`.
         'loan_documents:DELETE',
         'loan_documents:INSERT',
@@ -664,6 +693,11 @@ describeDb('loan row level security', () => {
         'loan_products:INSERT',
         'loan_products:SELECT',
         'loan_products:UPDATE',
+        // Phase 14. SELECT with `recovery:view`, INSERT with
+        // `recovery:record`, and nothing else: the table refuses UPDATE and
+        // DELETE outright, so there is no write grant for a policy to gate.
+        'loan_recovery_actions:INSERT',
+        'loan_recovery_actions:SELECT',
         'loan_salary_details:INSERT',
         'loan_salary_details:SELECT',
         'loan_salary_details:UPDATE',

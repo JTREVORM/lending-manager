@@ -195,6 +195,8 @@ docs/          Architecture, database, decisions, security
 | [docs/LOAN-PRODUCTS.md](docs/LOAN-PRODUCTS.md) | The configurable product catalogue, the guard-rail doctrine between a product and the business's settings, and the terms frozen onto a loan at approval. |
 | [docs/UPGRADE-PHASE-1-REPORT.md](docs/UPGRADE-PHASE-1-REPORT.md) | Upgrade Phase 1: branches and the financial ledger, the historical backfill and the reconciliation evidence. |
 | [docs/UPGRADE-PHASE-4-REPORT.md](docs/UPGRADE-PHASE-4-REPORT.md) | Upgrade Phase 4: the loan module reorganised — a typed closure, product-specific application data, guarantors captured on the application with a versioned undertaking, and the two defects building the screens found. |
+| [docs/DEBT-AND-SECURITY.md](docs/DEBT-AND-SECURITY.md) | Security taken against a loan, releasing a guarantor, the append-only recovery file, promises to pay whose verdict is derived from the payments, aging buckets, PAR, and collections sliceable by branch and product. |
+| [docs/UPGRADE-PHASE-5-REPORT.md](docs/UPGRADE-PHASE-5-REPORT.md) | Upgrade Phase 5: collections and Debt & Security — the migrations, the schema, the screens, the test counts, the reconciliation evidence and the commit. |
 
 Three decisions worth knowing before writing any code here:
 

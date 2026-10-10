@@ -79,6 +79,23 @@ export default async function PaymentsPage({
             <ActionLink href={`${ROUTES.payments}/new`}>Record a payment</ActionLink>
           ) : null
         }
+        secondaryActions={
+          /*
+            `prefetch={false}`, unlike the primary action beside it. Taking a
+            payment is what somebody opens this screen to do, so prefetching
+            that form buys an instant counter. The summary is a supervisor's
+            weekly read, and it aggregates a month of the register — on the
+            screen a cashier reloads all day, prefetching it would spend
+            airtime and a server read on a page most of them never open.
+          */
+          <ActionLink
+            href={ROUTES.collectionSummary}
+            variant="secondary"
+            prefetch={false}
+          >
+            Collection summary
+          </ActionLink>
+        }
       />
 
       {/* --- Today's collections ---------------------------------------- */}

@@ -4,7 +4,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { LoanBreakdownTable } from '@/components/loans/loan-breakdown-table';
+import { LoanCollateralPanel } from '@/components/loans/loan-collateral-panel';
+import { LoanGuaranteePanel } from '@/components/loans/loan-guarantee-panel';
 import { LoanLifecyclePanel } from '@/components/loans/loan-lifecycle-panel';
+import { LoanRecoveryPanel } from '@/components/loans/loan-recovery-panel';
 import { LoanStatusBadge } from '@/components/loans/loan-status-badge';
 import { RepaymentScheduleTable } from '@/components/loans/repayment-schedule-table';
 import { SectionTabs } from '@/components/ui/section-tabs';
@@ -48,6 +51,12 @@ import { DelinquencyPanel } from '@/components/delinquency/delinquency-panel';
 import { PenaltyCard } from '@/components/delinquency/penalty-card';
 import { Money } from '@/components/ui/money';
 import { getLoanDelinquency, getLoanPenalty } from '@/lib/data/delinquency';
+import {
+  getLoanRecoveryStatus,
+  listLoanCollateral,
+  listLoanGuaranteeExposure,
+  listLoanRecoveryActions,
+} from '@/lib/data/security';
 import { getCompanyBranding } from '@/lib/data/company';
 import { businessToday } from '@/lib/domain/datetime';
 import { formatCalendarDate, formatRecordedDate, maskNin } from '@/lib/domain/client';
@@ -153,6 +162,32 @@ export default async function LoanDetailPage({
     contextCan(context, 'penalties:view')
       ? getLoanPenalty(loanId)
       : Promise.resolve(null),
+  ]);
+
+  // Phase 14. Security, the guarantees with their exposure, and the chase.
+  //
+  // Each behind its own capability rather than the loan one: somebody who may
+  // read a loan is not automatically somebody who may read what a collections
+  // officer wrote about its borrower, and a business that wants the second
+  // restricted should get that from the capability rather than from a screen
+  // remembering to hide a section.
+  //
+  // Recovery is asked for only once money has gone out. A draft has nothing to
+  // recover by definition, and the insert trigger refuses one, so asking would
+  // be a round trip whose answer is always empty.
+  const canSeeCollateral = contextCan(context, 'collateral:view');
+  const canSeeRecovery = contextCan(context, 'recovery:view');
+  const isDisbursed = !['draft', 'pending_approval', 'approved', 'cancelled'].includes(
+    loan.status,
+  );
+
+  const [collateral, guarantees, recoveryStatus, recoveryActions] = await Promise.all([
+    canSeeCollateral ? listLoanCollateral(loanId) : Promise.resolve([]),
+    contextCan(context, 'guarantors:view')
+      ? listLoanGuaranteeExposure(loanId)
+      : Promise.resolve([]),
+    canSeeRecovery && isDisbursed ? getLoanRecoveryStatus(loanId) : Promise.resolve(null),
+    canSeeRecovery && isDisbursed ? listLoanRecoveryActions(loanId) : Promise.resolve([]),
   ]);
 
   // The stored schedule, verified before it is shown, on the same reasoning as
@@ -291,6 +326,10 @@ export default async function LoanDetailPage({
             : []),
           { id: 'client-snapshot-heading', label: 'Parties' },
           { id: 'guarantor-snapshot-heading', label: 'Guarantors' },
+          ...(canSeeCollateral ? [{ id: 'security-heading', label: 'Security' }] : []),
+          ...(canSeeRecovery && isDisbursed
+            ? [{ id: 'recovery-heading', label: 'Recovery' }]
+            : []),
           ...(documents.length > 0
             ? [{ id: 'documents-heading', label: 'Documents' }]
             : []),
@@ -744,6 +783,63 @@ export default async function LoanDetailPage({
               ))}
             </ul>
           </Card>
+        </section>
+      ) : null}
+
+      {/* --- Security ------------------------------------------------------- */}
+      {canSeeCollateral ? (
+        <section aria-labelledby="security-heading" className="min-w-0 space-y-3">
+          <h2 id="security-heading" className="text-text text-lg font-semibold">
+            Security
+          </h2>
+
+          <LoanCollateralPanel
+            loanId={loan.id}
+            items={collateral}
+            // Editable while the file is still being assembled. Afterwards the
+            // identity of an item is evidence and the database refuses a
+            // change — releasing and realising stay available, because those
+            // are the only things security is for.
+            editable={
+              loan.status === 'draft' ||
+              loan.status === 'pending_approval' ||
+              loan.status === 'approved'
+            }
+            canManage={contextCan(context, 'collateral:manage')}
+            collateralRequired={applicationProfile?.collateralRequired === true}
+          />
+
+          {guarantees.length > 0 ? (
+            <>
+              <h3 className="text-text text-base font-semibold">Who stands for it</h3>
+              <LoanGuaranteePanel
+                loanId={loan.id}
+                guarantees={guarantees}
+                // Only on a live loan: a draft's guarantors are removed from
+                // the application, and a finished loan's guarantee ended with
+                // it. The function refuses both, and offering a control that
+                // can only fail is worse than not offering it.
+                canRelease={contextCan(context, 'guarantors:release') && isDisbursed}
+              />
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* --- Recovery ------------------------------------------------------- */}
+      {canSeeRecovery && isDisbursed ? (
+        <section aria-labelledby="recovery-heading" className="min-w-0 space-y-3">
+          <h2 id="recovery-heading" className="text-text text-lg font-semibold">
+            Recovery
+          </h2>
+
+          <LoanRecoveryPanel
+            loanId={loan.id}
+            status={recoveryStatus}
+            actions={recoveryActions}
+            canRecord={contextCan(context, 'recovery:record')}
+            today={today}
+          />
         </section>
       ) : null}
 

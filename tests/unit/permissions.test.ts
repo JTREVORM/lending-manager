@@ -264,6 +264,9 @@ describe('authorization matrix', () => {
     'guarantors:documents': ['manager', 'owner_admin'],
     'guarantors:view_nin': ['manager', 'owner_admin'],
     'guarantors:link': ['manager', 'owner_admin'],
+    // Phase 14. Discharging a liability on money already lent, so it sits with
+    // the roles that decide rather than the one that files.
+    'guarantors:release': ['manager', 'owner_admin'],
 
     // --- Phase 4: loans -----------------------------------------------------
     'loans:view': ['secretary_treasurer', 'manager', 'owner_admin'],
@@ -301,6 +304,15 @@ describe('authorization matrix', () => {
     // why `client` is absent from both.
     'delinquency:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'penalties:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+
+    // --- Phase 14: security and recovery ------------------------------------
+    // The front office takes the item in and makes the calls, so all four go
+    // to every staff role. The decision to let somebody out of a guarantee is
+    // the one that does not — see `guarantors:release` above.
+    'collateral:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'collateral:manage': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'recovery:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'recovery:record': ['secretary_treasurer', 'manager', 'owner_admin'],
 
     // Phase 8. Reporting is split by what the figures reveal. The counter role
     // gets the working reports; the Manager also gets the book; what the

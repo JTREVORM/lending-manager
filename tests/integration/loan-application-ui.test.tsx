@@ -437,6 +437,8 @@ describe('the questions a product asks', () => {
     applicationProfile: 'salary',
     requiresSupportingDocuments: true,
     detailsPresent: true,
+    collateralRequired: false,
+    minGuarantors: 1,
     documentCount: 2,
     salary: {
       employerName: 'Mukwano Industries',

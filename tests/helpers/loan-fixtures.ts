@@ -185,6 +185,60 @@ export async function attachClientGuarantorsToLoan(
 }
 
 /**
+ * Attach one more guarantor to a loan, freshly registered.
+ *
+ * Phase 14. Needed by the release tests, which have to leave a loan still
+ * meeting its product's guarantor floor after somebody is let out. A *new*
+ * guarantor each time rather than a second one from the client's directory,
+ * because the concentration rule counts how many active loans a person already
+ * backs and would refuse the reuse — correctly.
+ *
+ * Returns the `loan_guarantors` row id.
+ */
+export async function attachExtraGuarantorToLoan(
+  loanId: string,
+  options?: { readonly consent?: boolean },
+): Promise<string> {
+  const signed = options?.consent !== false;
+
+  const guarantor = await queryOne<{ id: string }>(
+    `insert into public.guarantors
+       (full_name, sex, date_of_birth, phone, occupation, location, photo_path)
+     values ('Replacement Guarantor', 'female', '1988-03-02', $1, 'Tailor', 'Ntinda',
+             'guarantors/00000000-0000-4000-8000-000000000002/photo/a.jpg')
+     returning id`,
+    [nextPhone()],
+  );
+
+  await query(
+    `insert into public.guarantor_identities (guarantor_id, nin) values ($1, $2)`,
+    [guarantor.id, nextNin('CF')],
+  );
+
+  const row = await queryOne<{ id: string }>(
+    `insert into public.loan_guarantors
+       (loan_id, guarantor_id, relationship_to_client,
+        consent_terms_id, consent_version, consented_at,
+        signature_name, witness_name, witness_phone, consent_place)
+     select
+       $1, $2, 'Sister',
+       case when $3 then t.id end,
+       case when $3 then t.version end,
+       case when $3 then pg_catalog.now() end,
+       case when $3 then 'Replacement Guarantor' end,
+       case when $3 then 'Fixture Witness' end,
+       case when $3 then '+256700000901' end,
+       case when $3 then 'Kampala' end
+     from public.guarantor_consent_terms t
+     where t.is_current
+     returning id`,
+    [loanId, guarantor.id, signed],
+  );
+
+  return row.id;
+}
+
+/**
  * Run statements as a real signed-in user, committed.
  *
  * ## Why the lifecycle fixtures cannot act as the table owner
@@ -386,6 +440,12 @@ export async function deleteTestLoans(): Promise<void> {
     { table: 'loan_documents', trigger: 'loan_documents_guard' },
     { table: 'loan_salary_details', trigger: 'loan_salary_details_guard' },
     { table: 'loan_business_details', trigger: 'loan_business_details_guard' },
+    // Phase 14. Security on a live loan is released, never removed, and a
+    // recovery action is never deleted at all — both rules are asserted in
+    // `tests/db/security-and-recovery.test.ts`, which is what makes
+    // suspending them here an exemption rather than a hole.
+    { table: 'loan_collateral', trigger: 'loan_collateral_guard' },
+    { table: 'loan_recovery_actions', trigger: 'loan_recovery_actions_no_delete' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -416,6 +476,14 @@ export async function deleteTestLoans(): Promise<void> {
     // Phase 13. The documents go before the loan and the guarantor rows they
     // reference, both of which they hold with `on delete restrict`.
     await query(`delete from public.loan_documents`);
+    // Phase 14. Both reference the loan with `on delete restrict`, and a
+    // correction references the action it corrects, so the corrections go
+    // first.
+    await query(`delete from public.loan_collateral`);
+    await query(
+      `delete from public.loan_recovery_actions where corrects_action_id is not null`,
+    );
+    await query(`delete from public.loan_recovery_actions`);
     await query(`delete from public.loan_guarantors`);
     await query(`delete from public.loan_salary_details`);
     await query(`delete from public.loan_business_details`);

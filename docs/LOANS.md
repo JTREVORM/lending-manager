@@ -1422,6 +1422,32 @@ disagrees with the Overdue screen. A reader without the capability to see
 collections gets nulls and the stage falls back to the lifecycle status, which
 is honest: that reader genuinely does not know whether the loan is late.
 
+# Phase 14 — what a loan is secured on, and what is done when it goes bad
+
+Two sections on a loan's page, and a hub above the arrears list. They have
+their own document, because they are their own subject:
+
+- **Security.** What was pledged, what it was valued at and when, and whether
+  it is still held, released or realised. The item's identity freezes at
+  disbursement; its status never does. A valuation posts nothing and reduces
+  nothing — a realisation records a sale, and the money reaches the loan as a
+  payment like every other shilling.
+- **The guarantees on the loan**, with what each guarantor is exposed to —
+  the loan's whole outstanding balance, undivided, because a guarantee here is
+  joint. A guarantor can be let out of a live loan by a Manager, with a
+  reason, provided the loan keeps the number of guarantors its product
+  requires.
+- **Recovery.** Calls, visits, notices, notes, promises — append-only, with
+  the author derived from the session. A promise changes nothing contractual,
+  and whether it was kept is read from the posted payments, so a reversal
+  un-keeps one by itself.
+
+Above them, `/recovery` groups the active book by how late it is and quotes
+portfolio at risk at five thresholds. Aging adds no arithmetic of its own: the
+bucket is one `case` over the `days_past_due` this document already defines.
+
+See `DEBT-AND-SECURITY.md`.
+
 ## Test commands
 
 ```bash

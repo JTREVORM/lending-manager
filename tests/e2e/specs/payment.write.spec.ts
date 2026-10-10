@@ -57,15 +57,30 @@ async function openFirstPayment(page: Page): Promise<void> {
   // The register renders every row twice — cards for phones, a table for
   // wider screens — and hides one set with `display: none`, so the link has
   // to be the visible one.
-  const link = page
-    .locator('main a[href^="/payments/"]')
-    .filter({ hasNotText: /record/i })
-    .filter({ visible: true })
-    .first();
+  const candidates = page.locator('main a[href^="/payments/"]').filter({ visible: true });
 
-  await expect(link).toBeVisible();
-  await link.click();
-  await page.waitForURL(/\/payments\/[0-9a-f-]{36}/, { timeout: 20_000 });
+  await expect(candidates.first()).toBeVisible();
+
+  // By the *shape* of the href, which is what this helper always claimed to
+  // do and only approximated. `/payments` also carries `/payments/new` and,
+  // from Phase 14, `/payments/summary` — both of which match the prefix, both
+  // of which precede the register in the document, and neither of which is a
+  // payment. Excluding them by name would be a denylist that rots at the next
+  // sub-route; a uuid is a uuid.
+  const count = await candidates.count();
+
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    const href = await candidate.getAttribute('href');
+
+    if (href !== null && /^\/payments\/[0-9a-f-]{36}$/.test(href)) {
+      await candidate.click();
+      await page.waitForURL(/\/payments\/[0-9a-f-]{36}/, { timeout: 20_000 });
+      return;
+    }
+  }
+
+  throw new Error('The payment register showed no payment to open.');
 }
 
 /**

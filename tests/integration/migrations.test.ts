@@ -254,8 +254,12 @@ describe('column type discipline', () => {
     // `money` is worse again: its output depends on the server's lc_monetary.
     for (const { name, sql } of migrations) {
       const body = declarationsOnly(sql);
+      // Each alternative is bounded on both sides. `\breal` alone matched
+      // `realised_amount` in the Phase 14 collateral table — a column name,
+      // not a type, and the kind of false positive that teaches people to
+      // rename honest columns to appease a regular expression.
       expect(body, `${name} uses a float type`).not.toMatch(
-        /\b(real|double\s+precision|float4|float8|float\b)/i,
+        /\b(real|double\s+precision|float4|float8|float)\b/i,
       );
       expect(body, `${name} uses the money type`).not.toMatch(/\bmoney\b/i);
     }
@@ -390,6 +394,14 @@ describe('column type discipline', () => {
       // (product_id, branch_id), so there is no non-key column to amend. A
       // product is offered at a branch or it is not.
       'loan_product_branches',
+      // Phase 14. Append-only in exactly the way `client_remarks` is: UPDATE
+      // and DELETE are refused outright by statement-level trigger, and a
+      // mistake is corrected by appending a correction that points at the
+      // entry it supersedes. An `updated_at` would be a column that can never
+      // advance, and worse, one that implies the note can be reworded after
+      // the loan goes bad — which is precisely what the table exists to
+      // prevent.
+      'loan_recovery_actions',
     ]);
 
     for (const table of createdTables) {
@@ -751,6 +763,9 @@ describe('types stay in step with the schema', () => {
       'ensure_penalty_applied',
       'apply_eligible_penalties',
       'is_table_owner_session',
+      // Phase 14. Trigger functions on the security and recovery tables.
+      'loan_collateral_guard',
+      'loan_recovery_actions_stamp_author',
     ]);
 
     for (const functionName of functionNames) {

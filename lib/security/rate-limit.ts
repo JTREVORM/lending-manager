@@ -63,7 +63,10 @@ export type RateLimitedAction =
   | 'settings.update'
   | 'reports.export'
   | 'reports.read'
-  | 'uploads.document';
+  | 'uploads.document'
+  | 'recovery.record'
+  | 'security.collateral'
+  | 'security.decision';
 
 export interface RateLimitRule {
   /** Requests permitted inside one window. */
@@ -107,6 +110,16 @@ export interface RateLimitRule {
  *     does immediately.
  *   - **Uploads** — 20 in 10 minutes, matched to registering a client with a
  *     photograph and an identity document.
+ *   - **Recovery actions** — 120 in 10 minutes. A collections officer working
+ *     a list of overdue loans records one every few seconds for an hour, and
+ *     an append-only table means a mis-click cannot be tidied away, so the
+ *     limit has to sit above a genuinely busy morning rather than at it.
+ *   - **Recording security** — 30 a minute, the rhythm of taking in a pile of
+ *     items against one application.
+ *   - **Releasing or realising** — 20 an hour, and closed. These are the two
+ *     decisions in Phase 14 that let somebody out of a liability or dispose of
+ *     an asset, which puts them with reversal and approval rather than with
+ *     ordinary work.
  */
 export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
   'auth.sign-in': {
@@ -144,6 +157,27 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 3600,
     onStoreFailure: 'closed',
     message: 'Too many reversals in the last hour. Try again shortly.',
+  },
+  // Phase 14. Recording the chase is ordinary work; letting a guarantor out or
+  // selling an item is a decision.
+  'recovery.record': {
+    limit: 120,
+    windowSeconds: 600,
+    onStoreFailure: 'open',
+    message:
+      'Recovery actions are being recorded faster than expected. Try again in a moment.',
+  },
+  'security.collateral': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Security is being recorded faster than expected. Try again in a moment.',
+  },
+  'security.decision': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many release decisions in the last hour. Try again shortly.',
   },
   'loans.approve': {
     limit: 20,
