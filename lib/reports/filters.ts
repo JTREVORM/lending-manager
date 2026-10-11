@@ -22,6 +22,17 @@ import { isPaymentMethod, type PaymentMethod } from '@/lib/domain/payment';
 import { isLoanStatus, type LoanStatus } from '@/lib/domain/loan';
 import { CLIENT_STATUSES, isClientStatus } from '@/lib/domain/client';
 import { isCollectionStatus, type CollectionStatus } from '@/lib/domain/reporting';
+import { isAgingBucket, type AgingBucket } from '@/lib/domain/risk';
+import {
+  isCollateralStatus,
+  isGuaranteeStatus,
+  isPromiseStatus,
+  isRecoveryActionKind,
+  type CollateralStatus,
+  type GuaranteeStatus,
+  type PromiseStatus,
+  type RecoveryActionKind,
+} from '@/lib/domain/security';
 
 /**
  * Turning a query string into report filters.
@@ -177,4 +188,53 @@ export function exportQuery(params: ParamRecord, keys: readonly string[]): strin
   }
 
   return query.toString();
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16 — the Debt & Security reports' filters
+//
+// Each one whitelisted against the set its report actually offers, the way
+// every parser above is. So `?bucket=; drop table` filters on nothing rather
+// than on something, and `?guaranteeStatus=anything` shows the unfiltered
+// register rather than producing a database error the page would have to
+// explain.
+// ---------------------------------------------------------------------------
+
+export function parseAgingBucket(params: ParamRecord): AgingBucket | undefined {
+  const value = singleParam(params, 'bucket');
+  return isAgingBucket(value) ? value : undefined;
+}
+
+export function parseRecoveryKind(params: ParamRecord): RecoveryActionKind | undefined {
+  const value = singleParam(params, 'kind');
+  return isRecoveryActionKind(value) ? value : undefined;
+}
+
+export function parsePromiseStatus(params: ParamRecord): PromiseStatus | undefined {
+  const value = singleParam(params, 'promiseStatus');
+  return isPromiseStatus(value) ? value : undefined;
+}
+
+export function parseGuaranteeStatus(params: ParamRecord): GuaranteeStatus | undefined {
+  const value = singleParam(params, 'guaranteeStatus');
+  return isGuaranteeStatus(value) ? value : undefined;
+}
+
+export function parseCollateralStatusFilter(
+  params: ParamRecord,
+): CollateralStatus | undefined {
+  const value = singleParam(params, 'status');
+  return isCollateralStatus(value) ? value : undefined;
+}
+
+/**
+ * Whether a guarantor is an existing borrower or somebody from outside.
+ *
+ * Two values and no type guard in the domain for them, because the view
+ * derives the distinction rather than storing it — so the whitelist is here,
+ * written out, which is what a whitelist is for.
+ */
+export function parseSubjectKind(params: ParamRecord): 'client' | 'external' | undefined {
+  const value = singleParam(params, 'subjectKind');
+  return value === 'client' || value === 'external' ? value : undefined;
 }

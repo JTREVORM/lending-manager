@@ -1,34 +1,17 @@
-import { getCompanyBranding } from '@/lib/data/company';
-import { getClientReport } from '@/lib/data/reports';
-import { toCsv } from '@/lib/domain/reporting';
-import { clientCsvColumns, csvResponse } from '@/lib/reports/csv';
-import { guardExport } from '@/lib/reports/export-guard';
-import { parseClientStatus, singleParam, type ParamRecord } from '@/lib/reports/filters';
+import { reportExportRoute } from '@/lib/reports/export';
 
 /**
- * The client directory as CSV.
+ * The clients report, as CSV or as a branded PDF.
  *
- * No National Identification Number column exists in `clientCsvColumns`, so
- * there is nothing here to gate. A file of identification numbers is not a
- * thing this application produces. §76.
+ * One line, because everything that used to be written here is now read from
+ * the registry: the capability list, the filter parsing, the loader, the
+ * columns and the filename. The capability list in particular — it is the
+ * same object the page checks, so an export route cannot drift behind its
+ * page, which is a security defect that looks like a typo.
+ *
+ * The file exists per report rather than as one `[report]/export` handler
+ * because Next resolves a static path segment before a dynamic one: while
+ * `clients/` is a real folder, `/reports/clients/export` would never
+ * reach a dynamic sibling. So this is the shape the router requires.
  */
-export async function GET(request: Request): Promise<Response> {
-  const guard = await guardExport(['reports:view_operational', 'clients:view']);
-  if (!guard.ok) return guard.response;
-
-  const url = new URL(request.url);
-  const params: ParamRecord = Object.fromEntries(url.searchParams.entries());
-
-  const { branding } = await getCompanyBranding();
-
-  const report = await getClientReport({
-    status: parseClientStatus(params),
-    query: singleParam(params, 'query'),
-    pageSize: 1,
-  });
-
-  return csvResponse(
-    toCsv(clientCsvColumns(branding.timezone), report.exportRows),
-    'clients.csv',
-  );
-}
+export const GET = reportExportRoute('clients');

@@ -1,13 +1,14 @@
 import { Clock } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/page-header';
-import { ExportLink } from '@/components/reports/export-link';
+import { ExportActions } from '@/components/reports/export-actions';
 import { PortfolioReportView } from '@/components/reports/portfolio-report-view';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import type { ReportColumn } from '@/components/reports/report-table';
 import { ROUTES } from '@/config/app';
 import { guardReportPage } from '@/lib/auth/guard';
+import { REPORTS, reportHref } from '@/lib/reports/registry';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getGracePeriodReport, type PortfolioRow } from '@/lib/data/reports';
 import { businessToday, daysBetween } from '@/lib/domain/datetime';
@@ -39,10 +40,7 @@ export default async function GracePeriodPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardReportPage(`${ROUTES.reports}/grace`, [
-    'reports:view_operational',
-    'delinquency:view',
-  ]);
+  await guardReportPage(reportHref('grace'), REPORTS.grace.needs);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();
@@ -98,7 +96,7 @@ export default async function GracePeriodPage({
         secondaryActions={
           <>
             <PrintButton />
-            <ExportLink href={`${ROUTES.reports}/grace/export`} />
+            <ExportActions report="grace" filterQuery="" />
           </>
         }
       />

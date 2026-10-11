@@ -2,7 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { toBusinessDate, type BusinessDate } from '@/lib/domain/datetime';
-import { toUgx, type UgxAmount } from '@/lib/domain/money';
+import { sumUgx, toUgx, UGX_ZERO, type UgxAmount } from '@/lib/domain/money';
 import {
   isCollateralItemType,
   isCollateralStatus,
@@ -18,6 +18,7 @@ import {
   type RecoveryOutcome,
 } from '@/lib/domain/security';
 import { isAgingBucket, type AgingBucket } from '@/lib/domain/risk';
+import { MAX_EXPORT_ROWS, safeSearchTerm } from '@/lib/domain/reporting';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 /**
@@ -924,5 +925,372 @@ export async function getPortfolioAtRisk(): Promise<{
     byProduct: slices
       .filter((slice) => slice.scope === 'product')
       .sort((a, b) => (a.productCode ?? '').localeCompare(b.productCode ?? '')),
+  };
+}
+
+// ===========================================================================
+// Export-shaped reads
+//
+// The loaders above are built for operational screens: twenty-five rows and a
+// `hasMore`, because a worklist is something somebody works down.
+//
+// A report is a different question. It needs **every** matching row — a file
+// holding page three of a register would be a subtle lie about what was
+// downloaded — plus the totals and the honest admission when the set is too
+// large to total. So these four read the same views, through the same column
+// lists and the same mappers as the screens, and return the shape
+// `lib/data/reports.ts` established: the rows, the totals, and `truncated`.
+//
+// Sharing the column lists and mappers is the point. A second copy of
+// `AGING_COLUMNS` would be the thing that drifts, and a report whose columns
+// had drifted from the screen's would disagree with it about the same loan.
+// ===========================================================================
+
+/** What every export-shaped read returns. Matches the Phase 8 report shape. */
+export interface SecurityExport<Row, Totals> {
+  readonly rows: readonly Row[];
+  readonly totals: Totals;
+  /** The set hit `MAX_EXPORT_ROWS`, so the totals describe only part of it. */
+  readonly truncated: boolean;
+  readonly matchedRows: number;
+}
+
+/**
+ * The upper bound of the read window, which fetches one row past the ceiling.
+ *
+ * `range(from, to)` is **inclusive** at both ends in PostgREST, so
+ * `range(0, MAX_EXPORT_ROWS)` returns up to `MAX_EXPORT_ROWS + 1` rows. That
+ * extra row is the whole point: asking for exactly the ceiling cannot tell a
+ * set of exactly that size from one of fifty thousand, and the difference
+ * decides whether the totals are shown at all (ADR-042). The row itself is
+ * discarded — `truncated` is `all.length > MAX_EXPORT_ROWS`, and the rows
+ * returned are sliced back to the ceiling.
+ */
+const EXPORT_WINDOW = MAX_EXPORT_ROWS;
+
+export interface AgingExportTotals {
+  readonly loanCount: number;
+  readonly principalOutstanding: UgxAmount;
+  readonly totalOutstanding: UgxAmount;
+  readonly arrears: UgxAmount;
+  readonly penaltyOutstanding: UgxAmount;
+}
+
+export async function getAgingExport(
+  filter: {
+    readonly bucket?: AgingBucket | null;
+    readonly productId?: string | null;
+    readonly branchId?: string | null;
+    readonly query?: string | null;
+  } = {},
+): Promise<SecurityExport<AgingRow, AgingExportTotals>> {
+  const supabase = await createSupabaseServerClient();
+
+  let query = supabase
+    .from('loan_aging')
+    .select(AGING_COLUMNS)
+    // Worst first, the same order the screen uses: a register that opens on
+    // the loans one day late buries the ones three months late under them.
+    .order('aging_rank', { ascending: false })
+    .order('days_past_due', { ascending: false })
+    .range(0, EXPORT_WINDOW);
+
+  if (filter.bucket != null) query = query.eq('aging_bucket', filter.bucket);
+  if (filter.productId != null) query = query.eq('loan_product_id', filter.productId);
+  if (filter.branchId != null) query = query.eq('branch_id', filter.branchId);
+
+  const term = safeSearchTerm(filter.query);
+  if (term !== null) {
+    query = query.or(
+      [
+        `loan_number.ilike.%${term}%`,
+        `client_number.ilike.%${term}%`,
+        `client_name.ilike.%${term}%`,
+      ].join(','),
+    );
+  }
+
+  const { data, error } = await query;
+
+  if (error !== null) {
+    logger.warn('Could not read the aging report.', { code: error.code });
+    return { rows: [], totals: emptyAgingTotals(), truncated: false, matchedRows: 0 };
+  }
+
+  const all = (data ?? []).map((row) => toAging(row as Raw));
+  const truncated = all.length > MAX_EXPORT_ROWS;
+  const rows = truncated ? all.slice(0, MAX_EXPORT_ROWS) : all;
+
+  return {
+    rows,
+    totals: {
+      loanCount: rows.length,
+      principalOutstanding: sumUgx(rows.map((row) => row.principalRemaining)),
+      totalOutstanding: sumUgx(rows.map((row) => row.totalOutstanding)),
+      arrears: sumUgx(rows.map((row) => row.arrearsAmount)),
+      penaltyOutstanding: sumUgx(rows.map((row) => row.penaltyRemaining)),
+    },
+    truncated,
+    matchedRows: rows.length,
+  };
+}
+
+function emptyAgingTotals(): AgingExportTotals {
+  return {
+    loanCount: 0,
+    principalOutstanding: UGX_ZERO,
+    totalOutstanding: UGX_ZERO,
+    arrears: UGX_ZERO,
+    penaltyOutstanding: UGX_ZERO,
+  };
+}
+
+export interface GuarantorExportTotals {
+  /** Rows in the report: one per guarantee, released ones included. */
+  readonly guaranteeCount: number;
+  /** Distinct loans with at least one live guarantee. What the money is of. */
+  readonly guaranteedLoanCount: number;
+  /** Principal of those loans. Per loan, never per guarantee — see below. */
+  readonly guaranteed: UgxAmount;
+  readonly outstanding: UgxAmount;
+  readonly arrears: UgxAmount;
+  readonly releasedCount: number;
+}
+
+export async function getGuarantorExposureExport(
+  filter: {
+    readonly query?: string | null;
+    readonly subjectKind?: 'client' | 'external' | null;
+    readonly guaranteeStatus?: GuaranteeStatus | null;
+    readonly productId?: string | null;
+  } = {},
+): Promise<SecurityExport<GuarantorExposureRow, GuarantorExportTotals>> {
+  const supabase = await createSupabaseServerClient();
+
+  let query = supabase
+    .from('guarantor_exposure')
+    .select(EXPOSURE_COLUMNS)
+    .order('created_at', { ascending: false })
+    .range(0, EXPORT_WINDOW);
+
+  const term = safeSearchTerm(filter.query);
+  if (term !== null) {
+    query = query.or(
+      [
+        `guarantor_name.ilike.%${term}%`,
+        `client_name.ilike.%${term}%`,
+        `loan_number.ilike.%${term}%`,
+      ].join(','),
+    );
+  }
+
+  if (filter.subjectKind != null) query = query.eq('subject_kind', filter.subjectKind);
+  if (filter.guaranteeStatus != null) {
+    query = query.eq('guarantee_status', filter.guaranteeStatus);
+  }
+  if (filter.productId != null) query = query.eq('loan_product_id', filter.productId);
+
+  const { data, error } = await query;
+
+  if (error !== null) {
+    logger.warn('Could not read the guarantor exposure report.', { code: error.code });
+    return {
+      rows: [],
+      totals: {
+        guaranteeCount: 0,
+        guaranteedLoanCount: 0,
+        guaranteed: UGX_ZERO,
+        outstanding: UGX_ZERO,
+        arrears: UGX_ZERO,
+        releasedCount: 0,
+      },
+      truncated: false,
+      matchedRows: 0,
+    };
+  }
+
+  const all = (data ?? []).map((row) => toExposure(row as Raw));
+  const truncated = all.length > MAX_EXPORT_ROWS;
+  const rows = truncated ? all.slice(0, MAX_EXPORT_ROWS) : all;
+
+  // Two exclusions, and the second one is the subtle one.
+  //
+  // **Released guarantees are out.** A released guarantor was told they are
+  // out, so counting their amount among what the business is covered for
+  // would overstate the cover by every guarantee ever let go — and that is a
+  // figure that gets quoted in a lending decision.
+  //
+  // **Each loan counts once.** `guaranteed_amount` on this view is the
+  // *loan's* principal, not a per-guarantor share of it: the view's framing is
+  // that a guarantor stands behind the whole loan. So a loan with two live
+  // guarantors has two rows carrying the same principal, and summing the
+  // column would double the cover — on a book where the product requires two
+  // guarantors, it would double the whole figure. The same applies to the
+  // outstanding balance and the arrears, which are also the loan's.
+  //
+  // The per-row column is still right and still useful: it says what that
+  // guarantor put their name to. It is the *total* that has to be taken per
+  // loan, which is what `byLoan` below does.
+  const live = rows.filter((row) => !row.isReleased);
+
+  const byLoan = new Map<string, GuarantorExposureRow>();
+  for (const row of live) {
+    if (!byLoan.has(row.loanId)) byLoan.set(row.loanId, row);
+  }
+  const loans = [...byLoan.values()];
+
+  return {
+    rows,
+    totals: {
+      guaranteeCount: rows.length,
+      guaranteedLoanCount: loans.length,
+      guaranteed: sumUgx(loans.map((row) => row.guaranteedAmount)),
+      outstanding: sumUgx(loans.map((row) => row.outstandingBalance ?? UGX_ZERO)),
+      arrears: sumUgx(loans.map((row) => row.arrearsAmount ?? UGX_ZERO)),
+      releasedCount: rows.length - live.length,
+    },
+    truncated,
+    matchedRows: rows.length,
+  };
+}
+
+export interface CollateralExportTotals {
+  readonly itemCount: number;
+  readonly valuedAt: UgxAmount;
+  readonly heldCount: number;
+  readonly realisedCount: number;
+  readonly realised: UgxAmount;
+}
+
+export async function getCollateralExport(
+  filter: { readonly status?: CollateralStatus | null } = {},
+): Promise<SecurityExport<CollateralItem, CollateralExportTotals>> {
+  const supabase = await createSupabaseServerClient();
+
+  let query = supabase
+    .from('loan_collateral_register')
+    .select(COLLATERAL_COLUMNS)
+    .order('created_at', { ascending: false })
+    .range(0, EXPORT_WINDOW);
+
+  if (filter.status != null) query = query.eq('status', filter.status);
+
+  const { data, error } = await query;
+
+  if (error !== null) {
+    logger.warn('Could not read the security register report.', { code: error.code });
+    return {
+      rows: [],
+      totals: {
+        itemCount: 0,
+        valuedAt: UGX_ZERO,
+        heldCount: 0,
+        realisedCount: 0,
+        realised: UGX_ZERO,
+      },
+      truncated: false,
+      matchedRows: 0,
+    };
+  }
+
+  const all = (data ?? []).map((row) => toCollateral(row as Raw));
+  const truncated = all.length > MAX_EXPORT_ROWS;
+  const rows = truncated ? all.slice(0, MAX_EXPORT_ROWS) : all;
+
+  const held = rows.filter((row) => row.status === 'held');
+  const realised = rows.filter((row) => row.status === 'realised');
+
+  return {
+    rows,
+    totals: {
+      itemCount: rows.length,
+      // The valuation of what is *held*, not of everything ever taken in. An
+      // item released or sold is not cover any more, and a figure that
+      // included it would say the business is secured against things it has
+      // handed back.
+      valuedAt: sumUgx(held.map((row) => row.estimatedValue)),
+      heldCount: held.length,
+      realisedCount: realised.length,
+      realised: sumUgx(realised.map((row) => row.realisedAmount ?? UGX_ZERO)),
+    },
+    truncated,
+    matchedRows: rows.length,
+  };
+}
+
+export interface RecoveryExportTotals {
+  readonly actionCount: number;
+  readonly promiseCount: number;
+  readonly promised: UgxAmount;
+  readonly promisePaid: UgxAmount;
+  readonly keptCount: number;
+  readonly brokenCount: number;
+}
+
+export async function getRecoveryExport(
+  filter: {
+    readonly kind?: RecoveryActionKind | null;
+    readonly promiseStatus?: PromiseStatus | null;
+    readonly query?: string | null;
+  } = {},
+): Promise<SecurityExport<RecoveryAction, RecoveryExportTotals>> {
+  const supabase = await createSupabaseServerClient();
+
+  let query = supabase
+    .from('loan_recovery_register')
+    .select(RECOVERY_COLUMNS)
+    .order('action_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(0, EXPORT_WINDOW);
+
+  if (filter.kind != null) query = query.eq('action_kind', filter.kind);
+  if (filter.promiseStatus != null) {
+    query = query.eq('promise_status', filter.promiseStatus);
+  }
+
+  const term = safeSearchTerm(filter.query);
+  if (term !== null) {
+    query = query.or(
+      [`loan_number.ilike.%${term}%`, `client_name.ilike.%${term}%`].join(','),
+    );
+  }
+
+  const { data, error } = await query;
+
+  if (error !== null) {
+    logger.warn('Could not read the recovery report.', { code: error.code });
+    return {
+      rows: [],
+      totals: {
+        actionCount: 0,
+        promiseCount: 0,
+        promised: UGX_ZERO,
+        promisePaid: UGX_ZERO,
+        keptCount: 0,
+        brokenCount: 0,
+      },
+      truncated: false,
+      matchedRows: 0,
+    };
+  }
+
+  const all = (data ?? []).map((row) => toRecoveryAction(row as Raw));
+  const truncated = all.length > MAX_EXPORT_ROWS;
+  const rows = truncated ? all.slice(0, MAX_EXPORT_ROWS) : all;
+
+  const promises = rows.filter((row) => row.promisedAmount !== null);
+
+  return {
+    rows,
+    totals: {
+      actionCount: rows.length,
+      promiseCount: promises.length,
+      promised: sumUgx(promises.map((row) => row.promisedAmount ?? UGX_ZERO)),
+      promisePaid: sumUgx(promises.map((row) => row.promisePaidAmount ?? UGX_ZERO)),
+      keptCount: promises.filter((row) => row.promiseStatus === 'kept').length,
+      brokenCount: promises.filter((row) => row.promiseStatus === 'broken').length,
+    },
+    truncated,
+    matchedRows: rows.length,
   };
 }

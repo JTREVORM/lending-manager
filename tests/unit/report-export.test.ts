@@ -3,14 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import { toCsv } from '@/lib/domain/reporting';
+import { csvResponse } from '@/lib/reports/csv';
+import { csvColumns } from '@/lib/reports/columns';
 import {
-  arrearsCsvColumns,
-  clientCsvColumns,
-  collectionCsvColumns,
-  csvResponse,
-  penaltyCsvColumns,
-  portfolioCsvColumns,
-} from '@/lib/reports/csv';
+  arrearsFields,
+  clientFields,
+  collectionFields,
+  penaltyFields,
+  portfolioFields,
+} from '@/lib/reports/fields';
 import type {
   ArrearsReportRow,
   ClientReportRow,
@@ -21,6 +22,12 @@ import type {
 
 /**
  * The CSV exports.
+ *
+ * Phase 16 moved the column definitions from five `*CsvColumns` builders to
+ * the field sets in `lib/reports/fields.ts`, which declare a column once and
+ * derive both the spreadsheet's rendering and the screen's from it. Every
+ * assertion below is the assertion it was before that move: the builders were
+ * replaced, not the properties they had to have.
  *
  * ## The two things a report file must get right
  *
@@ -171,12 +178,18 @@ const clientRow = (overrides: Partial<ClientReportRow> = {}): ClientReportRow =>
   ...overrides,
 });
 
-const ALL_COLUMN_SETS = () => [
-  { name: 'collections', columns: collectionCsvColumns(TIMEZONE) },
-  { name: 'portfolio', columns: portfolioCsvColumns(TIMEZONE) },
-  { name: 'arrears', columns: arrearsCsvColumns(TIMEZONE, { withRemarks: true }) },
-  { name: 'penalties', columns: penaltyCsvColumns(TIMEZONE) },
-  { name: 'clients', columns: clientCsvColumns(TIMEZONE) },
+const ALL_COLUMN_SETS = (): readonly {
+  readonly name: string;
+  readonly columns: readonly { readonly header: string }[];
+}[] => [
+  { name: 'collections', columns: csvColumns(collectionFields(TIMEZONE)) },
+  { name: 'portfolio', columns: csvColumns(portfolioFields(TIMEZONE)) },
+  {
+    name: 'arrears',
+    columns: csvColumns(arrearsFields(TIMEZONE, { withRemarks: true })),
+  },
+  { name: 'penalties', columns: csvColumns(penaltyFields(TIMEZONE)) },
+  { name: 'clients', columns: csvColumns(clientFields(TIMEZONE)) },
 ];
 
 // ===========================================================================
@@ -218,15 +231,17 @@ describe('every export', () => {
 describe('spreadsheet formula injection', () => {
   it('disarms a payload in a client name, in every report that shows one', () => {
     const files = [
-      toCsv(collectionCsvColumns(TIMEZONE), [
+      toCsv(csvColumns(collectionFields(TIMEZONE)), [
         collectionRow({ clientNameAtPayment: PAYLOAD, clientName: PAYLOAD }),
       ]),
-      toCsv(portfolioCsvColumns(TIMEZONE), [portfolioRow({ clientName: PAYLOAD })]),
-      toCsv(arrearsCsvColumns(TIMEZONE, { withRemarks: true }), [
+      toCsv(csvColumns(portfolioFields(TIMEZONE)), [
+        portfolioRow({ clientName: PAYLOAD }),
+      ]),
+      toCsv(csvColumns(arrearsFields(TIMEZONE, { withRemarks: true })), [
         arrearsRow({ clientName: PAYLOAD }),
       ]),
-      toCsv(penaltyCsvColumns(TIMEZONE), [penaltyRow({ clientName: PAYLOAD })]),
-      toCsv(clientCsvColumns(TIMEZONE), [clientRow({ fullName: PAYLOAD })]),
+      toCsv(csvColumns(penaltyFields(TIMEZONE)), [penaltyRow({ clientName: PAYLOAD })]),
+      toCsv(csvColumns(clientFields(TIMEZONE)), [clientRow({ fullName: PAYLOAD })]),
     ];
 
     for (const file of files) {
@@ -244,7 +259,7 @@ describe('spreadsheet formula injection', () => {
   });
 
   it('disarms a payload in a remark, which is free text somebody typed', () => {
-    const file = toCsv(arrearsCsvColumns(TIMEZONE, { withRemarks: true }), [
+    const file = toCsv(csvColumns(arrearsFields(TIMEZONE, { withRemarks: true })), [
       arrearsRow({
         latestRemark: {
           id: 'r1',
@@ -260,7 +275,7 @@ describe('spreadsheet formula injection', () => {
   });
 
   it('disarms a payload in a reversal reason', () => {
-    const file = toCsv(collectionCsvColumns(TIMEZONE), [
+    const file = toCsv(csvColumns(collectionFields(TIMEZONE)), [
       collectionRow({ status: 'reversed', reversalReason: '-1+1' }),
     ]);
 
@@ -268,7 +283,7 @@ describe('spreadsheet formula injection', () => {
   });
 
   it('leaves money alone, because a number carries no formula', () => {
-    const file = toCsv(collectionCsvColumns(TIMEZONE), [collectionRow()]);
+    const file = toCsv(csvColumns(collectionFields(TIMEZONE)), [collectionRow()]);
     const [header, ...rows] = file.replace('\uFEFF', '').trim().split('\r\n');
 
     // The currency belongs in the heading…
@@ -283,7 +298,7 @@ describe('spreadsheet formula injection', () => {
   });
 
   it('keeps a comma or a quote in a name from breaking the row', () => {
-    const file = toCsv(clientCsvColumns(TIMEZONE), [
+    const file = toCsv(csvColumns(clientFields(TIMEZONE)), [
       clientRow({ fullName: 'Ssemakula, Kyagaba "Junior"', villageArea: 'Kalerwe, B' }),
     ]);
 
@@ -294,7 +309,7 @@ describe('spreadsheet formula injection', () => {
   });
 
   it('keeps a newline in free text from splitting a record', () => {
-    const file = toCsv(arrearsCsvColumns(TIMEZONE, { withRemarks: true }), [
+    const file = toCsv(csvColumns(arrearsFields(TIMEZONE, { withRemarks: true })), [
       arrearsRow({
         latestRemark: {
           id: 'r1',
@@ -314,7 +329,7 @@ describe('spreadsheet formula injection', () => {
     // Without the BOM a spreadsheet opens the file in the machine's local code
     // page and the name arrives as mojibake — a correctness problem in a
     // document used to identify a borrower.
-    const file = toCsv(clientCsvColumns(TIMEZONE), [clientRow()]);
+    const file = toCsv(csvColumns(clientFields(TIMEZONE)), [clientRow()]);
 
     expect(file.startsWith('﻿')).toBe(true);
     expect(file).toContain('Nakimuli Zaïnabu');
@@ -326,7 +341,7 @@ describe('the collection export', () => {
   it('reports gross and effective amounts separately', () => {
     // A reversed payment is in the file with its recorded amount and an
     // effective amount of zero, so a reader can total either and know which.
-    const file = toCsv(collectionCsvColumns(TIMEZONE), [
+    const file = toCsv(csvColumns(collectionFields(TIMEZONE)), [
       collectionRow({
         status: 'reversed',
         isEffective: false,
@@ -345,7 +360,7 @@ describe('the collection export', () => {
   });
 
   it('carries the name recorded on the receipt', () => {
-    const file = toCsv(collectionCsvColumns(TIMEZONE), [
+    const file = toCsv(csvColumns(collectionFields(TIMEZONE)), [
       collectionRow({ clientName: 'Renamed Later', clientNameAtPayment: 'As Recorded' }),
     ]);
 
@@ -354,7 +369,7 @@ describe('the collection export', () => {
   });
 
   it('splits each payment into its components', () => {
-    const file = toCsv(collectionCsvColumns(TIMEZONE), [collectionRow()]);
+    const file = toCsv(csvColumns(collectionFields(TIMEZONE)), [collectionRow()]);
 
     const headers = file.replace('﻿', '').split('\r\n')[0] ?? '';
     expect(headers).toContain('Principal (UGX)');
@@ -367,10 +382,10 @@ describe('the collection export', () => {
 // ===========================================================================
 describe('the arrears export', () => {
   it('adds the remark columns only when the caller may read notes', () => {
-    const withNotes = arrearsCsvColumns(TIMEZONE, { withRemarks: true }).map(
+    const withNotes = csvColumns(arrearsFields(TIMEZONE, { withRemarks: true })).map(
       (column) => column.header,
     );
-    const without = arrearsCsvColumns(TIMEZONE, { withRemarks: false }).map(
+    const without = csvColumns(arrearsFields(TIMEZONE, { withRemarks: false })).map(
       (column) => column.header,
     );
 
@@ -383,7 +398,7 @@ describe('the arrears export', () => {
   });
 
   it('carries the delinquency figures a collections officer works from', () => {
-    const headers = arrearsCsvColumns(TIMEZONE, { withRemarks: false }).map(
+    const headers = csvColumns(arrearsFields(TIMEZONE, { withRemarks: false })).map(
       (column) => column.header,
     );
 
@@ -397,7 +412,7 @@ describe('the arrears export', () => {
 
   it('keeps missed collections and days past due as separate columns', () => {
     // Three missed collections on an every-three-days loan are nine days.
-    const file = toCsv(arrearsCsvColumns(TIMEZONE, { withRemarks: false }), [
+    const file = toCsv(csvColumns(arrearsFields(TIMEZONE, { withRemarks: false })), [
       arrearsRow({ missedInstallmentCount: 3, daysPastDue: 9 }),
     ]);
 
@@ -408,7 +423,7 @@ describe('the arrears export', () => {
 // ===========================================================================
 describe('the penalty export', () => {
   it('shows each charge with its own arithmetic', () => {
-    const file = toCsv(penaltyCsvColumns(TIMEZONE), [penaltyRow()]);
+    const file = toCsv(csvColumns(penaltyFields(TIMEZONE)), [penaltyRow()]);
 
     const headers = file.replace('﻿', '').split('\r\n')[0] ?? '';
     expect(headers).toContain('Charged on (UGX)');
@@ -423,7 +438,7 @@ describe('the penalty export', () => {
 // ===========================================================================
 describe('the client export', () => {
   it('shows contact details and position, and no identification number', () => {
-    const headers = clientCsvColumns(TIMEZONE).map((column) => column.header);
+    const headers = csvColumns(clientFields(TIMEZONE)).map((column) => column.header);
 
     expect(headers).toContain('Client number');
     expect(headers).toContain('Phone');
@@ -433,7 +448,7 @@ describe('the client export', () => {
   });
 
   it('says yes or no rather than true or false', () => {
-    const file = toCsv(clientCsvColumns(TIMEZONE), [
+    const file = toCsv(csvColumns(clientFields(TIMEZONE)), [
       clientRow({ hasActiveLoan: true }),
       clientRow({ clientId: 'c2', hasActiveLoan: false }),
     ]);

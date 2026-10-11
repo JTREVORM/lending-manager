@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 
 import { ArrearsReportView } from '@/components/reports/arrears-report-view';
-import { ExportLink } from '@/components/reports/export-link';
+import { ExportActions } from '@/components/reports/export-actions';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { PageHeader } from '@/components/ui/page-header';
@@ -9,6 +9,7 @@ import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardReportPage } from '@/lib/auth/guard';
+import { REPORTS, reportHref } from '@/lib/reports/registry';
 import { getCompanyBranding } from '@/lib/data/company';
 import { ARREARS_STATES, getArrearsReport } from '@/lib/data/reports';
 import { DELINQUENCY_STATE_LABELS } from '@/lib/domain/delinquency';
@@ -50,10 +51,7 @@ export default async function ArrearsReportPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  const context = await guardReportPage(`${ROUTES.reports}/arrears`, [
-    'reports:view_operational',
-    'delinquency:view',
-  ]);
+  const context = await guardReportPage(reportHref('arrears'), REPORTS.arrears.needs);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();
@@ -93,9 +91,7 @@ export default async function ArrearsReportPage({
         secondaryActions={
           <>
             <PrintButton />
-            <ExportLink
-              href={`${ROUTES.reports}/arrears/export${query === '' ? '' : `?${query}`}`}
-            />
+            <ExportActions report="arrears" filterQuery={query} />
           </>
         }
       />

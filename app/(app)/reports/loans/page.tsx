@@ -1,7 +1,7 @@
 import { Banknote } from 'lucide-react';
 
 import { Alert } from '@/components/ui/alert';
-import { ExportLink } from '@/components/reports/export-link';
+import { ExportActions } from '@/components/reports/export-actions';
 import { PortfolioReportView } from '@/components/reports/portfolio-report-view';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportFilters } from '@/components/reports/report-filters';
@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { ReportPagination } from '@/components/reports/report-pagination';
 import { ROUTES } from '@/config/app';
 import { guardReportPage } from '@/lib/auth/guard';
+import { REPORTS, reportHref } from '@/lib/reports/registry';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getPortfolioReport } from '@/lib/data/reports';
 import { LOAN_STATUSES } from '@/lib/domain/loan';
@@ -57,10 +58,7 @@ export default async function LoanPortfolioPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardReportPage(`${ROUTES.reports}/loans`, [
-    'reports:view_financial',
-    'loans:view',
-  ]);
+  await guardReportPage(reportHref('loans'), REPORTS.loans.needs);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();
@@ -102,9 +100,7 @@ export default async function LoanPortfolioPage({
         secondaryActions={
           <>
             <PrintButton />
-            <ExportLink
-              href={`${ROUTES.reports}/loans/export${query === '' ? '' : `?${query}`}`}
-            />
+            <ExportActions report="loans" filterQuery={query} />
           </>
         }
       />

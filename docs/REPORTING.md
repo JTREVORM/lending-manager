@@ -18,8 +18,10 @@ ADR-037.
 - [Who sees what](#who-sees-what)
 - [The dashboards](#the-dashboards)
 - [The reports](#the-reports)
+- [One declaration per report](#one-declaration-per-report)
 - [Filters, paging and date ranges](#filters-paging-and-date-ranges)
 - [Exports](#exports)
+- [The branded PDF](#the-branded-pdf)
 - [Printing](#printing)
 - [The client statement](#the-client-statement)
 - [The client portal](#the-client-portal)
@@ -212,12 +214,66 @@ against an eligible loan and asserts the penalty table is still empty (§108).
 | Grace period | `/reports/grace` | Who can still settle with no charge, and by when |
 | Late-payment charges | `/reports/penalties` | Every charge raised, with its own arithmetic |
 | Clients | `/reports/clients` | The directory with each borrower's outstanding and status |
+| Aging and portfolio at risk | `/reports/aging` | The live book bucketed 1–7, 8–30, 31–60, 61–90 and 90+ days late, with the principal in each |
+| Recovery file | `/reports/recovery` | Every call, visit, message, notice, note and promise recorded against a loan |
+| Guarantor exposure | `/reports/guarantors` | Every guarantee given, who gave it, what it stands behind, and whether it has been released |
+| Security held | `/reports/collateral` | Every item taken as security, its valuation, its papers, and what any sale fetched |
 | Statement | `/loans/{id}/statement` | One loan, complete: agreement, plan, payments, balance |
 
 **Active loans** and **cleared loans** are the portfolio report under a status
 filter, with the disbursement and clearance dates as columns — the same rows
 and the same totals, which is why they are one page rather than three
 near-copies (§26, §27).
+
+### A report is not the screen you act on
+
+The last four arrived in Phase 16, and each of them reads rows that an
+operational screen already shows. That is deliberate, and the distinction is
+worth stating because it is the reason they are not near-copies:
+
+* An **operational screen** is for *doing*. `/overdue` is the worklist a
+  collections officer opens every morning, ordered worst-first, with the
+  controls to record a call or take a promise beside each row.
+  Debt & Security (`/recovery`) is the same for aging, the chase and the
+  security.
+* A **report** is for *accounting*. It totals, it says which filters produced
+  it, it exports as a spreadsheet and it prints on the company's letterhead —
+  which is what a figure needs before it can be quoted in a meeting or filed.
+
+Each report that has a counterpart names it, on the page and in the hub, so
+nobody has to work out which of two similar screens they wanted.
+
+### Who sees which report
+
+| Report | Secretary/Treasurer | Manager | Owner |
+| --- | --- | --- | --- |
+| Collections | yes | yes | yes |
+| Arrears | yes | yes | yes |
+| Grace period | yes | yes | yes |
+| Clients | yes | yes | yes |
+| Recovery file | yes | yes | yes |
+| Loan portfolio | — | yes | yes |
+| Late-payment charges | — | yes | yes |
+| Aging and portfolio at risk | — | yes | yes |
+| Guarantor exposure | — | yes | yes |
+| Security held | — | yes | yes |
+
+A report is listed in the hub only when the viewer holds **every** capability
+it needs, and the page and its export route check the same list again.
+
+### Why three of the four need the financial capability
+
+`/reports/recovery` is behind `reports:view_operational`, like the arrears and
+grace reports: chasing a borrower is a Secretary/Treasurer's work, and the
+recovery file is the record of it.
+
+The other three — aging, guarantor exposure and security held — are behind
+`reports:view_financial`, which a Secretary/Treasurer does not hold. Each of
+them totals the *book*: what proportion of the portfolio is at risk, what the
+business is covered for, what the security it holds is worth. Those are
+portfolio figures, and §98's rule is that a report sits behind the capability
+of the question it answers rather than the capability of the data it happens
+to read. The underlying registers stay open to the roles that work from them.
 
 ### Deliberately deferred
 
@@ -229,8 +285,20 @@ near-copies (§26, §27).
 * **As-at historical balances** (§106). Reports are current; date ranges select
   *which rows* appear, never a historical balance, and every page says "as at
   today" rather than implying a snapshot.
-* **PDF and Excel export** (§53). CSV is built; the browser's own print view
-  covers the printable case.
+* **Excel export** (§53). The CSV opens in every spreadsheet this business
+  uses, and a native `.xlsx` writer would be a dependency and a format to
+  maintain for no question the CSV cannot answer. The *PDF* half of §53 was
+  built in Phase 16 — see [The branded PDF](#the-branded-pdf).
+* **Arbitrary column sorting.** Each report opens in the order its purpose
+  implies — aging worst-first, the recovery file newest-first, collections by
+  the moment money arrived — and the arrears report keeps the four sorts it
+  was given. Making it generic would mean every field declaring the database
+  column behind it, because a field is a read function and not a column name:
+  a second declaration to keep in step with the first, across twenty-seven
+  columns and ten reports, for a capability the spreadsheet already provides.
+  Half a sorting feature — some columns sortable and others not, with nothing
+  on screen to say which — would be worse than the clear default each report
+  has.
 
 ### Reversed payments
 
@@ -243,6 +311,74 @@ would make withdrawn money look collected (§107, §131).
 Where a gross figure is useful it is labelled as what it is — *"recorded,
 including reversed"* — and it appears only when something in the range was
 actually reversed.
+
+## One declaration per report
+
+Before Phase 16 a report existed in five places, each of which had to be
+remembered: the page that rendered it, the export route that re-ran it, the CSV
+column builder, the `REPORTS` array on the hub, and the capability list
+repeated in the page and the route. The failure mode was never a crash. It was
+a hub that did not list a report, so nobody could find it — or an export
+route whose capability list had drifted from its page's, which is a security
+defect that looks like a typo.
+
+`lib/reports/registry.ts` is the one declaration now. A report is an entry:
+
+```ts
+collections: define<CollectionRow>({
+  id: 'collections',
+  title: 'Collections',
+  description: '…',
+  group: 'money-in',
+  icon: Receipt,
+  needs: ['reports:view_operational', 'payments:view'],
+  filterKeys: ['period', 'from', 'to', 'method', 'clientId', 'loanId', 'query'],
+  defaultPeriod: 'today',
+  fields: (timeZone) => collectionFields(timeZone),
+  fileStem: 'collections',
+  actOn: { href: ROUTES.payments, label: 'the payment register' },
+}),
+```
+
+Everything else is derived from it. The hub maps over `REPORTS`. Each page
+calls `guardReportPage(reportHref(id), REPORTS[id].needs)`. Each export route
+is one line — `export const GET = reportExportRoute('collections')` — and the
+shared handler reads the same `needs` the page did, so the two cannot drift
+because they are *the same object*. `filterKeys` is what an export link carries
+forward, which is also why `page` can never reach a download: it is not a
+filter key.
+
+### A column is declared once and rendered three ways
+
+`lib/reports/columns.ts` defines a **field**: a heading, how to read the value
+out of a row, and what kind of value it is. The kind decides the renderings:
+
+| Kind | On a screen and in the PDF | In the CSV |
+| --- | --- | --- |
+| `money` | `1,250,000`, em dash where nothing is recorded | `1250000`, empty where nothing is recorded |
+| `text` | exactly as typed — `=Mukasa` stays `=Mukasa` | disarmed — `'=Mukasa` |
+| `count` | the number, em dash for absent | the number |
+| `date` | ISO, which sorts and is unambiguous | the same |
+| `instant` | in the business timezone | the same, quoted |
+
+Because both renderings come from one declaration, a heading cannot disagree
+with itself and a money column cannot be formatted for reading in the file
+somebody wants to total. `lib/reports/fields.ts` holds every report's field
+list, and `tests/unit/report-fields.test.ts` pins each file's heading row in
+full — those strings were captured from the CSV builders the field sets
+replaced, so the move provably changed no download.
+
+A field also carries a **weight**: a relative width the PDF divides the page by
+and the table reads as a minimum column width. One number, so a note column
+that is three times a date column in the document is three times it on screen.
+
+### No report exports an identification number
+
+`assertNoIdentityField` runs inside `define()`, at module load, and refuses a
+field set whose heading reads as a NIN, a national ID, an identification number
+or a passport. So a report that would export one cannot be added at all — the
+failure is at startup and in a test, never in a file somebody has already
+downloaded. §76.
 
 ## Filters, paging and date ranges
 
@@ -329,10 +465,177 @@ The cap is 5,000 rows. A filtered set that hits it keeps its rows and **loses
 its totals**, with an explanation: a partial total presented as a total is
 worse than no total, because it is a figure somebody would circulate (ADR-042).
 
+## The branded PDF
+
+Every report downloads as a spreadsheet **and** as a letterheaded document,
+because the two answer different needs. The file is for totalling: somebody
+opens it, sorts it, sums a column. The document is for circulating: somebody
+prints it, signs it off, files it, hands it across a desk. Offering one and not
+the other pushes somebody into misusing it — a CSV emailed to a committee, or a
+PDF retyped into a spreadsheet.
+
+### It is not a screenshot, and that is testable
+
+The obvious way to produce a PDF from a web application is to render the page
+in a headless browser and rasterise it. The brief rules that out, and for good
+reasons: a bitmap cannot be searched, cannot be copied out of, prints at
+whatever resolution it was captured at, and weighs megabytes per page.
+
+So the document is drawn: text operators, vector rules, one embedded image for
+the mark. `tests/unit/pdf-writer.test.ts` and `tests/unit/pdf-report.test.ts`
+read the generated files back with `pdfjs-dist` — an independent PDF engine,
+a development dependency that never ships — and assert that "Nakimuli Zaïnabu"
+and "UGX 1,250,000" come *out* of the file as strings. A screenshot has no text
+to extract, so that assertion is the constraint rather than a promise about it.
+`tests/e2e/specs/reports.spec.ts` repeats it against every report's real
+download: `/BaseFont /Helvetica` present, text-showing operators present, and
+the company name the application is displaying found in the file.
+
+### Written rather than installed
+
+`lib/reports/pdf-writer.ts` is the whole writer: a page tree, a content stream,
+a cross-reference table of byte offsets, and the standard-14 font metrics
+generated into `helvetica-metrics.ts` by `scripts/gen-font-metrics.py`. The
+part that usually forces a dependency — embedding a font programme — is not
+needed, because Helvetica and Helvetica-Bold are two of the fourteen faces
+every conforming reader already carries. That is also why a nine-page portfolio
+report is tens of kilobytes.
+
+Two consequences worth knowing:
+
+* **Everything is assembled as `latin1` bytes, never `utf8`.** The
+  cross-reference table is a list of *byte* offsets, so one multi-byte
+  character written through a utf8 encoder would shift every offset after it
+  and produce a file readers reject.
+* **Characters outside WinAnsi are substituted before measurement.** Latin-1
+  covers the characters a name like Nakimuli Zaïnabu needs, and the typographic
+  band covers a pasted en dash or curly apostrophe. Anything else becomes `?`
+  *before* the string is measured, so the width the layout used is the width
+  the reader draws — and a name that lost a character says so rather than
+  silently shortening.
+
+### What every page carries
+
+The first page has the letterhead: the mark, the registered trading name, the
+tagline, both published numbers, the P.O. Box and the office address — all from
+`company_settings` through `DocumentBranding`, which is the same shape the
+receipt and the loan statement use. A borrower holding a receipt and a manager
+holding an arrears report are looking at the same identity because all three
+read one row.
+
+Continuation pages carry a one-line running head instead, so a page separated
+from the others still identifies itself, and the column headings repeat. Every
+page footers who ran the report, when, and `Page N of M` — a figure circulated
+without those cannot be reproduced.
+
+The mark is a **JPEG beside the configured asset, by the same stem**. The web
+uses the WebP that `company_settings.logo_path` names; a PDF cannot, because it
+embeds a JPEG by passing the compressed bytes straight through `DCTDecode` —
+no decoder, no dependency, the file appears in the document verbatim — and has
+no such path for WebP. So `/brand/polytos-logo.webp` is drawn from
+`/brand/polytos-logo.jpg`, which `scripts/gen-logo-jpeg.py` generates from it:
+cropped to its opaque bounds and flattened onto white, which is what a printed
+letterhead is anyway.
+
+A business that replaces its mark changes one row and runs that script, and
+both surfaces follow — rather than the web showing the new logo while every
+printed report still carries the old one.
+
+The stored path reaches `readFile`, so it is **whitelisted** rather than
+escaped: one leading slash, then the characters a path under `public/`
+contains, then an extension. A URL, a traversal, a null byte or a shell
+metacharacter is refused. `lib/reports/letterhead.ts` holds that check with no
+`server-only` marker, because a control that cannot be unit-tested is a control
+nobody can be sure of, and `tests/unit/letterhead.test.ts` reads it.
+
+A mark that cannot be read is not a failed report. A document with the name,
+tagline, numbers and addresses but no mark is still a valid letterhead, and
+refusing a download because an asset was missing would be the wrong trade. The
+same applies to a *progressive* JPEG, which `readJpegSize` refuses because a
+reader is not guaranteed to decode one through `DCTDecode` — it would produce a
+file that opens with a blank box.
+
+### Wide reports band their columns
+
+A twenty-seven column arrears report does not fit an A4 page in any
+typography. The choice is between dropping columns from the document — so it
+disagrees with the spreadsheet — and splitting them across page widths, which
+is what a spreadsheet's own print does and what this does:
+
+| Report | Columns | Bands |
+| --- | --- | --- |
+| Late-payment charges, Clients | 13 | one |
+| Recovery file | 15 | 1–7, 8–15 |
+| Collections | 16 | 1–7, 8–16 |
+| Aging | 18 | 1–8, 9–18 |
+| Security held | 20 | 1–10, 11–20 |
+| Loan portfolio | 21 | 1–10, 11–21 |
+| Guarantor exposure | 22 | 1–11, 12–22 |
+| Arrears, Grace period | 27 | 1–14, 15–27 |
+
+Every band after the first repeats the report's **first** column — the loan
+number, the receipt number — because without it the second band is a page of
+figures nobody can line up against the first. Each band is headed with
+"Columns 15 to 27 of 27, with Loan number repeated. The same rows throughout",
+and starts on its own page: two column sets on one page, separated only by a
+heading, is how a reader comes to believe a figure belongs to the wrong column.
+
+The bands are balanced rather than filled greedily. Filling the first to the
+brim left the recovery report split 14 and 1 — one column and an anchor alone
+on a landscape page.
+
+### What decides a column's width
+
+Its **floor**, not its weight. Each kind of value has a minimum taken from
+what it has to hold: `1,250,000` measures 35.6pt so money and counts get 44
+with padding, `2026-10-11` gets 48, `11 Oct 2026, 09:30` gets 76, and a name
+gets 56 — which holds "Nakimuli Zaï…", enough to tell two borrowers apart,
+which is that column's actual job. The weights distribute only what is left
+over, so a note column still gets more room than a date column without either
+being starved.
+
+Headings wrap to two lines rather than truncating, which is what lets the
+floors be driven by the values: "Oldest missed collection" sits on two lines
+over a 48pt date column instead of dragging it 110pt wide.
+
+The first version of this layout divided the page by weight alone. On the
+arrears report that produced 16.7pt a column — two characters, so every cell
+read `Na…`. It passed the unit tests, whose fixture had four columns, and the
+browser tests, which asked whether *some* text was in the file. The tests now
+assert that a twenty-seven column report's values come back out whole.
+
+### What a document cannot do that a spreadsheet can
+
+A free-text column — the latest note on an arrears row, a recovery note, a
+release reason — is truncated in the PDF on any report that also carries a
+dozen figures. Seventy characters of prose and twelve money columns do not
+share a page width, and widening the note would squeeze the figures it sits
+beside.
+
+That is left as it is rather than worked around. The marker says the value was
+shortened, the CSV carries it in full, and somebody who needs the whole note
+opens the recovery file report or the client's record, where it has room. A
+document that dropped two money columns to fit one note would be the wrong
+trade for the reader the document is for.
+
+### The export ceiling, and the totals
+
+A selection that hits `MAX_EXPORT_ROWS` keeps its rows and **loses its
+totals**, with the reason printed where the totals would have been. This is
+ADR-042, and it matters more in a PDF than in a CSV: a spreadsheet totals the
+column itself, while a PDF's printed total is the figure somebody circulates. A
+partial total presented as a total is worse than no total.
+
+Orientation is chosen from the fields' total weight rather than their count —
+six money columns need less room than six note columns — so the grace report
+is portrait and the portfolio report is landscape.
+
 ## Printing
 
-The browser's own print view, against print styles, rather than a server-side
-PDF pipeline. Navigation, filter bars, pagination and action buttons carry
+The browser's own print view, against print styles, kept alongside the
+generated PDF above rather than replaced by it: printing the screen is the
+quickest way to get the rows in front of somebody, and the PDF is what gets
+filed or sent. Navigation, filter bars, pagination and action buttons carry
 `print:hidden`; backgrounds drop to white so a dark-mode viewer does not print
 a page of ink; table headers repeat on each page and rows do not split across
 one; the stacked mobile rendering is hidden so rows are not duplicated.

@@ -55,6 +55,12 @@ const SCREENS = [
   '/reports/clients',
   '/reports/penalties',
   '/reports/grace',
+  // Phase 16 — the four Debt & Security reports. Each is a wide table, which
+  // is exactly the shape that fails a contrast or a scroll check first.
+  '/reports/aging',
+  '/reports/recovery',
+  '/reports/guarantors',
+  '/reports/collateral',
   '/users',
   '/users/new',
   '/audit',

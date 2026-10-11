@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ArrearsReportView } from '@/components/reports/arrears-report-view';
 import { CollectionReportView } from '@/components/reports/collection-report-view';
-import { ExportLink } from '@/components/reports/export-link';
+import { ExportActions } from '@/components/reports/export-actions';
 import { PortfolioReportView } from '@/components/reports/portfolio-report-view';
 import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportFilters } from '@/components/reports/report-filters';
@@ -803,21 +803,50 @@ describe('pagination', () => {
 });
 
 // ===========================================================================
-describe('the export link', () => {
-  it('is a link that carries the current filters', () => {
-    render(<ExportLink href="/reports/collections/export?period=month&method=cash" />);
+describe('the export links', () => {
+  it('offers both formats, each carrying the current filters', () => {
+    render(<ExportActions report="collections" filterQuery="period=month&method=cash" />);
 
-    const link = screen.getByRole('link', { name: /Download CSV/ });
-    expect(link).toHaveAttribute(
+    // Two formats because they answer different needs: the spreadsheet is for
+    // totalling, the document is for circulating. Offering one would push
+    // somebody into misusing it.
+    expect(screen.getByRole('link', { name: /Download CSV/ })).toHaveAttribute(
       'href',
-      '/reports/collections/export?period=month&method=cash',
+      '/reports/collections/export?period=month&method=cash&format=csv',
+    );
+    expect(screen.getByRole('link', { name: /Download PDF/ })).toHaveAttribute(
+      'href',
+      '/reports/collections/export?period=month&method=cash&format=pdf',
     );
   });
 
-  it('is hidden from a printout, where a download link means nothing', () => {
-    render(<ExportLink href="/x" />);
+  it('works for a report that takes no filters', () => {
+    render(<ExportActions report="penalties" filterQuery="" />);
 
-    expect(screen.getByRole('link').className).toContain('print:hidden');
+    expect(screen.getByRole('link', { name: /Download CSV/ })).toHaveAttribute(
+      'href',
+      '/reports/penalties/export?format=csv',
+    );
+  });
+
+  it('never carries the page somebody was on into a file', () => {
+    // An export holds every matching row. A `page` parameter reaching the
+    // route would make the file page three of the report, which is a subtle
+    // lie about what was downloaded — so `page` is not a filter key and the
+    // query handed here has already been narrowed to the ones that are.
+    render(<ExportActions report="collections" filterQuery="period=month" />);
+
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href')).not.toContain('page=');
+    }
+  });
+
+  it('hides both from a printout, where a download link means nothing', () => {
+    render(<ExportActions report="grace" filterQuery="" />);
+
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.className).toContain('print:hidden');
+    }
   });
 });
 
