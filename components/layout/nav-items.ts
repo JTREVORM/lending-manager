@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   Banknote,
+  Bell,
   ChartColumn,
   HeartHandshake,
   Landmark,
@@ -204,6 +205,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
     phase: 14,
     group: 'operations',
     prefetch: false,
+  },
+  // Phase 15. Last in Operations, because the bell in the header is how
+  // somebody reaches this most of the time; the entry is for the person who
+  // wants the history and the filters.
+  {
+    href: ROUTES.notifications,
+    label: 'Notifications',
+    shortLabel: 'Alerts',
+    icon: Bell,
+    permission: 'notifications:view',
+    phase: 15,
+    group: 'operations',
   },
   // --- Finance -------------------------------------------------------------
   // Phase 11. The overview first, because "where is the money" is the

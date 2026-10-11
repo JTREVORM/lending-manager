@@ -82,6 +82,7 @@ test.describe('the response headers', () => {
       '/loans',
       '/payments/new',
       '/overdue',
+      '/notifications',
       '/recovery',
       '/reports',
     ]) {

@@ -595,6 +595,11 @@ describeDb('payment row level security', () => {
         // Phase 13. The loan module's register: the loan, its product, its
         // collection state and its guarantor count.
         'loan_workflow_register',
+        // Phase 15. `security_invoker` on both, which is what makes the
+        // notification policy — and therefore the per-reader audience — apply
+        // to a view read rather than the view owner's.
+        'notification_feed',
+        'notification_summary',
         'payment_collection_totals',
         'payment_register',
         // Phase 14. PAR1/7/30/60/90 and the aging buckets, whole book and

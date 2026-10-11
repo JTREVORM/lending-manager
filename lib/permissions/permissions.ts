@@ -302,6 +302,21 @@ export const PERMISSIONS = [
   /** See a loan's expiry penalty: its basis, rate, amount and what remains. */
   'penalties:view',
 
+  // Phase 15. The notification *surface*, not the rows.
+  //
+  // It grants nobody a notification they could not already have read: every
+  // row is behind the capability of the thing it is about, so a
+  // Secretary/Treasurer holding this sees a loan awaiting approval and does
+  // not see a reversal or a variance. It exists so the route has a capability
+  // of its own rather than borrowing `dashboard:view` — the defect Phases 3,
+  // 6 and 8 each found once, where a placeholder route stayed open behind the
+  // broad capability after the real screen landed.
+  //
+  // There is no `notifications:manage` and no delete. The stream is a log of
+  // what happened; reading one is a receipt, and nothing un-happens.
+  /** See the notification bell and the notifications page. */
+  'notifications:view',
+
   // Phase 14. Security and recovery.
   //
   // Reading and recording are split, and recording is one capability rather
@@ -449,6 +464,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // Chasing collections is this role's daily work.
     'delinquency:view',
     'penalties:view',
+    'notifications:view',
 
     // Phase 14. The front office takes the item in and makes the calls, so it
     // records both. It does not hold `guarantors:release`: discharging a
@@ -553,6 +569,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'delinquency:view',
     'penalties:view',
+    'notifications:view',
 
     'collateral:view',
     'collateral:manage',
@@ -644,6 +661,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'delinquency:view',
     'penalties:view',
+    'notifications:view',
 
     'collateral:view',
     'collateral:manage',

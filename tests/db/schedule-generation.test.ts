@@ -109,6 +109,33 @@ async function regenerateWith(loanId: string, setClause: string): Promise<void> 
   await query(`select public.generate_loan_schedule($1)`, [loanId]);
 }
 
+/**
+ * The whole loan's history, moved to sit before a given disbursement instant.
+ *
+ * Re-anchoring only `disbursed_at` was enough until the day after it was
+ * written. These tests pin a disbursement to a literal date, and
+ * `loans_disbursed_after_approved` compares it against `approved_at`, which
+ * is `now()` for a loan the fixture just created — so the suite passed while
+ * "today" was still 10 October and failed at midnight with
+ * `loans_disbursed_after_approved`, having nothing to do with what any of
+ * these tests is about.
+ *
+ * `loans_approved_after_created` then rules out pulling approval back on its
+ * own. Both constraints are right: a loan disbursed at noon on the 10th was
+ * created, submitted and approved before that, and a loan approved after its
+ * own disbursement is the impossible history the constraint exists to refuse.
+ * So the fixture moves the whole chain, which is what "disbursed on the 10th"
+ * always meant.
+ */
+function historyBefore(instantExpression: string): string {
+  return [
+    `disbursed_at = ${instantExpression}`,
+    `approved_at = ${instantExpression} - interval '1 hour'`,
+    `submitted_at = ${instantExpression} - interval '2 hours'`,
+    `created_at = ${instantExpression} - interval '3 hours'`,
+  ].join(', ');
+}
+
 async function disburseOnDate(
   loanId: string,
   actors: LoanScenario,
@@ -121,7 +148,9 @@ async function disburseOnDate(
   // unambiguous and the date under test is the date intended.
   await regenerateWith(
     loanId,
-    `disbursed_at = ('${businessDate}'::date + time '12:00') at time zone 'Africa/Kampala'`,
+    historyBefore(
+      `(('${businessDate}'::date + time '12:00') at time zone 'Africa/Kampala')`,
+    ),
   );
 }
 
@@ -132,7 +161,7 @@ async function disburseAtInstant(
   instantUtc: string,
 ): Promise<void> {
   await disburseLoan(loanId, actors);
-  await regenerateWith(loanId, `disbursed_at = '${instantUtc}'::timestamptz`);
+  await regenerateWith(loanId, historyBefore(`('${instantUtc}'::timestamptz)`));
 }
 
 describeDb('repayment schedule generation', () => {

@@ -133,6 +133,11 @@ test.describe('the phone and tablet drawer', () => {
   test('no destination label is clipped in the rail', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /main menu/i }).click();
+    // The count below is a plain number, so `expect` cannot retry it. Closed,
+    // the drawer is `invisible`, so every span inside it is invisible too and
+    // a count taken mid-transition is legitimately zero. Wait for the rail
+    // the way every other test here does before measuring anything in it.
+    await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
 
     // The menu band only. The brand block clamps a long company name to two
     // lines and the footer truncates a long person's name on purpose, and
@@ -170,6 +175,7 @@ test.describe('the phone and tablet drawer', () => {
       '/payments',
       '/payments/new',
       '/overdue',
+      '/notifications',
       '/recovery',
       '/guarantors/register',
       '/payments/summary',

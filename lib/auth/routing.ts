@@ -83,6 +83,12 @@ const ROUTE_PERMISSIONS: readonly {
   // `/guarantors` prefix and `guarantors:view` is the right floor for it,
   // with the page itself checking the narrower capabilities it needs.
   { prefix: ROUTES.recovery, permission: 'recovery:view' },
+  // Phase 15. `notifications:view` gates the surface. It opens no row a
+  // reader could not already have read — every notification is behind the
+  // capability of the thing it is about — but the route gets a capability of
+  // its own rather than borrowing `dashboard:view`, which is the defect
+  // Phases 3, 6 and 8 each found once.
+  { prefix: ROUTES.notifications, permission: 'notifications:view' },
   // Phase 8. `reports:view_operational` is the floor for the reporting
   // surface, not `dashboard:view`: §98 is explicit that a dashboard
   // capability must not open a report, which is the third time this project

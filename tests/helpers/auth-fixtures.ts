@@ -167,6 +167,18 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'loan_business_details', trigger: 'loan_business_details_guard' },
     { table: 'loans', trigger: 'loans_guard_transition' },
     { table: 'loans', trigger: 'audit_loan_change' },
+    // Phase 15. Notifications and their read receipts are append-only in the
+    // same way, and they hold every reference with `on delete restrict` for
+    // exactly that reason — SET NULL and CASCADE are both mutations such a
+    // table refuses. So they are cleared explicitly, receipts first, through
+    // the same owner-level exemption, and the generation triggers are
+    // suspended so tearing down does not raise new notifications about the
+    // teardown.
+    { table: 'notification_reads', trigger: 'notification_reads_no_delete' },
+    { table: 'notifications', trigger: 'notifications_no_delete' },
+    { table: 'loans', trigger: 'notify_loan_transition' },
+    { table: 'loan_payments', trigger: 'notify_payment_reversed' },
+    { table: 'clients', trigger: 'notify_client_blacklisted' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -184,6 +196,12 @@ export async function deleteTestUsers(): Promise<void> {
     // global setup, so everything above it is a fixture's and nothing at or
     // below it is.
     await query(`delete from public.audit_log where id > $1`, [seedAuditBoundary()]);
+
+    // Phase 15. Before the profiles and branches they name with
+    // `on delete restrict`, and receipts before the notifications they point
+    // at.
+    await query(`delete from public.notification_reads`);
+    await query(`delete from public.notifications`);
 
     // The reversal pointer self-references with `on delete restrict`, so an
     // entry and its contra cannot both go in one statement. Unstamping first

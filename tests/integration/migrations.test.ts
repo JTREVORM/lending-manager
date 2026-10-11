@@ -325,6 +325,13 @@ describe('column type discipline', () => {
       // Phase 12, for the same reason as the Phase 4 snapshots: the row
       // records the moment the product's terms were fixed onto the loan.
       loan_product_snapshots: 'captured_at',
+      // Phase 15. A notification *is* the record that something occurred, and
+      // a read receipt is the record that somebody read it, so in both cases
+      // the creation instant already has a name that says what it means. A
+      // `created_at` beside either would be two columns holding one value,
+      // which is how they eventually come to disagree.
+      notifications: 'occurred_at',
+      notification_reads: 'read_at',
     };
 
     /**
@@ -402,6 +409,11 @@ describe('column type discipline', () => {
       // the loan goes bad — which is precisely what the table exists to
       // prevent.
       'loan_recovery_actions',
+      // Phase 15. Both append-only, and neither has anything an update could
+      // change: a notification records what happened and a receipt records
+      // that it was read. Nothing un-happens and nobody un-reads.
+      'notifications',
+      'notification_reads',
     ]);
 
     for (const table of createdTables) {
@@ -766,6 +778,23 @@ describe('types stay in step with the schema', () => {
       // Phase 14. Trigger functions on the security and recovery tables.
       'loan_collateral_guard',
       'loan_recovery_actions_stamp_author',
+      // Phase 15. The ten generation triggers, and the one writer they all
+      // call. `raise_notification` is definer-only and granted to nobody —
+      // a session that could raise a notification could address one to any
+      // capability it liked — so none of these is reachable over the API and
+      // none is generated. `mark_notifications_read` *is* callable and *is*
+      // in the types; it is the only one.
+      'raise_notification',
+      'notify_loan_transition',
+      'notify_payment_reversed',
+      'notify_penalty_applied',
+      'notify_promise_recorded',
+      'notify_collateral_realised',
+      'notify_transfer_pending',
+      'notify_expense_pending',
+      'notify_reconciliation_variance',
+      'notify_low_float',
+      'notify_client_blacklisted',
     ]);
 
     for (const functionName of functionNames) {

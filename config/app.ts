@@ -65,7 +65,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  * Delivery phase of this codebase. Used by the UI to label functionality that
  * is deliberately not built yet, so staff are never shown a dead control.
  */
-export const CURRENT_PHASE = 14 as const;
+export const CURRENT_PHASE = 15 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
@@ -92,6 +92,16 @@ export const ROUTES = {
   recovery: '/recovery',
   collectionSummary: '/payments/summary',
   guarantorRegister: '/guarantors/register',
+
+  /**
+   * Phase 15. The notification stream.
+   *
+   * Its own route rather than a panel only: the bell holds the five most
+   * recent unread, which is what somebody standing at the counter needs, and
+   * everything else — the history, the filters, marking a batch read — is a
+   * screen.
+   */
+  notifications: '/notifications',
 
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',

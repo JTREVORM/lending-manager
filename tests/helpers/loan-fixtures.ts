@@ -446,6 +446,13 @@ export async function deleteTestLoans(): Promise<void> {
     // suspending them here an exemption rather than a hole.
     { table: 'loan_collateral', trigger: 'loan_collateral_guard' },
     { table: 'loan_recovery_actions', trigger: 'loan_recovery_actions_no_delete' },
+    // Phase 15. The notifications these fixtures' lifecycles raised, and the
+    // triggers that would raise more while the teardown runs.
+    { table: 'notification_reads', trigger: 'notification_reads_no_delete' },
+    { table: 'notifications', trigger: 'notifications_no_delete' },
+    { table: 'loans', trigger: 'notify_loan_transition' },
+    { table: 'loan_payments', trigger: 'notify_payment_reversed' },
+    { table: 'loan_collateral', trigger: 'notify_collateral_realised' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -475,6 +482,11 @@ export async function deleteTestLoans(): Promise<void> {
     await query(`delete from public.loan_product_snapshots`);
     // Phase 13. The documents go before the loan and the guarantor rows they
     // reference, both of which they hold with `on delete restrict`.
+    // Phase 15. Notifications hold the branch and the actor with
+    // `on delete restrict`, so they go before anything else this teardown
+    // touches; receipts first, because they point at the notifications.
+    await query(`delete from public.notification_reads`);
+    await query(`delete from public.notifications`);
     await query(`delete from public.loan_documents`);
     // Phase 14. Both reference the loan with `on delete restrict`, and a
     // correction references the action it corrects, so the corrections go

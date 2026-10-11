@@ -304,6 +304,9 @@ describe('authorization matrix', () => {
     // why `client` is absent from both.
     'delinquency:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'penalties:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    // Phase 15. The surface, not the rows: every notification is behind the
+    // capability of the thing it is about, so this grants no new data.
+    'notifications:view': ['secretary_treasurer', 'manager', 'owner_admin'],
 
     // --- Phase 14: security and recovery ------------------------------------
     // The front office takes the item in and makes the calls, so all four go

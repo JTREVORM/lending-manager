@@ -77,6 +77,7 @@ const OWNER_SCREENS: readonly Screen[] = [
   { name: 'payments', path: '/payments', proves: /Payments/ },
   { name: 'record a payment', path: '/payments/new', proves: /Record a payment/ },
   { name: 'overdue', path: '/overdue', proves: /Overdue/ },
+  { name: 'notifications', path: '/notifications', proves: /Notifications/ },
   { name: 'debt and security', path: '/recovery', proves: /Debt & Security/ },
   { name: 'risk monitoring', path: '/recovery?view=risk', proves: /Portfolio at risk/ },
   {

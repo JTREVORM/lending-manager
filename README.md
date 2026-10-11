@@ -197,6 +197,8 @@ docs/          Architecture, database, decisions, security
 | [docs/UPGRADE-PHASE-4-REPORT.md](docs/UPGRADE-PHASE-4-REPORT.md) | Upgrade Phase 4: the loan module reorganised — a typed closure, product-specific application data, guarantors captured on the application with a versioned undertaking, and the two defects building the screens found. |
 | [docs/DEBT-AND-SECURITY.md](docs/DEBT-AND-SECURITY.md) | Security taken against a loan, releasing a guarantor, the append-only recovery file, promises to pay whose verdict is derived from the payments, aging buckets, PAR, and collections sliceable by branch and product. |
 | [docs/UPGRADE-PHASE-5-REPORT.md](docs/UPGRADE-PHASE-5-REPORT.md) | Upgrade Phase 5: collections and Debt & Security — the migrations, the schema, the screens, the test counts, the reconciliation evidence and the commit. |
+| [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) | The notification stream: one row per event addressed to a capability, read state per person, what raises each of the fourteen categories, why nothing is raised by the calendar, and the backfill that reconstructs the stream for the events that came before the triggers. |
+| [docs/UPGRADE-PHASE-6-REPORT.md](docs/UPGRADE-PHASE-6-REPORT.md) | Upgrade Phase 6: notifications — the migrations, the schema, the screens, the test counts, the live verification and the commit. |
 
 Three decisions worth knowing before writing any code here:
 

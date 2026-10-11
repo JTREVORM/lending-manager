@@ -93,6 +93,10 @@ describeDb('tables', () => {
     'loan_salary_details',
     'loan_schedules',
     'loans',
+    // Phase 15: one row per noteworthy event, addressed to the capability
+    // that may read it, and who has read which. Both append-only.
+    'notification_reads',
+    'notifications',
     // Phase 11: fees and income that is not interest or a penalty. Those two
     // are written by the lending functions and refused here.
     'other_income',
@@ -414,6 +418,17 @@ describeDb('foreign keys', () => {
       'loans.loan_product_id -> loan_products (r)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
+      // Phase 15. `r` on every reference both tables hold, and that is the
+      // whole point: they refuse UPDATE and DELETE, and SET NULL and CASCADE
+      // are both mutations. A nulling reference would make deleting a profile
+      // fail with a confusing error about append-only tables rather than a
+      // clear one about the reference.
+      'notification_reads.notification_id -> notifications (r)',
+      'notification_reads.profile_id -> profiles (r)',
+      'notifications.actor_profile_id -> profiles (r)',
+      'notifications.audience_branch_id -> branches (r)',
+      'notifications.audience_permission -> permissions (r)',
+      'notifications.audience_profile_id -> profiles (r)',
       // Phase 6. `r` restricts everywhere, with no `c` and no `n`: a payment
       // is financial evidence, so nothing it references may be deleted out
       // from under it and no attribution may be degraded to NULL. That is

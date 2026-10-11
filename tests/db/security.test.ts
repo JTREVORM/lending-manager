@@ -222,6 +222,14 @@ describeDb('row level security', () => {
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      // Phase 15. The stream, the receipts and the two views over them.
+      // SELECT only on all four: `raise_notification` and
+      // `mark_notifications_read` are the only writers and both run as the
+      // table owner, so no session has a write privilege to misuse.
+      'notification_feed:SELECT',
+      'notification_reads:SELECT',
+      'notification_summary:SELECT',
+      'notifications:SELECT',
       // Phase 6. The payment ledger: SELECT only. post_payment and
       // reverse_payment are the only writers, and they run as the table owner.
       'other_income:SELECT',
@@ -372,6 +380,12 @@ describeDb('row level security', () => {
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      // Phase 15. SELECT only on both, matching the only privileges granted.
+      // The notification policy is three independent narrowings — the
+      // capability of the thing it is about, an optional person, an optional
+      // branch; the receipt policy is "mine and nobody else's".
+      'notification_reads:SELECT',
+      'notifications:SELECT',
       'other_income:SELECT',
       'payment_allocations:SELECT',
       'permissions:SELECT',
@@ -723,6 +737,10 @@ describeDb('views', () => {
         // Phase 13. The loan module's register: the loan, its product, its
         // collection state and its guarantor count.
         'loan_workflow_register',
+        // Phase 15. The caller's notifications, each with whether that caller
+        // has read it, and the one-row count the bell shows.
+        'notification_feed',
+        'notification_summary',
         'payment_collection_totals',
         'payment_register',
         // Phase 14. PAR1/7/30/60/90 and the aging buckets, for the whole
@@ -780,7 +798,7 @@ describeDb('views', () => {
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(31);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(33);
   });
 });
 
@@ -894,7 +912,21 @@ describeDb('privileged functions', () => {
       'loans_guard_transition',
       'loans_stamp_branch',
       'loans_stamp_product',
+      // Phase 15. The one writer of the stream, and the ten triggers that
+      // call it. Every one is a trigger function or definer-only: none is
+      // granted to `authenticated`, which the next assertion checks.
+      'mark_notifications_read',
       'next_reference',
+      'notify_client_blacklisted',
+      'notify_collateral_realised',
+      'notify_expense_pending',
+      'notify_loan_transition',
+      'notify_low_float',
+      'notify_payment_reversed',
+      'notify_penalty_applied',
+      'notify_promise_recorded',
+      'notify_reconciliation_variance',
+      'notify_transfer_pending',
       'post_disbursement_journal',
       'post_expense_journal',
       'post_journal',
@@ -906,6 +938,10 @@ describeDb('privileged functions', () => {
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
       'purge_expired_rate_limits',
+      // Phase 15. The only writer of the notification stream. Definer-only
+      // and granted to nobody: a session that could raise a notification
+      // could address one to any capability it liked.
+      'raise_notification',
       'record_audit_event',
       'record_expense',
       'record_other_income',
@@ -1050,6 +1086,11 @@ describeDb('privileged functions', () => {
       'loan_outstanding_as_of',
       'loan_penalty_outstanding',
       'loan_total_outstanding',
+      // Phase 15. Acts on the calling user alone: the profile whose read
+      // receipts it writes is derived from the session, never passed, so the
+      // array of ids a caller supplies can only narrow what *they* can
+      // already see. Nothing to forge.
+      'mark_notifications_read',
       'mask_nin',
       'payment_business_date',
       // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.

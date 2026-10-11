@@ -43,6 +43,7 @@ const SCREENS = [
   // screens in the application — a PAR table, a twelve-column guarantor
   // register and five slice tables — and density is where contrast and
   // header association go wrong.
+  '/notifications',
   '/recovery',
   '/recovery?view=risk',
   '/guarantors/register',

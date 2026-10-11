@@ -2532,6 +2532,80 @@ export type Database = {
         };
         Relationships: [];
       };
+
+      // --- Phase 15: notifications -------------------------------------------
+      // Neither table has an Update or a Delete shape. Both refuse the pair
+      // with statement-level triggers, and both hold every reference with
+      // `on delete restrict` for exactly that reason.
+      notifications: {
+        Row: {
+          id: string;
+          category: string;
+          severity: string;
+          title: string;
+          body: string | null;
+          audience_permission: string;
+          audience_profile_id: string | null;
+          audience_branch_id: string | null;
+          entity_type: string;
+          entity_id: string | null;
+          actor_profile_id: string | null;
+          actor_label: string;
+          occurred_at: string;
+          dedupe_key: string;
+        };
+        Insert: {
+          id?: string;
+          category: string;
+          severity?: string;
+          title: string;
+          body?: string | null;
+          audience_permission: string;
+          audience_profile_id?: string | null;
+          audience_branch_id?: string | null;
+          entity_type: string;
+          entity_id?: string | null;
+          actor_profile_id?: string | null;
+          actor_label?: string;
+          occurred_at?: string;
+          dedupe_key: string;
+        };
+        Update: {
+          id?: string;
+          category?: string;
+          severity?: string;
+          title?: string;
+          body?: string | null;
+          audience_permission?: string;
+          audience_profile_id?: string | null;
+          audience_branch_id?: string | null;
+          entity_type?: string;
+          entity_id?: string | null;
+          actor_profile_id?: string | null;
+          actor_label?: string;
+          occurred_at?: string;
+          dedupe_key?: string;
+        };
+        Relationships: [];
+      };
+      notification_reads: {
+        Row: {
+          notification_id: string;
+          profile_id: string;
+          read_at: string;
+        };
+        Insert: {
+          notification_id: string;
+          profile_id: string;
+          read_at?: string;
+        };
+        Update: {
+          notification_id?: string;
+          profile_id?: string;
+          read_at?: string;
+        };
+        Relationships: [];
+      };
     };
 
     /**
@@ -3597,6 +3671,39 @@ export type Database = {
         };
         Relationships: [];
       };
+
+      // --- Phase 15: the feed and the bell's count ---------------------------
+      notification_feed: {
+        Row: {
+          id: string | null;
+          category: string | null;
+          severity: string | null;
+          title: string | null;
+          body: string | null;
+          entity_type: string | null;
+          entity_id: string | null;
+          actor_profile_id: string | null;
+          actor_label: string | null;
+          occurred_at: string | null;
+          audience_permission: string | null;
+          audience_profile_id: string | null;
+          audience_branch_id: string | null;
+          is_personal: boolean | null;
+          is_read: boolean | null;
+          read_at: string | null;
+        };
+        Relationships: [];
+      };
+      notification_summary: {
+        Row: {
+          total: number | null;
+          unread: number | null;
+          unread_urgent: number | null;
+          unread_attention: number | null;
+          newest_unread_at: string | null;
+        };
+        Relationships: [];
+      };
     };
 
     Functions: {
@@ -3632,6 +3739,16 @@ export type Database = {
       release_loan_guarantor: {
         Args: { p_loan_guarantor_id: string; p_reason: string };
         Returns: string;
+      };
+
+      /**
+       * Phase 15. Marks notifications read for the calling user. Null marks
+       * everything they can see; the profile is derived from the session, so
+       * a caller cannot write somebody else's receipt.
+       */
+      mark_notifications_read: {
+        Args: { p_ids?: string[] | null };
+        Returns: number;
       };
 
       /**

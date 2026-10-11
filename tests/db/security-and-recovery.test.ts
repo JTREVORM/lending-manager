@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { asUser, asUserScript, deleteTestUsers } from '../helpers/auth-fixtures';
+import {
+  asUser,
+  asUserScript,
+  createTestUser,
+  deleteTestUsers,
+} from '../helpers/auth-fixtures';
 import {
   approveLoan,
   attachExtraGuarantorToLoan,
@@ -166,24 +171,25 @@ describeDb('security and recovery', () => {
       const scenario = await createLoanScenario();
       const loanId = await createDraftLoan(scenario.clientId);
 
-      // Every staff role in this system holds `collateral:manage` — the front
-      // office takes the item in — so there is no role to test as. The
-      // capability is withdrawn inside the transaction instead, which is
-      // exactly what the policy reads, and the insert is refused on the
-      // policy rather than on a missing grant.
-      const attempt = await asUserScript(scenario.secretary, [
-        {
-          sql: `delete from public.role_permissions
-                 where role_key = 'secretary_treasurer'
-                   and permission_key = 'collateral:manage'`,
-        },
-        {
-          sql: `insert into public.loan_collateral
-                  (loan_id, item_type, description, estimated_value, valued_on)
-                values ($1, 'motorcycle', 'Red Bajaj Boxer', 1500000, current_date)`,
-          params: [loanId],
-        },
-      ]);
+      // Every staff role holds `collateral:manage` — the front office takes
+      // the item in — so the honest negative case is a borrower, who holds
+      // `portal:view` and nothing else.
+      //
+      // An earlier version of this test tried to withdraw the capability from
+      // the Secretary inside the transaction and then insert. It passed, but
+      // for the wrong reason: `authenticated` has no DELETE on
+      // `role_permissions`, so the *delete* was refused with 42501 and the
+      // insert never ran. The assertion was true of a statement the test was
+      // not about.
+      const borrower = await createTestUser('client');
+
+      const attempt = await asUser(
+        borrower,
+        `insert into public.loan_collateral
+           (loan_id, item_type, description, estimated_value, valued_on)
+         values ($1, 'motorcycle', 'Red Bajaj Boxer', 1500000, current_date)`,
+        [loanId],
+      );
 
       expect(attempt.ok).toBe(false);
       expect(attempt.code).toBe('42501');
