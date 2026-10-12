@@ -173,13 +173,19 @@ which is the mistake that turns a presentation decision into a leak.
 * **The loan book** — active and cleared counts, outstanding portfolio split
   into contract and charges, arrears; the seven mutually exclusive delinquency
   statuses; charges raised, unpaid and pending.
+* **Portfolio at risk** — PAR 30 with the principal behind it, the 90+ bucket,
+  and the live book as the denominator.
+* **Promises and follow-ups** — promises due today, promises broken with the
+  amount undertaken, and follow-ups overdue.
+* **Awaiting a decision** — transfers, expenses and cash counts waiting.
 * **Due today** — the collection sheet, with a link to the full overdue list.
 * **Recent payments**, **the next seven days**, and three activity panels:
   recently paid out, recently settled, recently charged.
 
 ### Manager
 
-The loan book, today with the method split, the collection sheet, recent
+The loan book, portfolio at risk, promises and follow-ups, anything awaiting
+their decision, today with the method split, the collection sheet, recent
 payments and the next seven days. **No business summary**:
 `reports:view_sensitive` is the Owner's, and supervising lending does not
 require knowing what the business earns (§44, §42).
@@ -187,9 +193,40 @@ require knowing what the business earns (§44, §42).
 ### Secretary/Treasurer
 
 Today with the method split, the collection sheet, the next seven days, recent
-payments, and the quick actions — record a payment, find a client, register a
-client, open the reports. **No portfolio-wide outstanding, no interest
-figures.**
+payments, promises and follow-ups, anything awaiting their decision, and the
+quick actions — record a payment, find a client, register a client, open the
+reports. **No portfolio-wide outstanding, no interest figures, and no
+portfolio at risk**: PAR is a reading of the whole book, behind
+`reports:view_financial`.
+
+### What the dashboard shows about the later modules
+
+Risk monitoring, the recovery file and the money movements that wait for a
+decision all arrived after the dashboard was written, and each was reachable
+only by opening the screen it lives on — so the page a person opens first said
+nothing about any of them. Three sections now read them, and each is a read of
+a module built above rather than a figure computed here:
+
+| Section | Reads | Behind |
+| --- | --- | --- |
+| Portfolio at risk | `portfolio_at_risk` | `reports:view_financial` + `delinquency:view` |
+| Promises and follow-ups | `loan_recovery_status` | `recovery:view` |
+| Awaiting a decision | the three registers, counted | each approval capability, separately |
+
+Two things about them are worth stating, because both were got wrong first
+and caught by a test.
+
+**A promise paid late is still broken.** The verdict counts the payments
+received between the action date and the *promised* date. A borrower who said
+Monday and paid Thursday settled the loan and did not keep the promise — the
+verdict is about whether the undertaking was met, which is what makes it worth
+recording at all. The card said the opposite in its first version.
+
+**"Loans in recovery" is not the row count.** `loan_recovery_status` holds
+every live or cleared loan, chased or not. On the live book that is 26 rows
+against 4 loans with an action on file, so reporting the row count would have
+overstated the chasing six times over, in the direction that flatters. The
+figure is loans with something recorded against them.
 
 ### Borrower
 

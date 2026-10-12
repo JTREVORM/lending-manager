@@ -4,20 +4,26 @@ import Link from 'next/link';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ActionLink } from '@/components/ui/page-header';
+import { AwaitingDecision } from '@/components/dashboard/awaiting-decision';
 import { CollectionSheet } from '@/components/dashboard/collection-sheet';
 import { ExecutiveCards } from '@/components/dashboard/executive-cards';
 import { LoanActivity } from '@/components/dashboard/loan-activity';
 import { PortfolioCards } from '@/components/dashboard/portfolio-cards';
 import { RecentPayments } from '@/components/dashboard/recent-payments';
+import { RecoveryWorkloadCards } from '@/components/dashboard/recovery-workload';
+import { RiskHeadline } from '@/components/dashboard/risk-headline';
 import { TodayCards } from '@/components/dashboard/today-cards';
 import { UpcomingCollections } from '@/components/dashboard/upcoming-collections';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
+import { getPortfolioAtRisk } from '@/lib/data/security';
 import {
   getCollectionSummary,
+  getPendingApprovals,
   getPortfolioSummary,
+  getRecoveryWorkload,
   listCollectionSheet,
   listRecentClearances,
   listRecentDisbursements,
@@ -92,6 +98,15 @@ export default async function DashboardPage() {
   const seePayments = contextCan(context, 'payments:view');
   const mayCollect = contextCan(context, 'payments:create');
 
+  // Phase 17. Three capabilities the dashboard had no use for until the
+  // modules behind them existed.
+  const seeRecovery = contextCan(context, 'recovery:view');
+  const mayApproveTransfers = contextCan(context, 'transfers:approve');
+  const mayApproveExpenses = contextCan(context, 'expenses:approve');
+  const mayApproveCounts = contextCan(context, 'reconciliation:approve');
+  const mayApproveAnything =
+    mayApproveTransfers || mayApproveExpenses || mayApproveCounts;
+
   const today = businessToday(new Date(), branding.timezone);
 
   const [
@@ -103,6 +118,9 @@ export default async function DashboardPage() {
     disbursements,
     clearances,
     penalised,
+    risk,
+    recoveryWorkload,
+    pendingApprovals,
   ] = await Promise.all([
     seeFinancial || seeSensitive ? getPortfolioSummary() : Promise.resolve(null),
     seeOperational ? getCollectionSummary() : Promise.resolve(null),
@@ -116,6 +134,23 @@ export default async function DashboardPage() {
     seeSensitive ? listRecentDisbursements(4) : Promise.resolve([]),
     seeSensitive ? listRecentClearances(4) : Promise.resolve([]),
     seeSensitive ? listRecentlyPenalised(4) : Promise.resolve([]),
+
+    // Portfolio at risk is a reading of the live book, so it needs both the
+    // delinquency data and the entitlement to portfolio-wide figures — the
+    // same pair the aging report is behind.
+    seeFinancial && seeDelinquency ? getPortfolioAtRisk() : Promise.resolve(null),
+
+    seeRecovery ? getRecoveryWorkload(today) : Promise.resolve(null),
+
+    // Each count is skipped for a caller who could not act on it, so the
+    // figure is absent from the page rather than hidden in its markup.
+    mayApproveAnything
+      ? getPendingApprovals({
+          transfers: mayApproveTransfers,
+          expenses: mayApproveExpenses,
+          reconciliations: mayApproveCounts,
+        })
+      : Promise.resolve(null),
   ]);
 
   const summaryUnavailable =
@@ -244,6 +279,21 @@ export default async function DashboardPage() {
       {seeFinancial && portfolio !== null ? (
         <PortfolioCards summary={portfolio} canSeeReports={seeOperational} />
       ) : null}
+
+      {/*
+        Phase 17. Everything below here is a read of a module built after the
+        dashboard was written — risk monitoring, the recovery file, and the
+        money movements that wait for a decision. Each was reachable only by
+        opening the screen it lives on, which meant the page a person opens
+        first said nothing about any of it.
+      */}
+      {risk === null ? null : <RiskHeadline slice={risk.portfolio} />}
+
+      {recoveryWorkload === null ? null : (
+        <RecoveryWorkloadCards workload={recoveryWorkload} />
+      )}
+
+      {pendingApprovals === null ? null : <AwaitingDecision pending={pendingApprovals} />}
 
       {seeDelinquency && sheet !== null ? (
         <section aria-labelledby="sheet-heading" className="min-w-0 space-y-3">

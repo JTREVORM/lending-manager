@@ -201,6 +201,7 @@ docs/          Architecture, database, decisions, security
 | [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) | The notification stream: one row per event addressed to a capability, read state per person, what raises each of the fourteen categories, why nothing is raised by the calendar, and the backfill that reconstructs the stream for the events that came before the triggers. |
 | [docs/UPGRADE-PHASE-6-REPORT.md](docs/UPGRADE-PHASE-6-REPORT.md) | Upgrade Phase 6: notifications — the migrations, the schema, the screens, the test counts, the live verification and the commit. |
 | [docs/UPGRADE-PHASE-7-REPORT.md](docs/UPGRADE-PHASE-7-REPORT.md) | Upgrade Phase 7: the Reports Center — one declaration per report, a PDF writer owned rather than installed, the four Debt & Security reports, and the guarantor-cover defect the parity method caught. |
+| [docs/UPGRADE-PHASE-8-REPORT.md](docs/UPGRADE-PHASE-8-REPORT.md) | Upgrade Phase 8: the dashboard reads the modules built after it — portfolio at risk, promises and follow-ups, and what is waiting for a decision — and the two mislabelled counts that reconciling against the base tables caught. |
 
 Three decisions worth knowing before writing any code here:
 
