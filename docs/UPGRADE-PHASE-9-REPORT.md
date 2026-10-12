@@ -181,8 +181,16 @@ would rewrite the funding history every earlier phase was certified against.
 So the expense history covers premises, operations and transaction costs, and
 the owner-operated reality — staff paid out of pocket and never put through
 the books — is left as what it is. The result is a first-year lender running
-at a loss of **1,362,440** before any payroll, which is both honest about this
-dataset and a more instructive thing to demonstrate than a fabricated profit.
+at a loss before any payroll at all:
+
+| | |
+| --- | --- |
+| Income — interest 4,484,123, penalties 41,437 | 4,525,560 |
+| Expenses — 58 documents at 5,888,000, plus 3,500 written off to Cash Over and Short | 5,891,500 |
+| **Result** | **−1,365,940** |
+
+That is both honest about this dataset and a more instructive thing to
+demonstrate than a fabricated profit.
 
 ### Other income: deliberately zero
 
@@ -291,9 +299,73 @@ could: MTN's peak falls from 10,974,067 to 4,953,543, and the bank account is
 in use from October. A future seed should put the capital in the bank and draw
 it to the till as disbursements require.
 
-**62 false notifications are still live.** They were raised by the defect in
-section 2 before it was fixed, they name documents that posted instantly and
-needed no decision, and `notifications` is append-only by design. Removing
-them is a deletion against live data, which is not something a phase does on
-its own initiative. They are listed by `category = 'approval_pending'` where
-the document they name is `posted` with no `approved_by`.
+**The 62 false notifications were removed, on instruction.** They had been
+raised by the defect in section 2 before it was fixed and named documents that
+posted instantly and needed no decision. `notifications` is append-only by
+design, so this was put to the client rather than decided here, and done only
+once they asked for it.
+
+The delete asserted its own scope on both sides: the predicate selected rows
+whose named document is `posted` with no `approved_by`, the count was required
+to be exactly 62 before the guard was suspended and exactly 62 after, the
+total was required to fall by exactly 62, and any mismatch raised and rolled
+the whole thing back. No read receipt pointed at any of them, which is why the
+`on delete restrict` on `notification_reads` did not have to be touched.
+
+181 notifications before, 119 after. The seven that remain are the ones that
+genuinely waited — TF2600008, TF2600010 approved, TF2600009 rejected,
+TF2600011 waiting, EX2600057 approved, EX2600056 rejected, EX2600058 waiting —
+and the append-only guard was verified to refuse a delete again afterwards.
+
+## 7. Certification
+
+The state of the live project `fszgwemtgyrbhngajpzm` at the close of Phase 9,
+read back after every change above.
+
+**The ledger.** 88,487,530 on each side of the trial balance, variance 0,
+across 564 entries and 1,601 lines, with 0 individually unbalanced entries.
+Liquidity 11,344,530 — till 3,004,918, MTN 3,178,067, Airtel 1,936,545, bank
+3,225,000. Income 4,525,560 against expenses 5,891,500.
+
+**The dataset.** 28 clients, 35 loans, 470 payments, 3 collateral items, 12
+recovery actions, 11 transfers, 58 expenses, 5 reconciliations, 0 other
+income, 119 notifications. One transfer, one expense and one count are waiting
+for a decision, so all three tiles of the dashboard's "Awaiting a decision"
+section carry a figure for the first time.
+
+**The migration registry** ends at `20261016000200 notify_what_still_waits`,
+matching the repository.
+
+**Schema parity.** Identical hashes on the live project and on a database
+built from the migrations alone, in all five categories the repository
+controls:
+
+| category | count | matches |
+| --- | --- | --- |
+| functions | 145 | yes |
+| triggers | 140 | yes |
+| policies | 88 | yes |
+| constraints | 579 | yes |
+| views | 33 | yes, plus the external `__gate_probe` live |
+
+**The nine commits of the upgrade**, oldest first:
+
+| phase | commit | what |
+| --- | --- | --- |
+| 4 | `16009e6` | the loan application, and who stands behind it |
+| 5 | `695a29c` | Debt & Security — collateral, recovery, aging and PAR |
+| 6 | `8686362` | notifications |
+| 7 | `037306a` | the Reports Centre and its branded PDF writer |
+| 8 | `cbd9bff` | the dashboard |
+| 9 | `5595444` | a count is compared against the day it was made |
+| 9 | `b0812d8` | "awaiting approval", said only of what is awaiting it |
+
+This report is the commit on top of those, so its own SHA is the branch head
+rather than a row in the table. The enrichment itself produced no commit: it
+is live data, written through the real functions, and `supabase/seed.sql` is
+deliberately empty of fabricated records.
+
+**Verification.** 3,384 tests across 113 files, lint clean, `tsc --noEmit`
+clean, production build succeeds, the financial-arithmetic audit finds no
+hazard across 58 files, and every migration applies in order to an empty
+database.
