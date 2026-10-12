@@ -39,9 +39,11 @@ export default async function OtherIncomePage() {
 
       <IncomeRegister rows={rows} canReverse={contextCan(context, 'income:create')} />
 
+      {/* Kept: recording recovered principal here would count the same
+          money twice. */}
       <p className="text-text-muted text-xs">
-        Principal recovered from a borrower is not income — it reduces Loans Receivable.
-        Interest and penalties collected are income, and are posted by the payment itself.
+        Principal recovered is not income. Interest and penalties collected are, and the
+        payment posts them itself.
       </p>
     </div>
   );

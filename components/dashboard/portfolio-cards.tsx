@@ -74,9 +74,11 @@ export function PortfolioCards({
       </StatGrid>
 
       <h3 className="text-text pt-1 text-sm font-semibold">Disbursed loans by status</h3>
-      <p className="text-text-muted text-sm">
-        Each loan appears in exactly one of these, so the {String(states.length)} counts
-        add up to the {String(summary.loansWithSchedule)} disbursed{' '}
+      {/* One line, kept: these counts look addable to the arrears count
+          below, and they are not. */}
+      <p className="text-text-muted text-xs">
+        Mutually exclusive, so the counts add up to the{' '}
+        {String(summary.loansWithSchedule)} disbursed{' '}
         {summary.loansWithSchedule === 1 ? 'loan' : 'loans'}.
       </p>
 
@@ -101,11 +103,10 @@ export function PortfolioCards({
         ))}
       </StatGrid>
 
-      <p className="text-text-muted text-sm">
-        Separately, {String(summary.loansWithArrears)}{' '}
-        {summary.loansWithArrears === 1 ? 'loan has' : 'loans have'} a past-due amount.
-        That count <strong>overlaps</strong> the statuses above — a penalised loan usually
-        has arrears too — so it is never added to them.
+      <p className="text-text-muted text-xs">
+        {String(summary.loansWithArrears)}{' '}
+        {summary.loansWithArrears === 1 ? 'loan has' : 'loans have'} a past-due amount,
+        which <strong>overlaps</strong> the statuses above and is never added to them.
       </p>
 
       <h3 className="text-text pt-1 text-sm font-semibold">Late-payment charges</h3>

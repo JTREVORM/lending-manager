@@ -68,7 +68,14 @@ async function fundOn(cashKind: string, amount: number, daysAgo: number): Promis
          jsonb_build_object('account_id', $3::uuid, 'debit', $4::bigint, 'credit', 0),
          jsonb_build_object('account_id', $5::uuid, 'debit', 0, 'credit', $4::bigint)
        ))`,
-    [branch.id, `Funding ${cashKind}`, await accountId(cashKind), amount, equity.id, daysAgo],
+    [
+      branch.id,
+      `Funding ${cashKind}`,
+      await accountId(cashKind),
+      amount,
+      equity.id,
+      daysAgo,
+    ],
   );
 }
 
@@ -87,7 +94,12 @@ describeDb('the as-of reading itself', () => {
     await fundOn('bank', 250_000, 3);
     const bank = await accountId('bank');
 
-    const row = await queryOne<{ before: string; on: string; after: string; now: string }>(
+    const row = await queryOne<{
+      before: string;
+      on: string;
+      after: string;
+      now: string;
+    }>(
       `select public.ledger_account_balance_as_of($1, current_date - 4)::text  as before,
               public.ledger_account_balance_as_of($1, current_date - 3)::text  as on,
               public.ledger_account_balance_as_of($1, current_date)::text      as after,
@@ -123,7 +135,9 @@ describeDb('the as-of reading itself', () => {
 
   it('refuses an account that does not exist', async () => {
     await expect(
-      query(`select public.ledger_account_balance_as_of(gen_random_uuid(), current_date)`),
+      query(
+        `select public.ledger_account_balance_as_of(gen_random_uuid(), current_date)`,
+      ),
     ).rejects.toThrow(/No such ledger account/);
   });
 });

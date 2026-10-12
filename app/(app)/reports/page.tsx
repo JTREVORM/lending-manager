@@ -15,8 +15,11 @@ import {
   REPORT_GROUPS,
   REPORT_GROUP_LABELS,
   REPORT_IDS,
+  isReportGroup,
   reportHref,
+  type ReportGroup,
 } from '@/lib/reports/registry';
+import { singleParam, type ParamRecord } from '@/lib/reports/filters';
 import { cn } from '@/lib/utils/cn';
 
 export const metadata = { title: 'Reports' };
@@ -37,6 +40,16 @@ export const metadata = { title: 'Reports' };
  * Adding a report is adding an entry, and `tests/integration/report-routes.test.ts`
  * fails if an entry has no page, no export, or capabilities that differ from
  * what that test pins.
+ *
+ * ## It is a module's front door, not a line in a menu
+ *
+ * The rail shows Reports as one of the business's modules, and its entries
+ * are these four **groups** — not the ten report definitions, which stay
+ * here, because this is where a report is chosen, pointed at a period and
+ * exported from. `?group=` narrows the listing to one of them, which is what
+ * each rail entry opens; an unrecognised value shows everything rather than
+ * nothing, because a hand-edited query string should not look like a
+ * reporting module with no reports in it.
  *
  * ## The three figures at the top
  *
@@ -59,8 +72,15 @@ export const metadata = { title: 'Reports' };
  * `guardReportPage`, and the export routes check again, because a URL can be
  * typed and a hidden link protects nothing.
  */
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<ParamRecord>;
+}) {
   const context = await guardReportPage(ROUTES.reports, ['reports:view_operational']);
+
+  const raw = singleParam(await searchParams, 'group');
+  const selected: ReportGroup | null = isReportGroup(raw) ? raw : null;
 
   // Kept as ids rather than definitions, so `reportHref` and the lookup both
   // stay typed: `REPORTS` is heterogeneous — each entry is written against its
@@ -78,27 +98,66 @@ export default async function ReportsPage() {
     canSeeFinancial ? getPortfolioSummary() : Promise.resolve(null),
   ]);
 
-  const groups = REPORT_GROUPS.map((group) => ({
-    group,
-    reports: available.filter((id) => REPORTS[id].group === group),
-  })).filter((block) => block.reports.length > 0);
+  // Only groups this person has a report in, so a chip never opens onto an
+  // empty list.
+  const offered = REPORT_GROUPS.filter((group) =>
+    available.some((id) => REPORTS[id].group === group),
+  );
+
+  const groups = (selected === null ? offered : [selected])
+    .map((group) => ({
+      group,
+      reports: available.filter((id) => REPORTS[id].group === group),
+    }))
+    .filter((block) => block.reports.length > 0);
 
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
-        eyebrow="Insights"
+        eyebrow="Reports"
         icon={ChartColumn}
-        title="Reports"
-        description="Every figure here is read from the ledger and the schedules. Nothing on these pages changes a record. Each report downloads as a spreadsheet for totalling and as a letterheaded document for circulating."
+        title={selected === null ? 'Reports' : REPORT_GROUP_LABELS[selected].title}
+        description="Read from the ledger and the schedules. Nothing here changes a record; every report downloads as a spreadsheet and as a letterheaded document."
       />
+
+      {offered.length < 2 ? null : (
+        <nav
+          aria-label="Report groups"
+          className="chip-row border-border bg-surface rounded-lg border p-1.5 shadow-xs print:hidden"
+        >
+          <RowLink
+            href={ROUTES.reports}
+            aria-current={selected === null ? 'true' : undefined}
+            className={cn(
+              'chip',
+              selected === null
+                ? 'bg-accent text-accent-contrast shadow-xs'
+                : 'text-text-muted hover:bg-surface-hover hover:text-text',
+            )}
+          >
+            All
+          </RowLink>
+          {offered.map((group) => (
+            <RowLink
+              key={group}
+              href={`${ROUTES.reports}?group=${group}`}
+              aria-current={selected === group ? 'true' : undefined}
+              className={cn(
+                'chip',
+                selected === group
+                  ? 'bg-accent text-accent-contrast shadow-xs'
+                  : 'text-text-muted hover:bg-surface-hover hover:text-text',
+              )}
+            >
+              {REPORT_GROUP_LABELS[group].title}
+            </RowLink>
+          ))}
+        </nav>
+      )}
 
       {collections === null && portfolio === null ? null : (
         <section aria-labelledby="highlights-heading">
-          <SectionHeader
-            id="highlights-heading"
-            title="Where things stand"
-            description="The same figures the dashboard shows, so there is no need to open a report to find out whether there is one worth opening."
-          />
+          <SectionHeader id="highlights-heading" title="Where things stand" />
 
           <div className="grid min-w-0 gap-3 sm:grid-cols-3">
             {collections === null ? null : (
@@ -142,7 +201,6 @@ export default async function ReportsPage() {
             <SectionHeader
               id={`${block.group}-heading`}
               title={REPORT_GROUP_LABELS[block.group].title}
-              description={REPORT_GROUP_LABELS[block.group].blurb}
             />
 
             <ul className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -171,7 +229,7 @@ export default async function ReportsPage() {
                           <span className="text-text block text-base font-semibold">
                             {report.title}
                           </span>
-                          <span className="text-text-muted mt-1 block text-sm">
+                          <span className="text-text-muted mt-0.5 block text-xs">
                             {report.description}
                           </span>
                         </span>

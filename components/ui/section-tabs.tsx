@@ -33,12 +33,23 @@ export function SectionTabs({
   tabs,
   className,
   label = 'Sections',
+  initial,
 }: {
   readonly tabs: readonly SectionTab[];
   readonly className?: string;
   readonly label?: string;
+  /**
+   * Which section the page was opened at, when a link named one.
+   *
+   * The rail's settings entries each point at a section, and the browser
+   * scrolls to the fragment on arrival. Without this the chip row would show
+   * the *first* section as current until the observer below catches up, which
+   * is a highlight that is briefly wrong — and on a short viewport, one that
+   * stays wrong.
+   */
+  readonly initial?: string;
 }) {
-  const [active, setActive] = useState(tabs[0]?.id);
+  const [active, setActive] = useState(initial ?? tabs[0]?.id);
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {

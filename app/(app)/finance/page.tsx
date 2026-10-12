@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { CashPosition } from '@/components/finance/cash-position';
 import { Card } from '@/components/ui/card';
 import { PageHeader, SectionHeader } from '@/components/ui/page-header';
+import { SectionTabs } from '@/components/ui/section-tabs';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -23,8 +24,30 @@ export const metadata = { title: 'Finance' };
  * whole point of giving the business a ledger, and a card that re-derived it
  * would be a second answer to a question that already has one.
  */
-export default async function FinancePage() {
+/**
+ * The three sections of this page, and the heading each one scrolls to.
+ *
+ * The Branch Network module opens the cash position directly, because the
+ * per-branch cards are the answer to "what does each branch hold" and this
+ * page is where they live — there is no separate branch screen, and inventing
+ * one would mean a second place deriving the same ledger balances.
+ */
+const SECTION_HEADINGS: Readonly<Record<string, string>> = {
+  cash: 'cash-position-heading',
+  movement: 'money-movement-heading',
+  controls: 'controls-heading',
+};
+
+export default async function FinancePage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const context = await guardPermission(ROUTES.finance, 'ledger:view');
+
+  const params = await searchParams;
+  const rawSection = Array.isArray(params.section) ? params.section[0] : params.section;
+  const openAt = rawSection === undefined ? undefined : SECTION_HEADINGS[rawSection];
 
   const [positions, settings] = await Promise.all([
     getCashPositions(),
@@ -88,8 +111,18 @@ export default async function FinancePage() {
         description="Where the money is, and everything that moved it."
       />
 
-      <section className="min-w-0 space-y-3">
-        <SectionHeader title="Cash position" />
+      <SectionTabs
+        label="Finance sections"
+        initial={openAt}
+        tabs={[
+          { id: 'cash-position-heading', label: 'Cash position' },
+          { id: 'money-movement-heading', label: 'Money movement' },
+          { id: 'controls-heading', label: 'Controls' },
+        ]}
+      />
+
+      <section aria-labelledby="cash-position-heading" className="min-w-0 space-y-3">
+        <SectionHeader id="cash-position-heading" title="Cash position" />
         <CashPosition positions={positions} lowBalances={lowBalances} />
         <p className="text-text-muted text-xs">
           Read from the ledger. Every figure is the sum of its account’s postings, so it
@@ -97,8 +130,8 @@ export default async function FinancePage() {
         </p>
       </section>
 
-      <section className="min-w-0 space-y-3">
-        <SectionHeader title="Money movement" />
+      <section aria-labelledby="money-movement-heading" className="min-w-0 space-y-3">
+        <SectionHeader id="money-movement-heading" title="Money movement" />
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {destinations.map(({ href, label, description, icon: Icon }) => (
             <Link key={href} href={href} className="min-w-0">
@@ -119,8 +152,8 @@ export default async function FinancePage() {
       </section>
 
       {settings === null ? null : (
-        <section className="min-w-0 space-y-3">
-          <SectionHeader title="Controls in force" />
+        <section aria-labelledby="controls-heading" className="min-w-0 space-y-3">
+          <SectionHeader id="controls-heading" title="Controls in force" />
           <Card className="min-w-0 p-4">
             <dl className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Control

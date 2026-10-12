@@ -6,29 +6,22 @@ import { Money } from '@/components/ui/money';
 /**
  * The executive summary: what the business has lent, and what it has received.
  *
- * ## Three things this deliberately does not say
+ * ## Three claims it does not make
  *
- * **It does not say "profit".** Interest collected is interest collected. The
- * system models no staff costs, no bad debt, no cost of capital and no tax, so
- * a figure labelled profit would be an accounting claim it cannot support. The
- * Owner can see what came in; what it was worth is a question this software is
- * not equipped to answer.
+ * **Profit.** No staff costs, no bad debt, no cost of capital, no tax are
+ * modelled, so a figure labelled profit would be an accounting claim this
+ * system cannot support.
  *
- * **It does not treat a charge as income.** Penalties *charged* and penalties
- * *collected* are separate cards, and the first is labelled as a charge raised
- * against borrowers. Booking an assessed penalty as revenue would recognise
- * money that may never arrive.
+ * **Penalties charged as income.** Charged and collected are separate cards.
+ * Booking an assessed penalty as revenue would recognise money that may never
+ * arrive.
  *
- * **It does not say "cash at hand".** There is no cash or bank accounting in
- * this system — no float, no banking, no expenses — so the method split lives
- * on the operational card as "received" and no balance is claimed anywhere.
+ * **Cash at hand.** That is the Finance module's figure, read from the
+ * ledger. Nothing here is a balance.
  *
- * ## Charged and collected, side by side
- *
- * Interest charged is the contractual total on every disbursed loan; interest
- * collected is the interest component of posted allocations. They are rarely
- * equal and the difference is meaningful, so both appear with the outstanding
- * remainder beside them rather than one standing in for the other.
+ * Interest charged and interest collected sit side by side because they are
+ * rarely equal and the difference is meaningful, so neither stands in for the
+ * other.
  */
 export function ExecutiveCards({ summary }: { readonly summary: PortfolioSummary }) {
   return (
@@ -91,10 +84,17 @@ export function ExecutiveCards({ summary }: { readonly summary: PortfolioSummary
         />
       </StatGrid>
 
-      <p className="text-text-muted text-sm">
-        Interest charged is what the business agreed to charge; interest collected is what
-        has been received. Neither is profit — this system records no costs, so it cannot
-        tell you what the business earned.
+      {/*
+        Kept, and shortened to one line.
+
+        Everything else explanatory on this screen moved behind an info
+        control, but not this: "interest collected" invites the reading
+        "profit", and a figure a reader silently converts into profit is worse
+        than no figure. The claim has to be denied where the figures are, not
+        one click away.
+      */}
+      <p className="text-text-muted text-xs">
+        Neither is profit — this system records no costs.
       </p>
     </section>
   );

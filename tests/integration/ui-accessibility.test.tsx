@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Alert } from '@/components/ui/alert';
@@ -6,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -322,9 +324,59 @@ describe('reporting accessibility', () => {
       </StatGrid>,
     );
 
-    // Not a tooltip and not a title attribute: both are unreachable by touch
-    // and inconsistently announced.
+    // In the card, always — reachable by a screen reader whether or not the
+    // info control has been pressed.
     expect(screen.getByText(/What borrowers owe in total/i)).toBeInTheDocument();
+  });
+
+  it('reaches that definition through a real control, not a title attribute', () => {
+    // A `title` does not open on a touch screen, is not reachable by Tab, and
+    // is announced inconsistently. So: a `<button>` with `aria-expanded` and
+    // `aria-controls` naming the text it reveals.
+    render(
+      <InfoHint subject="Outstanding portfolio" text="What borrowers owe in total." />,
+    );
+
+    const info = screen.getByRole('button', {
+      name: /what outstanding portfolio means/i,
+    });
+    expect(info.tagName).toBe('BUTTON');
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    expect(info.getAttribute('title')).toBeNull();
+
+    const panel = screen.getByText('What borrowers owe in total.');
+    expect(info.getAttribute('aria-controls')).toBe(panel.id);
+    // `role="note"`, so it is announced as a remark rather than as a bare
+    // run of text somewhere on the page.
+    expect(panel).toHaveAttribute('role', 'note');
+  });
+
+  it('names each info control after what it explains', async () => {
+    // Eleven controls called "Info" is eleven identically-named buttons in a
+    // screen reader's control list, and no way to tell which figure each one
+    // belongs to.
+    const user = userEvent.setup();
+    render(
+      <StatGrid>
+        <StatCard label="Collected today" value="UGX 1" metric="collected_today" />
+        <StatCard label="Expected today" value="UGX 2" metric="expected_today" />
+      </StatGrid>,
+    );
+
+    const names = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent?.trim());
+
+    expect(names).toEqual(['What Collected today means', 'What Expected today means']);
+
+    // And pressing one opens only its own.
+    await user.click(screen.getByRole('button', { name: /what collected today means/i }));
+    expect(
+      screen.getByRole('button', { name: /what collected today means/i }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByRole('button', { name: /what expected today means/i }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('names every filter control', () => {

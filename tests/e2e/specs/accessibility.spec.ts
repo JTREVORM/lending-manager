@@ -49,6 +49,8 @@ const SCREENS = [
   '/guarantors/register',
   '/payments/summary',
   '/reports',
+  // The group chips and the one-group listing are their own rendering.
+  '/reports?group=behind',
   '/reports/collections',
   '/reports/arrears',
   '/reports/loans',
@@ -65,6 +67,9 @@ const SCREENS = [
   '/users/new',
   '/audit',
   '/settings',
+  '/settings?section=finance',
+  '/finance?section=cash',
+  '/payments/summary?section=branch',
   '/account',
   '/account/password',
 ] as const;
