@@ -3830,6 +3830,10 @@ export type Database = {
         Args: { p_account_id: string };
         Returns: number;
       };
+      ledger_account_balance_as_of: {
+        Args: { p_account_id: string; p_as_of: string };
+        Returns: number;
+      };
 
       /** Phase 11. Move money between two of the company's cash accounts. */
       record_transfer: {

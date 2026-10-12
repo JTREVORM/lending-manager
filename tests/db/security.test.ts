@@ -884,6 +884,7 @@ describeDb('privileged functions', () => {
       'journal_entries_guard_update',
       'journal_lines_assert_balanced',
       'ledger_account_balance',
+      'ledger_account_balance_as_of',
       'ledger_account_by_code',
       'link_client_profile',
       'loan_application_details_guard',
