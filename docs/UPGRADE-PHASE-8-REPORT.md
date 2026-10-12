@@ -168,4 +168,4 @@ from the HTML rather than hidden in it.
 
 ## 7. Commit
 
-`claude/epic-mendel-rpimtt`.
+`cbd9bff`, on `claude/epic-mendel-rpimtt`.
