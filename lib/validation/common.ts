@@ -137,6 +137,15 @@ export const ugxAmountFromText = (messages: {
   readonly malformed: string;
   /** Shown when the value is zero or negative. */
   readonly nonPositive: string;
+  /**
+   * Whether zero is a legitimate answer.
+   *
+   * Off everywhere a figure represents money changing hands, where zero is a
+   * typo. On for a *count*: an empty drawer is a real and important thing to
+   * record, and refusing it would push the one reading a reconciliation most
+   * needs out of the system.
+   */
+  readonly allowZero?: boolean;
 }) =>
   z.union([z.string(), z.number()]).transform((value, ctx) => {
     const text = typeof value === 'number' ? String(value) : value.trim();
@@ -158,7 +167,12 @@ export const ugxAmountFromText = (messages: {
 
     const amount = Number(spaceless.replace(/,/g, ''));
 
-    if (!Number.isSafeInteger(amount) || amount <= 0) {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      ctx.addIssue({ code: 'custom', message: messages.nonPositive });
+      return z.NEVER;
+    }
+
+    if (amount === 0 && messages.allowZero !== true) {
       ctx.addIssue({ code: 'custom', message: messages.nonPositive });
       return z.NEVER;
     }

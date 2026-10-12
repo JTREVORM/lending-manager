@@ -24,7 +24,7 @@ import type { TestUser } from './auth-fixtures';
 
 export interface PostPaymentOptions {
   readonly amount: number;
-  readonly method?: 'cash' | 'mtn_mobile_money' | 'airtel_money';
+  readonly method?: 'cash' | 'mtn_mobile_money' | 'airtel_money' | 'bank';
   readonly externalReference?: string | null;
   /** Reuse a key to exercise the idempotent replay path. */
   readonly idempotencyKey?: string;

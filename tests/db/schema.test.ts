@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, inject, it } from 'vitest';
 
 import { REFERENCE_FORMAT_DEFAULTS, REFERENCE_SCOPES } from '@/lib/domain/reference';
 import { PROFILE_STATUSES } from '@/lib/domain/status';
@@ -27,7 +27,14 @@ if (!hasDatabase) {
 
 describeDb('tables', () => {
   const EXPECTED_TABLES = [
+    // Phase 11: the four ways money moves that are not a loan. Each is a
+    // document that points at the journal it wrote; none of them can exist
+    // without one.
+    'account_reconciliations',
+    'account_transfers',
     'audit_log',
+    // Phase 10: the branch network and the double-entry ledger.
+    'branches',
     'business_settings',
     // Phase 3: the lending-business customer record, its sensitive half, the
     // guarantors who vouch for them, the association between the two, and the
@@ -37,13 +44,30 @@ describeDb('tables', () => {
     'client_remarks',
     'clients',
     'company_settings',
+    'expenses',
+    // Phase 11: approval thresholds, the overdraft rule and the low-float
+    // levels. Separate from `business_settings`, which is about lending.
+    'finance_settings',
+    // Phase 13: the versioned undertaking a guarantor signs. A new version is
+    // appended; one in force is never reworded, because a signature points
+    // at words.
+    'guarantor_consent_terms',
     'guarantor_identities',
     'guarantors',
+    // Phase 10: the double-entry ledger. The header carries the branch, the
+    // date and what caused the posting; the lines carry the two sides.
+    'journal_entries',
+    'journal_lines',
+    'ledger_accounts',
+    // Phase 13: the product-specific answers an application gives, and the
+    // guarantors of a particular loan with the undertaking each one signed.
+    'loan_business_details',
     // Phase 4: the loan agreement, its contractual monthly breakdown, and the
     // three snapshots that make it evidence rather than a view over today's
     // records.
     'loan_client_snapshots',
     'loan_guarantor_snapshots',
+    'loan_guarantors',
     'loan_identity_snapshots',
     // Phase 5: the collection plan — one generation record per loan, and the
     // scheduled collections that allocate the contractual breakdown.
@@ -54,8 +78,17 @@ describeDb('tables', () => {
     // delinquency table for anybody to edit a borrower into or out of.
     'loan_penalties',
     'loan_periods',
+    // Phase 12: what the business sells, where it sells it, and the terms a
+    // loan was actually agreed under.
+    'loan_product_branches',
+    'loan_product_snapshots',
+    'loan_products',
+    'loan_salary_details',
     'loan_schedules',
     'loans',
+    // Phase 11: fees and income that is not interest or a penalty. Those two
+    // are written by the lending functions and refused here.
+    'other_income',
     // Phase 6: the payment ledger. Balances are derived in views rather than
     // stored, so there is no balance table here.
     'payment_allocations',
@@ -194,7 +227,34 @@ describeDb('foreign keys', () => {
     // record is referenced by loans and payments, and deleting it would
     // corrupt the books. Archiving replaces deletion.
     expect(actual).toEqual([
+      // Phase 11. The four money-movement documents. RESTRICT on everything
+      // a posting or a balance depends on — a branch, an account, a journal
+      // entry, a client or a loan a fee was charged against cannot be
+      // removed while a document names it. `n` on provenance, as everywhere
+      // else: an account that no longer exists is less useful than NULL, and
+      // the label column keeps the name the document was recorded under.
+      'account_reconciliations.account_id -> ledger_accounts (r)',
+      'account_reconciliations.adjustment_entry_id -> journal_entries (r)',
+      'account_reconciliations.branch_id -> branches (r)',
+      'account_reconciliations.performed_by -> profiles (n)',
+      'account_reconciliations.reviewed_by -> profiles (n)',
+      'account_transfers.approved_by -> profiles (n)',
+      'account_transfers.branch_id -> branches (r)',
+      'account_transfers.from_account_id -> ledger_accounts (r)',
+      'account_transfers.initiated_by -> profiles (n)',
+      'account_transfers.journal_entry_id -> journal_entries (r)',
+      'account_transfers.reversal_entry_id -> journal_entries (r)',
+      'account_transfers.reversed_by -> profiles (n)',
+      'account_transfers.to_account_id -> ledger_accounts (r)',
       'audit_log.actor_profile_id -> profiles (r)',
+      // Phase 10. The branch network and the ledger. RESTRICT throughout on
+      // anything a posting points at — a branch, an account, a loan or a
+      // client that has been posted against cannot be removed, because the
+      // journal referring to it is evidence. `c` on a journal line, because
+      // a line is part of its entry and has no meaning without it; `n` on
+      // provenance, as everywhere else.
+      'branches.created_by -> profiles (n)',
+      'branches.manager_profile_id -> profiles (n)',
       'business_settings.default_repayment_frequency -> repayment_frequencies (r)',
       'business_settings.updated_by -> profiles (r)',
       // Phase 3. `c` cascades: a client's identity row, remarks and guarantor
@@ -212,12 +272,40 @@ describeDb('foreign keys', () => {
       'client_remarks.client_id -> clients (c)',
       'client_remarks.created_by -> profiles (r)',
       'client_remarks.retracts_remark_id -> client_remarks (r)',
+      // Phase 10. A branch that has clients or loans cannot be removed.
+      'clients.branch_id -> branches (r)',
       'clients.created_by -> profiles (n)',
       'clients.profile_id -> profiles (r)',
       'clients.status_changed_by -> profiles (n)',
       'company_settings.updated_by -> profiles (r)',
+      'expenses.approved_by -> profiles (n)',
+      'expenses.branch_id -> branches (r)',
+      'expenses.expense_account_id -> ledger_accounts (r)',
+      'expenses.journal_entry_id -> journal_entries (r)',
+      'expenses.payment_account_id -> ledger_accounts (r)',
+      'expenses.recorded_by -> profiles (n)',
+      'expenses.reversal_entry_id -> journal_entries (r)',
+      'expenses.reversed_by -> profiles (n)',
+      'finance_settings.updated_by -> profiles (n)',
+      'guarantor_consent_terms.created_by -> profiles (n)',
       'guarantor_identities.guarantor_id -> guarantors (c)',
       'guarantors.created_by -> profiles (n)',
+      'journal_entries.branch_id -> branches (r)',
+      'journal_entries.client_id -> clients (r)',
+      'journal_entries.created_by -> profiles (n)',
+      'journal_entries.loan_id -> loans (r)',
+      'journal_entries.reversed_by_entry_id -> journal_entries (r)',
+      'journal_lines.account_id -> ledger_accounts (r)',
+      'journal_lines.entry_id -> journal_entries (c)',
+      'ledger_accounts.branch_id -> branches (r)',
+      'ledger_accounts.parent_id -> ledger_accounts (r)',
+      // Phase 13. The application's own answers and its own guarantors, all
+      // `r` on the loan and on the people they name: an application is the
+      // evidence a decision was made on, so nothing it points at may be
+      // deleted from under it. `n` only on `created_by`, which is
+      // attribution rather than substance.
+      'loan_business_details.created_by -> profiles (n)',
+      'loan_business_details.loan_id -> loans (r)',
       // Phase 4. `c` cascades: a loan's breakdown and snapshots are parts of
       // that loan. `r` restricts: the client and the guarantors a loan was
       // issued against cannot be removed while it references them, because
@@ -226,8 +314,18 @@ describeDb('foreign keys', () => {
       // and the audit trail holds the authoritative record either way.
       'loan_client_snapshots.client_id -> clients (r)',
       'loan_client_snapshots.loan_id -> loans (c)',
+      // Phase 13. `r`, never `n`: SET NULL on an append-only table is
+      // implemented as an UPDATE, and the guard here is statement-level, so
+      // a SET NULL reference would make deleting any client fail.
+      'loan_guarantor_snapshots.consent_terms_id -> guarantor_consent_terms (r)',
       'loan_guarantor_snapshots.guarantor_id -> guarantors (r)',
       'loan_guarantor_snapshots.loan_id -> loans (c)',
+      'loan_guarantor_snapshots.subject_client_id -> clients (r)',
+      'loan_guarantors.consent_terms_id -> guarantor_consent_terms (r)',
+      'loan_guarantors.created_by -> profiles (n)',
+      'loan_guarantors.guarantor_client_id -> clients (r)',
+      'loan_guarantors.guarantor_id -> guarantors (r)',
+      'loan_guarantors.loan_id -> loans (r)',
       'loan_identity_snapshots.loan_id -> loans (c)',
       // Phase 5. `c` cascades for the same reason: a collection schedule is
       // part of its loan, and an installment is part of the contractual month
@@ -252,10 +350,25 @@ describeDb('foreign keys', () => {
       'loan_penalties.client_id -> clients (r)',
       'loan_penalties.loan_id -> loans (c)',
       'loan_periods.loan_id -> loans (c)',
+      // Phase 12. `c` on the branch join table, because a row there is part
+      // of the product rather than a record of its own; `r` everywhere else,
+      // including the snapshot's loan — a loan whose terms were frozen is
+      // evidence of an agreement.
+      'loan_product_branches.branch_id -> branches (r)',
+      'loan_product_branches.product_id -> loan_products (c)',
+      'loan_product_snapshots.loan_id -> loans (r)',
+      'loan_product_snapshots.overridden_by -> profiles (n)',
+      'loan_product_snapshots.product_id -> loan_products (r)',
+      'loan_products.created_by -> profiles (n)',
+      'loan_products.default_repayment_frequency -> repayment_frequencies (r)',
+      'loan_products.updated_by -> profiles (n)',
+      'loan_salary_details.created_by -> profiles (n)',
+      'loan_salary_details.loan_id -> loans (r)',
       'loan_schedules.generated_by -> profiles (r)',
       'loan_schedules.loan_id -> loans (c)',
       'loan_schedules.repayment_frequency -> repayment_frequencies (r)',
       'loans.approved_by -> profiles (n)',
+      'loans.branch_id -> branches (r)',
       'loans.cancelled_by -> profiles (n)',
       // Phase 6. `r`, not `n`: the loan says who settled it, and that
       // attribution is evidence rather than provenance.
@@ -263,6 +376,7 @@ describeDb('foreign keys', () => {
       'loans.client_id -> clients (r)',
       'loans.created_by -> profiles (n)',
       'loans.disbursed_by -> profiles (n)',
+      'loans.loan_product_id -> loan_products (r)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
       // Phase 6. `r` restricts everywhere, with no `c` and no `n`: a payment
@@ -271,11 +385,24 @@ describeDb('foreign keys', () => {
       // stricter than the loan's own lifecycle columns, which null gracefully
       // because the audit trail holds the authoritative record — a payment's
       // actor is on the receipt a borrower is holding.
+      'other_income.branch_id -> branches (r)',
+      'other_income.client_id -> clients (r)',
+      'other_income.income_account_id -> ledger_accounts (r)',
+      'other_income.journal_entry_id -> journal_entries (r)',
+      'other_income.loan_id -> loans (r)',
+      'other_income.receiving_account_id -> ledger_accounts (r)',
+      'other_income.recorded_by -> profiles (n)',
+      'other_income.reversal_entry_id -> journal_entries (r)',
+      'other_income.reversed_by -> profiles (n)',
       'payment_allocations.installment_id -> loan_installments (r)',
       'payment_allocations.loan_id -> loans (r)',
       'payment_allocations.payment_id -> loan_payments (r)',
       'payment_allocations.penalty_id -> loan_penalties (r)',
       'profiles.auth_user_id -> users (r)',
+      // Phase 11. RESTRICT: a branch with staff assigned to it cannot be
+      // removed while they are. NULL on the column means unrestricted
+      // rather than unassigned — an Owner belongs to the company.
+      'profiles.branch_id -> branches (r)',
       'reference_sequences.scope -> reference_formats (r)',
       // Phase 2. RESTRICT here too: a capability cannot be deleted out from
       // under a role that grants it, and a role cannot vanish while granting
@@ -289,6 +416,10 @@ describeDb('foreign keys', () => {
   });
 
   it('links profiles to auth.users, not to a duplicated user table', async () => {
+    // Named by constraint rather than by "the only foreign key on profiles":
+    // Phase 11 added `branch_id`, and the claim being made here was never
+    // about how many relationships the table has. It is that the *identity*
+    // link points at Supabase Auth.
     const row = await queryOne<{ foreign_schema: string; foreign_table: string }>(
       `select n.nspname as foreign_schema, tgt.relname as foreign_table
          from pg_constraint k
@@ -296,11 +427,24 @@ describeDb('foreign keys', () => {
          join pg_class tgt on tgt.oid = k.confrelid
          join pg_namespace n on n.oid = tgt.relnamespace
         where k.contype = 'f'
-          and src.relname = 'profiles'`,
+          and src.relname = 'profiles'
+          and k.conname = 'profiles_auth_user_id_fkey'`,
     );
 
     expect(row.foreign_schema).toBe('auth');
     expect(row.foreign_table).toBe('users');
+
+    // And there is still no second person table anywhere for a profile to
+    // point at, which is the half of the claim the column name does not
+    // carry on its own.
+    const duplicates = await query<{ relname: string }>(
+      `select c.relname
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'
+          and c.relname in ('users', 'accounts', 'auth_users')`,
+    );
+    expect(duplicates).toEqual([]);
   });
 
   it('stores no credential value, since Supabase Auth owns them', async () => {
@@ -529,9 +673,13 @@ describeDb('seeded reference data matches the application constants', () => {
       locale: string;
     }>(`select * from public.company_settings where id = 1`);
 
-    expect(row.company_name).toBe('Money Lending Management System');
-    // Company registration is still in progress, so these have no value yet.
-    expect(row.legal_name).toBeNull();
+    // Phase 12. The placeholder is gone: the client's registration completed
+    // and migration 20261012000100 wrote the real identity.
+    expect(row.company_name).toBe('Polytos Financial Services Ltd');
+    expect(row.legal_name).toBe('Polytos Financial Services Limited');
+    // Registration and tax numbers are still not held. They are not needed
+    // to lend, and they are the two fields the public identity view most
+    // carefully leaves out, so an empty value is the honest one.
     expect(row.registration_number).toBeNull();
     expect(row.tax_identification_number).toBeNull();
 
@@ -566,15 +714,45 @@ describeDb('seeded reference data matches the application constants', () => {
   });
 
   it('seeds no audit record of its own', async () => {
-    // Every audit row in a freshly seeded database would have to come from the
-    // seed itself. Scoped to the settings and role actions the seed could
-    // plausibly produce, so test fixtures elsewhere do not affect it.
-    const row = await queryOne<{ count: string }>(
-      `select count(*)::text as count from public.audit_log
-        where action in ('settings.updated', 'user.role_granted')`,
+    // Every audit row written before any test ran came from the migrations
+    // and the seed, because nothing else had run yet. `seedAuditBoundary` is
+    // the highest audit id at that moment, published by the global setup
+    // immediately after it rebuilds the database.
+    //
+    // The bound is what makes this assertion mean what it says. Counting the
+    // whole table instead made the result depend on file order:
+    // `createTestUser` grants a role, which writes `user.role_granted`, so
+    // whether this passed came down to whether another file's fixtures had
+    // been torn down yet. The claim was never about those rows.
+    const boundary = inject('seedAuditBoundary');
+
+    const rows = await query<{
+      action: string;
+      entity_type: string;
+      actor_label: string;
+    }>(
+      `select action, entity_type, actor_label from public.audit_log
+        where id <= $1 and action in ('settings.updated', 'user.role_granted')
+        order by id`,
+      [boundary],
     );
 
-    expect(row.count).toBe('0');
+    // No role was granted to anybody by the seed. That half is absolute: a
+    // migration that quietly granted a role would be a migration that
+    // quietly created an administrator.
+    expect(rows.filter((row) => row.action === 'user.role_granted')).toEqual([]);
+
+    // Exactly one settings change, and it is the one Phase 12 made on
+    // purpose: migration 20261012000100 replaced the placeholder company
+    // name with the client's real identity. That row *belongs* in the trail
+    // — the company's own name changing is precisely what an audit log is
+    // for — and suppressing it to keep this assertion at zero would have
+    // been hiding a real change to make a test easier.
+    expect(
+      rows
+        .filter((row) => row.action === 'settings.updated')
+        .map((row) => `${row.entity_type}:${row.actor_label}`),
+    ).toEqual(['company_settings:system']);
   });
 });
 

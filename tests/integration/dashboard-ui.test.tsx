@@ -65,6 +65,7 @@ const collectionSummary: CollectionSummary = {
   cashReceived: toUgx(60_000),
   mtnReceived: toUgx(25_000),
   airtelReceived: toUgx(10_000),
+  bankReceived: toUgx(0),
   principalCollected: toUgx(76_000),
   interestCollected: toUgx(15_000),
   penaltyCollected: toUgx(4_000),
@@ -205,14 +206,20 @@ describe("today's figures", () => {
     expect(screen.getByText('Cash received')).toBeInTheDocument();
     expect(screen.getByText('MTN received')).toBeInTheDocument();
     expect(screen.getByText('Airtel received')).toBeInTheDocument();
+    expect(screen.getByText('Bank received')).toBeInTheDocument();
 
-    // The phrases a dashboard must never *assert*. Where they appear at all
-    // they appear denied — "not cash at hand" — which is the honest way to
-    // head off the reading somebody would otherwise bring to the figure.
+    // The phrases a dashboard must never *assert* about these four figures.
+    // Where they appear at all they appear denied — "not the Cash at Hand
+    // balance", "not a wallet balance" — which is the honest way to head off
+    // the reading somebody would otherwise bring to a receipts figure.
+    //
+    // Phase 10 changed only what follows the denial. The balances are real
+    // now, so the text names where they live rather than claiming they are
+    // not tracked.
     const text = document.body.textContent ?? '';
-    for (const claim of ['cash at hand', 'cash balance', 'wallet balance']) {
+    for (const claim of ['cash at hand', 'cash at bank', 'wallet balance']) {
       if (!text.toLowerCase().includes(claim)) continue;
-      expect(text).toMatch(new RegExp(`not\\s+(a\\s+)?${claim}`, 'i'));
+      expect(text).toMatch(new RegExp(`not\\s+(a\\s+|the\\s+)?${claim}`, 'i'));
     }
     expect(text).not.toMatch(/\bfloat\b/i);
   });

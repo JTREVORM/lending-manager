@@ -94,6 +94,11 @@ export function TodayCards({
               value={<Money amount={summary.airtelReceived} />}
               metric="airtel_received"
             />
+            <StatCard
+              label="Bank received"
+              value={<Money amount={summary.bankReceived} />}
+              metric="bank_received"
+            />
           </StatGrid>
         </>
       ) : null}

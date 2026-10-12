@@ -56,6 +56,12 @@ const ROUTE_PERMISSIONS: readonly {
 }[] = [
   { prefix: ROUTES.users, permission: 'users:view' },
   { prefix: ROUTES.audit, permission: 'audit:view' },
+  // Phase 12. Longest prefix wins, so the product routes are listed before
+  // `/settings` itself. `products:view` is deliberately *not* the same
+  // capability: a Secretary/Treasurer may read the products — they have to,
+  // to answer "what rate is a Salary Loan" — but holds no `settings:view`
+  // and must not reach the company record or the finance thresholds.
+  { prefix: ROUTES.loanProducts, permission: 'products:view' },
   { prefix: ROUTES.settings, permission: 'settings:view' },
   { prefix: ROUTES.clients, permission: 'clients:view' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },
@@ -78,6 +84,17 @@ const ROUTE_PERMISSIONS: readonly {
   // prefix map cannot express that. The pages call `guardPermission`, and
   // their export routes check again.
   { prefix: ROUTES.reports, permission: 'reports:view_operational' },
+  // Phase 11. Longest prefix wins, so the four document routes are listed
+  // before `/finance` itself: a Secretary/Treasurer holds `transfers:view`
+  // and `ledger:view` alike, but a Manager who one day holds only one of
+  // them must reach only the one. `/finance` itself needs `ledger:view`,
+  // because the overview's whole content is the cash position.
+  { prefix: ROUTES.transfers, permission: 'transfers:view' },
+  { prefix: ROUTES.expenses, permission: 'expenses:view' },
+  { prefix: ROUTES.otherIncome, permission: 'income:view' },
+  { prefix: ROUTES.reconciliation, permission: 'reconciliation:view' },
+  { prefix: ROUTES.ledger, permission: 'ledger:view' },
+  { prefix: ROUTES.finance, permission: 'ledger:view' },
   { prefix: ROUTES.portal, permission: 'portal:view' },
   { prefix: ROUTES.account, permission: 'account:view' },
   // The dashboard is last: '/' prefixes everything, so it must only match

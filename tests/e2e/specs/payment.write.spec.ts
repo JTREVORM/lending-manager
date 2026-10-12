@@ -205,6 +205,24 @@ test.describe('recording a payment', () => {
     await expect(page.getByText('Confirm this payment')).toBeVisible();
   });
 
+  test('a bank transfer demands the reference from the statement', async ({ page }) => {
+    await page.goto(`/payments/new?loanId=${fixtures.loans.current}`);
+
+    await page.getByText('Bank Transfer', { exact: true }).click();
+    await page.getByLabel('Amount received').fill(await statedMinimum(page));
+
+    // Labelled for where the number comes from. A bank transfer has no
+    // "transaction reference from the network", and asking for one would
+    // send a cashier looking in the wrong place.
+    const reference = page.getByLabel('Transfer reference');
+    await expect(reference).toBeVisible();
+    await expect(page.getByRole('button', { name: /^continue$/i })).toBeDisabled();
+
+    await reference.fill(`FT${String(Date.now()).slice(-9)}`);
+    await page.getByRole('button', { name: /^continue$/i }).click();
+    await expect(page.getByText('Confirm this payment')).toBeVisible();
+  });
+
   test('cash is offered no reference field to fill in wrongly', async ({ page }) => {
     await page.goto(`/payments/new?loanId=${fixtures.loans.current}`);
     await page.getByText('Cash', { exact: true }).click();

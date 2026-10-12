@@ -468,6 +468,17 @@ describeDb('settings constraints', () => {
     // And the meaning is untouched by the retirement.
     expect(retired.interval_days).toBe(3);
 
+    // Put it back. Phase 12 gave a retired cadence a consequence beyond this
+    // file: `loan_products_within_business_rules` checks, when a product's
+    // cadence list is *set*, that every cadence in it is active — so a
+    // cadence left retired here made a later file's product edit fail for a
+    // reason that had nothing to do with it.
+    await query(
+      `update public.repayment_frequencies
+          set is_active = true, label = 'Every 3 days', sort_order = 3
+        where key = 'every_3_days'`,
+    );
+
     // Restore, so the shared database is left as it was found.
     await query(
       `update public.repayment_frequencies

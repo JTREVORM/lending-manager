@@ -1012,5 +1012,34 @@ console.log(
   states.map((r) => `${r.delinquency_state}=${String(r.n)}`).join(' '),
 );
 
+// ---------------------------------------------------------------------------
+// The ledger
+//
+// Most of this seed goes through the real functions, which post their own
+// journals. The disbursements do not: they are back-dated with the
+// transition guard suspended, so `disburse_loan` never runs and its journal
+// is never written. `backfill_ledger_history` posts whatever is missing —
+// here, the opening capital and the disbursements — and skips everything
+// already posted, which is the same idempotency the migration relies on.
+// ---------------------------------------------------------------------------
+{
+  const ledger = await one(`select * from public.backfill_ledger_history()`);
+  console.log(
+    `ledger: opening ${ledger.opening}, ${ledger.disbursements} disbursements, ` +
+      `${ledger.repayments} repayments, ${ledger.reversals} reversals`,
+  );
+
+  const trial = await one(
+    `select sum(total_debit)::text as debits, sum(total_credit)::text as credits
+       from public.trial_balance`,
+  );
+  if (trial.debits !== trial.credits) {
+    throw new Error(
+      `seed left the ledger unbalanced: debits ${trial.debits}, credits ${trial.credits}`,
+    );
+  }
+  console.log(`trial balance: ${trial.debits} both sides`);
+}
+
 await db.end();
 console.log('\nSEED COMPLETE');

@@ -102,6 +102,7 @@ const collectionReport = (
         airtel_money: sum((row) =>
           row.paymentMethod === 'airtel_money' ? row.effectiveAmount : 0,
         ),
+        bank: sum((row) => (row.paymentMethod === 'bank' ? row.effectiveAmount : 0)),
       },
       countByMethod: {
         cash: effective.filter((row) => row.paymentMethod === 'cash').length,
@@ -110,6 +111,7 @@ const collectionReport = (
         ).length,
         airtel_money: effective.filter((row) => row.paymentMethod === 'airtel_money')
           .length,
+        bank: effective.filter((row) => row.paymentMethod === 'bank').length,
       },
       principalCollected: sum((row) => row.principalCollected),
       interestCollected: sum((row) => row.interestCollected),
@@ -406,6 +408,7 @@ describe('the collection report', () => {
           cash: toUgx(4_000),
           mtn: ZERO,
           airtel: ZERO,
+          bank: ZERO,
           reversedAmount: ZERO,
           reversedCount: 0,
         },
@@ -432,6 +435,7 @@ describe('the collection report', () => {
               cash: toUgx(8_000),
               mtn: ZERO,
               airtel: ZERO,
+              bank: ZERO,
               reversedAmount: ZERO,
               reversedCount: 0,
             },

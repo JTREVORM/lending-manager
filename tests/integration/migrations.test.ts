@@ -127,10 +127,21 @@ describe('row level security', () => {
   it('uses USING (true) only on the non-sensitive lookup tables', () => {
     // A permissive policy on financial or personal data would defeat the
     // entire security model, so each one is enumerated deliberately.
-    // All three are vocabulary: role names, capability names, and which role
-    // grants which. None holds personal or financial data, and none says
+    // The first three are vocabulary: role names, capability names, and which
+    // role grants which. None holds personal or financial data, and none says
     // anything about a particular person.
-    const PERMITTED = new Set(['roles', 'permissions', 'role_permissions']);
+    //
+    // Phase 13 adds the guarantor undertaking, which is the business's own
+    // published document and names nobody. The people most entitled to
+    // re-read it are the guarantors who signed it — who hold a borrower's
+    // portal login and nothing more — so gating it on a staff capability
+    // would hide a contract from the person bound by it.
+    const PERMITTED = new Set([
+      'roles',
+      'permissions',
+      'role_permissions',
+      'guarantor_consent_terms',
+    ]);
 
     const policies = [
       ...executableSql.matchAll(
@@ -307,6 +318,9 @@ describe('column type discipline', () => {
       // `generated_at` would be two columns holding one value, which is how
       // they eventually come to disagree.
       loan_schedules: 'generated_at',
+      // Phase 12, for the same reason as the Phase 4 snapshots: the row
+      // records the moment the product's terms were fixed onto the loan.
+      loan_product_snapshots: 'captured_at',
     };
 
     /**
@@ -333,6 +347,12 @@ describe('column type discipline', () => {
       'user_roles',
       'role_permissions',
       'client_remarks',
+      // Phase 10. A journal line is never edited: UPDATE and DELETE are both
+      // refused by trigger and the privilege is not granted. A posting is
+      // corrected by a contra entry, so an `updated_at` here would be a
+      // timestamp that can never advance. Its parent `journal_entries` does
+      // carry one, because being reversed stamps a column on it.
+      'journal_lines',
       // Phase 4. All four are append-only in the same way audit_log is:
       // UPDATE is refused by a statement-level trigger and the privilege is
       // not granted. A snapshot that could be edited would not be a snapshot,
@@ -360,6 +380,16 @@ describe('column type discipline', () => {
       // created, and `applied_at` records when. An `updated_at` would be a
       // column that can never advance.
       'loan_penalties',
+      // Phase 12. The terms a loan was approved under, append-only in
+      // exactly the way the Phase 4 snapshots are: UPDATE and DELETE are
+      // both refused by trigger. A product repriced next month must not be
+      // able to rewrite an agreement, so a column implying the row can be
+      // edited would be a lie.
+      'loan_product_snapshots',
+      // Phase 12. A membership row, like `user_roles`: the primary key is
+      // (product_id, branch_id), so there is no non-key column to amend. A
+      // product is offered at a branch or it is not.
+      'loan_product_branches',
     ]);
 
     for (const table of createdTables) {
@@ -614,6 +644,14 @@ describe('types stay in step with the schema', () => {
       'audit_settings_change',
       // Called only by other SECURITY DEFINER functions, never over the API.
       'assert_owner_admin_remains',
+      // Phase 10. Trigger functions on the journal tables.
+      'journal_lines_assert_balanced',
+      'journal_entries_assert_balanced',
+      'journal_entries_guard_update',
+      // Phase 10. The two branch-stamping triggers, which fill a column
+      // nothing that creates a client or a loan supplies yet.
+      'clients_stamp_branch',
+      'loans_stamp_branch',
 
       // --- Phase 3 ----------------------------------------------------------
       'clients_assign_client_number',
@@ -651,6 +689,38 @@ describe('types stay in step with the schema', () => {
 
       // --- Phase 7 ----------------------------------------------------------
       'audit_penalty_applied',
+
+      // --- Phase 13 ---------------------------------------------------------
+      // The application's guards: what a draft may change, who may act as a
+      // guarantor, what becomes evidence, and the audit record of the
+      // freeze. None is callable over the API.
+      'loan_application_details_guard',
+      'loan_application_details_stamp_actor',
+      'loan_guarantors_check_eligibility',
+      'loan_guarantors_guard_removal',
+      'loan_guarantors_guard_snapshot',
+      'loan_guarantors_stamp_actor',
+      'guarantor_consent_terms_guard',
+      'audit_loan_guarantors_frozen',
+
+      // --- Phase 12 ---------------------------------------------------------
+      // Three triggers on `loan_products`: the guard rail that keeps a
+      // product inside what `business_settings` permits, the actor stamp
+      // that also refuses a renamed product_code, and the audit record.
+      // Plus the trigger that supplies a loan's product when the caller
+      // names none.
+      'loan_products_within_business_rules',
+      'loan_products_stamp_actor',
+      'business_settings_keep_products_valid',
+      'audit_loan_product_change',
+      'loans_stamp_product',
+      // Not a trigger function, and exempt for the same reason
+      // `generate_loan_schedule` is: `capture_loan_product_snapshot` writes
+      // an append-only table, is revoked from `authenticated`, and its only
+      // caller is `approve_loan`, which runs as the table owner. A client
+      // type for it would advertise a call that is always refused. The
+      // revocation is asserted in `tests/db/security.test.ts`.
+      'capture_loan_product_snapshot',
 
       // Not a trigger function, and the one deliberate entry here that is not.
       // `generate_loan_schedule` is revoked from `authenticated` entirely: the

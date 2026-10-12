@@ -17,6 +17,7 @@ import {
   isMobileMoney,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
+  requiresExternalReference,
   validatePaymentAmount,
   type PaymentObligation,
   type PaymentMethod,
@@ -162,7 +163,7 @@ export function PaymentForm({
         })()
       : null;
 
-  // A Mobile Money payment is not complete without its network reference.
+  // Anything but cash is incomplete without the other side's reference.
   //
   // The field is `required` and `post_payment` refuses without it, but
   // `Continue` is a `type="button"`, so the browser's own validation never
@@ -170,7 +171,7 @@ export function PaymentForm({
   // the whole allocation, press "Record UGX …" and only then be told the
   // reference was missing. The reference is also what stops the same transfer
   // being recorded twice, so it is not a detail to collect late.
-  const referenceMissing = isMobileMoney(method) && reference.trim() === '';
+  const referenceMissing = requiresExternalReference(method) && reference.trim() === '';
 
   const canContinue =
     parsedAmount !== null && failure === null && plan !== null && !referenceMissing;
@@ -312,9 +313,11 @@ export function PaymentForm({
               </div>
             </fieldset>
 
-            {isMobileMoney(method) ? (
+            {requiresExternalReference(method) ? (
               <Field
-                label="Transaction reference"
+                label={
+                  isMobileMoney(method) ? 'Transaction reference' : 'Transfer reference'
+                }
                 name="externalReference"
                 type="text"
                 autoComplete="off"
@@ -325,7 +328,11 @@ export function PaymentForm({
                   setReference(event.target.value);
                 }}
                 error={result?.fieldErrors?.externalReference?.[0]}
-                hint="From the Mobile Money message. It is what stops the same payment being recorded twice."
+                hint={
+                  isMobileMoney(method)
+                    ? 'From the Mobile Money message. It is what stops the same payment being recorded twice.'
+                    : 'From the bank statement or deposit slip. It is what makes this posting reconcilable, and what stops the same transfer being recorded twice.'
+                }
               />
             ) : (
               // Not rendered at all for cash, rather than rendered and
@@ -407,7 +414,7 @@ export function PaymentForm({
               two steps cannot disagree. */}
           <input type="hidden" name="amount" value={amountText} />
           <input type="hidden" name="paymentMethod" value={method} />
-          {isMobileMoney(method) ? (
+          {requiresExternalReference(method) ? (
             <input type="hidden" name="externalReference" value={reference} />
           ) : null}
           <input type="hidden" name="notes" value={notes} />

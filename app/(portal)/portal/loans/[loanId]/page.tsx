@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
-import { getCompanyBranding } from '@/lib/data/company';
+import { getDocumentBranding } from '@/lib/data/company';
 import { getLoanStatement } from '@/lib/data/reports';
 import { businessToday } from '@/lib/domain/datetime';
 
@@ -44,9 +44,12 @@ export default async function PortalLoanPage({
     'portal:view',
   );
 
-  const [statement, { branding }, client] = await Promise.all([
+  const [statement, branding, client] = await Promise.all([
     getLoanStatement(loanId),
-    getCompanyBranding(),
+    // The document letterhead, which a borrower may read: it comes from
+    // `company_identity`, not from `company_settings`, so the registration
+    // and tax numbers stay behind `settings:view`.
+    getDocumentBranding(),
     getOwnClientRecord(context.profileId),
   ]);
 
@@ -67,7 +70,7 @@ export default async function PortalLoanPage({
       <LoanStatementView
         statement={statement}
         audience="client"
-        companyName={branding.companyName}
+        branding={branding}
         businessDate={businessToday(new Date(), branding.timezone)}
         timeZone={branding.timezone}
       />

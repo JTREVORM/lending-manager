@@ -5,6 +5,7 @@ import {
   approveLoan,
   createDraftLoan,
   createLoanScenario,
+  narrowLendingRules,
   type LoanScenario,
 } from '../helpers/loan-fixtures';
 import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
@@ -68,31 +69,68 @@ describeDb('loan snapshots', () => {
       expect(snapshot).toEqual(live);
     });
 
-    it('captures each active guarantor with their relationship', async () => {
+    it('captures each guarantor on the application, with their relationship', async () => {
       const own = await createLoanScenario();
       const loanId = await createDraftLoan(own.clientId);
       await approveLoan(loanId, own);
 
+      // Phase 13 moved the guarantor evidence onto the loan's own guarantor
+      // rows — `loan_guarantors.snapshot_*`, frozen by approval — because
+      // half of them are now existing clients, who have no row in
+      // `guarantors` and must not be given one. `loan_guarantor_evidence`
+      // reads both eras, so the claim is made against the view a reader
+      // actually uses.
       const snapshot = await queryOne<{
         full_name: string;
         phone: string;
         relationship_to_client: string;
         had_photograph: boolean;
+        subject_kind: string;
+        source: string;
       }>(
-        `select full_name, phone, relationship_to_client, had_photograph
-           from public.loan_guarantor_snapshots where loan_id = $1`,
+        `select full_name, phone, relationship_to_client, had_photograph,
+                subject_kind, source
+           from public.loan_guarantor_evidence where loan_id = $1`,
         [loanId],
       );
 
       expect(snapshot.relationship_to_client).toBe('Brother');
       expect(snapshot.full_name).toBe('Loan Guarantor');
+      expect(snapshot.subject_kind).toBe('external');
+      expect(snapshot.source).toBe('loan_guarantors');
       // Whether a photograph was on file, not the path: the object lives in a
       // private bucket under Phase 3's policies, and copying the path would
       // create a second route to it.
       expect(snapshot.had_photograph).toBe(true);
     });
 
-    it('does not capture a detached guarantor', async () => {
+    it('freezes the undertaking each guarantor signed', async () => {
+      const own = await createLoanScenario();
+      const loanId = await createDraftLoan(own.clientId);
+      await approveLoan(loanId, own);
+
+      const row = await queryOne<{
+        consent_version: string;
+        signature_name: string;
+        witness_name: string;
+        consented_at: string;
+      }>(
+        `select consent_version, signature_name, witness_name,
+                consented_at::text as consented_at
+           from public.loan_guarantor_evidence where loan_id = $1`,
+        [loanId],
+      );
+
+      // The version, not the words. A guarantor cannot be held to terms the
+      // business edited afterwards, and the terms row itself refuses to be
+      // reworded once signed.
+      expect(row.consent_version).toBe('1.0');
+      expect(row.signature_name).toBe('Loan Guarantor');
+      expect(row.witness_name).toBe('Fixture Witness');
+      expect(row.consented_at).not.toBeNull();
+    });
+
+    it('captures the application\'s guarantors, not the client\'s register', async () => {
       const own = await createLoanScenario();
 
       await query(
@@ -118,11 +156,17 @@ describeDb('loan snapshots', () => {
       await approveLoan(loanId, own);
 
       const rows = await query<{ full_name: string }>(
-        `select full_name from public.loan_guarantor_snapshots where loan_id = $1`,
+        `select full_name from public.loan_guarantor_evidence
+          where loan_id = $1 order by full_name`,
         [loanId],
       );
 
-      // Only the active association was relied on, so only it is evidence.
+      // Phase 13: the application carries its own guarantors, chosen from the
+      // client's *active* associations when the draft was raised. A detached
+      // association is not offered and so is not on the loan — and, which is
+      // the real change, re-attaching it afterwards would not add it either.
+      // What the business relied on is recorded against the loan, not looked
+      // up through a register that keeps moving.
       expect(rows.map((row) => row.full_name)).toEqual(['Loan Guarantor']);
     });
 
@@ -213,7 +257,9 @@ describeDb('loan snapshots', () => {
                 l.total_expected_repayment::text as total_expected
            from public.loans l
            join public.loan_client_snapshots cs on cs.loan_id = l.id
-           join public.loan_guarantor_snapshots gs on gs.loan_id = l.id
+           -- Phase 13: the guarantor evidence is on the loan's own guarantor
+           -- row now, and loan_guarantor_evidence reads both eras.
+           join public.loan_guarantor_evidence gs on gs.loan_id = l.id
           where l.id = $1`,
         [loanId],
       );
@@ -237,14 +283,15 @@ describeDb('loan snapshots', () => {
         [own.guarantorId],
       );
 
-      await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 2500,
-                grace_period_days = 14,
-                penalty_rate_bps = 9000,
-                min_loan_amount = 500000
-          where id = 1`,
-      );
+      // Phase 12: the products move with the rail, and the restore puts both
+      // back exactly. The claim is unchanged — the snapshot does not follow
+      // any of it.
+      const restoreRules = await narrowLendingRules({
+        monthlyRateBps: 2_500,
+        gracePeriodDays: 14,
+        penaltyRateBps: 9_000,
+        minLoanAmount: 500_000,
+      });
 
       try {
         const after = await queryOne<typeof before>(
@@ -255,7 +302,7 @@ describeDb('loan snapshots', () => {
                   l.total_expected_repayment::text as total_expected
              from public.loans l
              join public.loan_client_snapshots cs on cs.loan_id = l.id
-             join public.loan_guarantor_snapshots gs on gs.loan_id = l.id
+             join public.loan_guarantor_evidence gs on gs.loan_id = l.id
             where l.id = $1`,
           [loanId],
         );
@@ -276,12 +323,7 @@ describeDb('loan snapshots', () => {
         expect(live.phone).toBe('+256700099601');
         expect(live.village_area).toBe('Somewhere Else');
       } finally {
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500, grace_period_days = 3,
-                  penalty_rate_bps = 5000, min_loan_amount = 100000
-            where id = 1`,
-        );
+        await restoreRules();
       }
     });
 
@@ -302,10 +344,7 @@ describeDb('loan snapshots', () => {
       // Hand-checked: 30,000 then 15,000 — the confirmed Case B figures.
       expect(before.map((row) => row.interest)).toEqual(['30000', '15000']);
 
-      await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 2500 where id = 1`,
-      );
+      const restoreRate = await narrowLendingRules({ monthlyRateBps: 2_500 });
 
       try {
         const after = await query<{ interest: string }>(
@@ -316,10 +355,7 @@ describeDb('loan snapshots', () => {
 
         expect(after).toEqual(before);
       } finally {
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500 where id = 1`,
-        );
+        await restoreRate();
       }
     });
 

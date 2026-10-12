@@ -173,6 +173,12 @@ export function CollectionReportView({
           secondary={`${String(totals.countByMethod.airtel_money)} payments`}
           metric="airtel_received"
         />
+        <StatCard
+          label="Bank received"
+          value={<Money amount={totals.byMethod.bank} />}
+          secondary={`${String(totals.countByMethod.bank)} payments`}
+          metric="bank_received"
+        />
       </StatGrid>
 
       <StatGrid>
@@ -335,6 +341,13 @@ function Breakdown({
       header: 'Airtel',
       numeric: true,
       cell: (row) => formatUgx(row.airtel, { withCurrency: false }),
+    },
+    {
+      key: 'bank',
+      header: 'Bank',
+      numeric: true,
+      hideOnMobile: true,
+      cell: (row) => formatUgx(row.bank, { withCurrency: false }),
     },
     {
       key: 'reversed',

@@ -373,8 +373,18 @@ describe('the payment search filter', () => {
   });
 
   it('rejects an unknown method or status', () => {
-    expect(paymentSearchSchema.safeParse({ method: 'bank' }).success).toBe(false);
+    // `bank` was the example here until Phase 10 made it a real method, so
+    // the case is restated with one that is still not: a cheque is not a
+    // method this system records.
+    expect(paymentSearchSchema.safeParse({ method: 'cheque' }).success).toBe(false);
+    expect(paymentSearchSchema.safeParse({ method: 'bank_transfer' }).success).toBe(
+      false,
+    );
     expect(paymentSearchSchema.safeParse({ status: 'deleted' }).success).toBe(false);
+  });
+
+  it('accepts bank, which Phase 10 added', () => {
+    expect(paymentSearchSchema.safeParse({ method: 'bank' }).success).toBe(true);
   });
 
   it('bounds the page number', () => {

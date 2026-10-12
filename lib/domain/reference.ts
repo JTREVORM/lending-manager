@@ -37,8 +37,39 @@
 import { businessReferenceYear } from './datetime';
 
 /** Entity kinds that carry a reference number. */
-export const REFERENCE_SCOPES = ['client', 'loan', 'payment'] as const;
+export const REFERENCE_SCOPES = [
+  'client',
+  'loan',
+  'payment',
+  // Phase 10.
+  'branch',
+  'journal',
+  // Phase 11. The four documents that move money without being a loan.
+  'transfer',
+  'expense',
+  'other_income',
+  'reconciliation',
+] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
+
+/**
+ * What each scope numbers, in the words a person would use.
+ *
+ * Phase 12. The settings screen lists the counters so an Owner can see what
+ * numbering is in use, and `other_income` on a screen reads as a column name
+ * rather than as a thing the business does.
+ */
+export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = {
+  client: 'Clients',
+  loan: 'Loans',
+  payment: 'Payments',
+  branch: 'Branches',
+  journal: 'Journal entries',
+  transfer: 'Transfers',
+  expense: 'Expenses',
+  other_income: 'Other income',
+  reconciliation: 'Daily counts',
+};
 
 export interface ReferenceFormat {
   readonly scope: ReferenceScope;
@@ -58,6 +89,13 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   client: { scope: 'client', prefix: 'CL', padding: 3 },
   loan: { scope: 'loan', prefix: 'LN', padding: 4 },
   payment: { scope: 'payment', prefix: 'PAY', padding: 4 },
+  branch: { scope: 'branch', prefix: 'BR', padding: 2 },
+  // 'JV' for journal voucher, the name the printed ledger uses.
+  journal: { scope: 'journal', prefix: 'JV', padding: 5 },
+  transfer: { scope: 'transfer', prefix: 'TF', padding: 5 },
+  expense: { scope: 'expense', prefix: 'EX', padding: 5 },
+  other_income: { scope: 'other_income', prefix: 'OI', padding: 5 },
+  reconciliation: { scope: 'reconciliation', prefix: 'RC', padding: 5 },
 } as const;
 
 export class ReferenceError extends Error {

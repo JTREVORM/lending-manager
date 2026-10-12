@@ -443,10 +443,15 @@ export async function shiftDate(date: string, days: number): Promise<string> {
 /**
  * Set the lending terms a loan will be approved under.
  *
- * `approve_loan` snapshots the business settings onto the loan, so these have
- * to be in place **before** approval. Setting them afterwards changes nothing
- * about an existing loan, which is the ADR-023 guarantee and something the
- * tests assert in its own right.
+ * `approve_loan` snapshots the terms onto the loan, so these have to be in
+ * place **before** approval. Setting them afterwards changes nothing about an
+ * existing loan, which is the ADR-023 guarantee and something the tests
+ * assert in its own right.
+ *
+ * Phase 12 moved "what the business lends at" from `business_settings` alone
+ * to the business row *and* the default product, which is where a loan's
+ * terms now come from. So this configures both — see `applyLendingTerms` for
+ * why that takes three statements rather than two.
  */
 export async function configureLendingTerms(
   options: {
@@ -456,19 +461,13 @@ export async function configureLendingTerms(
     readonly penaltyRateBps?: number;
   } = {},
 ): Promise<void> {
-  await query(
-    `update public.business_settings
-        set default_monthly_interest_rate_bps = $1,
-            min_loan_amount = $2,
-            grace_period_days = $3,
-            penalty_rate_bps = $4`,
-    [
-      options.monthlyRateBps ?? 2_500,
-      options.minLoanAmount ?? 10_000,
-      options.graceDays ?? 3,
-      options.penaltyRateBps ?? 5_000,
-    ],
-  );
+  await applyLendingTerms({
+    monthlyRateBps: options.monthlyRateBps ?? 2_500,
+    minLoanAmount: options.minLoanAmount ?? 10_000,
+    graceDays: options.graceDays ?? 3,
+    penaltyRateBps: options.penaltyRateBps ?? 5_000,
+    product: 'default',
+  });
 }
 
 /**
@@ -476,15 +475,97 @@ export async function configureLendingTerms(
  *
  * Called after a suite that changed them, so a later suite reading
  * `business_settings` sees what migration `…0800` installed rather than
- * whatever the last test needed.
+ * whatever the last test needed. Phase 12 added the default product, which
+ * is where a loan's terms now actually come from, so both go back.
  */
 export async function restoreSeededLendingTerms(): Promise<void> {
+  await applyLendingTerms({
+    monthlyRateBps: 1_500,
+    minLoanAmount: 100_000,
+    graceDays: 3,
+    penaltyRateBps: 5_000,
+    product: 'seeded',
+  });
+}
+
+/**
+ * Set the business rules and the default product together, in an order the
+ * database will accept whichever direction the change goes in.
+ *
+ * ## Why this is three statements and not two
+ *
+ * Phase 12 made the guard rail hold both ways: a product may not sit outside
+ * `business_settings` (`loan_products_within_business_rules`) and
+ * `business_settings` may not be narrowed so far that it strands an active
+ * product (`business_settings_keep_products_valid`). Either single order
+ * therefore fails half the time — writing the settings first is refused when
+ * the change narrows the rail, and writing the product first is refused when
+ * the change widens it.
+ *
+ * So: open the rail to whichever side is wider, move the product inside it,
+ * then close the rail to where it belongs. Three statements, no direction to
+ * reason about, and it is what an Owner would have to do by hand.
+ *
+ * The product's rate band is widened to contain the new standing rate rather
+ * than replaced, because a band that excluded its own default would be
+ * refused by `loan_products_default_rate_in_band`.
+ */
+async function applyLendingTerms(terms: {
+  readonly monthlyRateBps: number;
+  readonly minLoanAmount: number;
+  readonly graceDays: number;
+  readonly penaltyRateBps: number;
+  /** `seeded` puts the product's rate band back to what 12.2 installed. */
+  readonly product: 'default' | 'seeded';
+}): Promise<void> {
+  // 1. The rail, opened as wide as it needs to be for either side.
   await query(
     `update public.business_settings
-        set default_monthly_interest_rate_bps = 1500,
-            min_loan_amount = 100000,
-            grace_period_days = 3,
-            penalty_rate_bps = 5000`,
+        set min_loan_amount = least(min_loan_amount, $1),
+            default_monthly_interest_rate_bps =
+              greatest(default_monthly_interest_rate_bps, $2)
+      where id = 1`,
+    [terms.minLoanAmount, terms.monthlyRateBps],
+  );
+
+  // 2. The product, inside it.
+  await query(
+    terms.product === 'seeded'
+      ? `update public.loan_products
+            set default_interest_rate_bps = 1500,
+                min_interest_rate_bps = 1200,
+                max_interest_rate_bps = 1800,
+                min_amount = $1,
+                grace_period_days = $2,
+                penalty_rate_bps = $3
+          where is_default`
+      : `update public.loan_products
+            set default_interest_rate_bps = $4,
+                min_interest_rate_bps = least(min_interest_rate_bps, $4),
+                max_interest_rate_bps = greatest(max_interest_rate_bps, $4),
+                min_amount = $1,
+                grace_period_days = $2,
+                penalty_rate_bps = $3
+          where is_default`,
+    terms.product === 'seeded'
+      ? [terms.minLoanAmount, terms.graceDays, terms.penaltyRateBps]
+      : [
+          terms.minLoanAmount,
+          terms.graceDays,
+          terms.penaltyRateBps,
+          terms.monthlyRateBps,
+        ],
+  );
+
+  // 3. The rail, closed to where it belongs.
+  await query(
+    `update public.business_settings
+        set default_monthly_interest_rate_bps = $1,
+            min_loan_amount = $2,
+            grace_period_days = $3,
+            penalty_rate_bps = $4
+      where id = 1`,
+    [terms.monthlyRateBps, terms.minLoanAmount, terms.graceDays, terms.penaltyRateBps],
   );
 }
 

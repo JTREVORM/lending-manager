@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { deleteTestUsers } from '../helpers/auth-fixtures';
 import {
+  addProbeFrequency,
   approveLoan,
+  narrowLendingRules,
   createDraftLoan,
   createLoanScenario,
   deleteTestLoans,
@@ -549,11 +551,7 @@ describeDb('repayment schedule generation', () => {
     it('rolls the whole disbursement back when generation fails', async () => {
       // A cadence of 200 days cannot fit inside a calendar month, so the
       // zero-installment guard refuses. The question is what survives.
-      await query(
-        `insert into public.repayment_frequencies (key, label, interval_days, sort_order)
-         values ('every_200_days_probe', 'Every 200 days (test)', 200, 950)
-         on conflict (key) do nothing`,
-      );
+      await addProbeFrequency('every_200_days_probe', 'Every 200 days (test)', 200, 950);
 
       const scenario = await createLoanScenario();
       const loanId = await createDraftLoan(scenario.clientId, {
@@ -737,11 +735,7 @@ describeDb('repayment schedule generation', () => {
     });
 
     it('refuses rather than leaving a contractual month uncollected', async () => {
-      await query(
-        `insert into public.repayment_frequencies (key, label, interval_days, sort_order)
-         values ('every_40_days_probe', 'Every 40 days (test)', 40, 951)
-         on conflict (key) do nothing`,
-      );
+      await addProbeFrequency('every_40_days_probe', 'Every 40 days (test)', 40, 951);
 
       const scenario = await createLoanScenario();
       const loanId = await createDraftLoan(scenario.clientId, {
@@ -810,19 +804,27 @@ describeDb('repayment schedule generation', () => {
         [loanId],
       );
 
-      // Everything an administrator is still allowed to change.
-      await query(
-        `update public.repayment_frequencies
-            set label = 'Every two days (renamed)', is_active = false, sort_order = 80
-          where key = 'every_2_days'`,
-      );
-      await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 2500, min_loan_amount = 250000
-          where id = 1`,
-      );
+      let restoreRules: (() => Promise<void>) | undefined;
 
       try {
+        // Everything an administrator is still allowed to change.
+        //
+        // Inside the `try` as of Phase 12, because one of these changes can
+        // now be refused: `business_settings_keep_products_valid` will not
+        // let the business floor rise above what an active product lends
+        // from. A refusal thrown before the `try` skipped the restore below
+        // and left the cadence retired for every file that ran afterwards.
+        await query(
+          `update public.repayment_frequencies
+              set label = 'Every two days (renamed)', is_active = false, sort_order = 80
+            where key = 'every_2_days'`,
+        );
+
+        restoreRules = await narrowLendingRules({
+          monthlyRateBps: 2_500,
+          minLoanAmount: 250_000,
+        });
+
         const after = await installmentsFor(loanId);
         const headerAfter = await queryOne<{
           interval_days: number;
@@ -845,11 +847,7 @@ describeDb('repayment schedule generation', () => {
               set label = 'Every 2 days', is_active = true, sort_order = 2
             where key = 'every_2_days'`,
         );
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500, min_loan_amount = 100000
-            where id = 1`,
-        );
+        await restoreRules?.();
       }
     });
 

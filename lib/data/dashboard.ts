@@ -243,6 +243,7 @@ export interface CollectionSummary {
   readonly cashReceived: UgxAmount;
   readonly mtnReceived: UgxAmount;
   readonly airtelReceived: UgxAmount;
+  readonly bankReceived: UgxAmount;
 
   readonly principalCollected: UgxAmount;
   readonly interestCollected: UgxAmount;
@@ -255,7 +256,7 @@ export interface CollectionSummary {
 const COLLECTION_COLUMNS = `
   business_date, expected_today, remaining_today, loans_due_today, clients_due_today,
   loans_settled_today, collected_today, payments_today, clients_paying_today,
-  cash_received, mtn_received, airtel_received, principal_collected,
+  cash_received, mtn_received, airtel_received, bank_received, principal_collected,
   interest_collected, penalty_collected, reversed_today_amount, reversed_today_count
 `;
 
@@ -292,6 +293,7 @@ export async function getCollectionSummary(): Promise<CollectionSummary | null> 
     cashReceived: money(row.cash_received),
     mtnReceived: money(row.mtn_received),
     airtelReceived: money(row.airtel_received),
+    bankReceived: money(row.bank_received),
 
     principalCollected: money(row.principal_collected),
     interestCollected: money(row.interest_collected),

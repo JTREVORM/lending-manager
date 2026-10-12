@@ -7,9 +7,11 @@ import {
   asUserScript,
   deleteTestUsers,
 } from '../helpers/auth-fixtures';
+import { restoreSeededLendingTerms } from '../helpers/delinquency-fixtures';
 import {
   approveLoan,
   cancelLoan,
+  narrowLendingRules,
   createDraftLoan,
   createLoanScenario,
   disburseLoan,
@@ -423,18 +425,51 @@ describeDb('the loan lifecycle', () => {
       },
     );
 
-    it('refuses when the guarantor was detached after drafting', async () => {
+    it('refuses an application with no guarantor of its own', async () => {
+      // Phase 13 moved the rule: approval counts the guarantors on the
+      // *application*, not the client's register. Detaching a register entry
+      // after drafting no longer changes what the loan relies on — the loan
+      // recorded it — and that is the point of the move. What still refuses
+      // an approval is an application nobody agreed to back.
+      const own = await createLoanScenario();
+      const loanId = await createDraftLoan(own.clientId, {
+        withoutLoanGuarantors: true,
+      });
+      await submitLoan(loanId, own);
+
+      await expect(approveAs(own.owner, loanId)).rejects.toThrow(
+        /insufficient_guarantors/,
+      );
+    });
+
+    it('refuses an application whose guarantor has not signed', async () => {
+      // A guarantor who has not signed the undertaking is somebody the
+      // business cannot hold to anything, so this stops the approval rather
+      // than being noted on it.
+      const own = await createLoanScenario();
+      const loanId = await createDraftLoan(own.clientId, { withoutConsent: true });
+      await submitLoan(loanId, own);
+
+      await expect(approveAs(own.owner, loanId)).rejects.toThrow(
+        /guarantor_consent_missing/,
+      );
+    });
+
+    it('refuses when a guarantor stopped being eligible after drafting', async () => {
+      // The same race the client check loses safely: a guarantor archived
+      // between drafting and approval must stop the approval, because the
+      // business would otherwise be relying on somebody it has struck off.
       const own = await createLoanScenario();
       const loanId = await createDraftLoan(own.clientId);
       await submitLoan(loanId, own);
 
       await query(
-        `update public.client_guarantors set active = false where client_id = $1`,
-        [own.clientId],
+        `update public.guarantors set archived_at = pg_catalog.now() where id = $1`,
+        [own.guarantorId],
       );
 
       await expect(approveAs(own.owner, loanId)).rejects.toThrow(
-        /insufficient_guarantors/,
+        /guarantor_ineligible/,
       );
     });
 
@@ -454,18 +489,18 @@ describeDb('the loan lifecycle', () => {
       });
       await submitLoan(loanId, own);
 
-      await query(
-        `update public.business_settings set min_loan_amount = 200000 where id = 1`,
-      );
+      // Phase 12: raising the floor means raising it on the products too,
+      // because the rail now holds in both directions. `narrowLendingRules`
+      // does it in the order the database permits and hands back the exact
+      // restore.
+      const restore = await narrowLendingRules({ minLoanAmount: 200_000 });
 
       try {
         await expect(query(`select public.approve_loan($1)`, [loanId])).rejects.toThrow(
           /below_minimum/,
         );
       } finally {
-        await query(
-          `update public.business_settings set min_loan_amount = 100000 where id = 1`,
-        );
+        await restore();
       }
     });
 
@@ -503,12 +538,19 @@ describeDb('the loan lifecycle', () => {
       });
       await submitLoan(loanId, own);
 
-      // The documented policy: terms are snapshotted at approval, from the
-      // settings in force then. Approving at a stale rate would mean lending
-      // at a rate the business had already decided to stop offering.
+      // The documented policy: terms are snapshotted at approval, from what
+      // is in force then. Approving at a stale rate would mean lending at a
+      // rate the business had already decided to stop offering.
+      //
+      // Phase 12 moved "what is in force" from `business_settings` to the
+      // loan's product — see the precedence note at the head of migration
+      // 20261012000200 — so the repricing happens there. The claim this test
+      // makes is unchanged: the draft does not fix the rate, approval does.
       await query(
-        `update public.business_settings
-            set default_monthly_interest_rate_bps = 1200 where id = 1`,
+        `update public.loan_products
+            set default_interest_rate_bps = 1200,
+                min_interest_rate_bps = least(min_interest_rate_bps, 1200)
+          where is_default`,
       );
 
       try {
@@ -527,10 +569,10 @@ describeDb('the loan lifecycle', () => {
         // Hand-checked at 12%: 72,000 + 48,000 + 24,000 = 144,000.
         expect(row.total_interest).toBe('144000');
       } finally {
-        await query(
-          `update public.business_settings
-              set default_monthly_interest_rate_bps = 1500 where id = 1`,
-        );
+        // Both the business settings and the product, because the db project
+        // runs its files in sequence: a product left at 12% is the rate every
+        // suite after this one would approve at.
+        await restoreSeededLendingTerms();
       }
     });
   });
@@ -551,7 +593,7 @@ describeDb('the loan lifecycle', () => {
         `select
            (select count(*) from public.loan_periods where loan_id = $1)::text as periods,
            (select count(*) from public.loan_client_snapshots where loan_id = $1)::text as client_snap,
-           (select count(*) from public.loan_guarantor_snapshots where loan_id = $1)::text as guarantor_snap,
+           (select count(*) from public.loan_guarantor_evidence where loan_id = $1)::text as guarantor_snap,
            (select count(*) from public.loan_identity_snapshots where loan_id = $1)::text as identity_snap`,
         [loanId],
       );

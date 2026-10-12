@@ -6,12 +6,13 @@ import { ValidationError } from '@/lib/errors';
 import {
   basisPointsSchema,
   businessDateSchema,
-  businessSettingsSchema,
-  companySettingsSchema,
+  companyIdentitySchema,
   createProfileSchema,
+  financeSettingsSchema,
   currencyCodeSchema,
   formDataToObject,
   fullNameSchema,
+  lendingRulesSchema,
   localeSchema,
   optionalEmailSchema,
   paginationSchema,
@@ -235,54 +236,114 @@ describe('updateProfileSchema', () => {
   });
 });
 
-describe('companySettingsSchema', () => {
-  it('accepts a name alone, since registration is still in progress', () => {
-    const parsed = companySettingsSchema.parse({ companyName: 'Example Lending Ltd' });
+describe('companyIdentitySchema', () => {
+  // Phase 12 replaced the number-typed `companySettingsSchema` with this.
+  //
+  // The old pair validated values that were already the right types, and
+  // nothing in the application used them: the settings screen was read-only,
+  // so the only caller was this file. Phase 12 made the screen editable, and
+  // a form sends strings — so these parse what a browser actually posts and
+  // enforce the same relationships the CHECK constraints do. One schema per
+  // table, which is the point: two would be two places for the rule to live.
+  const valid = {
+    companyName: 'Example Lending Ltd',
+    locale: 'en-UG',
+    timezone: 'Africa/Kampala',
+  };
+
+  it('accepts a name, locale and timezone alone', () => {
+    const parsed = companyIdentitySchema.parse(valid);
 
     expect(parsed.companyName).toBe('Example Lending Ltd');
-    expect(parsed.currencyCode).toBe('UGX');
-    expect(parsed.timezone).toBe('Africa/Kampala');
-    expect(parsed.locale).toBe('en-UG');
+    // Everything else is optional, because a business may have no second
+    // phone, no P.O. Box and no registration number yet.
+    //
+    // Two shapes of "not set", and the difference is deliberate: a field the
+    // form submitted *empty* becomes null, which is what the column stores,
+    // while a field that was not submitted at all stays undefined, which the
+    // update then leaves alone rather than blanking. A real form posts every
+    // box, so staff only ever produce the first.
+    expect(parsed.legalName).toBeUndefined();
+    expect(parsed.phoneSecondary).toBeNull();
+    expect(parsed.logoPath).toBeNull();
+  });
+
+  it('normalises a phone number typed any way staff might type it', () => {
+    const parsed = companyIdentitySchema.parse({
+      ...valid,
+      phone: '0768 735 982',
+      phoneSecondary: '+256703587676',
+    });
+
+    expect(parsed.phone).toBe('+256768735982');
+    expect(parsed.phoneSecondary).toBe('+256703587676');
+  });
+
+  it('treats a blank optional field as absent rather than as an error', () => {
+    const parsed = companyIdentitySchema.parse({
+      ...valid,
+      phone: '   ',
+      brandPrimaryColor: '',
+      logoPath: '',
+    });
+
+    expect(parsed.phone).toBeNull();
+    expect(parsed.brandPrimaryColor).toBeNull();
+    expect(parsed.logoPath).toBeNull();
   });
 
   it('validates the brand colour as a six-digit hex value', () => {
     expect(
-      companySettingsSchema.safeParse({
-        companyName: 'Example',
-        brandPrimaryColor: '#1F6F54',
-      }).success,
+      companyIdentitySchema.safeParse({ ...valid, brandPrimaryColor: '#1f6f54' }).success,
     ).toBe(true);
 
+    // And upper-cases it, so two spellings of one colour cannot be stored.
     expect(
-      companySettingsSchema.safeParse({
-        companyName: 'Example',
-        brandPrimaryColor: 'green',
-      }).success,
+      companyIdentitySchema.parse({ ...valid, brandPrimaryColor: '#1f6f54' })
+        .brandPrimaryColor,
+    ).toBe('#1F6F54');
+
+    expect(
+      companyIdentitySchema.safeParse({ ...valid, brandPrimaryColor: 'green' }).success,
     ).toBe(false);
   });
 
-  it('rejects a too-short company name', () => {
-    expect(companySettingsSchema.safeParse({ companyName: 'A' }).success).toBe(false);
+  it('rejects a logo path that tries to climb out of the asset root', () => {
+    expect(
+      companyIdentitySchema.safeParse({ ...valid, logoPath: '../../etc/passwd' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an empty trading name', () => {
+    expect(companyIdentitySchema.safeParse({ ...valid, companyName: '  ' }).success).toBe(
+      false,
+    );
   });
 });
 
-describe('businessSettingsSchema', () => {
+describe('lendingRulesSchema', () => {
   const valid = {
-    minLoanAmount: BUSINESS_DEFAULTS.minLoanAmount,
-    maxLoanAmount: BUSINESS_DEFAULTS.maxLoanAmount,
-    defaultMonthlyInterestRateBps: BUSINESS_DEFAULTS.defaultMonthlyInterestRateBps,
-    minLoanTermMonths: BUSINESS_DEFAULTS.minLoanTermMonths,
-    maxLoanTermMonths: BUSINESS_DEFAULTS.maxLoanTermMonths,
-    gracePeriodDays: BUSINESS_DEFAULTS.gracePeriodDays,
-    penaltyRateBps: BUSINESS_DEFAULTS.penaltyRateBps,
-    maxActiveLoansPerClient: BUSINESS_DEFAULTS.maxActiveLoansPerClient,
-    defaultRepaymentFrequency: BUSINESS_DEFAULTS.defaultRepaymentFrequency,
+    minLoanAmount: String(BUSINESS_DEFAULTS.minLoanAmount),
+    maxLoanAmount: String(BUSINESS_DEFAULTS.maxLoanAmount),
+    multiMonthMinAmount: '200000',
+    defaultMonthlyInterestRateBps: '15',
+    minLoanTermMonths: String(BUSINESS_DEFAULTS.minLoanTermMonths),
+    maxLoanTermMonths: String(BUSINESS_DEFAULTS.maxLoanTermMonths),
+    gracePeriodDays: String(BUSINESS_DEFAULTS.gracePeriodDays),
+    penaltyRateBps: '50',
+    maxActiveLoansPerClient: String(BUSINESS_DEFAULTS.maxActiveLoansPerClient),
+    minGuarantorsRequired: '1',
   };
 
   it('accepts the seeded business defaults', () => {
     // The values the application seeds must satisfy the validator that guards
     // the settings screen, or the first edit would be impossible.
-    expect(businessSettingsSchema.safeParse(valid).success).toBe(true);
+    const parsed = lendingRulesSchema.parse(valid);
+
+    expect(parsed.minLoanAmount).toBe(100_000);
+    // Typed as a percentage, stored as basis points.
+    expect(parsed.defaultMonthlyInterestRateBps).toBe(1_500);
+    expect(parsed.penaltyRateBps).toBe(5_000);
   });
 
   it('encodes the confirmed business rules', () => {
@@ -294,52 +355,115 @@ describe('businessSettingsSchema', () => {
     expect(BUSINESS_DEFAULTS.maxLoanTermMonths).toBe(3);
   });
 
+  it('reads a thousands separator rather than silently misreading it', () => {
+    expect(
+      lendingRulesSchema.parse({ ...valid, minLoanAmount: '100,000' }).minLoanAmount,
+    ).toBe(100_000);
+
+    // `500,00` is the trap: a decimal comma would make it 50,000.
+    expect(
+      lendingRulesSchema.safeParse({ ...valid, minLoanAmount: '500,00' }).success,
+    ).toBe(false);
+  });
+
   it('rejects a maximum below the minimum, and reports it on the right field', () => {
-    const result = businessSettingsSchema.safeParse({
-      ...valid,
-      maxLoanAmount: 50_000,
-    });
+    const result = lendingRulesSchema.safeParse({ ...valid, maxLoanAmount: '50000' });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['maxLoanAmount']);
+    expect(
+      result.error?.issues.some(
+        (issue: z.core.$ZodIssue) => issue.path[0] === 'maxLoanAmount',
+      ),
+    ).toBe(true);
   });
 
   it('rejects an inverted term range', () => {
-    const result = businessSettingsSchema.safeParse({
+    const result = lendingRulesSchema.safeParse({
       ...valid,
-      minLoanTermMonths: 6,
-      maxLoanTermMonths: 3,
+      minLoanTermMonths: '6',
+      maxLoanTermMonths: '3',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['maxLoanTermMonths']);
+    expect(
+      result.error?.issues.some(
+        (issue: z.core.$ZodIssue) => issue.path[0] === 'maxLoanTermMonths',
+      ),
+    ).toBe(true);
   });
 
   it('allows equal minimum and maximum', () => {
     expect(
-      businessSettingsSchema.safeParse({
+      lendingRulesSchema.safeParse({
         ...valid,
-        minLoanAmount: 100_000,
-        maxLoanAmount: 100_000,
+        minLoanAmount: '100000',
+        maxLoanAmount: '100000',
+        multiMonthMinAmount: '100000',
       }).success,
     ).toBe(true);
   });
 
   it('requires at least one active loan to be permitted', () => {
     expect(
-      businessSettingsSchema.safeParse({ ...valid, maxActiveLoansPerClient: 0 }).success,
+      lendingRulesSchema.safeParse({ ...valid, maxActiveLoansPerClient: '0' }).success,
     ).toBe(false);
   });
 
   it('allows a zero grace period and a zero penalty', () => {
     // The business may legitimately decide to charge neither.
     expect(
-      businessSettingsSchema.safeParse({
+      lendingRulesSchema.safeParse({
         ...valid,
-        gracePeriodDays: 0,
-        penaltyRateBps: 0,
+        gracePeriodDays: '0',
+        penaltyRateBps: '0',
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('financeSettingsSchema', () => {
+  const valid = {
+    transferApprovalThreshold: '2000000',
+    expenseApprovalThreshold: '1000000',
+    lowBalanceCashAtHand: '200000',
+    lowBalanceMtn: '150000',
+    lowBalanceAirtel: '150000',
+    lowBalanceBank: '500000',
+  };
+
+  it('accepts the seeded thresholds, and reads an unticked box as false', () => {
+    const parsed = financeSettingsSchema.parse(valid);
+
+    expect(parsed.transferApprovalThreshold).toBe(2_000_000);
+    // A browser sends nothing at all for an unticked checkbox, which is the
+    // one input shape a naive `z.boolean()` gets wrong.
+    expect(parsed.allowNegativeCash).toBe(false);
+    expect(parsed.reconciliationRequiresReview).toBe(false);
+  });
+
+  it('reads a ticked box as true', () => {
+    const parsed = financeSettingsSchema.parse({
+      ...valid,
+      allowNegativeCash: 'on',
+      reconciliationRequiresReview: 'on',
+    });
+
+    expect(parsed.allowNegativeCash).toBe(true);
+    expect(parsed.reconciliationRequiresReview).toBe(true);
+  });
+
+  it('permits a zero threshold, which means every movement needs approval', () => {
+    expect(
+      financeSettingsSchema.safeParse({ ...valid, transferApprovalThreshold: '0' })
+        .success,
+    ).toBe(true);
+  });
+
+  it('refuses a negative threshold', () => {
+    expect(
+      financeSettingsSchema.safeParse({ ...valid, expenseApprovalThreshold: '-1' })
+        .success,
+    ).toBe(false);
   });
 });
 

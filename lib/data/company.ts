@@ -35,6 +35,12 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 /** The branding fields the application shell needs. */
 export interface CompanyBranding {
   readonly companyName: string;
+  /**
+   * The line that sits under the name. Phase 12: the business has one, it is
+   * on its own flyer, and the sign-in screen is where a borrower first reads
+   * it. Nullable because a company need not have one.
+   */
+  readonly tagline: string | null;
   readonly currencyCode: string;
   readonly locale: string;
   readonly timezone: string;
@@ -55,36 +61,79 @@ export interface CompanyBrandingResult {
 
 const DEFAULT_BRANDING: CompanyBranding = {
   companyName: COMPANY_DEFAULTS.companyName,
+  tagline: COMPANY_DEFAULTS.tagline,
   currencyCode: COMPANY_DEFAULTS.currencyCode,
   locale: COMPANY_DEFAULTS.locale,
   timezone: COMPANY_DEFAULTS.timezone,
   logoPath: COMPANY_DEFAULTS.logoPath,
 };
 
-/** The company fields a printed receipt shows. */
-export interface ReceiptBranding {
+/**
+ * The company fields a document the business hands out carries.
+ *
+ * ## Why one shape for a receipt and a statement
+ *
+ * Phase 12 put the company's real identity on both, and before that each
+ * assembled its own header from whichever fields its page happened to pass —
+ * the receipt had the name and one phone number, the statement had the name
+ * alone. A borrower holding a statement and a receipt from the same lender
+ * read two different letterheads. One shape, one component
+ * (`DocumentLetterhead`), and a Phase 7 PDF will carry the same one.
+ */
+export interface DocumentBranding {
   readonly companyName: string;
-  readonly companyPhone: string | null;
+  readonly tagline: string | null;
+  readonly logoPath: string | null;
+  readonly phone: string | null;
+  readonly phoneSecondary: string | null;
+  /** The P.O. Box. A letter goes here. */
+  readonly postalAddress: string | null;
+  /** Where the office is, assembled from the address lines and the city. */
+  readonly physicalAddress: string | null;
   readonly receiptHeader: string | null;
   readonly receiptFooter: string | null;
   readonly timezone: string;
 }
 
 /**
- * Company details for a receipt, from the current settings.
+ * Company details for a document, from the current settings.
  *
  * Deliberately **not** snapshotted onto the payment. A receipt reprinted next
  * year showing this year's phone number is helpful; one showing a disconnected
  * number is not. The figures that must not move — the amount, the balances,
  * the borrower's name, the actor — are snapshotted on the payment row itself.
  *
+ * ## Which table it reads, and why that is not the obvious one
+ *
+ * `company_identity`, not `company_settings`. A staff member holds
+ * `settings:view` and could read either; a borrower holds neither, and
+ * Phase 12 is the phase where a borrower's own statement started carrying the
+ * letterhead. The view publishes exactly the fields a document needs and
+ * keeps the registration and tax numbers out, so one function serves both
+ * audiences and neither gets more than it should.
+ *
+ * `receipt_header` and `receipt_footer` are the exception: they are not on the
+ * view, because they are the business's own wording for its documents rather
+ * than its published identity. They are read separately and simply come back
+ * null for a borrower, which the letterhead renders as their absence.
+ *
  * Never throws, for the same reason `getCompanyBranding` does not: a receipt
  * must not fail to render because a settings read failed.
  */
-export async function getReceiptBranding(): Promise<ReceiptBranding> {
-  const fallback: ReceiptBranding = {
+export async function getDocumentBranding(): Promise<DocumentBranding> {
+  const fallback: DocumentBranding = {
     companyName: COMPANY_DEFAULTS.companyName,
-    companyPhone: null,
+    tagline: COMPANY_DEFAULTS.tagline,
+    logoPath: COMPANY_DEFAULTS.logoPath,
+    phone: COMPANY_DEFAULTS.phone,
+    phoneSecondary: COMPANY_DEFAULTS.phoneSecondary,
+    postalAddress: COMPANY_DEFAULTS.postalAddress,
+    physicalAddress: joinAddress([
+      COMPANY_DEFAULTS.addressLine1,
+      COMPANY_DEFAULTS.addressLine2,
+      COMPANY_DEFAULTS.city,
+      COMPANY_DEFAULTS.country,
+    ]),
     receiptHeader: null,
     receiptFooter: null,
     timezone: COMPANY_DEFAULTS.timezone,
@@ -93,27 +142,58 @@ export async function getReceiptBranding(): Promise<ReceiptBranding> {
   try {
     const supabase = await createSupabaseServerClient();
 
-    const { data, error } = await supabase
-      .from('company_settings')
-      .select('company_name, phone, receipt_header, receipt_footer, timezone')
-      .eq('id', 1)
-      .maybeSingle();
+    const [identity, wording] = await Promise.all([
+      supabase
+        .from('company_identity')
+        .select(
+          `company_name, tagline, logo_path, phone, phone_secondary, postal_address, address_line1, address_line2, city, country, timezone`,
+        )
+        .maybeSingle(),
+      supabase
+        .from('company_settings')
+        .select('receipt_header, receipt_footer')
+        .eq('id', 1)
+        .maybeSingle(),
+    ]);
 
-    if (error !== null || data === null) {
-      logger.debug('Receipt branding unreadable; using configured defaults.');
+    if (identity.error !== null || identity.data === null) {
+      logger.debug('Document branding unreadable; using configured defaults.');
       return fallback;
     }
 
+    const row = identity.data;
+
     return {
-      companyName: String(data.company_name),
-      companyPhone: data.phone === null ? null : String(data.phone),
-      receiptHeader: data.receipt_header === null ? null : String(data.receipt_header),
-      receiptFooter: data.receipt_footer === null ? null : String(data.receipt_footer),
-      timezone: String(data.timezone),
+      companyName: String(row.company_name),
+      tagline: row.tagline === null ? null : String(row.tagline),
+      logoPath: row.logo_path === null ? null : String(row.logo_path),
+      phone: row.phone === null ? null : String(row.phone),
+      phoneSecondary: row.phone_secondary === null ? null : String(row.phone_secondary),
+      postalAddress: row.postal_address === null ? null : String(row.postal_address),
+      physicalAddress: joinAddress([
+        row.address_line1,
+        row.address_line2,
+        row.city,
+        row.country,
+      ]),
+      receiptHeader: wording.data?.receipt_header ?? null,
+      receiptFooter: wording.data?.receipt_footer ?? null,
+      timezone: String(row.timezone),
     };
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     return fallback;
   }
+}
+
+/** The address lines that are actually recorded, as one line. */
+function joinAddress(parts: readonly (string | null)[]): string | null {
+  const joined = parts
+    .map((part) => part?.trim() ?? '')
+    .filter((part) => part !== '')
+    .join(', ');
+
+  return joined === '' ? null : joined;
 }
 
 /**
@@ -134,7 +214,7 @@ export async function getPortalBranding(): Promise<CompanyBranding> {
 
     const { data, error } = await supabase
       .from('company_identity')
-      .select('company_name, currency_code, locale, timezone, logo_path')
+      .select('company_name, tagline, currency_code, locale, timezone, logo_path')
       .maybeSingle();
 
     if (error !== null || data === null) {
@@ -144,6 +224,7 @@ export async function getPortalBranding(): Promise<CompanyBranding> {
 
     return {
       companyName: String(data.company_name),
+      tagline: data.tagline === null ? null : String(data.tagline),
       currencyCode: String(data.currency_code),
       locale: String(data.locale),
       timezone: String(data.timezone),
@@ -168,7 +249,7 @@ export async function getCompanyBranding(): Promise<CompanyBrandingResult> {
 
     const { data, error } = await supabase
       .from('company_settings')
-      .select('company_name, currency_code, locale, timezone, logo_path')
+      .select('company_name, tagline, currency_code, locale, timezone, logo_path')
       .eq('id', 1)
       .maybeSingle();
 
@@ -198,6 +279,7 @@ export async function getCompanyBranding(): Promise<CompanyBrandingResult> {
     return {
       branding: {
         companyName: data.company_name,
+        tagline: data.tagline,
         currencyCode: data.currency_code,
         locale: data.locale,
         timezone: data.timezone,

@@ -1,5 +1,6 @@
-import { BarChart3, Banknote, Receipt, ShieldCheck, Users } from 'lucide-react';
+import { BarChart3, Banknote, Receipt, Users } from 'lucide-react';
 
+import { CompanyLogo } from '@/components/brand/company-logo';
 import { SignInForm } from '@/components/auth/sign-in-form';
 import { Alert } from '@/components/ui/alert';
 import { APP_SHORT_NAME } from '@/config/app';
@@ -109,21 +110,39 @@ export default async function LoginPage({
       />
 
       <div className="relative z-10 mx-auto flex min-h-dvh max-w-7xl flex-col justify-center px-4 py-10 sm:px-6 lg:px-10">
-        {/* The institution mark: the reference's white rounded tile beside the
-            name, with the system's own name tracked out beneath it. */}
+        {/* The institution mark: the white rounded tile the reference puts
+            beside the name, now carrying the company's own logo instead of a
+            glyph from the icon set. Phase 12 — this is the first thing a
+            borrower or a member of staff sees, and a shield from an icon
+            library is not the lender's mark.
+
+            The tile and the type are unchanged; only what is inside the tile
+            is. `shadow-lg` stays on the wrapper so the mark sits off the wash
+            exactly as the glyph did. */}
         <div className="mb-8 flex items-center gap-3">
-          <span className="inline-flex items-center justify-center rounded-xl bg-white/95 p-2 shadow-lg">
-            <ShieldCheck aria-hidden="true" className="text-accent size-9" />
-          </span>
+          <CompanyLogo
+            companyName={branding.companyName}
+            logoPath={branding.logoPath}
+            size="mark"
+            className="shadow-lg"
+          />
           <div className="min-w-0">
-            {/* The company name comes from the database, never a constant, so
-                it changes everywhere when registration completes. */}
+            {/* The name and the tagline come from the company record. This
+                one screen reads them from `config/defaults.ts`, because an
+                anonymous caller cannot read `company_settings` — see the note
+                there on why the two are kept identical. */}
             <h1 className="text-lg font-black tracking-tight text-white uppercase sm:text-xl">
               {branding.companyName}
             </h1>
-            <p className="text-[11px] font-semibold tracking-widest text-blue-100 uppercase">
-              {APP_SHORT_NAME}
-            </p>
+            {branding.tagline === null ? (
+              <p className="text-[11px] font-semibold tracking-widest text-blue-100 uppercase">
+                {APP_SHORT_NAME}
+              </p>
+            ) : (
+              <p className="text-[11px] font-semibold tracking-wide text-blue-100">
+                {branding.tagline}
+              </p>
+            )}
           </div>
         </div>
 

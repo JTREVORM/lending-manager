@@ -1,9 +1,11 @@
 import { Alert } from '@/components/ui/alert';
+import { DocumentLetterhead } from '@/components/brand/document-letterhead';
 import { Card } from '@/components/ui/card';
 import { Money } from '@/components/ui/money';
 import { formatUgx, toUgx } from '@/lib/domain/money';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/domain/payment';
 import { DateValue } from '@/components/ui/data-value';
+import type { DocumentBranding } from '@/lib/data/company';
 
 /**
  * A payment receipt.
@@ -39,15 +41,19 @@ import { DateValue } from '@/components/ui/data-value';
  *
  * ## Company branding
  *
- * Read from the current company settings. If the business later needs receipts
- * to show the branding as it was on the day, that becomes a snapshot — but
- * inventing one now would be building for a requirement nobody has stated.
+ * Read from the current company settings and rendered by the one shared
+ * `DocumentLetterhead`, so a receipt and a loan statement carry the same
+ * letterhead — the mark, the trading name, the tagline, both published phone
+ * numbers and the address. Before Phase 12 this header was the name and one
+ * phone number assembled here, which is how the statement came to show
+ * something different.
+ *
+ * If the business later needs receipts to show the branding as it was on the
+ * day, that becomes a snapshot — but inventing one now would be building for
+ * a requirement nobody has stated.
  */
 export function PaymentReceipt({
-  companyName,
-  companyPhone,
-  receiptHeader,
-  receiptFooter,
+  branding,
   paymentNumber,
   receivedAt,
   clientName,
@@ -64,10 +70,7 @@ export function PaymentReceipt({
   reversalReason,
   allocations,
 }: {
-  readonly companyName: string;
-  readonly companyPhone: string | null;
-  readonly receiptHeader: string | null;
-  readonly receiptFooter: string | null;
+  readonly branding: DocumentBranding;
   readonly paymentNumber: string;
   readonly receivedAt: string;
   readonly clientName: string;
@@ -114,17 +117,13 @@ export function PaymentReceipt({
       ) : null}
 
       <Card className="min-w-0">
-        {/* --- Header ------------------------------------------------- */}
-        <header className="border-border mb-4 border-b pb-3 text-center">
-          <h2 className="text-text text-lg font-semibold break-words">{companyName}</h2>
-          {companyPhone === null ? null : (
-            <p className="text-text-muted text-sm">{companyPhone}</p>
-          )}
-          {receiptHeader === null ? null : (
-            <p className="text-text-muted mt-1 text-sm break-words">{receiptHeader}</p>
-          )}
-          <p className="text-text mt-2 font-medium">Payment receipt</p>
-        </header>
+        {/* --- Letterhead --------------------------------------------- */}
+        {/* No `reference` here: the body carries the receipt number against
+            its own label two lines below, and a document that prints its
+            number twice gives a borrower reading it out two things to
+            compare. The statement does pass one, because its loan number
+            appears nowhere else on the page. */}
+        <DocumentLetterhead branding={branding} documentTitle="Payment receipt" />
 
         <dl className="min-w-0 space-y-2 text-sm">
           <Line label="Receipt number">
@@ -216,9 +215,9 @@ export function PaymentReceipt({
           </div>
         ) : null}
 
-        {receiptFooter === null ? null : (
+        {branding.receiptFooter === null ? null : (
           <footer className="border-border text-text-muted mt-4 border-t pt-3 text-center text-sm break-words">
-            {receiptFooter}
+            {branding.receiptFooter}
           </footer>
         )}
       </Card>

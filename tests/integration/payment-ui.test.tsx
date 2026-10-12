@@ -11,6 +11,7 @@ import { PortalPaymentHistory } from '@/components/payments/portal-payment-histo
 import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import type { PaymentObligation } from '@/lib/domain/payment';
+import { DOCUMENT_BRANDING } from '../helpers/branding';
 import { getByCompositeText } from '../helpers/text';
 
 /**
@@ -223,13 +224,32 @@ describe('the payment form', () => {
     expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
   });
 
-  it('offers exactly the three confirmed methods', () => {
+  it('offers exactly the four confirmed methods', () => {
     render(<PaymentForm {...FORM_PROPS} />);
 
     expect(screen.getByText('Cash')).toBeInTheDocument();
     expect(screen.getByText('MTN Mobile Money')).toBeInTheDocument();
     expect(screen.getByText('Airtel Money')).toBeInTheDocument();
-    expect(screen.queryByText(/Bank/i)).toBeNull();
+    // Phase 10. Bank arrived with the ledger, which needed a fourth cash
+    // account; an account money can reach is an account a payment can land in.
+    expect(screen.getByText('Bank Transfer')).toBeInTheDocument();
+    // And nothing beyond them. A cheque is not a method this system records.
+    expect(screen.queryByText(/cheque/i)).toBeNull();
+  });
+
+  it('will not go forward on a bank transfer until its reference is entered', async () => {
+    // The same rule as Mobile Money, asked for in the words of where the
+    // number comes from: a bank transfer has no network transaction id, and
+    // asking for one would send a cashier looking in the wrong place.
+    const user = userEvent.setup();
+    render(<PaymentForm {...FORM_PROPS} />);
+
+    await user.click(screen.getByText('Bank Transfer'));
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+    expect(screen.queryByLabelText(/Transaction reference/i)).toBeNull();
+
+    await user.type(screen.getByLabelText(/Transfer reference/i), 'FT26100800123');
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
   });
 
   // =======================================================================
@@ -591,10 +611,10 @@ describe('the payment register', () => {
 
 describe('the receipt', () => {
   const RECEIPT = {
-    companyName: 'Kampala Credit Ltd',
-    companyPhone: '+256700000000',
-    receiptHeader: 'Thank you for your business',
-    receiptFooter: 'Keep this receipt safe',
+    // Phase 12: one branding object, rendered by the shared letterhead the
+    // loan statement also uses, in place of the four loose company props the
+    // receipt carried before.
+    branding: DOCUMENT_BRANDING,
     paymentNumber: 'PAY260001',
     receivedAt: '2026-11-01T09:00:00Z',
     clientName: 'Amina Nakato',
@@ -615,7 +635,14 @@ describe('the receipt', () => {
     render(<PaymentReceipt {...RECEIPT} />);
 
     expect(screen.getByText('Kampala Credit Ltd')).toBeInTheDocument();
-    expect(screen.getByText('+256700000000')).toBeInTheDocument();
+    // Phase 12. The letterhead publishes both numbers on one line, the
+    // tagline under the name, and the postal and office addresses — the same
+    // header a loan statement carries, so the two documents a borrower holds
+    // agree about who issued them.
+    expect(screen.getByText('Lending that moves with you')).toBeInTheDocument();
+    expect(screen.getByText('+256700000000 · +256700000001')).toBeInTheDocument();
+    expect(screen.getByText('P.O. Box 1234, Kampala')).toBeInTheDocument();
+    expect(screen.getByText('Plot 5, Kampala Road, Kampala, Uganda')).toBeInTheDocument();
     expect(screen.getByText('PAY260001')).toBeInTheDocument();
     expect(screen.getByText('Amina Nakato')).toBeInTheDocument();
     expect(screen.getByText('CL26001')).toBeInTheDocument();

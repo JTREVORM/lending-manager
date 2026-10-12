@@ -7,7 +7,7 @@ import { PrintButton } from '@/components/reports/print-button';
 import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
-import { getCompanyBranding } from '@/lib/data/company';
+import { getDocumentBranding } from '@/lib/data/company';
 import { getLoanStatement } from '@/lib/data/reports';
 import { businessToday } from '@/lib/domain/datetime';
 
@@ -38,9 +38,9 @@ export default async function LoanStatementPage({
 
   await guardPermission(`${ROUTES.loans}/${loanId}/statement`, 'loans:view');
 
-  const [statement, { branding }] = await Promise.all([
+  const [statement, branding] = await Promise.all([
     getLoanStatement(loanId),
-    getCompanyBranding(),
+    getDocumentBranding(),
   ]);
 
   if (statement === null) notFound();
@@ -59,7 +59,7 @@ export default async function LoanStatementPage({
       <LoanStatementView
         statement={statement}
         audience="staff"
-        companyName={branding.companyName}
+        branding={branding}
         businessDate={businessToday(new Date(), branding.timezone)}
         timeZone={branding.timezone}
       />
