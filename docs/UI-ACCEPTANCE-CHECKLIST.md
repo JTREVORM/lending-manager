@@ -101,6 +101,9 @@ drops a module looks like a tidier menu and is a feature nobody can reach.
 - [ ] **Finance** carries all six money surfaces.
 - [ ] **Branch Network** exists, on the four branch views Phase 9 actually
       has.
+- [ ] **Account Activity and Liquidity Position have no row of their own** —
+      they stay as the general ledger's `?account=` drill-down and the cash
+      position's total. — covered
 - [ ] **Phase 14's `prefetch: false`** is still set on every `/recovery`
       entry and on `/loans/by-product`, and `primary-nav.tsx` still passes it
       to the link. — covered
@@ -108,6 +111,45 @@ drops a module looks like a tidier menu and is a feature nobody can reach.
       budget in `performance.spec.ts`. A collapsed rail should *reduce* them:
       a closed module renders no links for Next to prefetch, so a cold load
       prefetches two rows instead of twenty.
+
+## 3c. The trial balance
+
+New in this pass, over the `public.trial_balance` view that already existed.
+
+- [ ] **Finance → Trial Balance** opens `/finance/trial-balance`. — covered
+      (`navigation.test.tsx`, `navigation.spec.ts`)
+- [ ] **Seven columns**: code, account, type, debits, credits, debit balance,
+      credit balance — the same seven in the table, the CSV and the PDF. —
+      covered (`trial-balance-ui.test.tsx`, `report-fields.test.ts`)
+- [ ] **Both pairs of money columns are different figures.** An account with a
+      million debited and a million credited shows two million of movement and
+      nothing held. — covered
+- [ ] **No balance column ever shows a negative figure** — a net credit is a
+      positive figure in the credit column. — covered
+- [ ] **All four totals and both differences appear at the foot**, and the
+      totals are visible on a phone as well as in the table. — covered
+- [ ] **It foots exactly.** Integer shillings throughout, no tolerance; a
+      one-shilling difference is reported as out of balance, loudly, and the
+      screen says not to report from it. — covered (`trial-balance.test.ts`
+      unit + db)
+- [ ] **UGX formatting** throughout, through `<Money>` on screen and the money
+      field in the file. — covered (`display-primitives.test.tsx` enforces no
+      bare formatter in JSX)
+- [ ] **No date filter and no branch filter**, because the view has neither
+      dimension. No control on the page narrows nothing. — covered
+- [ ] **CSV and PDF download**, through the reporting pipeline's own
+      `guardExport`, fields, CSV writer, letterhead and PDF renderer — not a
+      copy of them. — covered
+- [ ] **The export route guards itself** with `ledger:view`, per request. —
+      covered
+- [ ] **Read-only**: no form, no action, no mutation path, and the view itself
+      refuses a write whatever the privilege. — covered
+- [ ] **Branch visibility and permissions are the view's**, through
+      `security_invoker = true`. — covered (`trial-balance.test.ts` db)
+- [ ] A failed read shows a warning rather than an empty statement footing to
+      zero. — covered
+- [ ] It prints on one page per section with the letterhead and reads as a
+      document. — **by hand**
 
 ## 4. Reports as a module
 

@@ -372,9 +372,46 @@ describe('the Phase 9 modules the rail must not lose', () => {
       ROUTES.otherIncome,
       ROUTES.reconciliation,
       ROUTES.ledger,
+      // Phase 18.
+      ROUTES.trialBalance,
     ]) {
       expect(hrefs, href).toContain(href);
     }
+  });
+
+  it('gives the trial balance one row, under Finance', () => {
+    expect(hrefsIn('finance')).toContain(ROUTES.trialBalance);
+
+    const entry = NAV_ITEMS.find((item) => item.href === ROUTES.trialBalance);
+    expect(entry?.label).toBe('Trial Balance');
+    // The ledger's own capability, because a trial balance says nothing the
+    // general ledger does not.
+    expect(entry?.permission).toBe('ledger:view');
+
+    for (const block of NAV_MODULES) {
+      if (block.id === 'finance') continue;
+      expect(
+        block.items.map((item) => item.href),
+        block.id,
+      ).not.toContain(ROUTES.trialBalance);
+    }
+  });
+
+  it('gives Account Activity and Liquidity Position no row of their own', () => {
+    // Account activity *is* the general ledger narrowed by `?account=`,
+    // reached from the account chips on that page; the liquidity position is
+    // the total on the cash position cards. Rows for them would be the same
+    // screens under two more names, and two rows on one href would both claim
+    // to be the open page.
+    const labels = NAV_ITEMS.map((item) => item.label);
+
+    expect(labels).not.toContain('Account Activity');
+    expect(labels).not.toContain('Liquidity Position');
+
+    // And neither screen gained a second entry.
+    const hrefs = NAV_ITEMS.map((item) => item.href);
+    expect(hrefs.filter((href) => href === ROUTES.ledger)).toHaveLength(1);
+    expect(hrefs.filter((href) => href === ROUTES.finance)).toHaveLength(1);
   });
 
   it('keeps every loan workflow stage', () => {
@@ -483,11 +520,28 @@ describe('what each role sees', () => {
 
     expect(visible).not.toContain(`${ROUTES.clients}/new`);
     expect(visible).not.toContain(`${ROUTES.reports}/penalties`);
-    expect(visible).not.toContain(`${ROUTES.reports}?category=loans`);
+    expect(visible).not.toContain(`${ROUTES.reports}/guarantors`);
+    // The security group's most reachable report needs
+    // `reports:view_financial`, so the group is not offered either.
+    expect(visible).not.toContain(`${ROUTES.reports}?group=security`);
+    // The aging report needs it too, so Branch Network's portfolio entry is
+    // withheld while the module's other three remain.
+    expect(visible).not.toContain(`${ROUTES.reports}/aging`);
+    // And the audit trail, which they hold no capability for at all.
+    expect(visible).not.toContain(`${ROUTES.audit}?entity=client`);
+
+    // Phase 14 gave the chase to the counter role, so Debt & Security's hub
+    // *is* theirs — `recovery:view` is a Secretary/Treasurer's capability.
+    // Asserting otherwise here would have been asserting the wrong model.
+    expect(visible).toContain(ROUTES.recovery);
 
     // And the ones they do hold are offered.
     expect(visible).toContain(`${ROUTES.loans}/new`);
     expect(visible).toContain(`${ROUTES.payments}/new`);
+    expect(visible).toContain(`${ROUTES.reports}?group=money-in`);
+    // Whoever handles the cash reads the ledger, so the trial balance is
+    // theirs: `ledger:view` is the treasurer's, not an administrator's.
+    expect(visible).toContain(ROUTES.trialBalance);
   });
 
   it('shows every staff role the reporting module', () => {
@@ -657,6 +711,7 @@ describe('which entry is the open page', () => {
     expect(where('/notifications')).toBeNull();
 
     expect(where('/finance/expenses')).toBe('finance');
+    expect(where('/finance/trial-balance')).toBe('finance');
     expect(where('/clients?status=active')).toBe('clients');
     expect(where('/loans?stage=arrears')).toBe('loans');
     expect(where('/loans/by-product')).toBe('loans');

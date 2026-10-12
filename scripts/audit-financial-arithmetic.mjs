@@ -93,6 +93,14 @@ const FINANCIAL_FILES = [
   // makes it the single highest-leverage place for a `toFixed` to do damage:
   // one line here would misstate every figure in the system at once.
   'components/ui/money.tsx',
+  // Phase 18. The trial balance. It computes no money — it arranges the two
+  // columns `public.trial_balance` returns and foots them — but that is
+  // exactly why it is scanned: the whole value of the screen is the claim
+  // that debits equal credits exactly, and a `Math.round` or a decimal
+  // division anywhere near it would produce a statement that looked balanced
+  // and was not.
+  'lib/domain/trial-balance.ts',
+  'components/finance/trial-balance.tsx',
   // Phase 9. The chart draws money to scale. It works out widths and never
   // figures — but a `toFixed` or a rounded total here would produce a picture
   // that disagrees with the table beside it while looking authoritative,

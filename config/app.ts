@@ -114,6 +114,20 @@ export const ROUTES = {
   reconciliation: '/finance/reconciliation',
   newReconciliation: '/finance/reconciliation/new',
   ledger: '/finance/ledger',
+  /**
+   * Phase 18. The trial balance.
+   *
+   * Under `/finance` rather than `/reports`, which is where a treasurer looks
+   * for it and what the brief asked for. It is nonetheless a document: the
+   * export route beside it reuses the reporting pipeline's fields, CSV writer
+   * and letterheaded PDF renderer, so the file it produces is the same shape
+   * as every other statement this system issues.
+   *
+   * `ledger:view` by prefix, the same capability as the general ledger it
+   * aggregates — and the right one, because a trial balance says nothing the
+   * ledger does not.
+   */
+  trialBalance: '/finance/trial-balance',
 
   settings: '/settings',
   /**

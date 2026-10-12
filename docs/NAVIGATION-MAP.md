@@ -154,10 +154,41 @@ screen reader reading one name twice.
 | Other Income | `/finance/income` | `income:view` |
 | Reconciliation | `/finance/reconciliation` | `reconciliation:view` |
 | General Ledger | `/finance/ledger` | `ledger:view` |
-| Finance Controls | `/finance?section=controls#controls-heading` | `ledger:view` |
+| Trial Balance | `/finance/trial-balance` | `ledger:view` |
 
 Each of the four movement types has its own capability, so a role holding
-only one reaches only one.
+only one reaches only one. The trial balance takes `ledger:view`, the same as
+the general ledger it aggregates — which also means it belongs to a
+Secretary/Treasurer, because whoever handles the cash reads the ledger.
+
+**Trial Balance** reads `public.trial_balance` and nothing else: the view
+groups `journal_lines` by account and returns each account's debit and credit
+total. The screen arranges them, places each account's net balance on its
+side, and foots both pairs of columns. It has **no date filter and no branch
+filter**, because the view has neither dimension and inventing one would mean
+a second query over the same journal lines — a second source of truth for
+figures that already have one. Both omissions are the ledger's own design:
+
+- **Date.** An as-of statement needs the view to grow a date bound (a
+  `trial_balance_as_of(date)` beside the existing
+  `ledger_account_balance_as_of`), which is a migration rather than a screen.
+- **Branch.** The chart deliberately does not branch income and expense
+  accounts — `20261010000100_branches_and_ledger.sql` says a per-branch
+  "Interest Income — Nansana" would be "a reporting dimension pretending to be
+  an account". Branch is carried by the journal entry, and a trial balance is
+  a statement of the whole entity. Per-branch figures are in Branch Network.
+
+Branch visibility and capabilities are the view's, not the page's:
+`trial_balance` is `security_invoker = true`, so it runs as the caller and Row
+Level Security decides which postings are counted. Two people with different
+visibility get two statements, each footing on its own rows, without the page
+containing a single branch or role condition.
+
+It is read-only structurally — no form, no action, no mutation path — and the
+view itself refuses a write whatever the privilege, because a view over a
+`GROUP BY` is not automatically updatable. `/finance/trial-balance/export`
+serves CSV and a letterheaded PDF through the reporting pipeline's own
+`guardExport`, fields, CSV writer, PDF renderer and letterhead.
 
 ## Reports
 
@@ -267,6 +298,7 @@ specific** match: the longest path first, then the most pinned parameters.
 | `/reports/aging` | Branch Portfolio | Branch Network |
 | `/finance?section=cash` | Branch Cash Position | Branch Network |
 | `/finance/transfers` | Transfers | Finance |
+| `/finance/trial-balance` | Trial Balance | Finance |
 | `/settings` | Company Settings | Administration |
 | `/settings?section=branches` | Branches | Branch Network |
 | `/settings/products` | Loan Products | Administration |
@@ -280,15 +312,18 @@ parent prefix. The reader is still told they are in Reports.
 
 ## Asked for, and deliberately not in the rail
 
-Three labels from the brief have nothing behind them in Phase 9. Each is
-listed here rather than pointed at the nearest page that sounds similar: a
-rail entry that opens a screen which cannot answer the question it promises is
-worse than no entry, and two labels on one URL break the "exactly one current
-page" rule above.
+A few labels from the brief have no row of their own. Each is listed here
+rather than pointed at the nearest page that sounds similar: a rail entry that
+opens a screen which cannot answer the question it promises is worse than no
+entry, and two labels on one URL break the "exactly one current page" rule
+above.
+
+**Trial Balance is no longer among them** — it is built, at
+`/finance/trial-balance`, over the view that already existed. Account Activity
+and Liquidity Position stay as cross-references by design.
 
 | Asked for | Why it is not there |
 | --- | --- |
-| **Trial Balance** | The `trial_balance` view exists in the database (`20261010000100_branches_and_ledger.sql`) and in the generated types, and **no screen reads it** — there is no page, no data function and no export. This is the one genuine gap, and it is a small one: a page over an existing view. Building it is a feature, not a navigation change, so it was not done in this pass. |
 | **Account Activity** | `/finance/ledger?account=<uuid>` *is* account activity, reached from the account chips on that page. The parameter is a UUID, so a fixed rail entry cannot name one, and an entry pointing at `/finance/ledger` would be General Ledger twice. |
 | **Liquidity Position** | Total liquidity is a card inside the cash position section on `/finance` — the same cards as Finance → Cash Position and Branch Network → Branch Cash Position. A third row on that section would be the same figures under a third name. |
 | Repayment Schedules | A schedule belongs to a loan and is rendered on the loan's own page (`RepaymentScheduleTable`). There is no cross-loan schedule screen, and `/loans` would duplicate Loan Register. |

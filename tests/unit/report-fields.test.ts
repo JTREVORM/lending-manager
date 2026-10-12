@@ -16,6 +16,7 @@ import {
   collectionFields,
   penaltyFields,
   portfolioFields,
+  trialBalanceFields,
 } from '@/lib/reports/fields';
 
 /**
@@ -240,6 +241,12 @@ const EXPECTED_HEADERS: Readonly<Record<string, string>> = {
     'Client number,Name,Phone,District,Village or area,Occupation,Status,' +
     'Has active loan,Loans,Outstanding (UGX),Arrears (UGX),Delinquency status,' +
     'Registered',
+  // Phase 18. Both pairs of money columns, because movement and net balance
+  // are different questions: an account with a million debited and a million
+  // credited has moved two million and holds nothing.
+  'trial-balance':
+    'Code,Account,Type,Debits (UGX),Credits (UGX),Debit balance (UGX),' +
+    'Credit balance (UGX)',
 };
 
 function headerRow<Row>(fields: readonly ReportField<Row>[]): string {
@@ -280,6 +287,25 @@ describe('the heading row each report writes', () => {
 
   it('clients', () => {
     expect(headerRow(clientFields(ZONE))).toBe(EXPECTED_HEADERS.clients);
+  });
+
+  it('trial balance', () => {
+    expect(headerRow(trialBalanceFields())).toBe(EXPECTED_HEADERS['trial-balance']);
+  });
+
+  it('trial balance exports no identification number', () => {
+    // The same refusal every report is held to. §76.
+    expect(() => {
+      assertNoIdentityField('trial-balance', trialBalanceFields());
+    }).not.toThrow();
+  });
+
+  it('trial balance takes no timezone, because it has no instant in it', () => {
+    // Every other field set is a function of the business timezone. This one
+    // holds no date and no timestamp at all: a trial balance is a position,
+    // and the only date on the page is the day it was run, which the page
+    // supplies.
+    expect(trialBalanceFields).toHaveLength(0);
   });
 });
 

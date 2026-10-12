@@ -419,18 +419,95 @@ test.describe('the desktop rail', () => {
     await expect(rail.getByText('Insights', { exact: true })).toHaveCount(0);
 
     await rail.getByRole('button', { name: 'Reports' }).click();
+    // Phase 16's four groups, from `lib/reports/registry.ts` — not its ten
+    // report definitions.
     for (const entry of [
       'Reports Centre',
       'Collections Reports',
-      'Loan Reports',
       'Arrears & Risk Reports',
-      'Client Reports',
+      'Loan & Client Reports',
+      'Security & Guarantee Reports',
     ]) {
       await expect(
         rail.getByRole('link', { name: entry, exact: true }),
         entry,
       ).toBeVisible();
     }
+  });
+
+  test('Notifications stays a row of its own, below the modules', async ({ page }) => {
+    await page.goto('/notifications');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await expect(rail.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    // And nothing opened to show it, because it belongs to no module.
+    for (const block of MODULES) {
+      await expect(rail.getByRole('button', { name: block }), block).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    }
+  });
+
+  test('Debt & Security carries the whole Phase 14 module', async ({ page }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await rail.getByRole('button', { name: 'Debt & Security' }).click();
+
+    for (const entry of [
+      'Overdue Loans',
+      'Aging Buckets',
+      'Risk Monitoring',
+      'Follow-Ups',
+      'Promise to Pay',
+      'Collateral / Security',
+      'Guarantors',
+      'Guarantor Directory',
+      'Guarantor Exposure',
+      'Arrears Report',
+      'Penalties',
+      'Recovery Notes',
+    ]) {
+      await expect(
+        rail.getByRole('link', { name: entry, exact: true }),
+        entry,
+      ).toBeVisible();
+    }
+  });
+
+  test('Finance carries every money surface, trial balance included', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await rail.getByRole('button', { name: 'Finance' }).click();
+
+    for (const entry of [
+      'Cash Position',
+      'Transfers',
+      'Expenses',
+      'Other Income',
+      'Reconciliation',
+      'General Ledger',
+      'Trial Balance',
+    ]) {
+      await expect(
+        rail.getByRole('link', { name: entry, exact: true }),
+        entry,
+      ).toBeVisible();
+    }
+
+    // Account activity is the general ledger narrowed by `?account=`, and the
+    // liquidity position is the total on the cash position cards. Neither is
+    // a row of its own.
+    await expect(rail.getByRole('link', { name: 'Account Activity' })).toHaveCount(0);
+    await expect(rail.getByRole('link', { name: 'Liquidity Position' })).toHaveCount(0);
   });
 
   test('marks the current page for a screen reader, not only in colour', async ({

@@ -69,6 +69,7 @@ const SCREENS = [
   '/settings',
   '/settings?section=finance',
   '/finance?section=cash',
+  '/finance/trial-balance',
   '/payments/summary?section=branch',
   '/account',
   '/account/password',

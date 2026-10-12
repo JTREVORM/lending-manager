@@ -544,10 +544,19 @@ export const NAV_MODULES: readonly NavModule[] = [
         phase: 11,
       },
       {
-        href: `${ROUTES.finance}?section=controls#controls-heading`,
-        label: 'Finance Controls',
+        // Phase 18. The statement over the ledger, read from
+        // `public.trial_balance`.
+        //
+        // `Account Activity` and `Liquidity Position` are deliberately not
+        // rows of their own: account activity *is* the general ledger
+        // narrowed by `?account=`, reached from the account chips on that
+        // page, and the liquidity position is the total on the cash position
+        // cards. A third and fourth row pointing at those two screens would
+        // be the same figures under two more names.
+        href: ROUTES.trialBalance,
+        label: 'Trial Balance',
         permission: 'ledger:view',
-        phase: 11,
+        phase: 18,
       },
     ],
   },

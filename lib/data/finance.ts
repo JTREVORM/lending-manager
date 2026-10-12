@@ -23,6 +23,12 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { toBusinessDate, type BusinessDate } from '@/lib/domain/datetime';
 import { toUgx, type UgxAmount } from '@/lib/domain/money';
 import {
+  isNormalSide,
+  summariseTrialBalance,
+  type TrialBalanceAccount,
+  type TrialBalanceSummary,
+} from '@/lib/domain/trial-balance';
+import {
   isAccountType,
   isCashKind,
   isIncomeStatus,
@@ -542,4 +548,59 @@ export async function getFinanceSettings(): Promise<FinanceSettings | null> {
     lowBalanceAirtel: money(raw.low_balance_airtel_money),
     lowBalanceBank: money(raw.low_balance_bank),
   };
+}
+
+// ---------------------------------------------------------------------------
+// The trial balance
+// ---------------------------------------------------------------------------
+
+function normalSide(value: unknown): 'debit' | 'credit' {
+  // A CHECK constrains the column against the account type, so an
+  // unrecognised side cannot exist. Falling back beats refusing to render the
+  // whole statement over one odd row.
+  return isNormalSide(value) ? value : 'debit';
+}
+
+/**
+ * The trial balance: every account's debit and credit totals.
+ *
+ * Reads `public.trial_balance` and nothing else. The view groups
+ * `journal_lines` by account and is declared `security_invoker = true`, so it
+ * runs as the caller and Row Level Security decides which journal lines are
+ * counted — which is what keeps a reader's branch visibility and their
+ * capabilities intact without this function knowing anything about either.
+ *
+ * `null` on failure rather than an empty statement. A trial balance with no
+ * rows and two zero totals would read as "the books are empty and balanced",
+ * which is the one answer this page must never give by accident.
+ */
+export async function getTrialBalance(): Promise<TrialBalanceSummary | null> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('trial_balance')
+    .select('code, name, account_type, normal_side, total_debit, total_credit')
+    // The view already orders by code; restating it here means the order is
+    // the page's own guarantee rather than an implementation detail of the
+    // view that a later migration could change without anybody noticing.
+    .order('code');
+
+  if (error !== null) {
+    logger.warn('Could not read the trial balance.', { code: error.code });
+    return null;
+  }
+
+  const accounts = (data ?? []).map((row): TrialBalanceAccount => {
+    const raw = row as Raw;
+    return {
+      code: text(raw.code),
+      name: text(raw.name),
+      accountType: accountType(raw.account_type),
+      normalSide: normalSide(raw.normal_side),
+      totalDebit: money(raw.total_debit),
+      totalCredit: money(raw.total_credit),
+    };
+  });
+
+  return summariseTrialBalance(accounts);
 }

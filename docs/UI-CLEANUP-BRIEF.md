@@ -138,5 +138,6 @@ navigation or a UI regression.**
 | Definition behind an info control | `components/ui/info-hint.tsx`, `components/reports/stat-card.tsx` |
 | Report groups in the Centre | `app/(app)/reports/page.tsx`, `isReportGroup` in `lib/reports/registry.ts` |
 | Section deep links | `app/(app)/settings/page.tsx`, `app/(app)/finance/page.tsx`, `app/(app)/payments/summary/page.tsx`, `components/ui/section-tabs.tsx` |
+| Trial balance | `lib/domain/trial-balance.ts`, `lib/data/finance.ts`, `app/(app)/finance/trial-balance/` |
 | Route map, including what was deliberately left out | `docs/NAVIGATION-MAP.md` |
 | Acceptance checklist | `docs/UI-ACCEPTANCE-CHECKLIST.md` |
