@@ -311,8 +311,11 @@ test.describe('the collection summary', () => {
       await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     }
 
+    // The statement, not its phrasing: the line was shortened in the copy
+    // reduction pass and must still deny the reading it denies — somebody
+    // counting principal as revenue has overstated the business's income.
     await expect(
-      page.getByText(/Principal collected is a reduction of what is owed, not revenue/i),
+      page.getByText(/Principal collected reduces what is owed and is not revenue/i),
     ).toBeVisible();
   });
 
@@ -340,7 +343,11 @@ test.describe('the collection summary', () => {
     await page.goto('/payments');
     await expectNoErrorBoundary(page);
 
-    await page.getByRole('link', { name: 'Collection summary' }).click();
+    // Scoped to the page, because the rail carries its own route to here now:
+    // Collections -> Collection Summary, which auto-expands on `/payments`.
+    // Both links are correct and wanted; what this test is about is the one
+    // on the register.
+    await page.locator('main').getByRole('link', { name: 'Collection summary' }).click();
     await expect(page.getByRole('heading', { name: 'Collection summary' })).toBeVisible();
   });
 });

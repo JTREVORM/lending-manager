@@ -162,15 +162,55 @@ test.describe('the shell itself', () => {
   });
 
   test('every nav destination is reachable and none 500s', async ({ page }) => {
+    /*
+      ## Why this opens the rail's modules first
+
+      It used to read the rail as rendered and walk what it found, which was
+      every destination while the rail was a flat open list. Once the rail
+      became collapsible modules, a cold `/` renders two pinned rows and the
+      signed-in person's link — three hrefs — and this test went on passing
+      while exercising three destinations out of sixty.
+
+      Nothing failed. It simply stopped testing the thing it is named after,
+      which is the most expensive kind of green there is. So the modules are
+      opened and the floor is raised to match: a rail that stopped rendering
+      its children now fails here instead of quietly shrinking the sweep.
+
+      The accordion is why this collects after each click rather than opening
+      everything and reading once — opening one module closes the last.
+    */
+    test.setTimeout(300_000);
+
     await page.goto('/');
 
-    const hrefs = await page
-      .locator('nav a[href^="/"]')
-      .evaluateAll((links) =>
-        Array.from(new Set(links.map((link) => link.getAttribute('href') ?? ''))),
-      );
+    // On a phone the rail is an off-canvas drawer, and a closed drawer is
+    // `invisible` — its headers cannot be clicked until it is open.
+    const menu = page.getByRole('button', { name: /main menu/i });
+    if (await menu.isVisible()) {
+      await menu.click();
+      await expect(
+        page.getByRole('navigation', { name: 'Main navigation' }),
+      ).toBeVisible();
+    }
 
-    expect(hrefs.length).toBeGreaterThan(3);
+    const hrefs = new Set<string>();
+    const collect = async (): Promise<void> => {
+      for (const href of await page
+        .locator('nav a[href^="/"]')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''))) {
+        hrefs.add(href);
+      }
+    };
+
+    await collect();
+
+    const headers = page.locator('nav button[aria-controls]');
+    for (let index = 0; index < (await headers.count()); index += 1) {
+      await headers.nth(index).click();
+      await collect();
+    }
+
+    expect(hrefs.size).toBeGreaterThan(40);
 
     for (const href of hrefs) {
       const response = await page.goto(href);
