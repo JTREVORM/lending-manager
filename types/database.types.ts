@@ -4160,6 +4160,19 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
+      /**
+       * Phase 18. The Settings screen's read-only view of reference
+       * numbering. SECURITY DEFINER and gated on settings:view, so the
+       * `reference_sequences` table stays unreadable to a direct table read.
+       */
+      settings_reference_sequences: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          scope: string;
+          period_year: number;
+          last_value: number;
+        }[];
+      };
       record_security_event: {
         Args: { p_action: string; p_metadata?: Json };
         Returns: number;

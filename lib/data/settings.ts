@@ -7,14 +7,18 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 /**
  * Reading the settings the Settings screen shows.
  *
- * Both rows run as the caller, so Row Level Security decides visibility:
- * `settings:view` is what opens them, and a borrower holds no such
- * capability. Nothing here is cached or defaulted silently — a settings
- * screen that quietly shows a fallback is a settings screen that tells an
- * Owner their interest rate is 15% when the database says something else.
+ * Every read runs as the caller, so the database decides visibility:
+ * `settings:view` (and `branches:view` for the branch list) is what opens
+ * them, and a borrower holds no such capability. Four of the five are plain
+ * table reads under RLS; the fifth, reference numbering, goes through
+ * `settings_reference_sequences()` because its table is default-deny and a
+ * direct read is a permission error rather than an empty result — see the
+ * call site.
  *
- * So a failed read reports itself, and the page says the value is unavailable
- * rather than inventing one.
+ * Nothing here is cached or defaulted silently — a settings screen that
+ * quietly shows a fallback is one that tells an Owner their interest rate is
+ * 15% when the database says something else. So a failed read reports itself,
+ * and the page says the value is unavailable rather than inventing one.
  */
 
 export interface CompanyProfile {
@@ -113,11 +117,15 @@ export async function getSettingsSnapshot(): Promise<SettingsSnapshot> {
         .from('branches')
         .select('id, branch_code, name, location, district, phone, status, opened_on')
         .order('branch_code', { ascending: true }),
-      supabase
-        .from('reference_sequences')
-        .select('scope, period_year, last_value')
-        .order('scope', { ascending: true })
-        .order('period_year', { ascending: false }),
+      // Not a direct table read. `reference_sequences` is default-deny —
+      // RLS on, grants revoked from `authenticated`, no policy — because the
+      // counters disclose how many clients and loans the business has. A
+      // direct `.from('reference_sequences')` is `42501 permission denied`,
+      // not an empty result, which is the defect that showed every Owner the
+      // "Some settings could not be read" banner. The safe surface is a
+      // `settings:view`-gated SECURITY DEFINER function that returns only the
+      // three fields the screen shows; the table itself stays unreadable.
+      supabase.rpc('settings_reference_sequences'),
     ]);
 
   if (companyResult.error !== null) {

@@ -134,6 +134,33 @@ test.describe('the staff application renders', () => {
   }
 });
 
+test.describe('the settings page, as the Owner it is built for', () => {
+  test('loads every section with no "could not be read" warning', async ({ page }) => {
+    // The regression this is written against: Phase 12 read `reference_sequences`
+    // straight from the session, which is `42501 permission denied` on a
+    // default-deny table, so `getSettingsSnapshot()` recorded the read as
+    // unavailable and every Owner saw the yellow banner. Phase 18 routes that
+    // read through a `settings:view`-gated SECURITY DEFINER function, so an
+    // Owner now reads the counters and the banner is gone — while the table
+    // itself stays unreadable (proved in `tests/db/settings-reference.test.ts`).
+    const response = await page.goto('/settings');
+    expect(response?.status()).toBe(200);
+    await expectNoErrorBoundary(page);
+
+    // The banner is rendered only when a snapshot read failed, so its absence
+    // is `unavailable.length === 0` made visible.
+    await expect(page.getByText('Some settings could not be read')).toHaveCount(0);
+
+    // And the reference-numbering section shows real counters rather than its
+    // own "No sequences could be read" fallback — proof the safe surface
+    // returned rows through PostgREST, not merely that the banner is hidden.
+    const references = page.locator('main').getByText('Reference numbering');
+    await expect(references).toBeVisible();
+    await expect(page.getByText('No sequences could be read')).toHaveCount(0);
+    await expect(page.getByText(/\bissued\b/).first()).toBeVisible();
+  });
+});
+
 test.describe('the shell itself', () => {
   test('styles actually load', async ({ page }) => {
     // The first defect was a Tailwind token that resolved to nothing, so

@@ -961,6 +961,11 @@ describeDb('privileged functions', () => {
       'reverse_other_income',
       'reverse_payment',
       'reverse_transfer',
+      // Phase 18. The Settings screen's read-only view of reference
+      // numbering. SECURITY DEFINER so it can read `reference_sequences`,
+      // which stays default-deny to every session; it re-checks
+      // `settings:view` inside, because the grant alone decides nothing.
+      'settings_reference_sequences',
       'submit_reconciliation',
       'user_can_see_branch',
       'user_has_at_least_role',
@@ -1121,6 +1126,11 @@ describeDb('privileged functions', () => {
       'reverse_other_income',
       'reverse_payment',
       'reverse_transfer',
+      // Phase 18. Granted to `authenticated` so the Settings screen reads the
+      // reference counters as the signed-in Owner. It re-checks
+      // `settings:view` inside and reads a table no session may touch
+      // directly, so the grant hands a caller nothing the page does not.
+      'settings_reference_sequences',
       'storage_path_client_id',
       'storage_path_guarantor_id',
       'storage_path_kind',
