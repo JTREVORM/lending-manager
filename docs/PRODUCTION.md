@@ -20,6 +20,51 @@ shapes only.
   requests, so an ephemeral filesystem is fine; uploaded documents live in
   Supabase Storage, not on the app host.
 
+### 1.1 Where it runs, relative to the database
+
+Every page in this application is server-rendered and reads the database
+before it can return anything, and the authenticated ones read it several
+times. So the distance between the compute and the database is multiplied by
+the number of round trips a page makes, and it is paid again on every
+client-side navigation.
+
+**Put the compute in the same region as the database.** Not the same continent
+— the same region.
+
+As of the Phase 18 audit the two were not aligned:
+
+| | Configured |
+| --- | --- |
+| Supabase project `fszgwemtgyrbhngajpzm` ("lending manager") | `eu-west-1` (AWS, Ireland) |
+| Vercel production deployment `dpl_AhbFhETnLTBpCUFXnSyvsA6ewbu8` | `iad1` (Washington, D.C.) |
+
+That is roughly 5,500 km each way, about 75–90 ms per round trip, on every
+database call a page makes. It is latency no amount of query tuning can
+recover, because it is not spent in the database.
+
+`vercel.json` pins the deployment to **`dub1`** (Dublin), which is Vercel's
+region in the same AWS region as the database — so the hop becomes
+intra-region rather than transatlantic. The file cannot carry a comment, which
+is why the reasoning is here.
+
+Two notes on this:
+
+- **It takes effect on the next deployment**, not on commit. Changing where
+  production runs is a deployment decision; this repository only states the
+  intent.
+- **If the database moves, this file has to move with it.** A deployment
+  pinned to `dub1` against a database in `us-east-1` is worse than no pin at
+  all, because it looks deliberate. Check both together, and note that
+  `regions` applies to the serverless functions; in Next.js 16 the proxy
+  (`proxy.ts`) always runs on the Node.js runtime, so it is regional too and
+  is covered by the same setting.
+
+The business operates in Uganda. Neither region is close to Kampala, and that
+is the right trade: a browser in Kampala makes one round trip to the
+application, while the application makes several to the database. Co-locating
+with the database wins, and a region closer to East Africa would only help if
+the database moved there too.
+
 ## 2. Environment variables
 
 `npm run check:env` validates these before a deploy and exits non-zero, listing

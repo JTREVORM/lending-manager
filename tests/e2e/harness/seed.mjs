@@ -1079,5 +1079,36 @@ console.log(
   console.log(`trial balance: ${trial.debits} both sides`);
 }
 
+// ---------------------------------------------------------------------------
+// Statistics
+//
+// A database built by applying the migrations from zero has no planner
+// statistics, and autovacuum's analyse worker will not have run yet on a
+// stack that was created seconds ago. For the flat tables that costs nothing.
+// For the derived views it is the difference between a good plan and a
+// disastrous one, because they are stacked —
+// `dashboard_portfolio_summary` reads `loan_portfolio_report`, which reads
+// `loan_delinquency` and `loan_balances`, which read
+// `loan_installment_coverage` — and each wrong row estimate is multiplied by
+// the one above it.
+//
+// Measured on this seed, reading as an authenticated owner:
+//
+//   dashboard_portfolio_summary   1,981 ms  ->  80 ms
+//   collections_today             1,373 ms  ->  79 ms
+//   loan_portfolio_report           320 ms  ->  88 ms
+//
+// Twenty-five times, on fourteen loans, from statistics alone. Without this
+// the browser suite and any benchmark run against the harness measure the
+// planner guessing rather than the queries.
+//
+// It belongs here rather than in a migration: the migrations run against an
+// empty database, so an ANALYZE in the chain would find nothing to measure.
+// The same step is needed after restoring a backup — see
+// docs/BACKUP-RESTORE.md.
+// ---------------------------------------------------------------------------
+await q('analyze');
+console.log('statistics collected');
+
 await db.end();
 console.log('\nSEED COMPLETE');

@@ -15,11 +15,27 @@
  * something a minute ago — a token issued an hour ago asserts an hour-old
  * truth. So the context is read from the database on every request.
  *
- * That read is itself subject to Row Level Security, which closes the loop:
- * `public.current_profile_id()` resolves only *active* profiles, so a
- * suspended user's own profile row is invisible to them and this function
- * reports them as unauthorised. Disabling an account takes effect on the next
+ * That read resolves identity through `public.current_profile_id()`, which
+ * closes the loop: it resolves only *active* profiles, so a suspended
+ * account has no identity for authorization purposes and this function
+ * reports it as unauthorised. Disabling an account takes effect on the next
  * request, not when the token expires.
+ *
+ * ## One round trip, since Phase 18
+ *
+ * It used to be three, strictly serial: `auth.getClaims()`, then a `profiles`
+ * select, then a `user_roles` select. With the database in `eu-west-1` and
+ * the application in `iad1` that was about 240ms of transatlantic latency
+ * ahead of every page and every client-side navigation.
+ *
+ * It is now one call to `public.current_session_context()`, which composes
+ * the same two Phase 2 primitives — `current_profile_id()` and
+ * `current_user_role_keys()` — and reports the failure reason itself rather
+ * than leaving it to be inferred from which of three calls came back empty.
+ * See migration 20261018000300 for why removing the `getClaims()` call
+ * removes no verification: the proxy still performs one on every request
+ * (it has to, because that is what refreshes the session), and PostgREST
+ * performs another before `auth.uid()` has any value at all.
  *
  * ## Layering
  *
@@ -95,59 +111,92 @@ export type AuthResult =
 export const getAuthContext = cache(async (): Promise<AuthResult> => {
   const supabase = await createSupabaseServerClient();
 
-  // `getClaims` verifies the token signature against the project's published
-  // keys. `getSession` does not, and a cookie is attacker-controlled input, so
-  // it must never be trusted on the server.
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  // One round trip, not three.
+  //
+  // This used to be `auth.getClaims()` followed by a `profiles` select
+  // followed by a `user_roles` select — strictly serial, because each needed
+  // the one before. With the database in `eu-west-1` and the application in
+  // `iad1` that was roughly 240ms of transatlantic latency before a page
+  // began to render, on every request and every client-side navigation.
+  //
+  // `getClaims()` was the worst of the three and the least obvious: it is a
+  // local signature check only for a project signing with an asymmetric key.
+  // This project's tokens are HS256, and for a symmetric algorithm
+  // `getClaims()` falls back to `getUser(token)` — an HTTP call to the Auth
+  // service.
+  //
+  // The token is still verified before anything here is believed, twice over.
+  // The proxy calls `getClaims()` on every request, because that call is what
+  // refreshes an expiring session and writes the cookies a Server Component
+  // cannot. And PostgREST checks the signature against the project's key, and
+  // rejects an expired `exp`, before `auth.uid()` has any value at all — so a
+  // row coming back from this function is itself proof that the token was
+  // well-formed, correctly signed and unexpired. What was removed is the
+  // third verification of the same token in the same request.
+  //
+  // `getSession()` is still never trusted here, and no request header is
+  // either. See migration 20261018000300.
+  const { data, error } = await supabase.rpc('current_session_context');
 
-  if (claimsError !== null || claimsData === null) {
+  if (error !== null) {
+    // A rejected token (missing, malformed, expired) never reaches the
+    // function: PostgREST answers 401 and it arrives here as an error. That
+    // is indistinguishable from "not signed in", and is treated as such.
+    logger.debug('Could not resolve the session context.', { code: error.code });
     return { ok: false, reason: 'no_session' };
   }
 
-  const authUserId = claimsData.claims.sub;
+  // The function always returns exactly one row. Anything else means the
+  // schema and this code have diverged, which is a fault rather than an
+  // anonymous visitor.
+  const row = Array.isArray(data) ? data[0] : data;
 
-  if (typeof authUserId !== 'string' || authUserId === '') {
+  if (row === undefined || row === null) {
+    logger.warn('The session context returned no row.');
     return { ok: false, reason: 'no_session' };
   }
 
-  // Read as the user. RLS returns their own row only when the account is
-  // active, so a suspended account simply finds nothing — the status check and
-  // the identity lookup are the same query.
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, full_name, phone, email, status, must_change_password')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
+  switch (row.outcome) {
+    case 'no_session':
+      return { ok: false, reason: 'no_session' };
 
-  if (profileError !== null) {
-    logger.warn('Could not resolve the profile for an authenticated session.', {
-      code: profileError.code,
-    });
+    case 'no_active_profile':
+      return { ok: false, reason: 'no_active_profile' };
+
+    case 'no_roles':
+      return { ok: false, reason: 'no_roles' };
+
+    case 'ok':
+      break;
+
+    default:
+      logger.warn('The session context reported an unknown outcome.', {
+        outcome: row.outcome,
+      });
+      return { ok: false, reason: 'no_session' };
+  }
+
+  // `outcome = 'ok'` is the database's assertion that the profile resolved
+  // and carries at least one role, so these are present. They are still
+  // checked rather than asserted, because a nullable column that cannot be
+  // null is exactly the assumption that breaks quietly after a schema change.
+  if (
+    typeof row.auth_user_id !== 'string' ||
+    typeof row.profile_id !== 'string' ||
+    typeof row.full_name !== 'string' ||
+    typeof row.phone !== 'string' ||
+    typeof row.status !== 'string'
+  ) {
+    logger.warn('The session context reported ok with an incomplete profile.');
     return { ok: false, reason: 'no_active_profile' };
   }
 
-  if (profile === null) {
-    return { ok: false, reason: 'no_active_profile' };
-  }
+  const roles = row.role_keys.filter((key): key is RoleKey => isRoleKey(key));
 
-  const { data: assignments, error: rolesError } = await supabase
-    .from('user_roles')
-    .select('role_key')
-    .eq('profile_id', profile.id);
-
-  if (rolesError !== null) {
-    logger.warn('Could not resolve role assignments for an authenticated session.', {
-      code: rolesError.code,
-    });
-    return { ok: false, reason: 'no_roles' };
-  }
-
-  const roles = (assignments ?? [])
-    .map((row) => row.role_key)
-    .filter((key): key is RoleKey => isRoleKey(key));
-
-  // An account with no role is incomplete, not a borrower. Defaulting it to
-  // `client` would silently grant portal access to a half-created user.
+  // An account whose only roles are keys this build does not know is an
+  // account with no usable role — the same case as none at all, and not a
+  // borrower. The database already refused `no_roles` for an empty set; this
+  // covers a role removed from the matrix but not yet from the assignment.
   if (roles.length === 0) {
     return { ok: false, reason: 'no_roles' };
   }
@@ -160,15 +209,15 @@ export const getAuthContext = cache(async (): Promise<AuthResult> => {
   return {
     ok: true,
     context: {
-      authUserId,
-      profileId: profile.id,
-      fullName: profile.full_name,
-      phone: profile.phone,
-      email: profile.email,
-      status: profile.status as ProfileStatus,
+      authUserId: row.auth_user_id,
+      profileId: row.profile_id,
+      fullName: row.full_name,
+      phone: row.phone,
+      email: row.email,
+      status: row.status as ProfileStatus,
       roles,
       permissions,
-      mustChangePassword: profile.must_change_password,
+      mustChangePassword: row.must_change_password === true,
     },
   };
 });

@@ -31,9 +31,31 @@ encrypted, off the application host. A sensible cadence for a small lender is a
 ```
 createdb lending_restore
 pg_restore -d lending_restore --no-owner --role=<app_role> backup.dump
+psql -d lending_restore -c 'analyze'
 ```
 
 Then verify before trusting it (see §3).
+
+**The `analyze` is not optional.** `pg_restore` restores rows, indexes and
+constraints; it does not restore planner statistics. Until they are collected,
+every table reads to the planner as the ten-page default — and the derived
+reads in this schema are stacked four deep, so each wrong row estimate is
+multiplied by the one above it. Measured on a fourteen-loan database with no
+statistics, reading as an authenticated owner:
+
+| read | no statistics | after `analyze` |
+| --- | --- | --- |
+| `dashboard_portfolio_summary` | 1,981 ms | 80 ms |
+| `collections_today` | 1,373 ms | 79 ms |
+| `loan_portfolio_report` | 320 ms | 88 ms |
+
+Twenty-five times slower on fourteen loans, from statistics alone. Autovacuum
+collects them eventually; `analyze` after a restore means the first person to
+open the dashboard is not the one who waits. It reads the tables, writes
+nothing to them, takes no exclusive lock, and changes no figure.
+
+The same applies to any bulk import, and it is why
+`tests/e2e/harness/seed.mjs` ends with one.
 
 ## 3. Proven restore drill
 

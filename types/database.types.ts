@@ -4054,6 +4054,26 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: number;
       };
+      current_user_branch_id: {
+        Args: Record<PropertyKey, never>;
+        Returns: string | null;
+      };
+      // Phase 18. The whole session in one round trip. Returns a set, so the
+      // client sees an array; it is always exactly one row.
+      current_session_context: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          outcome: string;
+          auth_user_id: string | null;
+          profile_id: string | null;
+          full_name: string | null;
+          phone: string | null;
+          email: string | null;
+          status: string | null;
+          must_change_password: boolean | null;
+          role_keys: string[];
+        }[];
+      };
       user_has_permission: {
         Args: { p_permission_key: string };
         Returns: boolean;

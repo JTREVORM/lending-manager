@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { logger } from '@/lib/logger';
 import {
   categoriesInGroup,
@@ -54,7 +56,16 @@ const EMPTY_SUMMARY: NotificationSummary = {
  * showing no badge is the same thing a bell with nothing in it shows. The
  * failure is logged, which is where it belongs.
  */
-export async function getNotificationSummary(): Promise<NotificationSummary> {
+/**
+ * Memoised per request with React's `cache`, because the bell is in the shell
+ * and the feed page is beneath it: opening `/notifications` read this
+ * aggregate twice, once for the badge and once for the page's own header.
+ *
+ * Request-scoped, never shared between requests or users, and still read
+ * through the caller's own client — so the `security_invoker` view decides
+ * which rows are counted exactly as before.
+ */
+export const getNotificationSummary = cache(async (): Promise<NotificationSummary> => {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
@@ -76,7 +87,7 @@ export async function getNotificationSummary(): Promise<NotificationSummary> {
     unreadAttention: Number(data.unread_attention ?? 0),
     newestUnreadAt: nullableText(data.newest_unread_at),
   };
-}
+});
 
 export interface NotificationRow {
   readonly id: string;
