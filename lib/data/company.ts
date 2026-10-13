@@ -24,6 +24,7 @@
 
 import 'server-only';
 
+import { cache } from 'react';
 import { unstable_rethrow } from 'next/navigation';
 
 import { COMPANY_DEFAULTS } from '@/config/defaults';
@@ -120,7 +121,22 @@ export interface DocumentBranding {
  * Never throws, for the same reason `getCompanyBranding` does not: a receipt
  * must not fail to render because a settings read failed.
  */
-export async function getDocumentBranding(): Promise<DocumentBranding> {
+/**
+ * Memoised per request with React's `cache`.
+ *
+ * The staff shell renders the company's name in the sidebar's brand block and
+ * again in the header's business-day card, and almost every page then reads
+ * the same row for its own letterhead, timezone or currency — so a single
+ * dashboard render issued two identical `company_settings` selects, and a
+ * report page issued two more. One read per request now serves all of them.
+ *
+ * This is request-scoped memoisation, not a cache: React discards it when the
+ * render finishes, it is never shared between requests, and it is never
+ * shared between users. The read still goes through the caller's own Supabase
+ * client, so Row Level Security decides what comes back exactly as before —
+ * a borrower reading the portal header gets what a borrower may read.
+ */
+export const getDocumentBranding = cache(async (): Promise<DocumentBranding> => {
   const fallback: DocumentBranding = {
     companyName: COMPANY_DEFAULTS.companyName,
     tagline: COMPANY_DEFAULTS.tagline,
@@ -184,7 +200,7 @@ export async function getDocumentBranding(): Promise<DocumentBranding> {
     unstable_rethrow(error);
     return fallback;
   }
-}
+});
 
 /** The address lines that are actually recorded, as one line. */
 function joinAddress(parts: readonly (string | null)[]): string | null {
@@ -208,7 +224,22 @@ function joinAddress(parts: readonly (string | null)[]): string | null {
  * Never throws, for the same reason the staff version does not: a header must
  * not be able to fail the page.
  */
-export async function getPortalBranding(): Promise<CompanyBranding> {
+/**
+ * Memoised per request with React's `cache`.
+ *
+ * The staff shell renders the company's name in the sidebar's brand block and
+ * again in the header's business-day card, and almost every page then reads
+ * the same row for its own letterhead, timezone or currency — so a single
+ * dashboard render issued two identical `company_settings` selects, and a
+ * report page issued two more. One read per request now serves all of them.
+ *
+ * This is request-scoped memoisation, not a cache: React discards it when the
+ * render finishes, it is never shared between requests, and it is never
+ * shared between users. The read still goes through the caller's own Supabase
+ * client, so Row Level Security decides what comes back exactly as before —
+ * a borrower reading the portal header gets what a borrower may read.
+ */
+export const getPortalBranding = cache(async (): Promise<CompanyBranding> => {
   try {
     const supabase = await createSupabaseServerClient();
 
@@ -234,7 +265,7 @@ export async function getPortalBranding(): Promise<CompanyBranding> {
     unstable_rethrow(error);
     return DEFAULT_BRANDING;
   }
-}
+});
 
 /**
  * Company branding, from the database where possible.
@@ -243,7 +274,22 @@ export async function getPortalBranding(): Promise<CompanyBranding> {
  * because of a settings read, and the `source` field makes the degradation
  * explicit rather than invisible.
  */
-export async function getCompanyBranding(): Promise<CompanyBrandingResult> {
+/**
+ * Memoised per request with React's `cache`.
+ *
+ * The staff shell renders the company's name in the sidebar's brand block and
+ * again in the header's business-day card, and almost every page then reads
+ * the same row for its own letterhead, timezone or currency — so a single
+ * dashboard render issued two identical `company_settings` selects, and a
+ * report page issued two more. One read per request now serves all of them.
+ *
+ * This is request-scoped memoisation, not a cache: React discards it when the
+ * render finishes, it is never shared between requests, and it is never
+ * shared between users. The read still goes through the caller's own Supabase
+ * client, so Row Level Security decides what comes back exactly as before —
+ * a borrower reading the portal header gets what a borrower may read.
+ */
+export const getCompanyBranding = cache(async (): Promise<CompanyBrandingResult> => {
   try {
     const supabase = await createSupabaseServerClient();
 
@@ -314,4 +360,4 @@ export async function getCompanyBranding(): Promise<CompanyBrandingResult> {
       fallbackReason: reason,
     };
   }
-}
+});

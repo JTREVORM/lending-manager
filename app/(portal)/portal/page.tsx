@@ -8,7 +8,7 @@ import { listClientDelinquency } from '@/lib/data/delinquency';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
-import { getCompanyBranding } from '@/lib/data/company';
+import { getPortalBranding } from '@/lib/data/company';
 import { listClientPayments } from '@/lib/data/payments';
 import { listClientLoans } from '@/lib/data/reports';
 import { signedDocumentUrl } from '@/lib/storage/documents';
@@ -81,9 +81,21 @@ export default async function PortalPage() {
   // number — what was missed, what is due today, what remains, and when the
   // loan ends — which is information a borrower who is behind needs and
   // should not have to learn from a phone call.
-  const [payments, { branding }, positions, loans] = await Promise.all([
+  // `getPortalBranding`, not `getCompanyBranding`. The two differ in which
+  // relation they read, and for a borrower that decides whether they read
+  // anything at all: `company_settings` is behind `settings:view`, which a
+  // borrower does not hold, so the staff version's query was filtered to
+  // nothing on every portal load — a round trip that could only fail, a
+  // spurious "row 1 is missing" warning in the log, and a timezone that came
+  // from `config/defaults.ts` rather than from the business's own settings.
+  //
+  // `company_identity` is the view Phase 12 published for exactly this: the
+  // name, locale, timezone and logo, with the registration and tax numbers
+  // left out. The portal shell above already reads it, so with the
+  // request-scoped memoisation on that function this costs nothing here.
+  const [payments, branding, positions, loans] = await Promise.all([
     client === null ? Promise.resolve([]) : listClientPayments(client.id),
-    getCompanyBranding(),
+    getPortalBranding(),
     client === null ? Promise.resolve([]) : listClientDelinquency(client.id),
     client === null ? Promise.resolve([]) : listClientLoans(client.id),
   ]);

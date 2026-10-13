@@ -870,6 +870,8 @@ describeDb('privileged functions', () => {
       'confirm_password_change',
       'consume_rate_limit',
       'current_profile_id',
+      'current_session_context',
+      'current_user_branch_id',
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
@@ -1070,6 +1072,22 @@ describeDb('privileged functions', () => {
       // person out. The pre-authentication path goes through the server.
       'consume_rate_limit',
       'current_profile_id',
+      // Phase 18. The whole session in one round trip: the caller's active
+      // profile, their role keys, and why not when there is none. Granted
+      // because it is the read every authenticated request already made as
+      // three — `getClaims()`, a `profiles` select and a `user_roles` select
+      // — and it discloses strictly less than those three did. It resolves
+      // the profile through `current_profile_id()`, so it can only ever
+      // return the caller's own row, and only while that account is active.
+      'current_session_context',
+      // Phase 18. The caller's own branch, hoisted out of the per-row branch
+      // check so a policy resolves it once per statement instead of once per
+      // candidate row. Granted for the same reason `current_profile_id` is:
+      // it answers a question about the caller and nobody else, and it
+      // discloses nothing a caller does not already know about themselves.
+      // It reads `profiles` through `current_profile_id()`, so a suspended
+      // account resolves no branch at all.
+      'current_user_branch_id',
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
