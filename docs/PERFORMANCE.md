@@ -389,6 +389,36 @@ The last column is the point. Row Level Security used to cost up to two
 hundred times the query it protected; it now costs roughly double, which is
 what an authorization boundary should cost.
 
+### 3.2 Cold
+
+One request per route against a server process that has just started, with
+nothing warmed — no module graph, no connection pool, no plan cache:
+
+| Page | Cold | Warm |
+| --- | --- | --- |
+| Dashboard | 289 ms | 211 ms |
+| Report: arrears | 146 ms | 122 ms |
+| Finance ledger | 115 ms | 115 ms |
+| Portal (borrower) | 117 ms | 113 ms |
+| Report: loans | 112 ms | 117 ms |
+| Report: aging | 106 ms | 91 ms |
+| Overdue | 104 ms | 77 ms |
+| Loans | 89 ms | 80 ms |
+| Collections (payments) | 78 ms | 55 ms |
+| Debt & Security | 75 ms | 101 ms |
+| Reports | 73 ms | 75 ms |
+| Clients | 68 ms | 38 ms |
+| Finance | 45 ms | 35 ms |
+
+Cold costs 20–80 ms over warm and nothing is an outlier — the first request
+pays for module loading and the first database connection, and then the
+figures settle. Two routes read marginally *faster* cold than warm, which is
+measurement noise at this scale rather than a real effect.
+
+The reason this is worth stating: before the fix, the dashboard was 1,697 ms
+*warm*, so a cold first impression of the application was worse again. The
+cold path is now within 80 ms of the warm one on every screen.
+
 ### 3.1 Headroom, on a book sixty times larger
 
 The hosted database holds 35 loans. To find the ceiling rather than describe
@@ -501,7 +531,7 @@ would only help if the database moved there too.
 | `npm run build` | succeeds |
 | `npm run test:run` (unit + integration) | 2,174 passed / 2,174 |
 | `npm run test:db` (real PostgreSQL, migrations from zero) | 1,323 passed / 1,323 |
-| `npx playwright test` (production build, real stack, 4 accounts, desktop + mobile) | in progress at the time of this commit — see the note below |
+| `npx playwright test` (production build, real stack, 4 accounts, desktop + mobile) | 498 passed / 498, 27 skipped |
 
 The database suite is the one that matters most here: it rebuilds from the
 migrations on every run, so it re-proves that all four apply to an empty
@@ -528,25 +558,36 @@ Three files were added to it:
 Two existing inventory locks in `security.test.ts` were extended to name the
 new functions, which is what those locks are for.
 
-### 6.1 The browser suite
+### 6.1 The browser suite, and the one failure that was not one
 
-The browser suite is slow — it drives the production build against the real
-stack, serially, as four accounts across two viewports — and it was still
-running when this was committed. Two of its checks had already been run
-directly against the rebuilt stack and are the ones this work could plausibly
-have broken:
+The browser suite drives the production build against the real stack,
+serially, as four accounts across two viewports. The full run is green: 498
+passed, 27 skipped, 12.4 minutes.
 
-- The status codes that the reverted loading boundary was breaking. All four
-  `notFound()` routes answer `404` again, confirmed by request:
-  `/loans/<missing>`, `/clients/<missing>`, `/payments/<missing>`,
-  `/users/<missing>`.
-- Sign-in for all four accounts, via the suite's own `setup` project, which
-  is what exercises the rewritten authentication path end to end — Owner,
-  Manager, Secretary/Treasurer and borrower all sign in and their sessions
-  are usable, which is also what every benchmark figure in §3 depends on.
+An earlier run of it reported one failure, and it is worth writing down
+because the diagnosis matters more than the result. `loan-application.write.spec.ts`
+— "a manager may refuse what a manager may approve" — timed out waiting for
+the *Reject this application* button on the seeded pending loan.
 
-If the full run turns up anything else, it belongs in a follow-up commit
-rather than hidden here.
+It was not a regression. That spec is a **write** test and a rejection is
+final: an earlier run of the suite had been interrupted partway through,
+after it had already rejected that loan, so the next run opened a loan that
+had no reject button to offer. The seeded fixture is shared mutable state and
+the specs are serial for exactly that reason.
+
+Confirmed rather than assumed: on a freshly seeded database that loan is
+`pending_approval` again, and the full suite passes. Worth remembering when
+reading a red write-spec on this harness — re-seed before concluding
+anything.
+
+What the suite covers that matters most here: the status codes the reverted
+loading boundary was breaking (all four `notFound()` routes answer `404`),
+sign-in and session use for all four accounts through the rewritten
+authentication path, every route refused to every role that should not reach
+it, the per-page wire cost and request-count budgets on both desktop and the
+phone viewport, and the security suite — the session cookie unreadable from
+JavaScript, the privileged key never reaching the browser, and a borrower's
+phone number unreadable anonymously.
 
 ---
 
