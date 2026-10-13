@@ -207,6 +207,16 @@ export const PERMISSIONS = [
   'guarantors:view_nin',
   /** Attach a guarantor to a client, or detach one. */
   'guarantors:link',
+  /**
+   * Let a guarantor out of a live loan.
+   *
+   * Phase 14. Separate from `guarantors:link`, which is clerical work on an
+   * application being assembled. A release discharges somebody's liability on
+   * money that has already gone out, which is a decision of the same weight
+   * as approving the loan was — so the Secretary/Treasurer who attaches
+   * guarantors all day does not hold it.
+   */
+  'guarantors:release',
 
   // --- Loans ---------------------------------------------------------------
   // The lifecycle is split across several capabilities rather than one
@@ -228,6 +238,15 @@ export const PERMISSIONS = [
   'loans:disburse',
   /** Cancel a loan before it is disbursed. */
   'loans:cancel',
+  /**
+   * Attach or remove the supporting documents on a loan application.
+   *
+   * Phase 13. Its own capability rather than part of `loans:update_draft`,
+   * matching `clients:documents`: filing a payslip and agreeing a loan amount
+   * are different acts, and a business may want the first without the second.
+   * Reading what was filed follows `loans:view`.
+   */
+  'loans:documents',
   /** Read the identity snapshots captured against a loan. */
   'loans:view_sensitive',
 
@@ -282,6 +301,43 @@ export const PERMISSIONS = [
   'delinquency:view',
   /** See a loan's expiry penalty: its basis, rate, amount and what remains. */
   'penalties:view',
+
+  // Phase 15. The notification *surface*, not the rows.
+  //
+  // It grants nobody a notification they could not already have read: every
+  // row is behind the capability of the thing it is about, so a
+  // Secretary/Treasurer holding this sees a loan awaiting approval and does
+  // not see a reversal or a variance. It exists so the route has a capability
+  // of its own rather than borrowing `dashboard:view` — the defect Phases 3,
+  // 6 and 8 each found once, where a placeholder route stayed open behind the
+  // broad capability after the real screen landed.
+  //
+  // There is no `notifications:manage` and no delete. The stream is a log of
+  // what happened; reading one is a receipt, and nothing un-happens.
+  /** See the notification bell and the notifications page. */
+  'notifications:view',
+
+  // Phase 14. Security and recovery.
+  //
+  // Reading and recording are split, and recording is one capability rather
+  // than a create/update/delete family, because the underlying tables do not
+  // offer the family: `loan_recovery_actions` refuses every UPDATE and DELETE
+  // outright, and a pledged item's identity freezes at disbursement. A
+  // `recovery:edit` capability would be a promise the schema cannot keep.
+  //
+  // There is no `recovery:delete` and no `collateral:delete` for the same
+  // reason. An item taken in and no longer wanted is *released*, which is a
+  // status with a date and an actor; a note written in error is corrected by
+  // appending a correction. Both leave the original visible, which is the
+  // whole point of a recovery file somebody will later be asked to justify.
+  /** See the security recorded against a loan. */
+  'collateral:view',
+  /** Record security against a loan, and release or realise it. */
+  'collateral:manage',
+  /** See the recovery history and follow-ups on a loan. */
+  'recovery:view',
+  /** Record a recovery action, follow-up or promise to pay. */
+  'recovery:record',
 
   // Phase 8. Reporting is split by *what the figures reveal*, not by which
   // screen they appear on. One `reports:view` would have meant that the person
@@ -394,6 +450,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view',
     'loans:create',
     'loans:update_draft',
+    'loans:documents',
     'loans:submit',
 
     // The Secretary/Treasurer collects the money, so the schedule is the
@@ -407,6 +464,16 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // Chasing collections is this role's daily work.
     'delinquency:view',
     'penalties:view',
+    'notifications:view',
+
+    // Phase 14. The front office takes the item in and makes the calls, so it
+    // records both. It does not hold `guarantors:release`: discharging a
+    // guarantor's liability is a Manager's decision, for the reason this role
+    // does not approve loans either.
+    'collateral:view',
+    'collateral:manage',
+    'recovery:view',
+    'recovery:record',
 
     // The collection sheet and the arrears list are this role's working
     // documents all day. Deliberately nothing beyond: portfolio-wide
@@ -472,6 +539,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'guarantors:documents',
     'guarantors:view_nin',
     'guarantors:link',
+    'guarantors:release',
 
     // Reviews and approves, and may return a draft for correction.
     //
@@ -487,6 +555,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'loans:view',
     'loans:create',
     'loans:update_draft',
+    'loans:documents',
     'loans:submit',
     'loans:approve',
     'loans:view_sensitive',
@@ -500,6 +569,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'delinquency:view',
     'penalties:view',
+    'notifications:view',
+
+    'collateral:view',
+    'collateral:manage',
+    'recovery:view',
+    'recovery:record',
 
     // Supervising lending is not possible without seeing the book: what is
     // outstanding, what is late, what has been charged. Still not
@@ -566,10 +641,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'guarantors:documents',
     'guarantors:view_nin',
     'guarantors:link',
+    'guarantors:release',
 
     'loans:view',
     'loans:create',
     'loans:update_draft',
+    'loans:documents',
     'loans:submit',
     'loans:approve',
     'loans:disburse',
@@ -584,6 +661,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'delinquency:view',
     'penalties:view',
+    'notifications:view',
+
+    'collateral:view',
+    'collateral:manage',
+    'recovery:view',
+    'recovery:record',
 
     'reports:view_operational',
     'reports:view_financial',

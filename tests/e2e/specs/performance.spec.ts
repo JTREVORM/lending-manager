@@ -31,6 +31,10 @@ const PAGES = [
   '/payments',
   '/payments/new',
   '/overdue',
+  // Phase 14. The supervising screen, which reads a grouping-sets aggregate
+  // over the whole active book — so it is the one most likely to drift, and
+  // the one worth a budget.
+  '/recovery',
   '/reports',
 ] as const;
 

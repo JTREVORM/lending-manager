@@ -39,17 +39,38 @@ const SCREENS = [
   '/payments',
   '/payments/new',
   '/overdue',
+  // Phase 14. Debt & Security. Included because these three are the densest
+  // screens in the application — a PAR table, a twelve-column guarantor
+  // register and five slice tables — and density is where contrast and
+  // header association go wrong.
+  '/notifications',
+  '/recovery',
+  '/recovery?view=risk',
+  '/guarantors/register',
+  '/payments/summary',
   '/reports',
+  // The group chips and the one-group listing are their own rendering.
+  '/reports?group=behind',
   '/reports/collections',
   '/reports/arrears',
   '/reports/loans',
   '/reports/clients',
   '/reports/penalties',
   '/reports/grace',
+  // Phase 16 — the four Debt & Security reports. Each is a wide table, which
+  // is exactly the shape that fails a contrast or a scroll check first.
+  '/reports/aging',
+  '/reports/recovery',
+  '/reports/guarantors',
+  '/reports/collateral',
   '/users',
   '/users/new',
   '/audit',
   '/settings',
+  '/settings?section=finance',
+  '/finance?section=cash',
+  '/finance/trial-balance',
+  '/payments/summary?section=branch',
   '/account',
   '/account/password',
 ] as const;

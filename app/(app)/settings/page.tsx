@@ -58,8 +58,41 @@ export const metadata = { title: 'Settings' };
  * shown, but neither has an editing screen in this phase — and a control that
  * looked editable and was not would be worse than a page that says so.
  */
-export default async function SettingsPage() {
+/**
+ * The settings sections a rail entry may name, and the heading each scrolls
+ * to.
+ *
+ * Six of the seven subjects on this page have their own entry in the rail,
+ * because that is how somebody looks for them — "where do I change the
+ * penalty rate" is not a question answered by a link called "Settings".
+ * Branches is the seventh, and it lives in the Branch Network module.
+ *
+ * Each entry carries its section twice: as `?section=`, which is what the
+ * rail highlights on and what opens the chip row at the right section, and
+ * as a fragment, which moves the browser with no JavaScript involved.
+ */
+const SECTION_HEADINGS: Readonly<Record<string, string>> = {
+  company: 'company-heading',
+  products: 'products-heading',
+  lending: 'rules-heading',
+  guarantors: 'guarantors-heading',
+  finance: 'finance-heading',
+  branches: 'branches-heading',
+  references: 'references-heading',
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const context = await guardPermission(ROUTES.settings, 'settings:view');
+
+  const params = await searchParams;
+  const raw = Array.isArray(params.section) ? params.section[0] : params.section;
+  // An unrecognised section opens the page at the top rather than erroring: a
+  // hand-edited query string is not a reason to refuse a settings screen.
+  const openAt = raw === undefined ? undefined : SECTION_HEADINGS[raw];
 
   const [
     { company, rules, cadences, branches, sequences, unavailable },
@@ -87,12 +120,12 @@ export default async function SettingsPage() {
         status={canEdit ? null : <Badge tone="neutral">Read-only</Badge>}
       />
 
+      {/* Kept, and shortened. The consequence of a settings change is the
+          one thing a reader must not have to work out for themselves: a loan
+          already approved is priced, and nothing here re-prices it. */}
       <Alert tone="info" title="Changing a setting does not change an existing loan">
-        Every loan records its own product terms — rate, grace period and late-payment
-        charge — at the moment it is approved, and those figures never move afterwards. A
-        change made here applies to loans approved <strong>after</strong> the change,
-        which is why a loan from last month can be on a different rate from one approved
-        today.
+        A loan keeps the rate, grace period and late-payment charge captured when it was
+        approved. A change here applies to loans approved <strong>after</strong> it.
       </Alert>
 
       {unavailable.length > 0 ? (
@@ -103,6 +136,7 @@ export default async function SettingsPage() {
 
       <SectionTabs
         label="Settings sections"
+        initial={openAt}
         tabs={[
           { id: 'company-heading', label: 'Company' },
           { id: 'products-heading', label: 'Products' },
@@ -504,11 +538,10 @@ export default async function SettingsPage() {
             </ul>
           )}
 
-          <p className="text-text-muted mt-4 text-sm">
-            Adding or renaming a branch is not editable from this screen. A branch owns
-            cash accounts in the ledger and appears on every loan and payment written at
-            it, so creating one is a privileged write with its own capability
-            (branches:create) rather than a field on a settings page.
+          {/* Why a control a reader expects is absent. Kept, in one line. */}
+          <p className="text-text-muted mt-4 text-xs">
+            Read-only here. A branch owns ledger accounts, so opening one needs the
+            branches:create capability.
           </p>
         </Card>
       </section>
@@ -547,10 +580,11 @@ export default async function SettingsPage() {
                 ))}
               </ul>
             )}
-            <p className="text-text-muted mt-4 text-sm">
-              A loan records its own cadence at approval, and a product names which
-              cadences it offers. Retiring a cadence here stops new loans using it and
-              leaves every existing schedule exactly as it was.
+            {/* The consequence of retiring one, which is not reversible for
+                schedules already written. Kept, in one line. */}
+            <p className="text-text-muted mt-4 text-xs">
+              Retiring a cadence stops new loans using it and leaves existing schedules
+              untouched.
             </p>
           </Card>
 
@@ -576,11 +610,8 @@ export default async function SettingsPage() {
                 ))}
               </ul>
             )}
-            <p className="text-text-muted mt-4 text-sm">
-              Each reference is allocated by the database, once, inside the transaction
-              that creates the record — so two clients cannot be given the same number and
-              a number is never reused. The counters restart each year, which is what
-              makes CL26001 readable.
+            <p className="text-text-muted mt-4 text-xs">
+              Allocated by the database, once each, and restarted every year.
             </p>
           </Card>
         </div>
@@ -603,12 +634,9 @@ export default async function SettingsPage() {
                   ? ' The finance thresholds are yours as well.'
                   : ' The finance thresholds need the finance:settings capability.'}
               </p>
-              <p className="text-text-muted mt-1">
-                Every change is recorded in the audit trail with the values before and
-                after it, by a trigger on the table rather than by this screen. The
-                database enforces the cross-field rules whatever asks it — including the
-                one that refuses a change here which would leave an active loan product
-                offering more than the business permits.
+              <p className="text-text-muted mt-1 text-xs">
+                Every change is recorded in the audit trail, before and after. A change
+                that would leave an active product outside the new limits is refused.
               </p>
             </div>
           </div>

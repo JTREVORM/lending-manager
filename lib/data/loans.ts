@@ -6,9 +6,13 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   isLoanStatus,
   isLoanApprovalFailure,
+  isLoanClosureKind,
+  isLoanWorkflowStage,
   type LoanApprovalFailure,
+  type LoanClosureKind,
   type LoanPeriod,
   type LoanStatus,
+  type LoanWorkflowStage,
 } from '@/lib/domain/loan';
 import { toUgx } from '@/lib/domain/money';
 import type { LoanSearchInput } from '@/lib/validation/loan';
@@ -48,9 +52,25 @@ export interface LoanSummary {
   readonly createdAt: string;
   readonly proposedDisbursementDate: string;
   readonly disbursedAt: string | null;
+  /**
+   * Phase 13. Which product this loan was written under, and where in the
+   * workflow it sits. Both come from `loan_workflow_register`, so the
+   * register's tabs and its rows cannot disagree about what a stage means.
+   */
+  readonly productId: string;
+  readonly productCode: string;
+  readonly productName: string;
+  readonly workflowStage: LoanWorkflowStage;
+  readonly closureKind: LoanClosureKind | null;
+  /** Null for a reader without the capability to see collections. */
+  readonly arrearsAmount: number | null;
+  readonly daysPastDue: number | null;
+  readonly totalOutstanding: number | null;
+  readonly guarantorCount: number;
 }
 
 export interface LoanDetail extends LoanSummary {
+  readonly proposedInterestRateBps: number | null;
   readonly interestMethod: string;
   readonly totalInterest: number;
   readonly currencyCode: string;
@@ -109,10 +129,21 @@ export interface LoanIdentitySnapshot {
   readonly nin: string | null;
 }
 
-const SUMMARY_COLUMNS =
-  'id, loan_number, client_id, principal_amount, interest_rate_bps, loan_term_months, repayment_frequency, total_expected_repayment, status, created_at, proposed_disbursement_date, disbursed_at, clients!inner(full_name, client_number)';
+/**
+ * Phase 13. The register's columns, read from `loan_workflow_register`.
+ *
+ * The view, not the table: the product, the collection state and the guarantor
+ * count come from it, and deriving any of them here would be a second
+ * definition of "in arrears" that the first drift would put at odds with the
+ * one the Overdue screen uses.
+ */
+const REGISTER_COLUMNS =
+  'loan_id, loan_number, client_id, client_name, client_number, principal_amount, interest_rate_bps, loan_term_months, repayment_frequency, total_expected_repayment, status, closure_kind, created_at, proposed_disbursement_date, disbursed_at, loan_product_id, product_code, product_name, workflow_stage, arrears_amount, days_past_due, total_outstanding, guarantor_count';
 
-const DETAIL_COLUMNS = `${SUMMARY_COLUMNS}, interest_method, total_interest, currency_code, min_loan_amount_applied, max_loan_amount_applied, grace_period_days_applied, penalty_rate_bps_applied, submitted_at, approved_at, cancelled_at, cancellation_reason, review_note, notes, updated_at`;
+const SUMMARY_COLUMNS =
+  'id, loan_number, client_id, principal_amount, interest_rate_bps, loan_term_months, repayment_frequency, total_expected_repayment, status, closure_kind, created_at, proposed_disbursement_date, disbursed_at, loan_product_id, loan_products!inner(product_code, name), clients!inner(full_name, client_number)';
+
+const DETAIL_COLUMNS = `${SUMMARY_COLUMNS}, proposed_interest_rate_bps, interest_method, total_interest, currency_code, min_loan_amount_applied, max_loan_amount_applied, grace_period_days_applied, penalty_rate_bps_applied, submitted_at, approved_at, cancelled_at, cancellation_reason, review_note, notes, updated_at`;
 
 /** Pull a string out of a loosely-typed embedded relation. See lib/data/guarantors.ts. */
 function textField(fields: Record<string, unknown>, key: string): string {
@@ -132,20 +163,41 @@ function nullableText(fields: Record<string, unknown>, key: string): string | nu
   return typeof value === 'string' ? value : null;
 }
 
+/** A nullable number column, read without coercing null to zero. */
+function nullableNumber(fields: Record<string, unknown>, key: string): number | null {
+  const value = fields[key];
+  return value === null || value === undefined ? null : Number(value);
+}
+
 function toSummary(row: Record<string, unknown>): LoanSummary {
   const client =
     typeof row.clients === 'object' && row.clients !== null
       ? (row.clients as Record<string, unknown>)
       : {};
 
+  const product =
+    typeof row.loan_products === 'object' && row.loan_products !== null
+      ? (row.loan_products as Record<string, unknown>)
+      : {};
+
   const status = row.status;
+  const closureKind = row.closure_kind;
+  const stage = row.workflow_stage;
 
   return {
-    id: String(row.id),
+    id: String(row.id ?? row.loan_id),
     loanNumber: String(row.loan_number),
     clientId: String(row.client_id),
-    clientName: textField(client, 'full_name'),
-    clientNumber: textField(client, 'client_number'),
+    // The register view publishes the client's details directly; the table
+    // query embeds them. Either shape answers the same two questions.
+    clientName:
+      typeof row.client_name === 'string'
+        ? row.client_name
+        : textField(client, 'full_name'),
+    clientNumber:
+      typeof row.client_number === 'string'
+        ? row.client_number
+        : textField(client, 'client_number'),
     principalAmount: Number(row.principal_amount),
     interestRateBps: Number(row.interest_rate_bps),
     loanTermMonths: Number(row.loan_term_months),
@@ -157,7 +209,42 @@ function toSummary(row: Record<string, unknown>): LoanSummary {
     createdAt: String(row.created_at),
     proposedDisbursementDate: String(row.proposed_disbursement_date),
     disbursedAt: nullableText(row, 'disbursed_at'),
+    productId: String(row.loan_product_id),
+    productCode:
+      typeof row.product_code === 'string'
+        ? row.product_code
+        : textField(product, 'product_code'),
+    productName:
+      typeof row.product_name === 'string'
+        ? row.product_name
+        : textField(product, 'name'),
+    // Derived by the view. A row read straight off the table has no stage, so
+    // one is inferred from the status — never from arrears, which the table
+    // does not know about.
+    workflowStage: isLoanWorkflowStage(stage) ? stage : stageFromStatus(row),
+    closureKind: isLoanClosureKind(closureKind) ? closureKind : null,
+    arrearsAmount: nullableNumber(row, 'arrears_amount'),
+    daysPastDue: nullableNumber(row, 'days_past_due'),
+    totalOutstanding: nullableNumber(row, 'total_outstanding'),
+    guarantorCount: Number(row.guarantor_count ?? 0),
   };
+}
+
+/**
+ * The stage a row read off the table sits at.
+ *
+ * Deliberately conservative: `active` rather than any of the collection
+ * stages, because the table carries nothing that could distinguish them and
+ * guessing would put a loan in Arrears on no evidence.
+ */
+function stageFromStatus(row: Record<string, unknown>): LoanWorkflowStage {
+  const status = row.status;
+
+  if (status === 'cancelled') {
+    return row.closure_kind === 'rejected' ? 'rejected' : 'withdrawn';
+  }
+
+  return isLoanWorkflowStage(status) ? status : 'active';
 }
 
 /** See lib/data/clients.ts — `%`, `_` and `,` are PostgREST filter metacharacters. */
@@ -181,10 +268,18 @@ export async function listLoans(filter: LoanSearchInput): Promise<LoanPage> {
   const to = from + LOANS_PAGE_SIZE;
 
   let query = supabase
-    .from('loans')
-    .select(SUMMARY_COLUMNS)
+    .from('loan_workflow_register')
+    .select(REGISTER_COLUMNS)
     .order('created_at', { ascending: false })
     .range(from, to);
+
+  if (filter.stage !== null) {
+    query = query.eq('workflow_stage', filter.stage);
+  }
+
+  if (filter.productId !== null) {
+    query = query.eq('loan_product_id', filter.productId);
+  }
 
   if (filter.status !== null) {
     query = query.eq('status', filter.status);
@@ -198,13 +293,13 @@ export async function listLoans(filter: LoanSearchInput): Promise<LoanPage> {
     const term = escapeSearchTerm(filter.query.trim());
 
     if (term !== '') {
-      // The loan number lives on this table; the client's name and number are
-      // on the embedded relation, which PostgREST filters by path.
+      // Every searchable column is on the view, so this is a plain `or`
+      // rather than the embedded-relation paths the table query needed.
       query = query.or(
         [
           `loan_number.ilike.%${term}%`,
-          `clients.full_name.ilike.%${term}%`,
-          `clients.client_number.ilike.%${term}%`,
+          `client_name.ilike.%${term}%`,
+          `client_number.ilike.%${term}%`,
         ].join(','),
       );
     }
@@ -248,6 +343,7 @@ export async function getLoan(loanId: string): Promise<LoanDetail | null> {
 
   return {
     ...toSummary(row),
+    proposedInterestRateBps: nullableNumber(row, 'proposed_interest_rate_bps'),
     interestMethod: String(row.interest_method),
     totalInterest: Number(row.total_interest),
     currencyCode: String(row.currency_code),

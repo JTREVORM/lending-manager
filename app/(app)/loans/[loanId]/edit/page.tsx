@@ -58,6 +58,7 @@ export default async function EditLoanPage({
         loan={loan}
         clients={data.clients}
         frequencies={data.frequencies}
+        products={data.products}
         settings={data.settings}
       />
     </div>

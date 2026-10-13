@@ -190,6 +190,18 @@ docs/          Architecture, database, decisions, security
 | [docs/INCIDENT-RUNBOOK.md](docs/INCIDENT-RUNBOOK.md) | First actions for sign-in, payment, role, availability, deployment and compromise incidents, and the data-correction policy. |
 | [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) | Launch-day gate, first-day operation, daily operation, and the NO-GO stop conditions. |
 | [docs/PHASE-10-REPORT.md](docs/PHASE-10-REPORT.md) | Phase 10 production-readiness audit: test matrix, financial/RLS/security/recoverability evidence, CI, and the GO / CONDITIONAL-GO / NO-GO decision. |
+| [docs/PLATFORM-UPGRADE-PLAN.md](docs/PLATFORM-UPGRADE-PLAN.md) | The audit, the gap analysis and the phased plan for the move to the full operations platform, with each phase's status. |
+| [docs/REPORTING.md](docs/REPORTING.md) | Dashboards, the ten reports, one declaration per report, filters and the whitelist behind them, the CSV and the branded PDF, the client statement and the portal. |
+| [docs/LEDGER.md](docs/LEDGER.md) | Branches, the chart of accounts, double-entry journals, cash position and the trial balance. |
+| [docs/LOAN-PRODUCTS.md](docs/LOAN-PRODUCTS.md) | The configurable product catalogue, the guard-rail doctrine between a product and the business's settings, and the terms frozen onto a loan at approval. |
+| [docs/UPGRADE-PHASE-1-REPORT.md](docs/UPGRADE-PHASE-1-REPORT.md) | Upgrade Phase 1: branches and the financial ledger, the historical backfill and the reconciliation evidence. |
+| [docs/UPGRADE-PHASE-4-REPORT.md](docs/UPGRADE-PHASE-4-REPORT.md) | Upgrade Phase 4: the loan module reorganised — a typed closure, product-specific application data, guarantors captured on the application with a versioned undertaking, and the two defects building the screens found. |
+| [docs/DEBT-AND-SECURITY.md](docs/DEBT-AND-SECURITY.md) | Security taken against a loan, releasing a guarantor, the append-only recovery file, promises to pay whose verdict is derived from the payments, aging buckets, PAR, and collections sliceable by branch and product. |
+| [docs/UPGRADE-PHASE-5-REPORT.md](docs/UPGRADE-PHASE-5-REPORT.md) | Upgrade Phase 5: collections and Debt & Security — the migrations, the schema, the screens, the test counts, the reconciliation evidence and the commit. |
+| [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) | The notification stream: one row per event addressed to a capability, read state per person, what raises each of the fourteen categories, why nothing is raised by the calendar, and the backfill that reconstructs the stream for the events that came before the triggers. |
+| [docs/UPGRADE-PHASE-6-REPORT.md](docs/UPGRADE-PHASE-6-REPORT.md) | Upgrade Phase 6: notifications — the migrations, the schema, the screens, the test counts, the live verification and the commit. |
+| [docs/UPGRADE-PHASE-7-REPORT.md](docs/UPGRADE-PHASE-7-REPORT.md) | Upgrade Phase 7: the Reports Center — one declaration per report, a PDF writer owned rather than installed, the four Debt & Security reports, and the guarantor-cover defect the parity method caught. |
+| [docs/UPGRADE-PHASE-8-REPORT.md](docs/UPGRADE-PHASE-8-REPORT.md) | Upgrade Phase 8: the dashboard reads the modules built after it — portfolio at risk, promises and follow-ups, and what is waiting for a decision — and the two mislabelled counts that reconciling against the base tables caught. |
 
 Three decisions worth knowing before writing any code here:
 

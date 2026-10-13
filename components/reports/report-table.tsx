@@ -146,7 +146,25 @@ export function ReportTable<Row>({
           at `px-2 py-2.5`, rows separated by a hairline and hovering as a
           unit. Twelve columns of currency fit on a laptop at this size and do
           not at 14px. */}
-      <div className="border-border scroll-area scroll-x hidden min-w-0 rounded-lg border md:block print:block">
+      {/*
+        `tabIndex={0}` with a named region, because a wide report scrolls
+        sideways and a scrollable box that cannot be focused cannot be scrolled
+        from a keyboard at all — axe calls it `scrollable-region-focusable`, and
+        it is a serious violation rather than a nicety. It appeared the moment
+        Phase 16 added an eighteen-column aging report: the six earlier reports
+        happened to fit, so the defect had been latent since Phase 8. The
+        pattern is the one the recovery worklist and the collection summary
+        already use, moved here so every report inherits it.
+
+        The caption is the region's name, so a screen reader announces what the
+        box it has focused actually contains.
+      */}
+      <div
+        className="border-border scroll-area scroll-x hidden min-w-0 rounded-lg border md:block print:block"
+        tabIndex={0}
+        role="region"
+        aria-label={caption}
+      >
         <table className="w-full table-auto border-collapse text-left text-[11px]">
           <caption className="sr-only">{caption}</caption>
           <colgroup>

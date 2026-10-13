@@ -130,7 +130,7 @@ describeDb('loan snapshots', () => {
       expect(row.consented_at).not.toBeNull();
     });
 
-    it('captures the application\'s guarantors, not the client\'s register', async () => {
+    it("captures the application's guarantors, not the client's register", async () => {
       const own = await createLoanScenario();
 
       await query(

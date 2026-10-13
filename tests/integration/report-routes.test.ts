@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { ROUTES } from '@/config/app';
 import { permissionForPath } from '@/lib/auth/routing';
 import { PERMISSIONS, type Permission } from '@/lib/permissions';
+import { REPORTS, type ReportId } from '@/lib/reports/registry';
 
 /**
  * Every reporting route guards itself.
@@ -31,7 +32,11 @@ import { PERMISSIONS, type Permission } from '@/lib/permissions';
  *
  * 1. The proxy, from the route map — turns a borrower away at the door.
  * 2. The page's own `guardPermission` — this test.
- * 3. The export route's `guardExport` — this test.
+ * 3. The export route's `guardExport` — this test. Phase 16 moved the list it
+ *    is given into the registry, so the page and the route now read the *same
+ *    object*. That is a stronger guarantee than two source files agreeing, and
+ *    the assertions below changed shape to check it: the registry against the
+ *    expectation here, and the page against the registry.
  * 4. Row Level Security — the actual boundary, and the only layer that holds
  *    against a caller who skips the application entirely.
  */
@@ -55,6 +60,12 @@ const EXPECTED: Readonly<Record<string, readonly Permission[]>> = {
   clients: ['reports:view_operational', 'clients:view'],
   loans: ['reports:view_financial', 'loans:view'],
   penalties: ['reports:view_financial', 'penalties:view'],
+  // Phase 16. The Debt & Security module had the views and the worklists from
+  // Phase 14 but no documents; these four are the same rows as reports.
+  aging: ['reports:view_financial', 'delinquency:view'],
+  recovery: ['reports:view_operational', 'recovery:view'],
+  guarantors: ['reports:view_financial', 'guarantors:view'],
+  collateral: ['reports:view_financial', 'collateral:view'],
 };
 
 describe('the reporting routes', () => {
@@ -76,47 +87,61 @@ describe('the reporting routes', () => {
     }
   });
 
-  it.each(Object.entries(EXPECTED))(
-    'guards the %s page with every capability it needs',
-    (section, needs) => {
+  it.each(Object.keys(EXPECTED))(
+    'guards the %s page with the registry\u2019s own capability list',
+    (section) => {
       const source = read(join(REPORTS_DIR, section, 'page.tsx'));
 
-      for (const permission of needs) {
-        expect(source, `${section} page: ${permission}`).toContain(`'${permission}'`);
-      }
-
-      // As of Phase 9 a report page guards itself with one `guardReportPage`
-      // call that takes every capability it needs and checks them in turn —
-      // and then consumes the read budget, which is why it exists. Asserting
-      // on the single call is stronger than counting calls: a page cannot
-      // satisfy it by checking the first capability twice.
-      const call = /guardReportPage\(\s*[^,]+,\s*\[([\s\S]*?)\]/.exec(source);
-      expect(call, `${section} page: guardReportPage call`).not.toBeNull();
-
-      for (const permission of needs) {
-        expect(call?.[1] ?? '', `${section} page guards: ${permission}`).toContain(
-          `'${permission}'`,
-        );
-      }
-    },
-  );
-
-  it.each(Object.entries(EXPECTED))(
-    'guards the %s export with the same capabilities as its page',
-    (section, needs) => {
-      const source = read(join(REPORTS_DIR, section, 'export', 'route.ts'));
-
-      // One call, taking the whole list: a download is refused unless every
-      // capability the page required is held.
-      expect(source, `${section} export`).toContain('guardExport(');
-      for (const permission of needs) {
-        expect(source, `${section} export: ${permission}`).toContain(`'${permission}'`);
-      }
-      expect(source, `${section} export`).toContain(
-        'if (!guard.ok) return guard.response',
+      // A report page guards itself with one `guardReportPage` call that takes
+      // every capability it needs, checks them in turn, and then consumes the
+      // report read budget — which is the other reason that function exists.
+      //
+      // Phase 16 made the list it passes `REPORTS.<id>.needs` rather than a
+      // literal, in every page. That is what this asserts, and it is stronger
+      // than matching the literals: a page and its export route now read the
+      // *same object*, so neither can drift behind the other, and the list
+      // itself is pinned against `EXPECTED` by the assertion above.
+      expect(source, `${section} page: guardReportPage call`).toMatch(
+        new RegExp(
+          `guardReportPage\\(\\s*reportHref\\('${section}'\\),\\s*REPORTS\\.${section}\\.needs\\s*\\)`,
+        ),
       );
     },
   );
+
+  it.each(Object.entries(EXPECTED))(
+    'declares the %s report\u2019s capabilities in the registry, exactly',
+    (section, needs) => {
+      // The registry is now the single declaration, so this is where the
+      // expectation is pinned. `toStrictEqual` rather than `toContain`: a
+      // report that quietly gained a capability would be a widening nobody
+      // reviewed, and one that lost one would be the defect this file exists
+      // for.
+      expect([...REPORTS[section as ReportId].needs]).toStrictEqual([...needs]);
+    },
+  );
+
+  it.each(Object.keys(EXPECTED))(
+    'routes the %s export through the shared handler, under its own id',
+    (section) => {
+      const source = read(join(REPORTS_DIR, section, 'export', 'route.ts'));
+
+      // The whole route. It cannot carry a weaker capability list than its
+      // page, because it does not carry one at all: `reportExportRoute` reads
+      // `REPORTS[id].needs` and calls `guardExport` with it. What this checks
+      // is the one thing the route still decides — that it passes *its own*
+      // id, so `/reports/arrears/export` cannot serve the clients report.
+      expect(source, `${section} export`).toContain(`reportExportRoute('${section}')`);
+      expect(source, `${section} export`).not.toContain('guardExport');
+    },
+  );
+
+  it('checks the capability in the shared handler, once, for every report', () => {
+    const source = read(join(process.cwd(), 'lib', 'reports', 'export.ts'));
+
+    expect(source).toContain('guardExport(definition.needs)');
+    expect(source).toContain('if (!guard.ok) return guard.response');
+  });
 
   it('gives every section an export, so no report is a dead end', () => {
     for (const section of sections) {
@@ -148,30 +173,60 @@ describe('the reporting routes', () => {
   });
 
   it('exports no mutation from any report route', () => {
-    // §102 and §139: Phase 8 is a reading phase. A route handler exporting
+    // §102 and §139: reporting is a reading surface. A route handler exporting
     // POST, PUT, PATCH or DELETE under /reports would be a write surface
-    // nobody asked for.
+    // nobody asked for. Matched on the export rather than on a declaration
+    // style, because a handler can be a function or a const.
     for (const section of sections) {
       const source = read(join(REPORTS_DIR, section, 'export', 'route.ts'));
 
-      expect(source, section).toContain('export async function GET');
+      expect(source, section).toMatch(/export (const|async function) GET\b/);
       for (const verb of ['POST', 'PUT', 'PATCH', 'DELETE']) {
-        expect(source, `${section}: ${verb}`).not.toContain(
-          `export async function ${verb}`,
+        expect(source, `${section}: ${verb}`).not.toMatch(
+          new RegExp(`export (const|async function) ${verb}\\b`),
         );
       }
     }
   });
 
   it('builds every export response through the one shared helper', () => {
-    // So the content type, the attachment disposition, `no-store` and
-    // `nosniff` are set in one place rather than remembered five times.
+    // No route builds a response at all now, which is the strongest form of
+    // this assertion: the content type, the attachment disposition,
+    // `no-store` and `nosniff` are set once in the handler and cannot be
+    // forgotten by a report that is added later.
     for (const section of sections) {
       const source = read(join(REPORTS_DIR, section, 'export', 'route.ts'));
-
-      expect(source, section).toContain('csvResponse(');
       expect(source, section).not.toContain('new Response(');
     }
+
+    const handler = read(join(process.cwd(), 'lib', 'reports', 'export.ts'));
+
+    expect(handler).toContain('csvResponse(');
+    expect(handler).toContain('pdfResponse(');
+
+    // Both formats carry the same four headers, for the same reasons.
+    for (const header of [
+      'application/pdf',
+      'content-disposition',
+      'x-content-type-options',
+      'no-store',
+    ]) {
+      expect(handler, header).toContain(header);
+    }
+  });
+
+  it('gives every report both a spreadsheet and a document', () => {
+    // A branded PDF is not an alternative to the CSV — the two answer
+    // different needs. The file is for totalling; the document is what gets
+    // printed, signed off and handed across a desk. Every report produces
+    // both, from the same rows and the same fields.
+    const handler = read(join(process.cwd(), 'lib', 'reports', 'export.ts'));
+
+    expect(handler).toContain("=== 'pdf' ? 'pdf' : 'csv'");
+    expect(handler).toContain('renderReportPdf(');
+    // And the PDF reads the same `fields` the CSV does, rather than its own
+    // column list, which is what stops the two disagreeing.
+    expect(handler).toContain('csvColumns(fields)');
   });
 
   it('guards a statement with the capability of the record it states', () => {

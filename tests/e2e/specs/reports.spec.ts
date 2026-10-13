@@ -43,10 +43,20 @@ const REPORTS = [
   { name: 'clients', path: '/reports/clients', heading: /Clients/ },
   { name: 'penalties', path: '/reports/penalties', heading: /Late-payment charges/ },
   { name: 'grace period', path: '/reports/grace', heading: /Grace period/ },
+  // Phase 16. The Debt & Security module had the views and the worklists from
+  // Phase 14 but nothing that produced a document from them.
+  { name: 'aging', path: '/reports/aging', heading: /Aging and portfolio at risk/ },
+  { name: 'recovery', path: '/reports/recovery', heading: /Recovery file/ },
+  {
+    name: 'guarantor exposure',
+    path: '/reports/guarantors',
+    heading: /Guarantor exposure/,
+  },
+  { name: 'security held', path: '/reports/collateral', heading: /Security held/ },
 ] as const;
 
 test.describe('the reports hub', () => {
-  test('groups the reports instead of listing six links', async ({ page }) => {
+  test('groups the reports instead of listing them flat', async ({ page }) => {
     await page.goto('/reports');
     await expectNoErrorBoundary(page);
 
@@ -118,6 +128,61 @@ for (const report of REPORTS) {
       expect(body.split('\n').length).toBeGreaterThan(1);
       // The header row names columns rather than database identifiers.
       expect(body.split('\n')[0]).not.toMatch(/_id|uuid/i);
+    });
+
+    test('downloads a branded PDF whose figures are text, not a picture', async ({
+      page,
+    }) => {
+      await page.goto(report.path);
+
+      const link = page.getByRole('link', { name: /download pdf/i }).first();
+      if (!(await link.isVisible().catch(() => false))) {
+        test.skip(true, 'this report has no rows in the seeded data');
+        return;
+      }
+
+      const href = (await link.getAttribute('href')) ?? '';
+      const response = await page.request.get(href);
+
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toMatch(/application\/pdf/);
+      expect(response.headers()['content-disposition']).toMatch(/attachment/);
+      expect(response.headers()['cache-control']).toMatch(/no-store|private/);
+
+      const body = await response.body();
+      const text = body.toString('latin1');
+
+      // A real PDF, not an HTML error page with the wrong content type.
+      expect(text.startsWith('%PDF-')).toBe(true);
+      expect(text.trimEnd().endsWith('%%EOF')).toBe(true);
+
+      // The brief's constraint, checked where it matters: the document is
+      // drawn with text operators and the standard fonts, so a reader can
+      // search and copy it. A screenshot wrapped in a PDF would carry an
+      // image XObject and no font at all.
+      expect(text).toContain('/BaseFont /Helvetica');
+      expect(text).toContain(' Tj');
+
+      // The letterhead carries the identity the *application* is showing, not
+      // a name written into the document generator. This is read off the
+      // page's own brand block and looked for in the file, so a deployment
+      // that changes `company_settings` changes both or this fails.
+      const companyName = (
+        (await page
+          .locator('nav[aria-label="Main navigation"]')
+          .getByText(/\w/)
+          .first()
+          .textContent()) ?? ''
+      ).trim();
+
+      expect(companyName.length).toBeGreaterThan(2);
+      expect(text).toContain(`(${companyName})`);
+
+      // And the document says who ran it, and how long it is. A figure
+      // circulated without those cannot be reproduced, and a page separated
+      // from the others cannot be told from the last one.
+      expect(text).toMatch(/\(Page 1 of \d+\)/);
+      expect(text).toMatch(/\(Run by /);
     });
 
     test('prints without the application around it', async ({ page }) => {
@@ -249,12 +314,102 @@ test.describe('a filter cannot be used to read somebody else’s data', () => {
 test.describe('what a secretary/treasurer may read', () => {
   test.use({ storageState: stateFile('secretary') });
 
-  test('the hub offers only the reports they hold', async ({ page }) => {
+  /*
+   * The capability boundary, in a browser.
+   *
+   * Phase 16 put every report's capability list in one place, which both its
+   * page and its export route read. That makes drift impossible — but "the
+   * same list is used twice" is only worth having if the list is right, so
+   * this checks the boundary from outside: what a Secretary/Treasurer is
+   * offered, what they are refused, and that refusing is done by the *route*
+   * rather than by not drawing a link.
+   */
+
+  test('the hub offers the operational reports and not the financial ones', async ({
+    page,
+  }) => {
     await page.goto('/reports');
     await expectNoErrorBoundary(page);
 
-    // Operational reports, yes. The page must render rather than refuse,
-    // because every staff role holds `reports:view_operational`.
+    // The page renders rather than refusing: every staff role holds
+    // `reports:view_operational`.
     await expect(page.getByRole('heading', { name: /Reports/ }).first()).toBeVisible();
+
+    // Theirs. Collections and arrears are the work they do, and the recovery
+    // file is the record of chasing a borrower.
+    for (const title of ['Collections', 'Arrears', 'Recovery file']) {
+      await expect(
+        page.getByRole('link', { name: new RegExp(title) }).first(),
+        title,
+      ).toBeVisible();
+    }
+
+    // Not theirs. Each of these totals the *book* — what proportion is at
+    // risk, what the business is covered for, what its security is worth —
+    // and sits behind `reports:view_financial`. Listing one would be an
+    // invitation to a page that refuses, which is how somebody concludes the
+    // system is broken rather than that they are not entitled.
+    for (const title of [
+      'Loan portfolio',
+      'Late-payment charges',
+      'Aging and portfolio at risk',
+      'Guarantor exposure',
+      'Security held',
+    ]) {
+      await expect(
+        page.getByRole('link', { name: new RegExp(title) }),
+        title,
+      ).toHaveCount(0);
+    }
+  });
+
+  test('a report they do not hold turns them away, not just hides the link', async ({
+    page,
+  }) => {
+    // Typed, not clicked. Hiding a link is presentation; the page's own
+    // `guardReportPage` is the control, and it sends them where they can
+    // actually work rather than to an error.
+    await page.goto('/reports/guarantors');
+
+    await expect(page).not.toHaveURL(/\/reports\/guarantors/);
+    await expect(page.getByRole('heading', { name: /Guarantor exposure/ })).toHaveCount(
+      0,
+    );
+    await expectNoErrorBoundary(page);
+  });
+
+  test('and refuses its downloads, in both formats', async ({ page }) => {
+    // The control that matters: a download URL can be typed, copied, or kept
+    // after a role changes, so the route repeats the page's check. Both
+    // formats go through the same `guardExport`, with the same list, read
+    // from the same registry entry the page read.
+    for (const format of ['csv', 'pdf']) {
+      const response = await page.request.get(
+        `/reports/guarantors/export?format=${format}`,
+      );
+
+      expect(response.status(), format).toBe(403);
+      // A plain refusal, not an HTML page arriving as `guarantor-exposure.pdf`
+      // — which a download manager cannot interpret and a person opens to
+      // find markup. And it does not name the capability back: a refusal
+      // that lists what you would need is a map of the authorization model.
+      expect(response.headers()['content-type'], format).toMatch(/text\/plain/);
+      expect(await response.text(), format).not.toMatch(/reports:|guarantors:/);
+    }
+  });
+
+  test('while the report they do hold downloads in both formats', async ({ page }) => {
+    // The other half of the boundary: entitlement is not a blanket refusal.
+    for (const [format, type] of [
+      ['csv', /text\/csv/],
+      ['pdf', /application\/pdf/],
+    ] as const) {
+      const response = await page.request.get(
+        `/reports/recovery/export?format=${format}`,
+      );
+
+      expect(response.status(), format).toBe(200);
+      expect(response.headers()['content-type'], format).toMatch(type);
+    }
   });
 });

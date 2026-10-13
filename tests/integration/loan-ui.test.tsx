@@ -43,6 +43,7 @@ vi.mock('@/lib/loans/actions', () => ({
   returnLoanToDraftAction: vi.fn(),
   disburseLoanAction: vi.fn(),
   cancelLoanAction: vi.fn(),
+  rejectLoanAction: vi.fn(),
 }));
 
 const CASE_C = calculateLoan({
@@ -203,6 +204,17 @@ describe('the loan register', () => {
         createdAt: '2026-09-01T06:30:00Z',
         proposedDisbursementDate: '2026-09-05',
         disbursedAt: '2026-09-05T08:00:00Z',
+        // Phase 13. The register reads `loan_workflow_register`, which carries
+        // the product and the collection stage beside the loan.
+        productId: '5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b',
+        productCode: 'SL',
+        productName: 'Salary Loan',
+        workflowStage: 'active',
+        closureKind: null,
+        arrearsAmount: 0,
+        daysPastDue: 0,
+        totalOutstanding: 420_000,
+        guarantorCount: 1,
       },
       {
         id: '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e',
@@ -220,28 +232,56 @@ describe('the loan register', () => {
         createdAt: '2026-09-10T06:30:00Z',
         proposedDisbursementDate: '2026-09-15',
         disbursedAt: null,
+        productId: '6f7a8b9c-0d1e-4f2a-8b3c-4d5e6f7a8b9c',
+        productCode: 'QL',
+        productName: 'Quick Loan',
+        workflowStage: 'draft',
+        closureKind: null,
+        // A draft has no schedule, so the collection columns are genuinely
+        // unknown rather than zero.
+        arrearsAmount: null,
+        daysPastDue: null,
+        totalOutstanding: null,
+        guarantorCount: 0,
       },
     ],
     page: 1,
     hasMore: false,
   };
 
-  it('offers a labelled search box and status filter', () => {
-    render(<LoanRegister page={PAGE} filter={{ query: '', status: '' }} />);
+  const EMPTY_FILTER = { query: '', stage: '', productId: '' } as const;
+
+  const PRODUCTS = [
+    { id: '5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b', name: 'Salary Loan' },
+    { id: '6f7a8b9c-0d1e-4f2a-8b3c-4d5e6f7a8b9c', name: 'Quick Loan' },
+  ];
+
+  it('offers a labelled search box and product filter', () => {
+    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
 
     expect(screen.getByLabelText('Search')).toBeTruthy();
-    expect(screen.getByLabelText('Status')).toBeTruthy();
+    // Phase 13. The product, not the status: the workflow strip above the
+    // register is what navigates by status, and two controls answering the
+    // same question is how a filter row comes to contradict itself.
+    expect(screen.getByLabelText('Loan product')).toBeTruthy();
   });
 
-  it('offers every status as a filter', () => {
-    render(<LoanRegister page={PAGE} filter={{ query: '', status: '' }} />);
+  it('offers every product as a filter', () => {
+    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
 
-    const options = within(screen.getByLabelText('Status')).getAllByRole('option');
-    expect(options).toHaveLength(LOAN_STATUSES.length + 1);
+    const options = within(screen.getByLabelText('Loan product')).getAllByRole('option');
+    expect(options).toHaveLength(PRODUCTS.length + 1);
+  });
+
+  it('names the product each loan was written under', () => {
+    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
+
+    expect(screen.getAllByText('Salary Loan').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Quick Loan').length).toBeGreaterThan(0);
   });
 
   it('shows an em dash rather than zero for a draft with no total', () => {
-    render(<LoanRegister page={PAGE} filter={{ query: '', status: '' }} />);
+    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
 
     // A zero would read as "this loan is worth nothing". The figure does not
     // exist yet, and saying so is different from saying it is zero.
@@ -250,7 +290,7 @@ describe('the loan register', () => {
 
   it('renders both a card list and a table', () => {
     const { container } = render(
-      <LoanRegister page={PAGE} filter={{ query: '', status: '' }} />,
+      <LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />,
     );
 
     expect(container.querySelector('ul.md\\:hidden')).toBeTruthy();
@@ -258,7 +298,7 @@ describe('the loan register', () => {
   });
 
   it('states each status in words', () => {
-    render(<LoanRegister page={PAGE} filter={{ query: '', status: '' }} />);
+    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
 
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
@@ -266,7 +306,7 @@ describe('the loan register', () => {
 
   it('announces the result count politely', () => {
     const { container } = render(
-      <LoanRegister page={PAGE} filter={{ query: '', status: '' }} />,
+      <LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />,
     );
 
     const live = container.querySelector('[aria-live="polite"]');
@@ -280,7 +320,8 @@ describe('the loan register', () => {
           ...PAGE,
           loans: [{ ...PAGE.loans[0]!, clientName: '<img src=x onerror="alert(1)">' }],
         }}
-        filter={{ query: '', status: '' }}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
       />,
     );
 
@@ -292,7 +333,8 @@ describe('the loan register', () => {
     render(
       <LoanRegister
         page={{ loans: [], page: 1, hasMore: false }}
-        filter={{ query: '', status: '' }}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
       />,
     );
 
@@ -338,6 +380,54 @@ describe('the lifecycle panel', () => {
     // Not a single click. The first opens the confirmation; the second acts.
     expect(screen.getByRole('button', { name: 'Approve…' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Yes, approve/ })).toBeNull();
+  });
+
+  it('offers refusal beside approval, and only while a decision is pending', () => {
+    // Phase 13. Whoever may approve may refuse: a business that could grant
+    // the power to say yes without the power to say no is not one anybody
+    // wants. The control is the approver's, not the canceller's.
+    render(<LoanLifecyclePanel {...BASE} status="pending_approval" capabilities={ALL} />);
+
+    expect(screen.getByRole('button', { name: 'Reject this application' })).toBeTruthy();
+  });
+
+  it('offers no refusal on a draft, which has not been submitted for one', () => {
+    render(<LoanLifecyclePanel {...BASE} status="draft" capabilities={ALL} />);
+
+    expect(screen.queryByRole('button', { name: 'Reject this application' })).toBeNull();
+  });
+
+  it('withholds refusal from somebody who may cancel but not approve', () => {
+    render(
+      <LoanLifecyclePanel
+        {...BASE}
+        status="pending_approval"
+        capabilities={{ ...ALL, canApprove: false }}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Reject this application' })).toBeNull();
+    // Cancelling is a different decision and stays available.
+    expect(screen.getByRole('button', { name: /Cancel this loan/ })).toBeTruthy();
+  });
+
+  it('names the new approval failures in words a person can act on', () => {
+    render(
+      <LoanLifecyclePanel
+        {...BASE}
+        status="pending_approval"
+        capabilities={ALL}
+        approvalFailures={[
+          { code: 'salary_details_missing', detail: 'Salary Loan' },
+          { code: 'guarantor_consent_missing', detail: '2' },
+          { code: 'guarantor_ineligible', detail: '1' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/Salary Loan is a salary loan/)).toBeTruthy();
+    expect(screen.getByText(/2 guarantors have not signed/)).toBeTruthy();
+    expect(screen.getByText(/no longer eligible/)).toBeTruthy();
   });
 
   it('blocks approval and lists why when a rule is unmet', () => {

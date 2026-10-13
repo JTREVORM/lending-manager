@@ -28,9 +28,9 @@ export default async function NewLoanPage() {
         eyebrow="Lending Portfolio"
         icon={Banknote}
         back={{ href: ROUTES.loans, label: 'Loans' }}
-        title="Start a loan"
+        title="New loan application"
         description={
-          'A loan number is issued when the draft is saved. The amounts are recorded when the loan is approved.'
+          'Choose the product first: it decides the amounts, the periods, the rate and what else the application asks for. A loan number is issued when the draft is saved.'
         }
       />
 
@@ -41,9 +41,17 @@ export default async function NewLoanPage() {
         </Alert>
       ) : null}
 
+      {data.products.length === 0 ? (
+        <Alert tone="danger">
+          No loan product is currently active, so an application cannot be written. An
+          Owner or Administrator publishes one from Loan Products.
+        </Alert>
+      ) : null}
+
       <LoanForm
         clients={data.clients}
         frequencies={data.frequencies}
+        products={data.products}
         settings={data.settings}
       />
     </div>

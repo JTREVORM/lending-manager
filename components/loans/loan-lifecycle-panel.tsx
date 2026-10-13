@@ -12,6 +12,7 @@ import {
   approveLoanAction,
   cancelLoanAction,
   disburseLoanAction,
+  rejectLoanAction,
   returnLoanToDraftAction,
   submitLoanAction,
 } from '@/lib/loans/actions';
@@ -111,6 +112,17 @@ export function LoanLifecyclePanel({
 
       {status === 'pending_approval' && capabilities.canApprove ? (
         <ReturnForm loanId={loanId} />
+      ) : null}
+
+      {/*
+        Phase 13. Refusing is not cancelling, and the two sit apart on the
+        screen for the same reason they are two functions: returning an
+        application for correction asks for something, refusing it ends it.
+        Whoever may approve may refuse — a business that could grant the power
+        to say yes without the power to say no is not one anybody wants.
+      */}
+      {status === 'pending_approval' && capabilities.canApprove ? (
+        <RejectForm loanId={loanId} />
       ) : null}
 
       {status === 'approved' && capabilities.canDisburse ? (
@@ -502,6 +514,98 @@ function CancelForm({
             className="border-border text-text focus-visible:outline-accent min-h-11 rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Keep the loan
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/**
+ * Refusing an application.
+ *
+ * A credit decision, and recorded as one: the reason is required, it is
+ * permanent, and `closure_kind` separates it from a borrower who changed
+ * their mind. A report about lending standards counts refusals; it must not
+ * count withdrawals, and before Phase 13 it could not tell them apart.
+ */
+function RejectForm({ loanId }: { readonly loanId: string }) {
+  const [state, formAction, pending] = useActionState<ActionResult | undefined, FormData>(
+    rejectLoanAction,
+    undefined,
+  );
+
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+        }}
+        className="text-danger focus-visible:outline-accent min-h-11 text-sm font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        Reject this application
+      </button>
+    );
+  }
+
+  return (
+    <Card className="space-y-3">
+      <form action={formAction} className="space-y-3" noValidate>
+        <input type="hidden" name="loanId" value={loanId} />
+
+        {state?.message !== undefined ? (
+          <Alert tone={state.ok ? 'success' : 'danger'}>{state.message}</Alert>
+        ) : null}
+
+        <Alert tone="warning">
+          A rejected application is final and stays in the register as a record of the
+          decision. If the borrower only needs to correct something, return it for
+          correction instead.
+        </Alert>
+
+        <div className="min-w-0 space-y-1.5">
+          <Label htmlFor="reject-reason">
+            Reason for refusing
+            <span aria-hidden="true" className="text-danger ml-0.5">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </Label>
+          <textarea
+            id="reject-reason"
+            name="reason"
+            rows={2}
+            maxLength={500}
+            required
+            aria-invalid={state?.fieldErrors?.reason !== undefined}
+            className="border-border bg-surface text-text focus-visible:outline-accent aria-invalid:border-danger w-full rounded-lg border p-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2"
+          />
+          <p className="text-text-muted text-sm">
+            Recorded against the application permanently, and visible to anyone who opens
+            it.
+          </p>
+          {state?.fieldErrors?.reason?.[0] !== undefined ? (
+            <p role="alert" className="text-danger text-sm">
+              {state.fieldErrors.reason[0]}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Rejecting…' : 'Confirm rejection'}
+          </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+            }}
+            className="border-border text-text focus-visible:outline-accent min-h-11 rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            Keep it open
           </button>
         </div>
       </form>

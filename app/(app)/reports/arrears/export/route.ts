@@ -1,60 +1,17 @@
-import { contextCan } from '@/lib/auth/context';
-import { getCompanyBranding } from '@/lib/data/company';
-import {
-  getArrearsReport,
-  latestRemarkByClient,
-  type ClientRemarkSummary,
-} from '@/lib/data/reports';
-import { toCsv } from '@/lib/domain/reporting';
-import { arrearsCsvColumns, csvResponse } from '@/lib/reports/csv';
-import { guardExport } from '@/lib/reports/export-guard';
-import {
-  parseDelinquencyStates,
-  parseOverdueSort,
-  parseUuid,
-  singleParam,
-  type ParamRecord,
-} from '@/lib/reports/filters';
+import { reportExportRoute } from '@/lib/reports/export';
 
 /**
- * The arrears report as CSV.
+ * The arrears report, as CSV or as a branded PDF.
  *
- * The remark columns are present only for a caller who may read remarks. Note
- * that the page attaches remarks to the visible page of rows; the export needs
- * them for the whole filtered set, so it reads them for the exported rows in
- * one query rather than per row.
+ * One line, because everything that used to be written here is now read from
+ * the registry: the capability list, the filter parsing, the loader, the
+ * columns and the filename. The capability list in particular — it is the
+ * same object the page checks, so an export route cannot drift behind its
+ * page, which is a security defect that looks like a typo.
+ *
+ * The file exists per report rather than as one `[report]/export` handler
+ * because Next resolves a static path segment before a dynamic one: while
+ * `arrears/` is a real folder, `/reports/arrears/export` would never
+ * reach a dynamic sibling. So this is the shape the router requires.
  */
-export async function GET(request: Request): Promise<Response> {
-  const guard = await guardExport(['reports:view_operational', 'delinquency:view']);
-  if (!guard.ok) return guard.response;
-
-  const withRemarks = contextCan(guard.context, 'clients:remarks_view');
-
-  const url = new URL(request.url);
-  const params: ParamRecord = Object.fromEntries(url.searchParams.entries());
-
-  const { branding } = await getCompanyBranding();
-
-  const report = await getArrearsReport({
-    states: parseDelinquencyStates(params),
-    sort: parseOverdueSort(params),
-    clientId: parseUuid(params, 'clientId'),
-    query: singleParam(params, 'query'),
-    pageSize: 1,
-    withRemarks: false,
-  });
-
-  const remarks: ReadonlyMap<string, ClientRemarkSummary> = withRemarks
-    ? await latestRemarkByClient(report.exportRows.map((row) => row.clientId))
-    : new Map<string, ClientRemarkSummary>();
-
-  const rows = report.exportRows.map((row) => ({
-    ...row,
-    latestRemark: remarks.get(row.clientId) ?? null,
-  }));
-
-  return csvResponse(
-    toCsv(arrearsCsvColumns(branding.timezone, { withRemarks }), rows),
-    'arrears.csv',
-  );
-}
+export const GET = reportExportRoute('arrears');

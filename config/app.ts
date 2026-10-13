@@ -65,7 +65,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  * Delivery phase of this codebase. Used by the UI to label functionality that
  * is deliberately not built yet, so staff are never shown a dead control.
  */
-export const CURRENT_PHASE = 12 as const;
+export const CURRENT_PHASE = 15 as const;
 
 /** Canonical route paths, so links are never hand-typed across the codebase. */
 export const ROUTES = {
@@ -80,6 +80,29 @@ export const ROUTES = {
   overdue: '/overdue',
   reports: '/reports',
 
+  /**
+   * Phase 14. Debt & Security.
+   *
+   * `/overdue` stays what it was — the arrears worklist a collections officer
+   * opens every morning — and `/recovery` is the hub above it: aging, risk,
+   * the chase, the promises and the security. Two routes rather than one
+   * because they answer different questions, and the morning list should not
+   * have to load a portfolio summary to show itself.
+   */
+  recovery: '/recovery',
+  collectionSummary: '/payments/summary',
+  guarantorRegister: '/guarantors/register',
+
+  /**
+   * Phase 15. The notification stream.
+   *
+   * Its own route rather than a panel only: the bell holds the five most
+   * recent unread, which is what somebody standing at the counter needs, and
+   * everything else — the history, the filters, marking a batch read — is a
+   * screen.
+   */
+  notifications: '/notifications',
+
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',
   transfers: '/finance/transfers',
@@ -91,6 +114,20 @@ export const ROUTES = {
   reconciliation: '/finance/reconciliation',
   newReconciliation: '/finance/reconciliation/new',
   ledger: '/finance/ledger',
+  /**
+   * Phase 18. The trial balance.
+   *
+   * Under `/finance` rather than `/reports`, which is where a treasurer looks
+   * for it and what the brief asked for. It is nonetheless a document: the
+   * export route beside it reuses the reporting pipeline's fields, CSV writer
+   * and letterheaded PDF renderer, so the file it produces is the same shape
+   * as every other statement this system issues.
+   *
+   * `ledger:view` by prefix, the same capability as the general ledger it
+   * aggregates — and the right one, because a trial balance says nothing the
+   * ledger does not.
+   */
+  trialBalance: '/finance/trial-balance',
 
   settings: '/settings',
   /**

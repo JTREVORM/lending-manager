@@ -29,6 +29,7 @@
 import { z } from 'zod';
 
 import { MAX_SUPPORTED_TERM_MONTHS } from '@/lib/domain/loan';
+import { MAX_BPS } from '@/lib/domain/rate';
 import { ugxAmountFromText, uuidSchema } from './common';
 
 /**
@@ -124,12 +125,51 @@ const optionalNote = (label: string, max: number) =>
     .optional()
     .transform((value) => value ?? null);
 
-/** Starting a loan draft. */
+/**
+ * The rate a loan officer proposes, where the product permits one.
+ *
+ * Optional, and null means "the product's standard rate". The agreed rate is
+ * still set by `approve_loan`, which refuses a proposal outside what the
+ * product allows and refuses any proposal at all on a product that does not
+ * permit an override — so this is a request, not a price.
+ */
+export const proposedInterestRateSchema = z
+  // The empty branch comes first, deliberately. `z.coerce.number()` turns `''`
+  // into `0`, which passes every numeric rule below it — so an empty field
+  // would silently become a zero-per-cent proposal rather than "the product's
+  // own rate". Found by a test that asserts blank means null.
+  .union([
+    z.literal(''),
+    z.coerce
+      .number()
+      .int('Enter the rate in basis points, as a whole number.')
+      .min(0, 'A rate cannot be negative.')
+      .max(MAX_BPS, 'That rate is implausibly high.'),
+  ])
+  .transform((value) => (value === '' ? null : value))
+  .nullable()
+  .optional()
+  .transform((value) => value ?? null);
+
+/**
+ * Starting a loan draft.
+ *
+ * Phase 13 puts the product first. It is required rather than defaulted,
+ * because which product a loan is written under decides the rate, the
+ * permitted amounts, the cadences, the guarantor count and which questions
+ * the application asks — and a loan that silently landed on whichever product
+ * happened to be the default would be a loan nobody chose the terms of.
+ *
+ * `loans_stamp_product` still supplies the default for a row written by some
+ * other route, which is a backstop rather than a path this form uses.
+ */
 export const createLoanSchema = z.object({
   clientId: uuidSchema,
+  loanProductId: uuidSchema,
   principalAmount: loanPrincipalSchema,
   loanTermMonths: loanTermSchema,
   repaymentFrequency: repaymentFrequencySchema,
+  proposedInterestRateBps: proposedInterestRateSchema,
   proposedDisbursementDate: proposedDisbursementDateSchema,
   notes: optionalNote('Notes', 2000),
 });
@@ -183,8 +223,27 @@ export const cancelLoanSchema = z.object({
     .max(500, 'A reason cannot be longer than 500 characters.'),
 });
 
-/** Filtering the loan register. */
+/**
+ * Filtering the loan register.
+ *
+ * Phase 13 adds two axes the loan module navigates by: the workflow stage —
+ * the thirteen views the brief names — and the product. `status` stays,
+ * because a link built before this phase should keep working and because
+ * "every cancelled loan" is a question somebody still asks.
+ */
 export const loanSearchSchema = z.object({
+  stage: z
+    .union([z.string().trim().max(40), z.literal('')])
+    .transform((value) => (value === '' ? null : value))
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  productId: z
+    .union([uuidSchema, z.literal('')])
+    .transform((value) => (value === '' ? null : value))
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
   query: z
     .union([z.string().trim().max(120), z.literal('')])
     .transform((value) => (value === '' ? null : value))

@@ -254,8 +254,12 @@ describe('column type discipline', () => {
     // `money` is worse again: its output depends on the server's lc_monetary.
     for (const { name, sql } of migrations) {
       const body = declarationsOnly(sql);
+      // Each alternative is bounded on both sides. `\breal` alone matched
+      // `realised_amount` in the Phase 14 collateral table — a column name,
+      // not a type, and the kind of false positive that teaches people to
+      // rename honest columns to appease a regular expression.
       expect(body, `${name} uses a float type`).not.toMatch(
-        /\b(real|double\s+precision|float4|float8|float\b)/i,
+        /\b(real|double\s+precision|float4|float8|float)\b/i,
       );
       expect(body, `${name} uses the money type`).not.toMatch(/\bmoney\b/i);
     }
@@ -321,6 +325,13 @@ describe('column type discipline', () => {
       // Phase 12, for the same reason as the Phase 4 snapshots: the row
       // records the moment the product's terms were fixed onto the loan.
       loan_product_snapshots: 'captured_at',
+      // Phase 15. A notification *is* the record that something occurred, and
+      // a read receipt is the record that somebody read it, so in both cases
+      // the creation instant already has a name that says what it means. A
+      // `created_at` beside either would be two columns holding one value,
+      // which is how they eventually come to disagree.
+      notifications: 'occurred_at',
+      notification_reads: 'read_at',
     };
 
     /**
@@ -390,6 +401,19 @@ describe('column type discipline', () => {
       // (product_id, branch_id), so there is no non-key column to amend. A
       // product is offered at a branch or it is not.
       'loan_product_branches',
+      // Phase 14. Append-only in exactly the way `client_remarks` is: UPDATE
+      // and DELETE are refused outright by statement-level trigger, and a
+      // mistake is corrected by appending a correction that points at the
+      // entry it supersedes. An `updated_at` would be a column that can never
+      // advance, and worse, one that implies the note can be reworded after
+      // the loan goes bad — which is precisely what the table exists to
+      // prevent.
+      'loan_recovery_actions',
+      // Phase 15. Both append-only, and neither has anything an update could
+      // change: a notification records what happened and a receipt records
+      // that it was read. Nothing un-happens and nobody un-reads.
+      'notifications',
+      'notification_reads',
     ]);
 
     for (const table of createdTables) {
@@ -702,6 +726,7 @@ describe('types stay in step with the schema', () => {
       'loan_guarantors_stamp_actor',
       'guarantor_consent_terms_guard',
       'audit_loan_guarantors_frozen',
+      'loan_documents_guard',
 
       // --- Phase 12 ---------------------------------------------------------
       // Three triggers on `loan_products`: the guard rail that keeps a
@@ -750,6 +775,26 @@ describe('types stay in step with the schema', () => {
       'ensure_penalty_applied',
       'apply_eligible_penalties',
       'is_table_owner_session',
+      // Phase 14. Trigger functions on the security and recovery tables.
+      'loan_collateral_guard',
+      'loan_recovery_actions_stamp_author',
+      // Phase 15. The ten generation triggers, and the one writer they all
+      // call. `raise_notification` is definer-only and granted to nobody —
+      // a session that could raise a notification could address one to any
+      // capability it liked — so none of these is reachable over the API and
+      // none is generated. `mark_notifications_read` *is* callable and *is*
+      // in the types; it is the only one.
+      'raise_notification',
+      'notify_loan_transition',
+      'notify_payment_reversed',
+      'notify_penalty_applied',
+      'notify_promise_recorded',
+      'notify_collateral_realised',
+      'notify_transfer_pending',
+      'notify_expense_pending',
+      'notify_reconciliation_variance',
+      'notify_low_float',
+      'notify_client_blacklisted',
     ]);
 
     for (const functionName of functionNames) {

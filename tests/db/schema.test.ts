@@ -66,6 +66,12 @@ describeDb('tables', () => {
     // three snapshots that make it evidence rather than a view over today's
     // records.
     'loan_client_snapshots',
+    // Phase 14: the security a loan is written against, and the recovery
+    // effort recorded when it goes bad.
+    'loan_collateral',
+    // Phase 13: the evidence filed with an application — payslips, employment
+    // letters, trading licences, a guarantor's identification or signature.
+    'loan_documents',
     'loan_guarantor_snapshots',
     'loan_guarantors',
     'loan_identity_snapshots',
@@ -83,9 +89,14 @@ describeDb('tables', () => {
     'loan_product_branches',
     'loan_product_snapshots',
     'loan_products',
+    'loan_recovery_actions',
     'loan_salary_details',
     'loan_schedules',
     'loans',
+    // Phase 15: one row per noteworthy event, addressed to the capability
+    // that may read it, and who has read which. Both append-only.
+    'notification_reads',
+    'notifications',
     // Phase 11: fees and income that is not interest or a penalty. Those two
     // are written by the lending functions and refused here.
     'other_income',
@@ -314,6 +325,21 @@ describeDb('foreign keys', () => {
       // and the audit trail holds the authoritative record either way.
       'loan_client_snapshots.client_id -> clients (r)',
       'loan_client_snapshots.loan_id -> loans (c)',
+      // Phase 14. `r` on the loan: a pledged item is evidence of what the
+      // business agreed to lend against, so the loan cannot be deleted out
+      // from under it. `n` on the three actors, because provenance that has
+      // been archived should degrade to "unknown" rather than make an account
+      // undeletable — the item's own history is in the status and the dates.
+      'loan_collateral.created_by -> profiles (n)',
+      'loan_collateral.loan_id -> loans (r)',
+      'loan_collateral.realised_by -> profiles (n)',
+      'loan_collateral.released_by -> profiles (n)',
+      // Phase 13. `r` on both: a document is evidence, so the loan it was
+      // filed against and the guarantor it belongs to cannot be deleted out
+      // from under it.
+      'loan_documents.created_by -> profiles (n)',
+      'loan_documents.loan_guarantor_id -> loan_guarantors (r)',
+      'loan_documents.loan_id -> loans (r)',
       // Phase 13. `r`, never `n`: SET NULL on an append-only table is
       // implemented as an UPDATE, and the guard here is statement-level, so
       // a SET NULL reference would make deleting any client fail.
@@ -326,6 +352,10 @@ describeDb('foreign keys', () => {
       'loan_guarantors.guarantor_client_id -> clients (r)',
       'loan_guarantors.guarantor_id -> guarantors (r)',
       'loan_guarantors.loan_id -> loans (r)',
+      // Phase 14. `n`, like the other actor columns on this table: a release
+      // keeps its reason and its date whatever becomes of the account that
+      // made it.
+      'loan_guarantors.released_by -> profiles (n)',
       'loan_identity_snapshots.loan_id -> loans (c)',
       // Phase 5. `c` cascades for the same reason: a collection schedule is
       // part of its loan, and an installment is part of the contractual month
@@ -362,6 +392,15 @@ describeDb('foreign keys', () => {
       'loan_products.created_by -> profiles (n)',
       'loan_products.default_repayment_frequency -> repayment_frequencies (r)',
       'loan_products.updated_by -> profiles (n)',
+      // Phase 14. `r` throughout, and `r` on `created_by` specifically — the
+      // same reasoning `client_remarks` records: SET NULL is implemented as an
+      // UPDATE, which this append-only table refuses outright, so a `n`
+      // reference would make deleting any profile fail with a confusing
+      // error. `created_by_label` keeps the author readable after the account
+      // is archived.
+      'loan_recovery_actions.corrects_action_id -> loan_recovery_actions (r)',
+      'loan_recovery_actions.created_by -> profiles (r)',
+      'loan_recovery_actions.loan_id -> loans (r)',
       'loan_salary_details.created_by -> profiles (n)',
       'loan_salary_details.loan_id -> loans (r)',
       'loan_schedules.generated_by -> profiles (r)',
@@ -379,6 +418,17 @@ describeDb('foreign keys', () => {
       'loans.loan_product_id -> loan_products (r)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
+      // Phase 15. `r` on every reference both tables hold, and that is the
+      // whole point: they refuse UPDATE and DELETE, and SET NULL and CASCADE
+      // are both mutations. A nulling reference would make deleting a profile
+      // fail with a confusing error about append-only tables rather than a
+      // clear one about the reference.
+      'notification_reads.notification_id -> notifications (r)',
+      'notification_reads.profile_id -> profiles (r)',
+      'notifications.actor_profile_id -> profiles (r)',
+      'notifications.audience_branch_id -> branches (r)',
+      'notifications.audience_permission -> permissions (r)',
+      'notifications.audience_profile_id -> profiles (r)',
       // Phase 6. `r` restricts everywhere, with no `c` and no `n`: a payment
       // is financial evidence, so nothing it references may be deleted out
       // from under it and no attribution may be degraded to NULL. That is

@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
-import { ExportLink } from '@/components/reports/export-link';
+import { ExportActions } from '@/components/reports/export-actions';
 import { PrintButton } from '@/components/reports/print-button';
 import { ReportEmpty } from '@/components/reports/report-empty';
 import { ReportFilters } from '@/components/reports/report-filters';
@@ -13,6 +13,7 @@ import { ReportPagination } from '@/components/reports/report-pagination';
 import { ReportTable, type ReportColumn } from '@/components/reports/report-table';
 import { ROUTES } from '@/config/app';
 import { guardReportPage } from '@/lib/auth/guard';
+import { REPORTS, reportHref } from '@/lib/reports/registry';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getClientReport, type ClientReportRow } from '@/lib/data/reports';
 import { CLIENT_STATUS_LABELS, isClientStatus } from '@/lib/domain/client';
@@ -54,10 +55,7 @@ export default async function ClientReportPage({
 }: {
   readonly searchParams: Promise<ParamRecord>;
 }) {
-  await guardReportPage(`${ROUTES.reports}/clients`, [
-    'reports:view_operational',
-    'clients:view',
-  ]);
+  await guardReportPage(reportHref('clients'), REPORTS.clients.needs);
 
   const params = await searchParams;
   const { branding } = await getCompanyBranding();
@@ -160,9 +158,7 @@ export default async function ClientReportPage({
         secondaryActions={
           <>
             <PrintButton />
-            <ExportLink
-              href={`${ROUTES.reports}/clients/export${query === '' ? '' : `?${query}`}`}
-            />
+            <ExportActions report="clients" filterQuery={query} />
           </>
         }
       />

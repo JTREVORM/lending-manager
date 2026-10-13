@@ -79,7 +79,7 @@ export default async function OverduePage({
         eyebrow="Delinquency"
         icon={AlertTriangle}
         title="Overdue"
-        description="Loans with something uncovered: what is due now, how late it is, and whether a late-payment charge applies. Settled loans are not listed."
+        description="What is due now, how late it is, and whether a charge applies. Settled loans are not listed."
       />
 
       <OverdueList

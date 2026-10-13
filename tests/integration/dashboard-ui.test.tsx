@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CollectionSheet } from '@/components/dashboard/collection-sheet';
@@ -156,13 +157,84 @@ describe('a stat card', () => {
     expect(screen.getByText('UGX 95,000')).toBeInTheDocument();
   });
 
-  it('renders the definition rather than hiding it in a tooltip', () => {
-    // A definition nobody can see is a definition nobody agrees on.
+  it('keeps the definition in the card, behind an info control', () => {
+    // A definition nobody can reach is a definition nobody agrees on. It is
+    // no longer *printed* under the figure — that turned a dashboard into a
+    // page of documentation — but it is still in the card, still in the
+    // accessibility tree, and still one press away.
     render(<StatCard label="Total collected" value="UGX 10" metric="total_collected" />);
 
     expect(
       screen.getByText(METRIC_DEFINITIONS.total_collected.definition),
     ).toBeInTheDocument();
+
+    const info = screen.getByRole('button', { name: /what total collected means/i });
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    expect(info).toHaveAttribute(
+      'aria-controls',
+      screen.getByText(METRIC_DEFINITIONS.total_collected.definition).id,
+    );
+  });
+
+  it('shows the definition when the info control is pressed', async () => {
+    const user = userEvent.setup();
+    render(<StatCard label="Total collected" value="UGX 10" metric="total_collected" />);
+
+    const info = screen.getByRole('button', { name: /what total collected means/i });
+    await user.click(info);
+
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    // One copy of the sentence, whether it is open or shut: two would mean a
+    // screen reader hearing it twice.
+    expect(
+      screen.getAllByText(METRIC_DEFINITIONS.total_collected.definition),
+    ).toHaveLength(1);
+    expect(
+      screen.getByText(METRIC_DEFINITIONS.total_collected.definition).className,
+    ).not.toContain('sr-only');
+
+    await user.click(info);
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps the info control outside a linked card anchor', () => {
+    // A `<button>` inside an `<a>` is invalid, and a press on it would open
+    // the definition *and* navigate away from the card being asked about.
+    render(
+      <StatCard
+        label="Arrears"
+        value="UGX 1"
+        definition="What is past due."
+        href="/overdue"
+      />,
+    );
+
+    const link = screen.getByRole('link');
+    const info = screen.getByRole('button', { name: /what arrears means/i });
+    expect(link.contains(info)).toBe(false);
+  });
+
+  it('holds one figure, one supporting line, and no paragraph', () => {
+    // The shape of the card is the point of the simplification pass: a
+    // title, a figure, and at most one short line under it.
+    render(
+      <StatCard
+        label="Principal disbursed"
+        value="UGX 26,500,000"
+        secondary="26 loans paid out"
+        metric="principal_disbursed"
+      />,
+    );
+
+    expect(screen.getByText('Principal disbursed')).toBeInTheDocument();
+    expect(screen.getByText('UGX 26,500,000')).toBeInTheDocument();
+    expect(screen.getByText('26 loans paid out')).toBeInTheDocument();
+
+    // The definition is present but not laid out — it carries `sr-only`
+    // until the control is pressed, so it occupies no height in the card.
+    expect(
+      screen.getByText(METRIC_DEFINITIONS.principal_disbursed.definition).className,
+    ).toContain('sr-only');
   });
 
   it('becomes a real link when it leads somewhere', () => {

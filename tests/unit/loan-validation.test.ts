@@ -25,9 +25,16 @@ import {
 
 const VALID_LOAN = {
   clientId: '0f8fad5b-d9cb-469f-a165-70867728950e',
+  // Phase 13. The product is required rather than defaulted: it decides the
+  // rate, the permitted amounts, the cadences, the guarantor count and which
+  // questions the application asks, and a loan that silently landed on
+  // whichever product happened to be the default would be a loan nobody chose
+  // the terms of.
+  loanProductId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
   principalAmount: '600000',
   loanTermMonths: '3',
   repaymentFrequency: 'daily',
+  proposedInterestRateBps: '',
   proposedDisbursementDate: '2026-10-15',
   notes: '',
 };
@@ -152,6 +159,7 @@ describe('starting a loan', () => {
 
   it.each([
     'clientId',
+    'loanProductId',
     'principalAmount',
     'loanTermMonths',
     'repaymentFrequency',
@@ -159,6 +167,27 @@ describe('starting a loan', () => {
   ])('requires %s', (field) => {
     const parsed = createLoanSchema.safeParse({ ...VALID_LOAN, [field]: '' });
     expect(parsed.success, field).toBe(false);
+  });
+
+  it('treats the proposed rate as optional, meaning the product\u2019s own', () => {
+    // Blank is not "zero per cent": it is "whatever this product charges",
+    // which `approve_loan` resolves from the product at the moment of the
+    // decision.
+    const parsed = createLoanSchema.safeParse({
+      ...VALID_LOAN,
+      proposedInterestRateBps: '',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.proposedInterestRateBps).toBeNull();
+  });
+
+  it('accepts a proposed rate in basis points', () => {
+    const parsed = createLoanSchema.safeParse({
+      ...VALID_LOAN,
+      proposedInterestRateBps: '1200',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.proposedInterestRateBps).toBe(1200);
   });
 
   it('treats notes as optional', () => {

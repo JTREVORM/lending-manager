@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { InfoHint } from '@/components/ui/info-hint';
 import { cn } from '@/lib/utils/cn';
 import { METRIC_DEFINITIONS, type MetricKey } from '@/lib/domain/reporting';
 
@@ -30,10 +31,13 @@ export interface StatCardProps {
   /** A second line: a count beside a total, or what the figure excludes. */
   readonly secondary?: ReactNode;
   /**
-   * What this figure means, in one sentence. Rendered, not a tooltip: a
-   * definition nobody can see is a definition nobody agrees on, and two people
-   * reading the same card differently is how a business acts on a number
-   * twice.
+   * What this figure means, in one sentence.
+   *
+   * Carried by every card, and reachable from every card — behind the small
+   * info control in its corner rather than printed under the figure. The
+   * sentence still exists, in the markup, for a screen reader and for
+   * anybody who presses the icon; what it no longer does is turn a strip of
+   * four figures into twelve lines of prose.
    */
   readonly definition?: string;
   /** Pull the definition from the shared table instead of repeating it. */
@@ -52,18 +56,28 @@ export interface StatCardProps {
 /**
  * One figure on a dashboard.
  *
- * ## Every card states what it means
+ * ## Every card states what it means, and says it once
  *
  * `definition` is required in practice, either directly or via `metric`, and a
  * test asserts that every dashboard card carries one. A money figure with a
  * three-word label — "Outstanding", "Collected" — is the thing that makes two
  * staff members confident about different numbers.
  *
+ * It is reached through `InfoHint` rather than printed: the card holds the
+ * title, the figure and at most one supporting line, which is what makes a
+ * row of four readable at a glance. See `InfoHint` for why the sentence is
+ * still in the markup either way.
+ *
  * ## A linked card is a link
  *
  * When `href` is given the whole card becomes an anchor, so it is reachable by
  * keyboard and announced as a link. A `div` with an `onClick` would look
  * identical and be unusable without a mouse.
+ *
+ * Which is why the info control sits *outside* that anchor, pinned to the
+ * card's corner by its wrapper: a `<button>` inside an `<a>` is invalid, and
+ * in practice a press on it would both open the definition and navigate away
+ * from the card being asked about.
  */
 export function StatCard({
   label,
@@ -108,10 +122,6 @@ export function StatCard({
           ) : null}
         </div>
       </div>
-
-      {text !== undefined ? (
-        <p className="t-caption mt-2.5 leading-snug break-words">{text}</p>
-      ) : null}
     </>
   );
 
@@ -122,17 +132,28 @@ export function StatCard({
     // translucent surface there muddies both.
     'bg-surface min-w-0 rounded-2xl border p-4 shadow-xs',
     TONES[tone],
+    // Room for the info control in the corner, so a long label never runs
+    // underneath it.
+    text === undefined ? '' : 'pr-9',
     href !== undefined
       ? 'lift block focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2'
       : '',
   );
 
-  return href === undefined ? (
-    <div className={classes}>{body}</div>
-  ) : (
-    <Link href={href} className={classes}>
-      {body}
-    </Link>
+  return (
+    <div className="relative min-w-0">
+      {href === undefined ? (
+        <div className={classes}>{body}</div>
+      ) : (
+        <Link href={href} className={classes}>
+          {body}
+        </Link>
+      )}
+
+      {text === undefined ? null : (
+        <InfoHint className="absolute top-2 right-1.5" text={text} subject={label} />
+      )}
+    </div>
   );
 }
 

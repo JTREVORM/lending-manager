@@ -7,6 +7,13 @@ import { AuditLog } from '@/components/audit/audit-log';
 import { PaymentRecorded } from '@/components/payments/payment-recorded';
 import { PageHeader, ActionLink, SectionHeader } from '@/components/ui/page-header';
 import type { AuditEntry } from '@/lib/domain/audit';
+import {
+  PERIOD_SHORTCUTS,
+  REPORTS,
+  REPORT_GROUPS,
+  REPORT_GROUP_LABELS,
+  REPORT_IDS,
+} from '@/lib/reports/registry';
 
 /**
  * The four screens the pre-Phase-9 review called out as weak or unfinished,
@@ -134,7 +141,7 @@ describe('the settings page', () => {
     // system can carry: an approved loan keeps the rate, grace period and
     // penalty rate captured at approval.
     expect(page).toMatch(/does not change an existing loan/i);
-    expect(page).toMatch(/approved after the change|after<\/strong> the change/i);
+    expect(page).toMatch(/approved <strong>after<\/strong>/i);
   });
 
   it('separates what is editable from what is a historical snapshot', () => {
@@ -150,16 +157,42 @@ describe('the settings page', () => {
 describe('the reports hub', () => {
   const page = read('app/(app)/reports/page.tsx');
 
-  it('groups the reports rather than listing six identical cards', () => {
-    expect(page).toContain('money-in');
-    expect(page).toContain('behind');
-    expect(page).toContain('book');
+  /*
+   * Phase 16 moved the hub's own array of reports — titles, groups, period
+   * chips, capabilities — into `lib/reports/registry.ts`, because the same
+   * facts existed here, in each page's guard and in each export route. These
+   * three assertions follow it there, which makes them stronger: they now
+   * check the single declaration rather than one of four copies of it.
+   */
+
+  it('groups the reports rather than listing a dozen identical cards', () => {
+    expect([...REPORT_GROUPS]).toContain('money-in');
+    expect([...REPORT_GROUPS]).toContain('behind');
+    expect([...REPORT_GROUPS]).toContain('book');
+
+    // Every report belongs to a group that has a heading, or it renders in a
+    // section with no title.
+    for (const id of REPORT_IDS) {
+      expect([...REPORT_GROUPS], id).toContain(REPORTS[id].group);
+      expect(REPORT_GROUP_LABELS[REPORTS[id].group].title.length).toBeGreaterThan(0);
+    }
+
+    expect(page).toContain('REPORT_GROUP_LABELS');
   });
 
-  it('offers period shortcuts on the report that takes a period', () => {
-    expect(page).toContain("value: 'today'");
-    expect(page).toContain("value: 'week'");
-    expect(page).toContain("value: 'month'");
+  it('offers period shortcuts on the reports that take a period', () => {
+    expect(PERIOD_SHORTCUTS.map((period) => period.value)).toStrictEqual([
+      'today',
+      'week',
+      'month',
+    ]);
+
+    // The chips appear only where the report has a date range to pre-set.
+    // Offering "This week" on a report that ignores it would be a control
+    // that does nothing.
+    expect(REPORTS.collections.defaultPeriod).toBe('today');
+    expect(REPORTS.penalties.defaultPeriod).toBeUndefined();
+    expect(page).toContain('report.defaultPeriod === undefined');
   });
 
   it('reads its headline figures from the dashboard summaries', () => {
@@ -177,8 +210,19 @@ describe('the reports hub', () => {
 
   it('still requires every capability a report needs before listing it', () => {
     // `needs` is a conjunction. A report listed without its data capability
-    // is an invitation to a blank page.
-    expect(page).toContain('report.needs.every(');
+    // is an invitation to a blank page, and a blank page is how somebody
+    // concludes the system is broken rather than that they are not entitled.
+    expect(page).toContain('REPORTS[id].needs.every(');
+
+    // And every report declares at least the reporting capability plus the
+    // capability of the data it renders — never one alone.
+    for (const id of REPORT_IDS) {
+      expect(REPORTS[id].needs.length, id).toBeGreaterThanOrEqual(2);
+      expect(
+        REPORTS[id].needs.some((permission) => permission.startsWith('reports:')),
+        id,
+      ).toBe(true);
+    }
   });
 });
 

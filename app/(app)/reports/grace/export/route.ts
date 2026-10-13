@@ -1,19 +1,17 @@
-import { getCompanyBranding } from '@/lib/data/company';
-import { getGracePeriodReport } from '@/lib/data/reports';
-import { toCsv } from '@/lib/domain/reporting';
-import { csvResponse, portfolioCsvColumns } from '@/lib/reports/csv';
-import { guardExport } from '@/lib/reports/export-guard';
+import { reportExportRoute } from '@/lib/reports/export';
 
-/** Loans in their grace period, as CSV. */
-export async function GET(): Promise<Response> {
-  const guard = await guardExport(['reports:view_operational', 'delinquency:view']);
-  if (!guard.ok) return guard.response;
-
-  const { branding } = await getCompanyBranding();
-  const report = await getGracePeriodReport({ pageSize: 1 });
-
-  return csvResponse(
-    toCsv(portfolioCsvColumns(branding.timezone), report.exportRows),
-    'grace-period.csv',
-  );
-}
+/**
+ * The grace report, as CSV or as a branded PDF.
+ *
+ * One line, because everything that used to be written here is now read from
+ * the registry: the capability list, the filter parsing, the loader, the
+ * columns and the filename. The capability list in particular — it is the
+ * same object the page checks, so an export route cannot drift behind its
+ * page, which is a security defect that looks like a typo.
+ *
+ * The file exists per report rather than as one `[report]/export` handler
+ * because Next resolves a static path segment before a dynamic one: while
+ * `grace/` is a real folder, `/reports/grace/export` would never
+ * reach a dynamic sibling. So this is the shape the router requires.
+ */
+export const GET = reportExportRoute('grace');

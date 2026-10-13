@@ -3,9 +3,11 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { CompanyLogo } from '@/components/brand/company-logo';
-import type { AuthContext } from '@/lib/auth/context';
+import { NotificationBadge } from '@/components/notifications/notification-badge';
+import { contextCan, type AuthContext } from '@/lib/auth/context';
 import { APP_SHORT_NAME, ROUTES } from '@/config/app';
 import { getCompanyBranding } from '@/lib/data/company';
+import { getNotificationSummary } from '@/lib/data/notifications';
 import { ROLES, effectiveRole } from '@/lib/permissions';
 import { SignOutButton } from './sign-out-button';
 import { PrimaryNav } from './primary-nav';
@@ -56,7 +58,24 @@ export async function AppShell({
   readonly context: AuthContext;
   readonly children: ReactNode;
 }) {
-  const { branding } = await getCompanyBranding();
+  const canSeeNotifications = contextCan(context, 'notifications:view');
+
+  // Phase 15. One aggregate over the feed, read in the shell because the bell
+  // is in the shell. Not read at all for somebody who cannot open it — the
+  // borrower portal has its own frame and this is the staff one, but a staff
+  // account without the capability should cost no query.
+  const [{ branding }, notifications] = await Promise.all([
+    getCompanyBranding(),
+    canSeeNotifications
+      ? getNotificationSummary()
+      : Promise.resolve({
+          total: 0,
+          unread: 0,
+          unreadUrgent: 0,
+          unreadAttention: 0,
+          newestUnreadAt: null,
+        }),
+  ]);
 
   const role = effectiveRole(context.roles);
   const roleLabel = role === null ? 'No role' : ROLES[role].label;
@@ -235,6 +254,16 @@ export async function AppShell({
               <span className="sr-only">Overdue loans</span>
             </Link>
 
+            {/* Phase 15. Beside arrears rather than in place of it: the two
+                answer different questions, and the bell is the one that says
+                *something new happened* rather than *this is the state*. */}
+            {canSeeNotifications ? (
+              <NotificationBadge
+                unread={notifications.unread}
+                unreadUrgent={notifications.unreadUrgent}
+              />
+            ) : null}
+
             {/*
               No sign-out here.
 
@@ -275,6 +304,14 @@ export async function AppShell({
                 <RefreshCw aria-hidden="true" className="size-6" />
                 <span className="sr-only">Overdue loans</span>
               </Link>
+              {canSeeNotifications ? (
+                <NotificationBadge
+                  unread={notifications.unread}
+                  unreadUrgent={notifications.unreadUrgent}
+                  className="p-1"
+                  iconClassName="size-6"
+                />
+              ) : null}
               <SignOutButton
                 className="w-auto p-1"
                 icon={<LogOut aria-hidden="true" className="size-6" />}

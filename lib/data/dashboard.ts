@@ -661,3 +661,177 @@ export async function listRecentlyPenalised(
     };
   });
 }
+
+// ===========================================================================
+// Phase 17 — what the modules built after Phase 8 know
+//
+// The dashboard was written when the system ended at payments. Since then the
+// book has gained aging and portfolio at risk, a recovery file with promises
+// and follow-ups, money movements that wait for a decision, and a notification
+// stream. All of it was reachable only by opening the screen it lives on,
+// which means the one page a person opens first told them nothing about any of
+// it.
+//
+// So three reads are added here. Each is a read of a module built above —
+// nothing new is computed, and nothing is a second opinion about a figure
+// another screen already states.
+// ===========================================================================
+
+/**
+ * The recovery work waiting today.
+ *
+ * One read of `loan_recovery_status`, which is one row per loan in recovery
+ * with its open promise and its outstanding follow-up already derived. The
+ * counting is done here rather than in SQL for the reason ADR-042 gives: one
+ * query, summed in memory, so the figures on the card cannot disagree with
+ * each other the way four separate counts can when a payment lands between
+ * them.
+ */
+export interface RecoveryWorkload {
+  /** Loans with a promise that falls due today. */
+  readonly promisesDueToday: number;
+  /** Loans with a promise whose date has passed and is still unpaid. */
+  readonly promisesBroken: number;
+  /** What those broken promises undertook to pay. */
+  readonly promisedBrokenAmount: UgxAmount;
+  /** Loans whose follow-up date has passed with nothing recorded since. */
+  readonly followUpsOverdue: number;
+  /**
+   * Loans with anything at all recorded against them — the denominator.
+   *
+   * Not the number of rows the view returns. `loan_recovery_status` is one
+   * row per **live or cleared loan**, whether or not anybody has ever chased
+   * it: on the live book that is 26 rows against 4 loans with an action on
+   * file. A card reading "26 loans in recovery" would have overstated the
+   * chasing six times over, in the direction that flatters.
+   */
+  readonly loansInRecovery: number;
+}
+
+const RECOVERY_WORKLOAD_COLUMNS = `
+  loan_id, action_count, overdue_follow_up_on, open_promise_amount,
+  open_promise_on, open_promise_status
+`;
+
+export async function getRecoveryWorkload(
+  today: BusinessDate,
+): Promise<RecoveryWorkload | null> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('loan_recovery_status')
+    .select(RECOVERY_WORKLOAD_COLUMNS);
+
+  if (error !== null) {
+    logger.warn('Could not read the recovery workload.', { code: error.code });
+    return null;
+  }
+
+  const rows = (data ?? []) as Raw[];
+
+  let promisesDueToday = 0;
+  let promisesBroken = 0;
+  let promisedBrokenAmount = 0;
+  let followUpsOverdue = 0;
+  let loansInRecovery = 0;
+
+  for (const row of rows) {
+    // The view returns every live or cleared loan, chased or not. A loan is
+    // *in recovery* once something has been recorded against it.
+    if (Number(row.action_count ?? 0) > 0) loansInRecovery += 1;
+
+    // `overdue_follow_up_on` is already the view's own judgement: a follow-up
+    // date in the past with nothing recorded since. Re-deriving it here from
+    // `next_follow_up_on` would be a second opinion about the same question.
+    if (row.overdue_follow_up_on !== null) followUpsOverdue += 1;
+
+    const status = row.open_promise_status;
+    const promisedOn = row.open_promise_on;
+
+    if (status === 'broken') {
+      promisesBroken += 1;
+      promisedBrokenAmount += Number(row.open_promise_amount ?? 0);
+    } else if (
+      status === 'pending' &&
+      promisedOn !== null &&
+      text(promisedOn) === today
+    ) {
+      // Today only. A promise for Friday is not work for Tuesday, and a card
+      // that counted it would make every day look like the busiest one.
+      promisesDueToday += 1;
+    }
+  }
+
+  return {
+    promisesDueToday,
+    promisesBroken,
+    promisedBrokenAmount: toUgx(promisedBrokenAmount),
+    followUpsOverdue,
+    loansInRecovery,
+  };
+}
+
+/**
+ * Money movements waiting for somebody to decide.
+ *
+ * Three registers, counted rather than listed: a dashboard card says how many
+ * and links to the screen that shows them, because the decision is made there
+ * with the detail in front of the person making it.
+ *
+ * Each count is read only when the caller may actually approve that kind of
+ * movement. A Manager who cannot approve an expense is not shown a number they
+ * can do nothing about — and more to the point, the query is not run, so the
+ * figure is absent from the page rather than hidden in its markup.
+ */
+export interface PendingApprovals {
+  readonly transfers: number;
+  readonly expenses: number;
+  readonly reconciliations: number;
+}
+
+export async function getPendingApprovals(options: {
+  readonly transfers: boolean;
+  readonly expenses: boolean;
+  readonly reconciliations: boolean;
+}): Promise<PendingApprovals> {
+  const supabase = await createSupabaseServerClient();
+
+  /**
+   * A count with no rows fetched.
+   *
+   * `head: true` means PostgREST runs the count and returns no body, which is
+   * what a card needs: the rows are on the screen the link goes to.
+   */
+  const countPending = async (
+    table: 'transfer_register' | 'expense_register' | 'reconciliation_register',
+    status: string,
+  ): Promise<number> => {
+    const { count: total, error } = await supabase
+      .from(table)
+      .select('id', { count: 'exact', head: true })
+      .eq('status', status);
+
+    if (error !== null) {
+      logger.warn('Could not count pending approvals.', { table, code: error.code });
+      return 0;
+    }
+
+    return total ?? 0;
+  };
+
+  const [transfers, expenses, reconciliations] = await Promise.all([
+    options.transfers
+      ? countPending('transfer_register', 'pending_approval')
+      : Promise.resolve(0),
+    options.expenses
+      ? countPending('expense_register', 'pending_approval')
+      : Promise.resolve(0),
+    // A reconciliation is `submitted` while it waits — it has been counted and
+    // is waiting to be reviewed, which is the same kind of queue.
+    options.reconciliations
+      ? countPending('reconciliation_register', 'submitted')
+      : Promise.resolve(0),
+  ]);
+
+  return { transfers, expenses, reconciliations };
+}

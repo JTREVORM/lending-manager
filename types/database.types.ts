@@ -695,6 +695,9 @@ export type Database = {
           multi_month_min_amount: number;
           min_guarantors_required: number;
           default_interest_method: string;
+          allow_client_as_guarantor: boolean;
+          guarantor_min_age_years: number;
+          guarantor_max_active_loans: number;
         };
         Insert: {
           id?: number;
@@ -713,6 +716,9 @@ export type Database = {
           multi_month_min_amount?: number;
           min_guarantors_required?: number;
           default_interest_method?: string;
+          allow_client_as_guarantor?: boolean;
+          guarantor_min_age_years?: number;
+          guarantor_max_active_loans?: number;
         };
         Update: {
           id?: number;
@@ -731,23 +737,11 @@ export type Database = {
           multi_month_min_amount?: number;
           min_guarantors_required?: number;
           default_interest_method?: string;
+          allow_client_as_guarantor?: boolean;
+          guarantor_min_age_years?: number;
+          guarantor_max_active_loans?: number;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'business_settings_default_repayment_frequency_fkey';
-            columns: ['default_repayment_frequency'];
-            isOneToOne: false;
-            referencedRelation: 'repayment_frequencies';
-            referencedColumns: ['key'];
-          },
-          {
-            foreignKeyName: 'business_settings_updated_by_fkey';
-            columns: ['updated_by'];
-            isOneToOne: false;
-            referencedRelation: 'profiles';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
 
       client_guarantors: {
@@ -965,6 +959,7 @@ export type Database = {
           created_at: string;
           updated_at: string;
           archived_at: string | null;
+          employer_name: string | null;
         };
         Insert: {
           id?: string;
@@ -981,6 +976,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          employer_name?: string | null;
         };
         Update: {
           id?: string;
@@ -997,6 +993,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          employer_name?: string | null;
         };
         Relationships: [];
       };
@@ -1712,6 +1709,8 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          monthly_expenses: number | null;
+          business_contact: string | null;
         };
         Insert: {
           loan_id: string;
@@ -1729,6 +1728,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          monthly_expenses?: number | null;
+          business_contact?: string | null;
         };
         Update: {
           loan_id?: string;
@@ -1743,6 +1744,58 @@ export type Database = {
           trading_licence_number?: string | null;
           trading_licence_path?: string | null;
           bank_statement_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          monthly_expenses?: number | null;
+          business_contact?: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. The evidence filed with a loan application: a payslip, an
+       * employment letter, a trading licence, a bank statement, a business
+       * photograph, or a guarantor's identification, photograph or signature.
+       * Writable while the loan is a draft and frozen from submission, like
+       * every other part of the application.
+       */
+      loan_documents: {
+        Row: {
+          id: string;
+          loan_id: string;
+          loan_guarantor_id: string | null;
+          kind: string;
+          storage_path: string;
+          label: string | null;
+          content_type: string;
+          byte_size: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          loan_guarantor_id?: string | null;
+          kind: string;
+          storage_path: string;
+          label?: string | null;
+          content_type: string;
+          byte_size: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          loan_guarantor_id?: string | null;
+          kind?: string;
+          storage_path?: string;
+          label?: string | null;
+          content_type?: string;
+          byte_size?: number;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1866,6 +1919,8 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          employment_status: string | null;
+          salary_verification: string;
         };
         Insert: {
           loan_id: string;
@@ -1881,6 +1936,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          employment_status?: string | null;
+          salary_verification?: string;
         };
         Update: {
           loan_id?: string;
@@ -1896,6 +1953,8 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          employment_status?: string | null;
+          salary_verification?: string;
         };
         Relationships: [];
       };
@@ -2354,6 +2413,199 @@ export type Database = {
           },
         ];
       };
+
+      // --- Phase 14: security and recovery -----------------------------------
+      // `loan_recovery_actions` has no Update or Delete shape, which is not an
+      // omission: statement-level triggers refuse both outright, the way
+      // `audit_log` and `client_remarks` do.
+      loan_collateral: {
+        Row: {
+          id: string;
+          loan_id: string;
+          item_type: string;
+          description: string;
+          estimated_value: number;
+          valued_on: string;
+          serial_number: string | null;
+          ownership_document: string | null;
+          location: string | null;
+          status: string;
+          released_at: string | null;
+          released_by: string | null;
+          release_reason: string | null;
+          realised_amount: number | null;
+          realised_at: string | null;
+          realised_by: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          item_type: string;
+          description: string;
+          estimated_value: number;
+          valued_on: string;
+          serial_number?: string | null;
+          ownership_document?: string | null;
+          location?: string | null;
+          status?: string;
+          released_at?: string | null;
+          released_by?: string | null;
+          release_reason?: string | null;
+          realised_amount?: number | null;
+          realised_at?: string | null;
+          realised_by?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          item_type?: string;
+          description?: string;
+          estimated_value?: number;
+          valued_on?: string;
+          serial_number?: string | null;
+          ownership_document?: string | null;
+          location?: string | null;
+          status?: string;
+          released_at?: string | null;
+          released_by?: string | null;
+          release_reason?: string | null;
+          realised_amount?: number | null;
+          realised_at?: string | null;
+          realised_by?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      loan_recovery_actions: {
+        Row: {
+          id: string;
+          loan_id: string;
+          action_kind: string;
+          outcome: string | null;
+          notes: string;
+          action_date: string;
+          follow_up_on: string | null;
+          promised_amount: number | null;
+          promised_on: string | null;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          corrects_action_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          action_kind: string;
+          outcome?: string | null;
+          notes: string;
+          action_date?: string;
+          follow_up_on?: string | null;
+          promised_amount?: number | null;
+          promised_on?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          corrects_action_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          action_kind?: string;
+          outcome?: string | null;
+          notes?: string;
+          action_date?: string;
+          follow_up_on?: string | null;
+          promised_amount?: number | null;
+          promised_on?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          corrects_action_id?: string | null;
+        };
+        Relationships: [];
+      };
+
+      // --- Phase 15: notifications -------------------------------------------
+      // Neither table has an Update or a Delete shape. Both refuse the pair
+      // with statement-level triggers, and both hold every reference with
+      // `on delete restrict` for exactly that reason.
+      notifications: {
+        Row: {
+          id: string;
+          category: string;
+          severity: string;
+          title: string;
+          body: string | null;
+          audience_permission: string;
+          audience_profile_id: string | null;
+          audience_branch_id: string | null;
+          entity_type: string;
+          entity_id: string | null;
+          actor_profile_id: string | null;
+          actor_label: string;
+          occurred_at: string;
+          dedupe_key: string;
+        };
+        Insert: {
+          id?: string;
+          category: string;
+          severity?: string;
+          title: string;
+          body?: string | null;
+          audience_permission: string;
+          audience_profile_id?: string | null;
+          audience_branch_id?: string | null;
+          entity_type: string;
+          entity_id?: string | null;
+          actor_profile_id?: string | null;
+          actor_label?: string;
+          occurred_at?: string;
+          dedupe_key: string;
+        };
+        Update: {
+          id?: string;
+          category?: string;
+          severity?: string;
+          title?: string;
+          body?: string | null;
+          audience_permission?: string;
+          audience_profile_id?: string | null;
+          audience_branch_id?: string | null;
+          entity_type?: string;
+          entity_id?: string | null;
+          actor_profile_id?: string | null;
+          actor_label?: string;
+          occurred_at?: string;
+          dedupe_key?: string;
+        };
+        Relationships: [];
+      };
+      notification_reads: {
+        Row: {
+          notification_id: string;
+          profile_id: string;
+          read_at: string;
+        };
+        Insert: {
+          notification_id: string;
+          profile_id: string;
+          read_at?: string;
+        };
+        Update: {
+          notification_id?: string;
+          profile_id?: string;
+          read_at?: string;
+        };
+        Relationships: [];
+      };
     };
 
     /**
@@ -2617,16 +2869,26 @@ export type Database = {
           monthly_turnover: number | null;
           loan_purpose: string | null;
           has_trading_licence: boolean | null;
+          employer_contact: string | null;
+          staff_number: string | null;
+          employment_started_on: string | null;
+          employment_status: string | null;
+          salary_verification: string | null;
+          has_employment_letter: boolean | null;
+          business_location: string | null;
+          trading_since: string | null;
+          monthly_expenses: number | null;
+          business_contact: string | null;
+          employee_count: number | null;
+          premises_ownership: string | null;
+          trading_licence_number: string | null;
+          has_bank_statement: boolean | null;
+          document_count: number | null;
+          collateral_required: boolean | null;
+          min_guarantors: number | null;
         };
         Relationships: [];
       };
-
-      /**
-       * Phase 13. Who guaranteed a loan, as frozen at approval: from
-       * `loan_guarantors` for loans approved from Phase 13 onward, and from
-       * `loan_guarantor_snapshots` for the ones before it. `source` says
-       * which.
-       */
       loan_guarantor_evidence: {
         Row: {
           loan_id: string | null;
@@ -2689,6 +2951,67 @@ export type Database = {
           consent_signed: boolean | null;
           has_identification: boolean | null;
           created_at: string | null;
+          employer_name: string | null;
+          has_photograph: boolean | null;
+          evidence_frozen: boolean | null;
+          document_count: number | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Phase 13. One row per loan carrying its product, its collection
+       * state, its guarantor count and the stage of the loan workflow it sits
+       * at. The backing for every view in the loan module, so the thirteen
+       * the brief names are thirteen filters over one query.
+       */
+      loan_workflow_register: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          client_id: string | null;
+          client_name: string | null;
+          client_number: string | null;
+          client_phone: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          loan_product_id: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          application_profile: string | null;
+          principal_amount: number | null;
+          interest_rate_bps: number | null;
+          interest_method: string | null;
+          loan_term_months: number | null;
+          repayment_frequency: string | null;
+          total_interest: number | null;
+          total_expected_repayment: number | null;
+          status: string | null;
+          closure_kind: string | null;
+          cancellation_reason: string | null;
+          cancelled_at: string | null;
+          review_note: string | null;
+          proposed_disbursement_date: string | null;
+          submitted_at: string | null;
+          approved_at: string | null;
+          disbursed_at: string | null;
+          cleared_at: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+          delinquency_state: string | null;
+          arrears_amount: number | null;
+          days_past_due: number | null;
+          missed_installment_count: number | null;
+          oldest_unpaid_due_date: string | null;
+          contractual_outstanding: number | null;
+          penalty_remaining: number | null;
+          total_outstanding: number | null;
+          installment_count: number | null;
+          scheduled_completion_date: string | null;
+          guarantor_count: number | null;
+          guarantor_consent_count: number | null;
+          document_count: number | null;
+          workflow_stage: string | null;
         };
         Relationships: [];
       };
@@ -2777,36 +3100,41 @@ export type Database = {
        */
       payment_register: {
         Row: {
-          payment_id: string;
-          payment_number: string;
-          loan_id: string;
+          payment_id: string | null;
+          payment_number: string | null;
+          loan_id: string | null;
           loan_number: string | null;
-          client_id: string;
+          client_id: string | null;
           client_number: string | null;
           client_name: string | null;
           client_phone: string | null;
-          client_name_at_payment: string;
-          amount: number;
-          payment_method: string;
-          status: string;
-          is_effective: boolean;
-          effective_amount: number;
-          received_at: string;
-          business_date: string;
-          recorded_by: string;
-          recorded_by_label: string;
+          client_name_at_payment: string | null;
+          amount: number | null;
+          payment_method: string | null;
+          status: string | null;
+          is_effective: boolean | null;
+          effective_amount: number | null;
+          received_at: string | null;
+          business_date: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string | null;
           external_reference: string | null;
           reversed_at: string | null;
           reversed_by: string | null;
           reversal_reason: string | null;
-          outstanding_before: number;
-          outstanding_after: number;
-          allocated_principal: number;
-          allocated_interest: number;
-          allocated_penalty: number;
-          principal_collected: number;
-          interest_collected: number;
-          penalty_collected: number;
+          outstanding_before: number | null;
+          outstanding_after: number | null;
+          allocated_principal: number | null;
+          allocated_interest: number | null;
+          allocated_penalty: number | null;
+          principal_collected: number | null;
+          interest_collected: number | null;
+          penalty_collected: number | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          loan_product_id: string | null;
+          product_code: string | null;
+          product_name: string | null;
         };
         Relationships: [];
       };
@@ -3129,6 +3457,253 @@ export type Database = {
         };
         Relationships: [];
       };
+
+      // --- Phase 14: aging, risk and the registers ---------------------------
+      loan_collateral_register: {
+        Row: {
+          id: string | null;
+          loan_id: string | null;
+          loan_number: string | null;
+          loan_status: string | null;
+          branch_id: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          item_type: string | null;
+          description: string | null;
+          estimated_value: number | null;
+          valued_on: string | null;
+          serial_number: string | null;
+          ownership_document: string | null;
+          location: string | null;
+          status: string | null;
+          released_at: string | null;
+          release_reason: string | null;
+          realised_amount: number | null;
+          realised_at: string | null;
+          created_at: string | null;
+          total_outstanding: number | null;
+        };
+        Relationships: [];
+      };
+      loan_recovery_register: {
+        Row: {
+          id: string | null;
+          loan_id: string | null;
+          loan_number: string | null;
+          loan_status: string | null;
+          branch_id: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          action_kind: string | null;
+          outcome: string | null;
+          notes: string | null;
+          action_date: string | null;
+          follow_up_on: string | null;
+          promised_amount: number | null;
+          promised_on: string | null;
+          corrects_action_id: string | null;
+          created_by: string | null;
+          created_by_label: string | null;
+          created_at: string | null;
+          is_corrected: boolean | null;
+          promise_paid_amount: number | null;
+          promise_status: string | null;
+        };
+        Relationships: [];
+      };
+      loan_recovery_status: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          loan_status: string | null;
+          branch_id: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          arrears_amount: number | null;
+          days_past_due: number | null;
+          delinquency_state: string | null;
+          total_outstanding: number | null;
+          action_count: number | null;
+          last_action_date: string | null;
+          last_action_kind: string | null;
+          last_action_notes: string | null;
+          last_action_by: string | null;
+          next_follow_up_on: string | null;
+          overdue_follow_up_on: string | null;
+          open_promise_amount: number | null;
+          open_promise_on: string | null;
+          open_promise_status: string | null;
+        };
+        Relationships: [];
+      };
+      guarantor_exposure: {
+        Row: {
+          loan_guarantor_id: string | null;
+          loan_id: string | null;
+          loan_number: string | null;
+          loan_status: string | null;
+          branch_id: string | null;
+          loan_product_id: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          subject_kind: string | null;
+          guarantor_id: string | null;
+          guarantor_client_id: string | null;
+          guarantor_name: string | null;
+          guarantor_phone: string | null;
+          guarantor_client_number: string | null;
+          relationship_to_client: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          guaranteed_amount: number | null;
+          guaranteed_total: number | null;
+          outstanding_balance: number | null;
+          arrears_amount: number | null;
+          days_past_due: number | null;
+          delinquency_state: string | null;
+          guarantee_date: string | null;
+          consent_version: string | null;
+          consent_signed: boolean | null;
+          evidence_frozen_at: string | null;
+          released_at: string | null;
+          release_reason: string | null;
+          is_released: boolean | null;
+          guarantee_status: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      loan_aging: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          loan_status: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          loan_product_id: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          client_name: string | null;
+          client_phone: string | null;
+          principal_amount: number | null;
+          principal_remaining: number | null;
+          interest_remaining: number | null;
+          penalty_remaining: number | null;
+          total_outstanding: number | null;
+          arrears_amount: number | null;
+          current_due: number | null;
+          missed_installment_count: number | null;
+          days_past_due: number | null;
+          oldest_past_due_date: string | null;
+          grace_end_date: string | null;
+          within_grace_period: boolean | null;
+          delinquency_state: string | null;
+          penalty_applied: boolean | null;
+          penalty_amount: number | null;
+          penalty_paid: number | null;
+          aging_bucket: string | null;
+          aging_rank: number | null;
+          at_risk_1: boolean | null;
+          at_risk_7: boolean | null;
+          at_risk_30: boolean | null;
+          at_risk_60: boolean | null;
+          at_risk_90: boolean | null;
+          disbursed_at: string | null;
+          last_payment_date: string | null;
+        };
+        Relationships: [];
+      };
+      portfolio_at_risk: {
+        Row: {
+          scope: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          loan_product_id: string | null;
+          product_code: string | null;
+          product_name: string | null;
+          loan_count: number | null;
+          principal_outstanding: number | null;
+          total_outstanding: number | null;
+          arrears_amount: number | null;
+          loans_at_risk_1: number | null;
+          loans_at_risk_7: number | null;
+          loans_at_risk_30: number | null;
+          loans_at_risk_60: number | null;
+          loans_at_risk_90: number | null;
+          principal_at_risk_1: number | null;
+          principal_at_risk_7: number | null;
+          principal_at_risk_30: number | null;
+          principal_at_risk_60: number | null;
+          principal_at_risk_90: number | null;
+          par1_bps: number | null;
+          par7_bps: number | null;
+          par30_bps: number | null;
+          par60_bps: number | null;
+          par90_bps: number | null;
+          loans_bucket_current: number | null;
+          loans_bucket_1_7: number | null;
+          loans_bucket_8_30: number | null;
+          loans_bucket_31_60: number | null;
+          loans_bucket_61_90: number | null;
+          loans_bucket_90_plus: number | null;
+          principal_bucket_current: number | null;
+          principal_bucket_1_7: number | null;
+          principal_bucket_8_30: number | null;
+          principal_bucket_31_60: number | null;
+          principal_bucket_61_90: number | null;
+          principal_bucket_90_plus: number | null;
+        };
+        Relationships: [];
+      };
+
+      // --- Phase 15: the feed and the bell's count ---------------------------
+      notification_feed: {
+        Row: {
+          id: string | null;
+          category: string | null;
+          severity: string | null;
+          title: string | null;
+          body: string | null;
+          entity_type: string | null;
+          entity_id: string | null;
+          actor_profile_id: string | null;
+          actor_label: string | null;
+          occurred_at: string | null;
+          audience_permission: string | null;
+          audience_profile_id: string | null;
+          audience_branch_id: string | null;
+          is_personal: boolean | null;
+          is_read: boolean | null;
+          read_at: string | null;
+        };
+        Relationships: [];
+      };
+      notification_summary: {
+        Row: {
+          total: number | null;
+          unread: number | null;
+          unread_urgent: number | null;
+          unread_attention: number | null;
+          newest_unread_at: string | null;
+        };
+        Relationships: [];
+      };
     };
 
     Functions: {
@@ -3155,6 +3730,62 @@ export type Database = {
       reject_loan: {
         Args: { p_loan_id: string; p_reason: string };
         Returns: string;
+      };
+
+      /**
+       * Phase 14. Lets a guarantor out of a live loan, with a reason, provided
+       * the loan keeps the number of guarantors its product requires.
+       */
+      release_loan_guarantor: {
+        Args: { p_loan_guarantor_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Phase 15. Marks notifications read for the calling user. Null marks
+       * everything they can see; the profile is derived from the session, so
+       * a caller cannot write somebody else's receipt.
+       */
+      mark_notifications_read: {
+        Args: { p_ids?: string[] | null };
+        Returns: number;
+      };
+
+      /**
+       * Phase 13. The loan a `loan-documents` object belongs to, taken from
+       * its path. NULL when the path is not shaped like one, which denies the
+       * three storage policies that gate the bucket.
+       */
+      storage_path_loan_id: {
+        Args: { p_name: string };
+        Returns: string | null;
+      };
+
+      /**
+       * Phase 13. The existing clients who could back a given application,
+       * each with the reasons they may not. Advice for the screen;
+       * `loan_guarantors_check_eligibility` and `validate_loan_for_approval`
+       * remain the enforcement.
+       */
+      guarantor_candidates: {
+        Args: { p_loan_id: string; p_search?: string | null };
+        Returns: {
+          client_id: string;
+          client_number: string;
+          full_name: string;
+          phone: string;
+          occupation: string;
+          location: string;
+          district: string | null;
+          status: string;
+          has_identification: boolean;
+          active_loan_count: number;
+          arrears_amount: number;
+          guaranteeing_count: number;
+          already_attached: boolean;
+          eligible: boolean;
+          reasons: string[];
+        }[];
       };
 
       /** Phase 11. Refuses an account that is not an active cash account. */
@@ -3197,6 +3828,10 @@ export type Database = {
       /** Phase 11. One account's balance, signed the way the account is read. */
       ledger_account_balance: {
         Args: { p_account_id: string };
+        Returns: number;
+      };
+      ledger_account_balance_as_of: {
+        Args: { p_account_id: string; p_as_of: string };
         Returns: number;
       };
 

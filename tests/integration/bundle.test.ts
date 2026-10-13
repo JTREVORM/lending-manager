@@ -107,10 +107,19 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 480 KB gzipped in total', () => {
-    // The sum of all forty chunks, which is the ceiling on what the
-    // application could *ever* ask a phone to download across a whole
-    // session. It was 410 KB when this was written.
+  it('keeps every chunk the application has under 520 KB gzipped in total', () => {
+    // The sum of every chunk, which is the ceiling on what the application
+    // could *ever* ask a phone to download across a whole session. It was
+    // 410 KB over forty chunks when this was written, and 506 KB over
+    // fifty-seven after Phase 14 added four routes and ten components for
+    // Debt & Security.
+    //
+    // Raised from 480 to 520 with that phase, deliberately and not far: the
+    // growth was spread across small per-route chunks with no new dependency
+    // behind it — the largest chunk is unchanged and its own assertion still
+    // holds — and a whole module's screens genuinely add to this total. The
+    // headroom is for one more phase, not for four, so the next phase to
+    // cross it has to make its own case.
     //
     // It is not what a page costs. No page loads all forty: a measured page
     // transfers 155-165 KB of JavaScript, and that figure — the one that is
@@ -119,7 +128,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(480);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(520);
   });
 
   it('emits no source map for the browser', () => {

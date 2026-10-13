@@ -82,6 +82,8 @@ test.describe('the response headers', () => {
       '/loans',
       '/payments/new',
       '/overdue',
+      '/notifications',
+      '/recovery',
       '/reports',
     ]) {
       await page.goto(path);

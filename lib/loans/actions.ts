@@ -50,6 +50,7 @@ import {
   submitLoanSchema,
   updateLoanDraftSchema,
 } from '@/lib/validation/loan';
+import { rejectLoanSchema } from '@/lib/validation/loan-application';
 import { parseSafely } from '@/lib/validation/validate';
 import type { ActionResult } from '@/lib/auth/actions';
 
@@ -81,9 +82,11 @@ export async function createLoanAction(
 
   const parsed = parseSafely(createLoanSchema, {
     clientId: formData.get('clientId'),
+    loanProductId: formData.get('loanProductId'),
     principalAmount: formData.get('principalAmount'),
     loanTermMonths: formData.get('loanTermMonths'),
     repaymentFrequency: formData.get('repaymentFrequency'),
+    proposedInterestRateBps: formData.get('proposedInterestRateBps'),
     proposedDisbursementDate: formData.get('proposedDisbursementDate'),
     notes: formData.get('notes'),
   });
@@ -169,9 +172,11 @@ export async function createLoanAction(
     .from('loans')
     .insert({
       client_id: input.clientId,
+      loan_product_id: input.loanProductId,
       principal_amount: input.principalAmount,
       loan_term_months: input.loanTermMonths,
       repayment_frequency: input.repaymentFrequency,
+      proposed_interest_rate_bps: input.proposedInterestRateBps,
       proposed_disbursement_date: input.proposedDisbursementDate,
       notes: input.notes,
       // Placeholders, overwritten at approval. See the note above.
@@ -227,9 +232,11 @@ export async function updateLoanDraftAction(
   const parsed = parseSafely(updateLoanDraftSchema, {
     loanId: formData.get('loanId'),
     clientId: formData.get('clientId'),
+    loanProductId: formData.get('loanProductId'),
     principalAmount: formData.get('principalAmount'),
     loanTermMonths: formData.get('loanTermMonths'),
     repaymentFrequency: formData.get('repaymentFrequency'),
+    proposedInterestRateBps: formData.get('proposedInterestRateBps'),
     proposedDisbursementDate: formData.get('proposedDisbursementDate'),
     notes: formData.get('notes'),
   });
@@ -251,9 +258,11 @@ export async function updateLoanDraftAction(
     .from('loans')
     .update({
       client_id: input.clientId,
+      loan_product_id: input.loanProductId,
       principal_amount: input.principalAmount,
       loan_term_months: input.loanTermMonths,
       repayment_frequency: input.repaymentFrequency,
+      proposed_interest_rate_bps: input.proposedInterestRateBps,
       proposed_disbursement_date: input.proposedDisbursementDate,
       notes: input.notes,
     })
@@ -441,6 +450,71 @@ export async function disburseLoanAction(
   revalidatePath(ROUTES.loans);
 
   return { ok: true, message: 'The loan is now active.' };
+}
+
+/**
+ * Refuse an application.
+ *
+ * Separate from `cancelLoanAction` rather than a flag on it, for the reason
+ * `reject_loan` is separate from `cancel_loan`: the two are different
+ * decisions with different preconditions and different capabilities. A
+ * refusal can only happen to an application awaiting a decision and belongs to
+ * whoever may approve one; a cancellation can also take back a loan already
+ * approved and belongs to the Owner.
+ *
+ * Both end as `status = 'cancelled'` with `closure_kind` saying which, so the
+ * register can separate a credit decision from a change of mind — and a
+ * report about lending standards counts only the first.
+ */
+export async function rejectLoanAction(
+  _previous: ActionResult | undefined,
+  formData: FormData,
+): Promise<ActionResult> {
+  let actor;
+  try {
+    actor = await requirePermission('loans:approve');
+  } catch (error) {
+    return { ok: false, message: toPublicError(error).message };
+  }
+
+  // A decision, not throughput — the same brake the approval carries, for the
+  // same reason: the database still refuses a second transition on the same
+  // loan, and this is what stops a script walking the whole book.
+  const limit = await checkActorRateLimit('loans.approve', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
+
+  const parsed = parseSafely(rejectLoanSchema, {
+    loanId: formData.get('loanId'),
+    reason: formData.get('reason'),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: 'Say why this application is being refused.',
+      fieldErrors: parsed.error.fieldErrors,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc('reject_loan', {
+    p_loan_id: parsed.data.loanId,
+    p_reason: parsed.data.reason,
+  });
+
+  if (error !== null) {
+    logger.warn('Could not reject a loan application.', { code: error.code });
+    return { ok: false, message: friendlyLoanError(error) };
+  }
+
+  revalidatePath(`${ROUTES.loans}/${parsed.data.loanId}`);
+  revalidatePath(ROUTES.loans);
+
+  return {
+    ok: true,
+    message: 'The application has been refused. The reason is recorded against it.',
+  };
 }
 
 /** Cancel a loan before the money moves. */

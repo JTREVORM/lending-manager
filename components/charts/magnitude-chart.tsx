@@ -97,7 +97,16 @@ export function MagnitudeChart({
                   <span className="text-text-muted min-w-0 truncate text-xs">
                     {row.label}
                     {row.note === undefined ? null : (
-                      <span className="text-text-muted/70"> · {row.note}</span>
+                      /*
+                        The same colour as the label it follows, not a fainter
+                        one. `text-text-muted/70` read at 3.4:1 on the card
+                        surface, which axe flags as a serious contrast failure
+                        — and it flags it even though this list is
+                        `aria-hidden`, correctly: hiding something from a
+                        screen reader does not make it legible to the person
+                        looking at it. The separator carries the distinction.
+                      */
+                      <span className="text-text-muted"> · {row.note}</span>
                     )}
                   </span>
                   <span className="text-text shrink-0 text-xs font-medium">

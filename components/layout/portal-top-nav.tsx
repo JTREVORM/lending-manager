@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { Banknote } from 'lucide-react';
+
 import { cn } from '@/lib/utils/cn';
 import type { Permission } from '@/lib/permissions';
-import { PORTAL_NAV_ITEMS, visibleNavItems } from './nav-items';
-import { isNavItemActive } from './primary-nav';
+import { PORTAL_NAV_ITEMS, isNavItemActive, visibleNavItems } from './nav-items';
 
 /**
  * The borrower's navigation on a screen wide enough for it.
@@ -33,7 +34,7 @@ export function PortalTopNav({
     <nav aria-label="Main navigation">
       <ul className="flex items-center gap-1">
         {items.map((item) => {
-          const Icon = item.icon;
+          const Icon = item.icon ?? Banknote;
           const isActive = isNavItemActive(item.href, pathname);
 
           return (

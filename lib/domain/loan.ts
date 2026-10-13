@@ -509,6 +509,13 @@ export const LOAN_APPROVAL_FAILURES = [
   'frequency_not_permitted',
   'insufficient_guarantors',
   'guarantor_incomplete',
+  // Phase 13. Approval reads the application it was given: the product's own
+  // questions have to have been answered, and the people who agreed to stand
+  // behind the loan have to have signed and still be eligible.
+  'salary_details_missing',
+  'business_details_missing',
+  'guarantor_consent_missing',
+  'guarantor_ineligible',
 ] as const;
 
 export type LoanApprovalFailure = (typeof LOAN_APPROVAL_FAILURES)[number];
@@ -562,8 +569,117 @@ export function describeLoanApprovalFailure(
       return `This client needs at least ${detail ?? 'one'} active guarantor before a loan can be approved.`;
     case 'guarantor_incomplete':
       return 'A guarantor is missing required information — a phone number, occupation, location, relationship or identification number.';
+    case 'salary_details_missing':
+      return `${detail ?? 'This product'} is a salary loan, and the employment details have not been entered.`;
+    case 'business_details_missing':
+      return `${detail ?? 'This product'} is a business loan, and the business details have not been entered.`;
+    case 'guarantor_consent_missing':
+      return detail === '1'
+        ? 'One guarantor has not signed the undertaking.'
+        : `${detail ?? 'Some'} guarantors have not signed the undertaking.`;
+    case 'guarantor_ineligible':
+      return 'A guarantor on this application is no longer eligible — archived, suspended or blacklisted since it was drafted.';
   }
 }
+
+// ---------------------------------------------------------------------------
+// How a cancelled loan ended
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a cancelled loan was cancelled.
+ *
+ * `status` answers the question the whole system branches on — did this loan
+ * ever become debt — and both of these answer no. What separates them is
+ * whose decision it was: a refusal is a credit decision and belongs in a
+ * report about lending standards; a withdrawal is a change of mind and does
+ * not.
+ */
+export const LOAN_CLOSURE_KINDS = ['rejected', 'withdrawn'] as const;
+
+export type LoanClosureKind = (typeof LOAN_CLOSURE_KINDS)[number];
+
+export function isLoanClosureKind(value: unknown): value is LoanClosureKind {
+  return (
+    typeof value === 'string' && (LOAN_CLOSURE_KINDS as readonly string[]).includes(value)
+  );
+}
+
+export const LOAN_CLOSURE_LABELS: Readonly<Record<LoanClosureKind, string>> = {
+  rejected: 'Rejected',
+  withdrawn: 'Cancelled',
+};
+
+export const LOAN_CLOSURE_DESCRIPTIONS: Readonly<Record<LoanClosureKind, string>> = {
+  rejected: 'The business refused this application.',
+  withdrawn: 'Taken back before any money was released.',
+};
+
+// ---------------------------------------------------------------------------
+// The loan workflow
+// ---------------------------------------------------------------------------
+
+/**
+ * The stage of the loan workflow a loan sits at.
+ *
+ * Derived in `public.loan_workflow_register` from the lifecycle status, the
+ * intended disbursement date and the collection position — never stored, so
+ * the passage of midnight moves a loan from `active` to `arrears` without any
+ * process having to run.
+ *
+ * Mirrored here so the register's tabs can be declared once and so an
+ * unrecognised value is caught rather than rendered. A test compares the two
+ * representations.
+ */
+export const LOAN_WORKFLOW_STAGES = [
+  'draft',
+  'pending_approval',
+  'approved',
+  'awaiting_disbursement',
+  'active',
+  'grace_period',
+  'arrears',
+  'cleared',
+  'rejected',
+  'withdrawn',
+] as const;
+
+export type LoanWorkflowStage = (typeof LOAN_WORKFLOW_STAGES)[number];
+
+export function isLoanWorkflowStage(value: unknown): value is LoanWorkflowStage {
+  return (
+    typeof value === 'string' &&
+    (LOAN_WORKFLOW_STAGES as readonly string[]).includes(value)
+  );
+}
+
+export const LOAN_WORKFLOW_LABELS: Readonly<Record<LoanWorkflowStage, string>> = {
+  draft: 'Draft applications',
+  pending_approval: 'Pending approval',
+  approved: 'Approved',
+  awaiting_disbursement: 'Awaiting disbursement',
+  active: 'Active loans',
+  grace_period: 'Grace period',
+  arrears: 'Arrears',
+  cleared: 'Cleared loans',
+  rejected: 'Rejected',
+  withdrawn: 'Cancelled',
+};
+
+export const LOAN_WORKFLOW_DESCRIPTIONS: Readonly<Record<LoanWorkflowStage, string>> = {
+  draft: 'Being entered. Not yet submitted for a decision.',
+  pending_approval: 'Submitted and waiting for a decision.',
+  approved: 'Agreed, and the money has not been released yet.',
+  // Not a duplicate of Approved. This is the subset whose intended date has
+  // arrived — the queue somebody works through this morning.
+  awaiting_disbursement: 'Approved, and due to be paid out today or earlier.',
+  active: 'Disbursed and being collected, with nothing overdue.',
+  grace_period: 'Past the final collection date and inside the grace period.',
+  arrears: 'A collection before today is uncovered.',
+  cleared: 'Fully repaid, penalties included.',
+  rejected: 'The business refused the application.',
+  withdrawn: 'Taken back before any money was released.',
+};
 
 /**
  * Is a multi-month term available at this amount?
