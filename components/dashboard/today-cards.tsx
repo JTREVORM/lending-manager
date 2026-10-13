@@ -7,19 +7,17 @@ import { Money } from '@/components/ui/money';
  *
  * ## Three numbers that are not a subtraction
  *
- * Expected, collected and still-due are shown side by side, and the note under
- * them says explicitly that the first minus the second is not the third. It
- * genuinely is not: money taken today may settle a collection from last month
- * or run ahead into next week. Presenting them as a tidy sum would invent a
+ * Expected, collected and still-due sit side by side, and the line under them
+ * says so: money taken today may settle a collection from last month or run
+ * ahead into next week. Presenting them as a tidy sum would invent a
  * relationship the ledger does not have, and the first person to notice they
  * do not add up would stop trusting all three.
  *
  * ## The method split is not a cash position
  *
- * "Cash received" is cash that came in today. It is not cash at hand: the
- * business also spends and banks money, and this system records neither. The
- * labels say *received* for that reason, and the definitions under them say it
- * again.
+ * "Cash received" is cash that came in today, not cash at hand — that balance
+ * belongs to the Finance module and is read from the ledger. Every label here
+ * says *received* for that reason, and each one's definition says it again.
  */
 export function TodayCards({
   summary,
@@ -67,10 +65,11 @@ export function TodayCards({
         ) : null}
       </StatGrid>
 
-      <p className="text-text-muted text-sm">
-        Expected today is this morning&rsquo;s target. Collected today is every payment
-        taken today, which may settle an older collection or run ahead, so{' '}
-        <strong>expected minus collected is not the same as still due today</strong>.
+      {/* One line, kept: 120,000 - 95,000 is not 40,000, and a reader who
+          does that subtraction stops trusting all three figures. */}
+      <p className="text-text-muted text-xs">
+        <strong>Expected minus collected is not the same as still due today</strong> — a
+        payment may settle an older collection or run ahead.
       </p>
 
       {canSeeMethods ? (

@@ -478,7 +478,19 @@ async function attachRemarks(
  */
 const logoCache = new Map<string, PdfImage | null>();
 
-async function letterheadMark(logoPath: string | null): Promise<PdfImage | undefined> {
+/**
+ * The letterhead mark, read once and cached.
+ *
+ * Exported because the trial balance is a document too. It lives under
+ * `/finance` rather than in the report registry — a treasurer looks for it
+ * beside the ledger, not in the Reports Centre — but a statement this
+ * application issues should carry the same letterhead as every other, and a
+ * second copy of this function would be a second cache and a second set of
+ * warnings about an unreadable logo.
+ */
+export async function letterheadMark(
+  logoPath: string | null,
+): Promise<PdfImage | undefined> {
   const path = letterheadJpegPath(logoPath);
   if (path === null) {
     logger.warn('The configured logo path is not a usable file name.');
@@ -511,8 +523,14 @@ async function letterheadMark(logoPath: string | null): Promise<PdfImage | undef
   }
 }
 
-/** The response a PDF export returns. One place, so every route agrees. */
-function pdfResponse(body: Buffer, filename: string): Response {
+/**
+ * The response a PDF export returns. One place, so every route agrees.
+ *
+ * Exported for the same reason as `letterheadMark`: the trial balance's
+ * export route is not a registry report, and `attachment`, `nosniff` and
+ * `no-store` on a financial document are not decisions to make twice.
+ */
+export function pdfResponse(body: Buffer, filename: string): Response {
   return new Response(new Uint8Array(body), {
     headers: {
       'content-type': 'application/pdf',

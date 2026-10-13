@@ -79,6 +79,20 @@ import {
 export const REPORT_GROUPS = ['money-in', 'behind', 'book', 'security'] as const;
 export type ReportGroup = (typeof REPORT_GROUPS)[number];
 
+/**
+ * Is this a group the registry knows?
+ *
+ * The rail's Reports entries pin `?group=`, and the index reads it back to
+ * show one group. Whitelisted here rather than trusted, so a hand-edited
+ * query string narrows to nothing it should not — it falls back to the whole
+ * listing instead.
+ */
+export function isReportGroup(value: unknown): value is ReportGroup {
+  return (
+    typeof value === 'string' && (REPORT_GROUPS as readonly string[]).includes(value)
+  );
+}
+
 export const REPORT_GROUP_LABELS: Readonly<
   Record<ReportGroup, { readonly title: string; readonly blurb: string }>
 > = {

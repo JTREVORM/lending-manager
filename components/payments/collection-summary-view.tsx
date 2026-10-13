@@ -80,17 +80,19 @@ export function CollectionSummaryView({
           </div>
         </dl>
 
-        <p className="text-text-muted mt-4 text-sm">
-          Posted payments only, by business date, from {summary.from} to {summary.to}
-          inclusive. Principal collected is a reduction of what is owed, not revenue;
-          interest and penalties are the income in this figure. Allocation follows the
-          loan&apos;s own order — penalty, then interest, then principal — and is not
-          re-decided here.
+        {/* Shortened, not removed: a reader who counts principal as revenue
+            has overstated the business's income, and the allocation order is
+            the loan's, not this screen's. */}
+        <p className="text-text-muted mt-4 text-xs">
+          Posted payments only, by business date, {summary.from} to {summary.to}
+          inclusive. Principal collected reduces what is owed and is not revenue; interest
+          and penalties are the income here.
         </p>
       </Card>
 
       {/* --- The five slices --------------------------------------------- */}
       <SliceTable
+        id="by-method"
         heading="By method"
         caption="Collections by payment method: receipts, reversals and the allocation split"
         slices={summary.byMethod}
@@ -102,6 +104,7 @@ export function CollectionSummaryView({
       />
 
       <SliceTable
+        id="by-staff"
         heading="By staff member"
         caption="Collections by the staff member who recorded them"
         slices={summary.byStaff}
@@ -111,6 +114,7 @@ export function CollectionSummaryView({
       />
 
       <SliceTable
+        id="by-branch"
         heading="By branch"
         caption="Collections by the branch that owns the loan"
         slices={summary.byBranch}
@@ -120,6 +124,7 @@ export function CollectionSummaryView({
       />
 
       <SliceTable
+        id="by-product"
         heading="By loan product"
         caption="Collections by the product the loan was written on"
         slices={summary.byProduct}
@@ -129,6 +134,7 @@ export function CollectionSummaryView({
       />
 
       <SliceTable
+        id="by-day"
         heading="By day"
         caption="Collections by business date"
         slices={summary.byDay}
@@ -141,6 +147,7 @@ export function CollectionSummaryView({
 }
 
 function SliceTable({
+  id,
   heading,
   caption,
   slices,
@@ -148,6 +155,15 @@ function SliceTable({
   chartTitle,
   chartCaption,
 }: {
+  /**
+   * The heading's element id, so a link can name this slice.
+   *
+   * The rail's "Collections by …" entries and Branch Network's "Branch
+   * Performance" are deep links into this one page: the summary reads the
+   * register once and sums it five ways, so five screens would be five
+   * chances for the totals to disagree.
+   */
+  readonly id: string;
   readonly heading: string;
   readonly caption: string;
   readonly slices: readonly CollectionSlice[];
@@ -158,7 +174,9 @@ function SliceTable({
   if (slices.length === 0) {
     return (
       <Card className="min-w-0">
-        <h2 className="text-text mb-2 text-lg font-semibold">{heading}</h2>
+        <h2 id={id} className="text-text mb-2 text-lg font-semibold">
+          {heading}
+        </h2>
         <p className="text-text-muted text-sm">Nothing was collected in this period.</p>
       </Card>
     );
@@ -180,7 +198,9 @@ function SliceTable({
       role="region"
       aria-label={heading}
     >
-      <h2 className="text-text mb-3 text-lg font-semibold">{heading}</h2>
+      <h2 id={id} className="text-text mb-3 text-lg font-semibold">
+        {heading}
+      </h2>
 
       <table className="w-full text-left text-sm">
         <caption className="sr-only">{caption}</caption>

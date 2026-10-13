@@ -430,10 +430,9 @@ export default async function LoanDetailPage({
         />
 
         {periods.length > 0 ? (
-          <p className="text-text-muted text-sm">
-            This is the contractual monthly breakdown — what falls due in each month of
-            the agreement. The individual collection dates below allocate it; they do not
-            change it.
+          <p className="text-text-muted text-xs">
+            The contractual monthly breakdown. The collection dates below allocate it;
+            they do not change it.
           </p>
         ) : null}
       </section>
@@ -510,10 +509,11 @@ export default async function LoanDetailPage({
             showFilters={false}
           />
 
-          <p className="text-text-muted text-sm">
-            What was collected, which is a separate record from the schedule above — that
-            says what is due. A reversed payment stays listed and struck through; it no
-            longer counts toward the balance.
+          {/* Kept: a struck-through row is still a row, and a reader who
+              counts it would overstate what has been collected. */}
+          <p className="text-text-muted text-xs">
+            A reversed payment stays listed, struck through, and no longer counts toward
+            the balance.
           </p>
         </section>
       ) : null}
@@ -553,10 +553,9 @@ export default async function LoanDetailPage({
             today={businessToday()}
           />
 
-          <p className="text-text-muted text-sm">
-            Generated when the loan was disbursed, from the day the money reached the
-            borrower. It is a fixed record and cannot be edited. Payments are not yet
-            recorded against it, so no collection here is marked paid or missed.
+          <p className="text-text-muted text-xs">
+            Fixed at disbursement and not editable. Collections here are not marked paid
+            or missed.
           </p>
         </section>
       ) : null}
@@ -568,9 +567,8 @@ export default async function LoanDetailPage({
           </h2>
           <Card>
             <p className="text-text-muted text-sm">
-              No schedule yet. It is generated at disbursement, from the day the money
-              actually reaches the borrower — not from the intended date above, which may
-              still change.
+              No schedule yet — it is generated at disbursement, from the day the money
+              reaches the borrower.
             </p>
           </Card>
         </section>

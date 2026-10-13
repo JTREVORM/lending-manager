@@ -30,9 +30,11 @@ export default async function ExpensesPage() {
 
       <ExpenseRegister rows={rows} canDecide={contextCan(context, 'expenses:approve')} />
 
+      {/* Kept: miscategorising a disbursement as an expense would overstate
+          costs and understate the loan book at once. */}
       <p className="text-text-muted text-xs">
-        Loan principal is never an expense. Paying out a loan moves an asset — it does not
-        consume one — so it debits Loans Receivable and appears nowhere on this page.
+        Loan principal is never an expense — paying out a loan moves an asset, and appears
+        nowhere on this page.
       </p>
     </div>
   );

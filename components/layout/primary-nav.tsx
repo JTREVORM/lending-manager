@@ -1,21 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronDown, ChevronRight, Ellipsis, LayoutDashboard, X } from 'lucide-react';
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 
-import { ROUTES } from '@/config/app';
 import { LinkPending } from '@/components/ui/link-pending';
 import { cn } from '@/lib/utils/cn';
 import type { Permission } from '@/lib/permissions';
 import {
-  NAV_GROUP_LABELS,
-  NAV_ITEMS,
+  DASHBOARD_ITEM,
+  NAV_MODULES,
+  NOTIFICATIONS_ITEM,
   PORTAL_NAV_ITEMS,
-  groupedNavItems,
+  canReachNavItem,
+  currentNavItem,
+  currentNavModuleId,
+  isNavItemActive,
   splitForBottomBar,
   type NavItem,
+  type NavModule,
+  type NavModuleId,
 } from './nav-items';
 
 export interface PrimaryNavProps {
@@ -41,14 +46,12 @@ export interface PrimaryNavProps {
    * out is a Server Action, and a module that reaches one is a module this
    * client component would drag into the browser bundle; keeping it out means
    * the navigation knows about destinations and nothing about the session.
-   * An element crosses the server/client boundary cleanly — a component would
-   * not, which is the whole reason `menu` is a name rather than a list.
    */
   readonly sheetFooter?: ReactNode;
 }
 
 /**
- * The primary navigation, as a grouped sidebar or a phone bottom bar.
+ * The primary navigation: the staff rail, or the portal's bottom bar.
  *
  * `menu` and `permissions` are plain serialisable data passed from the
  * server, which is what lets a Client Component render a server-resolved
@@ -60,44 +63,43 @@ export interface PrimaryNavProps {
  * protection: the same capability is enforced by the route guard and by Row
  * Level Security, and both would refuse a hand-typed URL.
  *
- * ## Why the two variants are shaped so differently
+ * ## The rail is modules, closed
  *
- * The sidebar has room for every destination, so it shows every destination,
- * grouped into Operations / Insights / Administration — eleven flat rows is a
- * list you read, three labelled blocks is a map you scan. It is the only
- * navigation the staff shell has: on a phone or a tablet the same rail slides
- * in from the left behind the header's menu button, so there is one menu to
- * learn rather than a sidebar on one screen and a tab bar on another.
+ * Seven modules — Clients, Loan Management, Collections, Debt & Security,
+ * Finance, Reports, Administration — with the dashboard pinned above them.
+ * Every module starts **closed**, one opens at a time, and the module holding
+ * the page being viewed opens by itself.
+ *
+ * That is the opposite of what this rail used to do, and the reason is the
+ * destination count. Four open blocks holding eleven entries was a list you
+ * read top to bottom; seven closed modules holding fifty is a map you scan,
+ * and fifty rows at once is not navigation. Opening one module closes the
+ * last, because two open modules put the thing you want below the fold again.
+ *
+ * The open module is **not** remembered across navigations: arriving
+ * somewhere re-derives it from the URL, so the rail always shows where you
+ * are rather than where you last clicked.
  *
  * ## Two breakpoints, deliberately
  *
  * The shell switches the rail from drawer to fixed at `md` (768px). The rows
  * inside it switch from touch-sized to compact at **`lg`** (1024px). They are
- * not the same question.
+ * not the same question. Whether the rail can sit beside the content is about
+ * width; whether a row should be 11px type with 6px of padding is about what
+ * is pointing at it, and everything between 768px and 1024px is a touch
+ * device held at arm's length.
  *
- * Whether the rail can sit beside the content is about **width**: at 768px
- * there is room for a 256px rail and a usable column next to it. Whether a
- * row should be 11px type with 6px of padding is about **what is pointing at
- * it**, and everything between 768px and 1024px is a tablet — a touch device,
- * held at arm's length, often in portrait. Giving it the laptop's density
- * made a 1112px-tall rail hold 460px of menu and 450px of nothing, and asked
- * a thumb to hit a 26px row.
+ * ## The bottom bar is the borrower portal's alone
  *
- * So from `md` the rail is furniture, and from `lg` it is dense furniture.
- *
- * The bottom bar is now the borrower portal's alone — the portal has a sticky
- * header and no drawer, so its two destinations sit in a bar within thumb
- * reach below `md`. It shows up to four destinations and a "More" button that
- * opens the rest in a sheet, which is what keeps it readable at 390px: the
- * design it replaced put every entry in the bar and let the labels truncate
- * to `H…`, `Cli…`, `B…`, and a navigation you cannot read is not
- * navigation.
+ * The portal has a sticky header and no drawer, so its two destinations sit
+ * in a bar within thumb reach below `md`.
  */
 export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryNavProps) {
   const pathname = usePathname();
-  const items = menu === 'portal' ? PORTAL_NAV_ITEMS : NAV_ITEMS;
+  const searchParams = useSearchParams();
 
   if (variant === 'bottom-bar') {
+    const items = menu === 'portal' ? PORTAL_NAV_ITEMS : [DASHBOARD_ITEM];
     const { bar, overflow } = splitForBottomBar(items, permissions);
 
     return (
@@ -112,41 +114,117 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
     );
   }
 
-  const blocks = groupedNavItems(items, permissions);
-
-  // The dashboard is pinned above the accordion as its own row, which is what
-  // the reference does: it is the one destination you reach often enough that
-  // opening a group to find it would be a cost.
-  const dashboard = items.find(
-    (item) => item.href === ROUTES.dashboard && permissions.includes(item.permission),
-  );
-  const groups = blocks
-    .map((block) => ({
-      ...block,
-      items: block.items.filter((item) => item.href !== ROUTES.dashboard),
-    }))
-    .filter((block) => block.items.length > 0);
+  if (menu === 'portal') {
+    return (
+      <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2 text-xs">
+        {PORTAL_NAV_ITEMS.filter((item) => canReachNavItem(item, permissions)).map(
+          (item) => (
+            <SidebarTopLink key={item.href} item={item} pathname={pathname} />
+          ),
+        )}
+      </div>
+    );
+  }
 
   return (
-    // The reference's menu band: `flex-1 min-h-0 scroll-area scroll-y py-2
-    // px-2.5 space-y-1.5 text-xs`. `min-h-0` is what lets it scroll inside a
-    // flex column instead of pushing the user footer off the bottom, and the
-    // bands above and below it are `shrink-0` so this is the only part that
-    // ever gives. `gap-1` rather than `gap-1.5`: with every group open the
-    // rail is a list of a dozen rows, and 6px between blocks reads as loose.
+    <StaffRail pathname={pathname} params={searchParams} permissions={permissions} />
+  );
+}
+
+/**
+ * The staff rail: the pinned dashboard, then the modules.
+ *
+ * Its own component because it holds the one piece of state the rail has —
+ * which module the reader has opened — and that state is keyed by the page it
+ * was opened on, so a navigation resets it rather than freezing yesterday's
+ * choice over today's page.
+ */
+function StaffRail({
+  pathname,
+  params,
+  permissions,
+}: {
+  readonly pathname: string;
+  readonly params: URLSearchParams | null;
+  readonly permissions: readonly Permission[];
+}) {
+  const modules = NAV_MODULES.map((module) => ({
+    ...module,
+    items: module.items.filter((item) => canReachNavItem(item, permissions)),
+  })).filter((module) => module.items.length > 0);
+
+  const dashboard = canReachNavItem(DASHBOARD_ITEM, permissions) ? DASHBOARD_ITEM : null;
+  const notifications = canReachNavItem(NOTIFICATIONS_ITEM, permissions)
+    ? NOTIFICATIONS_ITEM
+    : null;
+
+  // The entry that is the page being viewed — resolved once, over what this
+  // person can actually reach, so exactly one row claims it however many
+  // prefixes match.
+  const current = currentNavItem(
+    [
+      ...(dashboard === null ? [] : [dashboard]),
+      ...modules.flatMap((module) => module.items),
+      ...(notifications === null ? [] : [notifications]),
+    ],
+    pathname,
+    params,
+  );
+  const currentModule = currentNavModuleId(modules, pathname, params);
+
+  /*
+    Which module is open, and the page it was opened on.
+
+    Stored together and read back as "opened, and still on that page", the
+    same shape the shell uses for its drawer. A changed pathname *is* the
+    reader's choice expiring, in the same render that shows the new page —
+    which is what makes "navigate to Expenses and Finance is open" true
+    without an effect that sets state during render.
+
+    `undefined` for the opened module means "nothing chosen here yet", which
+    is distinct from `null`, meaning "closed everything on this page".
+  */
+  const [opened, setOpened] = useState<{
+    readonly module: NavModuleId | null;
+    readonly path: string;
+  } | null>(null);
+
+  const chosen = opened !== null && opened.path === pathname ? opened.module : undefined;
+  const openModule = chosen === undefined ? currentModule : chosen;
+
+  const toggle = (id: NavModuleId): void => {
+    setOpened({ module: openModule === id ? null : id, path: pathname });
+  };
+
+  return (
+    // The menu band: `flex-1 min-h-0 scroll-area scroll-y py-2 px-2.5
+    // text-xs`. `min-h-0` is what lets it scroll inside a flex column instead
+    // of pushing the user footer off the bottom, and the bands above and
+    // below it are `shrink-0` so this is the only part that ever gives.
     <div className="scroll-area scroll-y flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2 text-xs">
-      {dashboard === undefined ? null : (
-        <SidebarTopLink item={dashboard} pathname={pathname} />
+      {dashboard === null ? null : (
+        <SidebarTopLink item={dashboard} pathname={pathname} params={params} />
       )}
 
-      {groups.map((block) => (
-        <SidebarGroup
-          key={block.group}
-          label={NAV_GROUP_LABELS[block.group]}
-          items={block.items}
-          pathname={pathname}
+      {modules.map((module) => (
+        <SidebarModule
+          key={module.id}
+          module={module}
+          expanded={openModule === module.id}
+          onToggle={() => {
+            toggle(module.id);
+          }}
+          currentHref={current?.href}
         />
       ))}
+
+      {/* Pinned below the modules, for the same reason the dashboard is
+          pinned above them: it belongs to no module because it is about
+          every module, and the header's bell is how somebody reaches it most
+          of the time. */}
+      {notifications === null ? null : (
+        <SidebarTopLink item={notifications} pathname={pathname} params={params} />
+      )}
     </div>
   );
 }
@@ -154,18 +232,20 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
 /**
  * The pinned dashboard row.
  *
- * The reference's active state for it is a solid amber fill with near-black
- * text at `font-black` — the loudest thing in the rail, and the only place
- * amber is used as a background rather than an accent.
+ * Its active state is a solid amber fill with near-black text at
+ * `font-black` — the loudest thing in the rail, and the only place amber is
+ * used as a background rather than an accent.
  */
 function SidebarTopLink({
   item,
   pathname,
+  params,
 }: {
   readonly item: NavItem;
   readonly pathname: string;
+  readonly params?: URLSearchParams | null;
 }) {
-  const isActive = isNavItemActive(item.href, pathname);
+  const isActive = isNavItemActive(item.href, pathname, params);
   const Icon = item.icon ?? LayoutDashboard;
 
   return (
@@ -188,90 +268,56 @@ function SidebarTopLink({
 }
 
 /**
- * One accordion group.
- *
- * ## Why an accordion rather than the flat labelled blocks
- *
- * The reference's rail is thirteen collapsed groups, each opening onto its own
- * sub-tree. That shape is the design, and it is not arbitrary: a rail that
- * shows every destination at once is a list you read top to bottom, while a
- * rail of closed groups is a map you scan. This application has eleven
- * destinations in three groups, so the groups are the three it already has —
- * Operations, Insights, Administration — and the capability filter still
- * decides what appears inside them.
- *
- * ## The open state
- *
- * Groups start **open**, and the group holding the page being viewed stays
- * open whatever the reader does, so arriving on a screen never hides where
- * you are.
- *
- * Starting shut is what this used to do, and it was wrong in this rail. The
- * reference has thirteen groups and no room to show them; this application
- * has three, holding eleven destinations between them. Collapsed, those three
- * rows plus the pinned dashboard filled about 140px of a rail that is the
- * full height of the window — on a 900px screen that is some 550px of flat
- * navy between the last group and the signed-in person at the foot, which is
- * what the rail actually looked like. Open, the same rail carries its eleven
- * destinations and reads as a menu rather than as three shut doors above a
- * void. Collapsing is still the reader's to do, one group at a time.
- *
- * The state is intentionally *not* persisted across sessions: the reference
- * does not persist it either, and a rail that remembers a group you shut once
- * a week is a rail that is always half closed.
+ * One module: an amber header that discloses its destinations.
  *
  * The header is a real `<button>` with `aria-expanded` and `aria-controls`,
  * and the panel it names carries the id — so a screen-reader user hears
- * "Operations, collapsed, button" rather than meeting four links with no
- * explanation of why the other nine are missing.
+ * "Finance, collapsed, button" rather than meeting six links with no
+ * explanation of why the other forty are missing. Touch-sized up to `lg`
+ * (48px tall at the drawer widths), compact from `lg`, because a thumb and a
+ * trackpad are not the same instrument.
  */
-function SidebarGroup({
-  label,
-  items,
-  pathname,
+function SidebarModule({
+  module,
+  expanded,
+  onToggle,
+  currentHref,
 }: {
-  readonly label: string;
-  readonly items: readonly NavItem[];
-  readonly pathname: string;
+  readonly module: NavModule;
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
+  readonly currentHref?: string;
 }) {
   const panelId = useId();
-  const containsCurrent = items.some((item) => isNavItemActive(item.href, pathname));
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  // The group holding the current page is open whenever it holds it, even if
-  // the reader collapsed it before navigating into it — otherwise a link in a
-  // collapsed group navigates to a screen whose own menu entry is hidden.
-  const expanded = containsCurrent || !isCollapsed;
+  const Icon = module.icon;
 
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
-        onClick={() => {
-          setIsCollapsed((collapsed) => !collapsed);
-        }}
+        onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={panelId}
         className={cn(
-          'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all lg:py-2 lg:text-xs',
+          'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-3 text-left text-[15px] font-bold transition-all lg:py-2 lg:text-xs',
           /*
-            The reference's active/open group: the amber `#F5A623` fill.
+            The open module's amber `#F5A623` fill.
 
-            Its own label on that fill is white, which is 2.03:1 — the axe
-            sweep refuses it, and rightly: this is a navigation label on a
-            screen used outdoors in daylight. The amber is kept, because it is
-            the single most recognisable thing about the rail; the label takes
-            the near-black the reference itself pairs with amber everywhere
-            else, on its active Dashboard link (`bg-amber-500 text-blue-950`)
-            and on its save button (`#fbbf24` on `#0f172a`). That is 8.81:1,
-            and it is the reference's own pairing rather than a substitution.
+            Its label takes the near-black the design pairs with amber
+            everywhere else — on the active Dashboard link and on the save
+            button — which is 8.81:1. White on this amber is 2.03:1, and the
+            axe sweep refuses it: this is a navigation label on a screen used
+            outdoors in daylight.
           */
           expanded
             ? 'bg-accent-2 text-brand-900 shadow-sm'
             : 'text-white hover:bg-blue-800/60',
         )}
       >
-        <span className="flex items-center gap-3 lg:gap-2.5">{label}</span>
+        <span className="flex min-w-0 items-center gap-3 lg:gap-2.5">
+          <Icon aria-hidden="true" className="size-4 shrink-0 lg:size-3.5" />
+          <span>{module.label}</span>
+        </span>
         {expanded ? (
           <ChevronDown aria-hidden="true" className="size-4 shrink-0 lg:size-3.5" />
         ) : (
@@ -280,15 +326,18 @@ function SidebarGroup({
       </button>
 
       {expanded ? (
-        // The reference's sub-tree: indented, with a translucent amber rule
-        // down the left edge standing in for the tree's trunk.
+        // The sub-tree: indented, with a translucent amber rule down the left
+        // edge standing in for the tree's trunk. The children carry no icon
+        // of their own — forty glyphs down one rail is the clutter this pass
+        // exists to remove, and the module's own icon above them is what
+        // names the branch.
         <ul
           id={panelId}
           className="ml-4 flex flex-col gap-0.5 border-l-2 border-amber-500/40 py-1 pr-1 pl-4"
         >
-          {items.map((item) => (
+          {module.items.map((item) => (
             <li key={item.href}>
-              <SidebarLink item={item} pathname={pathname} />
+              <SidebarLink item={item} isActive={item.href === currentHref} />
             </li>
           ))}
         </ul>
@@ -297,36 +346,21 @@ function SidebarGroup({
   );
 }
 
-/**
- * Is this item the page currently being viewed?
- *
- * The dashboard lives at `/`, so a prefix match would make it active on every
- * page; it matches exactly. Every other section matches its own subtree, so a
- * detail page keeps its parent highlighted.
- */
-export function isNavItemActive(href: string, pathname: string): boolean {
-  if (href === ROUTES.dashboard) return pathname === ROUTES.dashboard;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
 function SidebarLink({
   item,
-  pathname,
+  isActive,
 }: {
   readonly item: NavItem;
-  readonly pathname: string;
+  readonly isActive: boolean;
 }) {
-  const isActive = isNavItemActive(item.href, pathname);
-  const Icon = item.icon;
-
   return (
     <Link
       href={item.href}
       prefetch={item.prefetch}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        // The reference's sub-item: 14px touch-sized up to `lg`, 11px and
-        // tight from `lg`, active on a translucent white fill.
+        // 14px and touch-sized up to `lg`, 11px and tight from `lg`, active
+        // on a translucent white fill.
         'flex items-center gap-3 rounded-md px-2.5 py-2.5 text-[14px] font-normal transition-all',
         'lg:gap-2 lg:py-1.5 lg:text-[11px] lg:font-medium',
         isActive
@@ -334,15 +368,7 @@ function SidebarLink({
           : 'text-white hover:bg-white/10',
       )}
     >
-      {/* Amber at the compact size, plain white at the touch size — the
-          reference tints the tree's leaf icons to match the trunk rule beside
-          them, and drops the tint at the larger size where it would read as
-          disabled. */}
-      <Icon
-        aria-hidden="true"
-        className="size-[18px] shrink-0 text-white/90 lg:size-3 lg:text-amber-300"
-      />
-      <span className="leading-snug lg:truncate">{item.label}</span>
+      <span className="leading-snug">{item.label}</span>
       {/* The application carries no full-page loading spinner — see
           `LinkPending` for why — so the feedback for a tap lives in the thing
           that was tapped. */}
@@ -359,7 +385,7 @@ function BottomBarLink({
   readonly pathname: string;
 }) {
   const isActive = isNavItemActive(item.href, pathname);
-  const Icon = item.icon;
+  const Icon = item.icon ?? LayoutDashboard;
 
   return (
     <Link
@@ -384,7 +410,7 @@ function BottomBarLink({
       <Icon aria-hidden="true" className="size-5 shrink-0" />
       {/* No truncation: with four cells the label fits, and a label that did
           not fit would be a sign the bar is holding too much again. */}
-      <span className="w-full text-center">{item.shortLabel}</span>
+      <span className="w-full text-center">{item.shortLabel ?? item.label}</span>
       {/* Absolutely positioned so an appearing spinner cannot shift the
           label under a finger that is already on its way down. */}
       <LinkPending
@@ -468,8 +494,6 @@ function MoreMenu({
         onClick={(event) => {
           if (event.target === dialogRef.current) close();
         }}
-        // The reference's modal shell: a white panel with its own bordered
-        // header, `shadow-2xl`, over a `slate-900/50` backdrop.
         className={cn(
           'bg-surface text-text m-0 mt-auto w-full max-w-none rounded-t-xl p-0 shadow-2xl',
           'backdrop:bg-slate-900/50',
@@ -491,7 +515,7 @@ function MoreMenu({
 
         <ul className="max-h-[60dvh] overflow-y-auto p-2">
           {items.map((item) => {
-            const Icon = item.icon;
+            const Icon = item.icon ?? LayoutDashboard;
             const isActive = isNavItemActive(item.href, pathname);
 
             return (

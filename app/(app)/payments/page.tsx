@@ -133,9 +133,8 @@ export default async function PaymentsPage({
           ) : null}
         </Card>
 
-        <p className="text-text-muted text-sm">
-          Posted payments only — a reversal removes its payment from this total. What was{' '}
-          <em>due</em> today is shown on each loan; comparing the two is a later phase.
+        <p className="text-text-muted text-xs">
+          Posted payments only — a reversal removes its payment from this total.
         </p>
       </section>
 

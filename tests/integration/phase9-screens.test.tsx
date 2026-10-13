@@ -141,7 +141,7 @@ describe('the settings page', () => {
     // system can carry: an approved loan keeps the rate, grace period and
     // penalty rate captured at approval.
     expect(page).toMatch(/does not change an existing loan/i);
-    expect(page).toMatch(/approved after the change|after<\/strong> the change/i);
+    expect(page).toMatch(/approved <strong>after<\/strong>/i);
   });
 
   it('separates what is editable from what is a historical snapshot', () => {

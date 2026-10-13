@@ -945,9 +945,9 @@ describe('the collection summary', () => {
     render(<CollectionSummaryView summary={SUMMARY} />);
 
     expect(
-      screen.getByText(
-        /Principal collected is a reduction of what is owed, not revenue/i,
-      ),
+      // The statement, not its phrasing: the line was shortened in the copy
+      // reduction pass and must still deny the reading it denies.
+      screen.getByText(/Principal collected reduces what is owed and is not revenue/i),
     ).toBeInTheDocument();
   });
 

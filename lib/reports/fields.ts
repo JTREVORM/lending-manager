@@ -39,6 +39,8 @@
  */
 
 import { DELINQUENCY_STATE_LABELS } from '@/lib/domain/delinquency';
+import { accountTypeLabel } from '@/lib/domain/trial-balance';
+import type { TrialBalanceLine } from '@/lib/domain/trial-balance';
 import { PAYMENT_METHOD_LABELS } from '@/lib/domain/payment';
 import { AGING_BUCKET_LABELS } from '@/lib/domain/risk';
 import {
@@ -371,5 +373,33 @@ export function recoveryFields(timeZone: string): readonly ReportField<RecoveryA
     textField('Corrected', (row) => (row.isCorrected ? 'yes' : 'no'), { weight: 1 }),
     textField('Recorded by', (row) => row.createdByLabel, { weight: 1.8 }),
     instantField('Recorded', (row) => row.createdAt, timeZone),
+  ];
+}
+
+/**
+ * The trial balance's columns.
+ *
+ * Seven, in the order a trial balance has always been read: what the account
+ * is, what moved through it, and what it holds. Both pairs of money columns
+ * are here for the reason `lib/domain/trial-balance.ts` gives — movement and
+ * net balance are different questions, and a statement showing only one of
+ * them can be misread.
+ *
+ * The same fields drive the screen, the CSV and the PDF, so a heading cannot
+ * say one thing on paper and another in a spreadsheet, and the money columns
+ * are grouped for a reader and plain for a spreadsheet by construction.
+ *
+ * No `defaultPeriod` and no filter columns: the view this reads has neither a
+ * date nor a branch, by design (see the page).
+ */
+export function trialBalanceFields(): readonly ReportField<TrialBalanceLine>[] {
+  return [
+    textField('Code', (row) => row.code, { weight: 1, minWidth: 54 }),
+    textField('Account', (row) => row.name, { weight: 3.2 }),
+    textField('Type', (row) => accountTypeLabel(row.accountType), { weight: 1.2 }),
+    moneyField('Debits', (row) => row.totalDebit),
+    moneyField('Credits', (row) => row.totalCredit),
+    moneyField('Debit balance', (row) => row.debitBalance),
+    moneyField('Credit balance', (row) => row.creditBalance),
   ];
 }

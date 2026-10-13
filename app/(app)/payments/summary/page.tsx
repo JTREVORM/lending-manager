@@ -2,6 +2,7 @@ import { ChartColumn } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
+import { SectionTabs } from '@/components/ui/section-tabs';
 import { CollectionSummaryView } from '@/components/payments/collection-summary-view';
 import { CollectionPeriodForm } from '@/components/payments/collection-period-form';
 import { ROUTES } from '@/config/app';
@@ -35,6 +36,23 @@ const DEFAULT_SPAN_DAYS = 29;
  * summary that looks complete is the one failure mode that matters on a screen
  * somebody banks from.
  */
+/**
+ * The five slices a rail entry may name, and the heading each scrolls to.
+ *
+ * "Collections by payment method", "by staff" and "by loan product" are
+ * entries in the Collections module; "by branch" is Branch Network's "Branch
+ * Performance", because that is the module a reader asking a branch question
+ * opens. All four are this page — one read, summed five ways — rather than
+ * four screens that could disagree.
+ */
+const SECTION_HEADINGS: Readonly<Record<string, string>> = {
+  method: 'by-method',
+  staff: 'by-staff',
+  branch: 'by-branch',
+  product: 'by-product',
+  day: 'by-day',
+};
+
 export default async function CollectionSummaryPage({
   searchParams,
 }: {
@@ -69,6 +87,9 @@ export default async function CollectionSummaryPage({
 
   const summary = await getCollectionSummary(start, end);
 
+  const rawSection = single('section');
+  const openAt = rawSection === undefined ? undefined : SECTION_HEADINGS[rawSection];
+
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -82,6 +103,18 @@ export default async function CollectionSummaryPage({
       <Card className="min-w-0">
         <CollectionPeriodForm from={start} to={end} today={today} />
       </Card>
+
+      <SectionTabs
+        label="Summary slices"
+        initial={openAt}
+        tabs={[
+          { id: 'by-method', label: 'By method' },
+          { id: 'by-staff', label: 'By staff' },
+          { id: 'by-branch', label: 'By branch' },
+          { id: 'by-product', label: 'By product' },
+          { id: 'by-day', label: 'By day' },
+        ]}
+      />
 
       <CollectionSummaryView summary={summary} />
     </div>
