@@ -125,14 +125,16 @@ start() {
     openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
       -keyout "${RUN_DIR}/key.pem" -out "${RUN_DIR}/cert.pem" \
       -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" \
-      >/dev/null 2>&1
+      > "${RUN_DIR}/openssl.log" 2>&1 ||
+      { echo "error: could not generate the harness certificate." >&2
+        tail -5 "${RUN_DIR}/openssl.log" >&2; exit 1; }
   fi
 
   log "postgrest"
   sed -e "s|@DB_URI@|postgres://authenticator:${POSTGREST_ROLE_PASSWORD}@127.0.0.1:${PG_PORT}/${PG_DB}|" \
       -e "s|@PORT@|${POSTGREST_PORT}|" \
       "${HARNESS_DIR}/postgrest.conf" > "${RUN_DIR}/postgrest.conf"
-  nohup "${pgrst}" "${RUN_DIR}/postgrest.conf" > "${RUN_DIR}/postgrest.log" 2>&1 &
+  setsid "${pgrst}" "${RUN_DIR}/postgrest.conf" </dev/null > "${RUN_DIR}/postgrest.log" 2>&1 &
   echo $! > "${RUN_DIR}/postgrest.pid"
 
   # PostgREST builds its schema cache once at boot and reloads it on a
@@ -152,7 +154,7 @@ start() {
   E2E_PG_PORT="${PG_PORT}" E2E_PG_DB="${PG_DB}" E2E_PG_USER="${PG_USER}" \
   E2E_POSTGREST_PORT="${POSTGREST_PORT}" E2E_SHIM_PORT="${SHIM_PORT}" \
   E2E_PUBLISHABLE_KEY="${PUBLISHABLE_KEY}" E2E_SECRET_KEY="${SECRET_KEY}" \
-    nohup node "${HARNESS_DIR}/shim.mjs" > "${RUN_DIR}/shim.log" 2>&1 &
+    setsid node "${HARNESS_DIR}/shim.mjs" </dev/null > "${RUN_DIR}/shim.log" 2>&1 &
   echo $! > "${RUN_DIR}/shim.pid"
 
   for _ in $(seq 1 30); do
@@ -174,11 +176,24 @@ start() {
   (cd "${PROJECT_ROOT}" && npx next build > "${RUN_DIR}/build.log" 2>&1) ||
     { tail -20 "${RUN_DIR}/build.log" >&2; exit 1; }
 
-  (cd "${PROJECT_ROOT}" && nohup npx next start -p "${APP_PORT}" > "${RUN_DIR}/next.log" 2>&1 &
+  (cd "${PROJECT_ROOT}" && setsid npx next start -p "${APP_PORT}" </dev/null > "${RUN_DIR}/next.log" 2>&1 &
    echo $! > "${RUN_DIR}/next.pid")
 
   for _ in $(seq 1 30); do
     if curl -sf -o /dev/null "http://127.0.0.1:${APP_PORT}/login"; then
+      # Serving a page is not the same as being able to authenticate, and the
+      # browser suite needs the second one. `verify.mjs` checks the two things
+      # the probes above cannot: that the shim's certificate is acceptable to
+      # Node (the probe uses `-k`, the application does not) and that the
+      # sign-in path answers. A stack that fails between those points is
+      # exactly what produced four `auth.setup.ts` timeouts and 519 specs
+      # "did not run" in CI, with nothing in the output to say why.
+      log "verifying the sign-in path"
+      if ! E2E_POSTGREST_URL="http://127.0.0.1:${POSTGREST_PORT}" \
+           node "${HARNESS_DIR}/verify.mjs"; then
+        echo "error: the stack is serving but cannot sign anybody in." >&2
+        exit 1
+      fi
       log "ready on http://127.0.0.1:${APP_PORT}"
       return 0
     fi

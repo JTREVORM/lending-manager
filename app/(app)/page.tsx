@@ -25,10 +25,8 @@ import {
   getPortfolioSummary,
   getRecoveryWorkload,
   listCollectionSheet,
-  listRecentClearances,
-  listRecentDisbursements,
+  listRecentLoanActivity,
   listRecentPayments,
-  listRecentlyPenalised,
   listUpcomingCollections,
 } from '@/lib/data/dashboard';
 import { businessToday } from '@/lib/domain/datetime';
@@ -41,6 +39,12 @@ export const metadata = { title: 'Dashboard' };
 
 /** How many of today's collections the dashboard shows before linking onward. */
 const SHEET_PREVIEW_ROWS = 8;
+
+/** "a", "a and b", "a, b and c" — an English list, for the notice below. */
+function listSections(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${String(names[names.length - 1])}`;
+}
 
 /**
  * The staff dashboard.
@@ -115,9 +119,7 @@ export default async function DashboardPage() {
     sheet,
     recentPayments,
     upcoming,
-    disbursements,
-    clearances,
-    penalised,
+    activity,
     risk,
     recoveryWorkload,
     pendingApprovals,
@@ -131,9 +133,10 @@ export default async function DashboardPage() {
     seeDelinquency
       ? listUpcomingCollections({ after: today, through: addBusinessDays(today, 7) })
       : Promise.resolve([]),
-    seeSensitive ? listRecentDisbursements(4) : Promise.resolve([]),
-    seeSensitive ? listRecentClearances(4) : Promise.resolve([]),
-    seeSensitive ? listRecentlyPenalised(4) : Promise.resolve([]),
+    // One read for all three lifecycle cards. Three separate reads each cost a
+    // scan of the whole loan book, which is what tipped them past the
+    // database's statement budget in production.
+    seeSensitive ? listRecentLoanActivity(4) : Promise.resolve(null),
 
     // Portfolio at risk is a reading of the live book, so it needs both the
     // delinquency data and the entitlement to portfolio-wide figures — the
@@ -153,10 +156,35 @@ export default async function DashboardPage() {
       : Promise.resolve(null),
   ]);
 
-  const summaryUnavailable =
-    (seeFinancial || seeSensitive) && portfolio === null
-      ? 'The portfolio figures could not be read just now. They are derived from the ledger, so nothing is lost — reload in a moment.'
-      : null;
+  /**
+   * Which sections the caller is entitled to but could not be read.
+   *
+   * Every reader above returns `null` for "the query failed", and the page
+   * only asks for a section the caller holds the capability for — so
+   * "entitled and null" is exactly a failed read, and the two cases cannot be
+   * confused. Phase 19: these sections used to return an empty list or a zero
+   * on failure, which a reader cannot tell from a quiet day. An empty
+   * collection sheet means nobody owes anything today; zero portfolio-at-risk
+   * means a book with no arrears in it. Both are statements about the
+   * business, and neither was true — the database had cancelled the query
+   * (57014) after its eight-second budget.
+   *
+   * So a section that could not be read is named here and not drawn at all.
+   */
+  const unreadable: string[] = [];
+  if ((seeFinancial || seeSensitive) && portfolio === null)
+    unreadable.push('the portfolio summary');
+  if (seeOperational && collections === null)
+    unreadable.push("today's collection summary");
+  if (seeDelinquency && sheet === null) unreadable.push("today's collection sheet");
+  if (seePayments && recentPayments === null) unreadable.push('recent payments');
+  if (seeDelinquency && upcoming === null) unreadable.push('upcoming collections');
+  if (seeSensitive && activity === null) unreadable.push('recent loan activity');
+  if (seeFinancial && seeDelinquency && risk === null)
+    unreadable.push('portfolio at risk');
+  if (seeRecovery && recoveryWorkload === null) unreadable.push('the recovery workload');
+  if (mayApproveAnything && pendingApprovals === null)
+    unreadable.push('approvals awaiting a decision');
 
   // The hero's greeting and attention line, built from figures already read
   // above — no extra query, and no invented metric.
@@ -264,9 +292,15 @@ export default async function DashboardPage() {
         </Alert>
       ) : null}
 
-      {summaryUnavailable !== null ? (
-        <Alert tone="warning" title="Figures unavailable">
-          {summaryUnavailable}
+      {unreadable.length > 0 ? (
+        <Alert tone="warning" title="Some figures could not be read">
+          {/*
+            Named, not summarised. "Something went wrong" leaves a reader
+            guessing which card to distrust, and the cards that failed are not
+            drawn — so without the list, a missing section is indistinguishable
+            from one this role never sees.
+          */}
+          {`This dashboard could not read ${listSections(unreadable)}. Those sections are left out rather than shown as nil — every figure is derived from the ledger, so nothing is lost. Reload in a moment, and if it persists tell an administrator.`}
         </Alert>
       ) : null}
 
@@ -324,7 +358,7 @@ export default async function DashboardPage() {
       ) : null}
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        {seePayments ? (
+        {seePayments && recentPayments !== null ? (
           <section aria-labelledby="recent-heading" className="min-w-0 space-y-3">
             <h2 id="recent-heading" className="text-base">
               Recent payments
@@ -333,7 +367,7 @@ export default async function DashboardPage() {
           </section>
         ) : null}
 
-        {seeDelinquency ? (
+        {seeDelinquency && upcoming !== null ? (
           <section aria-labelledby="upcoming-heading" className="min-w-0 space-y-3">
             <h2 id="upcoming-heading" className="text-base">
               Next seven days
@@ -343,14 +377,14 @@ export default async function DashboardPage() {
         ) : null}
       </div>
 
-      {seeSensitive ? (
+      {seeSensitive && activity !== null ? (
         <div className="grid min-w-0 gap-4 lg:grid-cols-3">
           <section aria-labelledby="disbursed-heading" className="min-w-0 space-y-3">
             <h2 id="disbursed-heading" className="text-base">
               Recently paid out
             </h2>
             <LoanActivity
-              rows={disbursements}
+              rows={activity.disbursements}
               kind="disbursed"
               timeZone={branding.timezone}
               emptyTitle="No loans paid out yet"
@@ -363,7 +397,7 @@ export default async function DashboardPage() {
               Recently settled
             </h2>
             <LoanActivity
-              rows={clearances}
+              rows={activity.clearances}
               kind="cleared"
               timeZone={branding.timezone}
               emptyTitle="No loans settled yet"
@@ -376,7 +410,7 @@ export default async function DashboardPage() {
               Recently charged
             </h2>
             <LoanActivity
-              rows={penalised}
+              rows={activity.penalised}
               kind="penalised"
               timeZone={branding.timezone}
               emptyTitle="No late-payment charges"

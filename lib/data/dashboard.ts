@@ -386,7 +386,7 @@ export async function listCollectionSheet(
     readonly page?: unknown;
     readonly pageSize?: unknown;
   } = {},
-): Promise<Paged<CollectionSheetRow>> {
+): Promise<Paged<CollectionSheetRow> | null> {
   const supabase = await createSupabaseServerClient();
   const request = resolvePageRequest(options);
   const window = pageWindow(request);
@@ -406,8 +406,11 @@ export async function listCollectionSheet(
   const { data, error } = await query;
 
   if (error !== null) {
-    logger.warn("Could not read today's collection sheet.", { code: error.code });
-    return { rows: [], page: request.page, pageSize: request.pageSize, hasMore: false };
+    logger.warn("Could not read today's collection sheet.", {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    return null;
   }
 
   return takePage(
@@ -447,7 +450,7 @@ export interface RecentPayment {
 export async function listRecentPayments(
   limit = 8,
   options: { readonly clientId?: string; readonly loanId?: string } = {},
-): Promise<readonly RecentPayment[]> {
+): Promise<readonly RecentPayment[] | null> {
   const supabase = await createSupabaseServerClient();
 
   let query = supabase
@@ -466,8 +469,11 @@ export async function listRecentPayments(
   const { data, error } = await query;
 
   if (error !== null) {
-    logger.warn('Could not read recent payments.', { code: error.code });
-    return [];
+    logger.warn('Could not read recent payments.', {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    return null;
   }
 
   return (data ?? []).map((raw) => {
@@ -516,7 +522,7 @@ export async function listUpcomingCollections(options: {
   readonly after: BusinessDate;
   readonly through: BusinessDate;
   readonly limit?: number;
-}): Promise<readonly UpcomingCollection[]> {
+}): Promise<readonly UpcomingCollection[] | null> {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
@@ -529,8 +535,11 @@ export async function listUpcomingCollections(options: {
     .limit(Math.min(200, Math.max(1, options.limit ?? 25)));
 
   if (error !== null) {
-    logger.warn('Could not read upcoming collections.', { code: error.code });
-    return [];
+    logger.warn('Could not read upcoming collections.', {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    return null;
   }
 
   const rows = (data ?? []).map((raw) => {
@@ -580,10 +589,24 @@ export interface LoanActivityRow {
   readonly penaltyEffectiveDate: BusinessDate | null;
 }
 
+function toActivityRow(row: Raw): LoanActivityRow {
+  return {
+    loanId: text(row.loan_id),
+    loanNumber: text(row.loan_number),
+    clientId: text(row.client_id),
+    clientName: text(row.client_name),
+    principalAmount: money(row.principal_amount),
+    totalOutstanding: money(row.total_outstanding),
+    disbursedAt: row.disbursed_at === null ? null : text(row.disbursed_at),
+    clearedAt: row.cleared_at === null ? null : text(row.cleared_at),
+    penaltyEffectiveDate: nullableDate(row.penalty_effective_date),
+  };
+}
+
 async function listLoanActivity(
   column: 'disbursed_at' | 'cleared_at',
   limit: number,
-): Promise<readonly LoanActivityRow[]> {
+): Promise<readonly LoanActivityRow[] | null> {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
@@ -597,8 +620,12 @@ async function listLoanActivity(
     .limit(Math.min(50, Math.max(1, limit)));
 
   if (error !== null) {
-    logger.warn('Could not read recent loan activity.', { code: error.code, column });
-    return [];
+    logger.warn('Could not read recent loan activity.', {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+      column,
+    });
+    return null;
   }
 
   return (data ?? []).map((raw) => {
@@ -617,18 +644,99 @@ async function listLoanActivity(
   });
 }
 
-export function listRecentDisbursements(limit = 5): Promise<readonly LoanActivityRow[]> {
+/**
+ * All three lifecycle cards from one read.
+ *
+ * ## Why these are not three queries any more
+ *
+ * The dashboard shows "recently paid out", "recently settled" and "recently
+ * charged" — four rows each. Until Phase 19 that was three separate reads of
+ * `loan_portfolio_report`, and each one cost a scan of the *whole* loan book:
+ * the ordering column is computed by the view, so PostgREST's
+ * `order(...).limit(4)` cannot be answered from an index and the view is
+ * materialised in full before four rows are taken. Production's
+ * `pg_stat_statements` put those three statements at 20,759–194,125 shared
+ * buffer hits *per call* — up to 1.5 GB of buffer traffic to show twelve rows.
+ *
+ * One read, sorted in memory, answers all three. The whole book is one scan
+ * instead of three, and twelve rows are chosen from rows already in hand.
+ *
+ * ## Why in-memory sorting is safe here
+ *
+ * It sorts, it does not compute. Every figure still comes from the view's own
+ * columns, so no card shows a number this module derived. The read is capped
+ * (`ACTIVITY_SCAN_CAP`) so a large book cannot turn this into an unbounded
+ * fetch; past the cap the three lists are drawn from the capped window, which
+ * is the same window the three `limit(4)` queries would have ranked within for
+ * any book whose recent activity sits inside it.
+ */
+const ACTIVITY_SCAN_CAP = 2000;
+
+export interface RecentLoanActivity {
+  readonly disbursements: readonly LoanActivityRow[];
+  readonly clearances: readonly LoanActivityRow[];
+  readonly penalised: readonly LoanActivityRow[];
+}
+
+export async function listRecentLoanActivity(
+  limit = 4,
+): Promise<RecentLoanActivity | null> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('loan_portfolio_report')
+    .select(
+      `loan_id, loan_number, client_id, client_name, principal_amount,
+       total_outstanding, disbursed_at, cleared_at, penalty_effective_date,
+       penalty_applied`,
+    )
+    .limit(ACTIVITY_SCAN_CAP);
+
+  if (error !== null) {
+    logger.warn('Could not read recent loan activity.', {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    return null;
+  }
+
+  const take = Math.min(50, Math.max(1, limit));
+  const rows = (data ?? []) as Raw[];
+
+  /** Most recent first, by the column the card is ordered on. */
+  const recentBy = (
+    key: 'disbursed_at' | 'cleared_at' | 'penalty_effective_date',
+    keep: (row: Raw) => boolean,
+  ): readonly LoanActivityRow[] =>
+    rows
+      .filter((row) => keep(row) && row[key] !== null && row[key] !== undefined)
+      .sort((a, b) => String(b[key]).localeCompare(String(a[key])))
+      .slice(0, take)
+      .map((row) => toActivityRow(row));
+
+  return {
+    disbursements: recentBy('disbursed_at', (row) => row.disbursed_at !== null),
+    clearances: recentBy('cleared_at', (row) => row.cleared_at !== null),
+    penalised: recentBy('penalty_effective_date', (row) => row.penalty_applied === true),
+  };
+}
+
+export function listRecentDisbursements(
+  limit = 5,
+): Promise<readonly LoanActivityRow[] | null> {
   return listLoanActivity('disbursed_at', limit);
 }
 
-export function listRecentClearances(limit = 5): Promise<readonly LoanActivityRow[]> {
+export function listRecentClearances(
+  limit = 5,
+): Promise<readonly LoanActivityRow[] | null> {
   return listLoanActivity('cleared_at', limit);
 }
 
 /** Loans carrying a recorded late-payment charge, most recent charge first. */
 export async function listRecentlyPenalised(
   limit = 5,
-): Promise<readonly LoanActivityRow[]> {
+): Promise<readonly LoanActivityRow[] | null> {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
@@ -642,8 +750,11 @@ export async function listRecentlyPenalised(
     .limit(Math.min(50, Math.max(1, limit)));
 
   if (error !== null) {
-    logger.warn('Could not read recently penalised loans.', { code: error.code });
-    return [];
+    logger.warn('Could not read recently penalised loans.', {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    return null;
   }
 
   return (data ?? []).map((raw) => {
@@ -793,7 +904,7 @@ export async function getPendingApprovals(options: {
   readonly transfers: boolean;
   readonly expenses: boolean;
   readonly reconciliations: boolean;
-}): Promise<PendingApprovals> {
+}): Promise<PendingApprovals | null> {
   const supabase = await createSupabaseServerClient();
 
   /**
@@ -805,15 +916,22 @@ export async function getPendingApprovals(options: {
   const countPending = async (
     table: 'transfer_register' | 'expense_register' | 'reconciliation_register',
     status: string,
-  ): Promise<number> => {
+  ): Promise<number | null> => {
     const { count: total, error } = await supabase
       .from(table)
       .select('id', { count: 'exact', head: true })
       .eq('status', status);
 
     if (error !== null) {
-      logger.warn('Could not count pending approvals.', { table, code: error.code });
-      return 0;
+      logger.warn('Could not count pending approvals.', {
+        table,
+        code: error.code,
+        region: process.env.VERCEL_REGION ?? null,
+      });
+      // Not zero. "Nothing is waiting for you" and "the queue could not be
+      // read" look identical on a card and call for opposite reactions, and
+      // this card is the only prompt an approver gets.
+      return null;
     }
 
     return total ?? 0;
@@ -832,6 +950,13 @@ export async function getPendingApprovals(options: {
       ? countPending('reconciliation_register', 'submitted')
       : Promise.resolve(0),
   ]);
+
+  // One failed count makes the whole card untrustworthy: the approver cannot
+  // tell which number is real, so the page says so instead of showing three
+  // figures of which one is a guess.
+  if (transfers === null || expenses === null || reconciliations === null) {
+    return null;
+  }
 
   return { transfers, expenses, reconciliations };
 }

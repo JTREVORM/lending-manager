@@ -905,14 +905,22 @@ export async function getPortfolioAtRisk(): Promise<{
   readonly portfolio: ParSlice;
   readonly byBranch: ParSlice[];
   readonly byProduct: ParSlice[];
-}> {
+} | null> {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase.from('portfolio_at_risk').select(PAR_COLUMNS);
 
   if (error !== null) {
-    logger.warn('Could not read portfolio at risk.', { code: error.code });
-    return { portfolio: EMPTY_PAR, byBranch: [], byProduct: [] };
+    logger.warn('Could not read portfolio at risk.', {
+      code: error.code,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    // Deliberately not `EMPTY_PAR`. Every bucket in it is zero, so returning
+    // it on a failed read renders a book with no risk in it — the single most
+    // dangerous thing this dashboard can say, and indistinguishable from a
+    // genuinely clean portfolio. A risk figure nobody could read is reported
+    // as unreadable.
+    return null;
   }
 
   const slices = (data ?? []).map(toParSlice);

@@ -162,6 +162,19 @@ jobs:
       - name: Bring up the stack (migrate, seed, build, serve)
         run: bash tests/e2e/harness/stack.sh up
 
+      # The stack is brought up by the previous step. Each `run:` is its own
+      # shell, and a service started in one step can be gone by the next — the
+      # runner signals the step's process group at step end, which `nohup`
+      # does not escape (`stack.sh` now uses `setsid`, which does). When the
+      # browser suite failed in CI with four `auth.setup.ts` timeouts and 519
+      # specs "did not run", the job's own cleanup listed only `postgres` as an
+      # orphan: everything else was already dead. This step says so in one
+      # line, in the right place, instead of leaving it to be inferred.
+      - name: The stack is still up
+        run: |
+          source <(bash tests/e2e/harness/stack.sh env)
+          E2E_POSTGREST_URL="http://127.0.0.1:3001" node tests/e2e/harness/verify.mjs
+
       - name: Browser tests
         run: |
           source <(bash tests/e2e/harness/stack.sh env)

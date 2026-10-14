@@ -286,7 +286,13 @@ export default async function ClientDetailPage({
         </section>
       ) : null}
 
-      {canSeePayments ? (
+      {/*
+        `payments === null` means the read failed, not that this client has
+        never paid. Drawing the empty state there would tell a clerk the
+        borrower has no payment history, which is a statement about the
+        client's account rather than about the query.
+      */}
+      {canSeePayments && payments !== null ? (
         <section aria-labelledby="client-payments-heading" className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="client-payments-heading" className="text-base">
