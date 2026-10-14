@@ -320,15 +320,53 @@ tolerate the one failure that makes the suite meaningless.
    `stack.sh down` still reaps them (verified).
 4. **Certificate generation no longer discards its errors.**
 
-### 7.3 Still open
+### 7.3 The cause, found
 
-Why the shim does not bind in CI is not yet known — the previous runs printed
-nothing, and that is what change (1) fixes. The next CI run will print the
-shim's startup error, and the likely candidates (a port already held, a
-missing certificate file, a failure reaching PostgREST) are each named
-directly by that log. The honest position: the harness no longer hides the
-failure, and the cause will be in the next run's output rather than requiring
-another investigation from first principles.
+The next run's log carried the shim's own error, which is the whole answer:
+
+```
+  auth shim
+error: the auth shim did not come up on time.
+--- .e2e/shim.log (last 20 lines) ---
+Error: Cannot find module 'pg'
+Require stack:
+- /home/user/lending-manager/package.json
+    at file:///home/runner/work/lending-manager/lending-manager/tests/e2e/harness/shim.mjs:26:20
+  code: 'MODULE_NOT_FOUND'
+```
+
+`tests/e2e/harness/shim.mjs` resolved its one dependency like this:
+
+```js
+const require = createRequire('/home/user/lending-manager/package.json');
+```
+
+An absolute path to one machine's working directory, committed in **Phase 9**
+(`722923d`) and unchanged since. The shim can only start where the checkout
+sits at exactly that path. It did on the machines Phases 9–18 were written on
+— which is why the browser suite looked green to every one of them — and it
+does not on a GitHub Actions runner, where the checkout is under
+`/home/runner/work`.
+
+So the full chain, eight phases old:
+
+1. The shim exits immediately with `MODULE_NOT_FOUND`.
+2. Next renders `/login` anyway, because it does not need the shim to render
+   it; the readiness loop (§7.1) tolerated the missing service.
+3. Sign-in does need the shim, so all four `auth.setup.ts` sign-ins time out
+   and 519 specs never run.
+
+The fix is `createRequire(import.meta.url)`, which resolves from the file's own
+location upwards and therefore finds the repository's `node_modules` wherever
+the repository is. Verified by running the shim from a checkout at a different
+absolute path with its own `node_modules`: it resolves
+`<repo>/node_modules/pg` and starts. The old form cannot be tested that way in
+this container, because the hardcoded path exists here — which is precisely
+the trap it set. CI was the test, and CI named it.
+
+`tests/e2e/specs/fixtures.ts` already used the cwd-relative form, so the shim
+was the only file carrying this; a repository-wide search for hardcoded
+developer paths finds nothing else.
 
 ## 8. Verification
 
@@ -344,7 +382,9 @@ another investigation from first principles.
 | New tests against the **old** data layer | **7 fail** — they are genuine regression tests |
 | Forced-failure dashboard render | notice shown, nine sections named, no zero-risk card |
 | CI on this branch (`96a78b9`) | `checks` **success**, `database` **success** |
-| CI browser job | fails in `Bring up the stack`, naming `ECONNREFUSED :8443` — the diagnosis in §7.1, in the right step |
+| CI browser job, `96a78b9` | fails in `Bring up the stack` naming `ECONNREFUSED :8443` — in the right step, per §7.1 |
+| CI browser job, `2c4f6cd` | fails naming the shim's own `MODULE_NOT_FOUND` — the cause, per §7.3 |
+| CI browser job, `33720b1` | the shim starts: the bring-up passes the point that failed fast in both runs above, and the suite runs for the first time since Phase 9. Final tally was still in flight when this was written — the branch's run is the record. |
 
 `tests/unit/dashboard-read-failures.test.ts` pins the contract the page relies
 on: each reader returns `null` on `57014`, and the lifecycle cards read
