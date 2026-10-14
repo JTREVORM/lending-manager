@@ -22,7 +22,16 @@ import { createHmac, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto
 import { request as httpRequest } from 'node:http';
 import { createRequire } from 'node:module';
 
-const require = createRequire('/home/user/lending-manager/package.json');
+// Resolved from this file's own location, so `pg` is found wherever the
+// repository is checked out. This was an absolute path to one developer's
+// working directory (`/home/user/lending-manager/package.json`) from Phase 9
+// until Phase 19, which meant the shim could only start on a machine whose
+// checkout sat at exactly that path. It did on the machines this was written
+// on, and it did not on a GitHub Actions runner, where the checkout is under
+// `/home/runner/work`: the shim exited immediately with MODULE_NOT_FOUND,
+// `/login` still rendered because Next does not need the shim to render it,
+// and the browser suite failed every sign-in for eight phases.
+const require = createRequire(import.meta.url);
 const { Client } = require('pg');
 
 const JWT_SECRET = 'harness-only-jwt-secret-not-a-real-key-32+';
