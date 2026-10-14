@@ -259,42 +259,76 @@ Red on the production branch before Phase 18 and still red: all four
 `2 passed`, **zero spec failures**. It does not reproduce locally — the same
 suite signs all four roles in, in 7.8 s.
 
-What the CI log shows is that `/login` rendered (so Next was reachable) and
-sign-in did not complete — and sign-in is the only part of that path that calls
-the auth shim. The job's own cleanup is the tell:
+### 7.1 What it actually is
+
+The first hypothesis from the CI log was wrong and the run proved it. The log
+showed the job's cleanup reaping only `postgres`, which suggested the services
+were killed with the starting step's process group. They were started with
+`nohup … &`, which ignores SIGHUP but does not leave that group, so `setsid`
+was a reasonable fix — and is a strict improvement — but it was not the cause.
+
+Adding the check in §7.2 and pushing moved the failure from the browser step
+into the step where it belongs, and it named the cause in one line:
 
 ```
-Cleaning up orphan processes
-Terminate orphan process: pid (2948) (postgres)
+  auth shim
+  seed
+  application
+  verifying the sign-in path
+harness check failed: the shim’s TLS certificate is not acceptable to Node
+  ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:8443
+error: the stack is serving but cannot sign anybody in.
 ```
 
-Only `postgres` was still alive to be reaped. It survives because `pg_ctl`
-daemonizes into its own session; `postgrest`, the shim and `next` were started
-with `nohup … &`, which ignores SIGHUP but does **not** leave the starting
-step's process group — so a runner that signals that group at step end takes
-them with it.
+**The auth shim is not listening** — and not because a later step killed it,
+but inside the very step that starts it. The reason the stack reported success
+anyway is the readiness loop:
 
-Three changes:
+```bash
+for _ in $(seq 1 30); do
+  if curl -skf -o /dev/null "https://127.0.0.1:${SHIM_PORT}/auth/v1/health"; then break; fi
+  sleep 1
+done
+```
 
-1. **`setsid` instead of `nohup`** for all three services, so they genuinely
-   outlive the step that starts them.
-2. **`tests/e2e/harness/verify.mjs`**, run at the end of `stack.sh up` and
-   again immediately before Playwright. It checks the two things the existing
-   probes cannot: that the shim's certificate is acceptable **to Node with the
-   harness CA** — the old probe is `curl -skf`, and `-k` skips the very
-   validation the application performs — and that the seeded owner can actually
-   complete a password grant. Verified both ways: it passes against a healthy
-   stack, and against a stack missing `NODE_EXTRA_CA_CERTS` it fails with
-   `DEPTH_ZERO_SELF_SIGNED_CERT` and says what to check.
-3. **Certificate generation no longer discards its errors**, which previously
-   made a failed `openssl` silent — the shim still starts, `curl -k` still
-   passes, and the first symptom is a sign-in that never navigates.
+It breaks on success and does **nothing** when the attempts are exhausted. So
+thirty failed probes fell through to the seed and the application exactly as
+though they had succeeded. `/login` rendered, because Next does not need the
+shim to render it; sign-in could not work, because it does. The suite then
+failed in `auth.setup.ts` with four twenty-second timeouts, and nothing
+anywhere said the shim was missing. The same shape applied to the PostgREST
+probe.
 
-Honest status: `setsid` addresses the leading hypothesis and is a strict
-improvement either way, but the cause is inferred from the CI log rather than
-reproduced. The point of (2) is that the next CI run states the cause in the
-step where it happens, instead of producing four timeouts and 519 skipped
-specs with nothing to go on.
+That is the defect. It is not a Phase 18 regression, it predates this work,
+and it is why the symptom was so hard to read: the harness was designed to
+tolerate the one failure that makes the suite meaningless.
+
+### 7.2 The changes
+
+1. **`await_service`** replaces both fall-through loops. It fails when the
+   attempts are exhausted and prints that service's own log, which is where
+   the reason is. Proven both ways: it returns 0 against the live services,
+   and against a probe that never succeeds it exits 1 and prints the log tail.
+2. **`tests/e2e/harness/verify.mjs`**, at the end of `stack.sh up` and again
+   before Playwright. It checks the two things the old probes could not: that
+   the shim's certificate satisfies **Node with the harness CA** — the old
+   probe is `curl -skf`, and `-k` skips precisely the validation the
+   application performs — and that the seeded owner can complete a password
+   grant. This is the check that produced the diagnosis above.
+3. **`setsid` instead of `nohup`** for all three services. Not the cause, but
+   correct: they now genuinely outlive the step that starts them, and
+   `stack.sh down` still reaps them (verified).
+4. **Certificate generation no longer discards its errors.**
+
+### 7.3 Still open
+
+Why the shim does not bind in CI is not yet known — the previous runs printed
+nothing, and that is what change (1) fixes. The next CI run will print the
+shim's startup error, and the likely candidates (a port already held, a
+missing certificate file, a failure reaching PostgREST) are each named
+directly by that log. The honest position: the harness no longer hides the
+failure, and the cause will be in the next run's output rather than requiring
+another investigation from first principles.
 
 ## 8. Verification
 
@@ -309,6 +343,8 @@ specs with nothing to go on.
 | Browser: `dashboard`, `app-shell`, `security` | **120 passed** |
 | New tests against the **old** data layer | **7 fail** — they are genuine regression tests |
 | Forced-failure dashboard render | notice shown, nine sections named, no zero-risk card |
+| CI on this branch (`96a78b9`) | `checks` **success**, `database` **success** |
+| CI browser job | fails in `Bring up the stack`, naming `ECONNREFUSED :8443` — the diagnosis in §7.1, in the right step |
 
 `tests/unit/dashboard-read-failures.test.ts` pins the contract the page relies
 on: each reader returns `null` on `57014`, and the lifecycle cards read

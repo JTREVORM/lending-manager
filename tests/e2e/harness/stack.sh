@@ -93,6 +93,40 @@ postgrest_binary() {
 # ---------------------------------------------------------------------------
 # up
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Wait for a service, and fail if it never arrives.
+#
+# The loops this replaces were written as `if <probe>; then break; fi` with
+# nothing after the loop, so thirty failed attempts fell through to the next
+# step as though they had succeeded. A stack with no auth shim therefore
+# reported itself up: `/login` rendered, sign-in could not work, and the
+# browser suite failed in `auth.setup.ts` with four twenty-second timeouts and
+# 519 specs "did not run" — with nothing anywhere saying the shim was missing.
+# That is exactly what CI had been doing.
+#
+# On failure this prints the service's own log, which is where the reason is.
+# The harness credentials in it are synthetic, local-only literals that are
+# already committed to this repository.
+await_service() {
+  local label="$1" logfile="$2"
+  shift 2
+
+  local attempt
+  for attempt in $(seq 1 30); do
+    if "$@" 2>/dev/null; then return 0; fi
+    sleep 1
+  done
+
+  echo "error: ${label} did not come up on time." >&2
+  if [[ -f "${logfile}" ]]; then
+    echo "--- ${logfile} (last 20 lines) ---" >&2
+    tail -20 "${logfile}" >&2
+  else
+    echo "       (${logfile} does not exist — it never started)" >&2
+  fi
+  exit 1
+}
+
 start() {
   local pgrst
   pgrst="$(postgrest_binary)"
@@ -142,10 +176,8 @@ start() {
   # stale cache answers PGRST202 ("could not find the function") for a
   # function that plainly exists, so the notify is sent explicitly rather
   # than relied upon.
-  for _ in $(seq 1 30); do
-    if curl -sf -o /dev/null "http://127.0.0.1:${POSTGREST_PORT}/"; then break; fi
-    sleep 1
-  done
+  await_service "postgrest" "${RUN_DIR}/postgrest.log" \
+    curl -sf -o /dev/null "http://127.0.0.1:${POSTGREST_PORT}/"
   psql "postgresql://${PG_USER}@127.0.0.1:${PG_PORT}/${PG_DB}" \
     -q -c "notify pgrst, 'reload schema';" >/dev/null
 
@@ -157,10 +189,8 @@ start() {
     setsid node "${HARNESS_DIR}/shim.mjs" </dev/null > "${RUN_DIR}/shim.log" 2>&1 &
   echo $! > "${RUN_DIR}/shim.pid"
 
-  for _ in $(seq 1 30); do
-    if curl -skf -o /dev/null "https://127.0.0.1:${SHIM_PORT}/auth/v1/health"; then break; fi
-    sleep 1
-  done
+  await_service "the auth shim" "${RUN_DIR}/shim.log" \
+    curl -skf -o /dev/null "https://127.0.0.1:${SHIM_PORT}/auth/v1/health"
 
   log "seed"
   E2E_DATABASE_URL="postgresql://${PG_USER}@127.0.0.1:${PG_PORT}/${PG_DB}" \
