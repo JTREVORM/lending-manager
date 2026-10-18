@@ -224,6 +224,7 @@ export function ReportTable<Row>({
                       : {
                           style: { minWidth: `${String(columnWidth(column.width))}px` },
                         })}
+                    data-wrap={column.wrap === true ? 'wrap' : 'nowrap'}
                     className={cn(
                       'px-2 py-2.5 align-top',
                       column.wrap === true ? undefined : 'whitespace-nowrap',

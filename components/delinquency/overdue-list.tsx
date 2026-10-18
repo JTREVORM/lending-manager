@@ -330,8 +330,16 @@ export function OverdueList({
                       <Money amount={loan.currentDue} />
                     </TableCell>
                     {/* The one cell allowed extra lines: a penalty note under
-                        the figure is the reason the officer is looking. */}
-                    <TableCell width="money-wide" align="numeric" className="text-text">
+                        the figure is the reason the officer is looking at
+                        this row at all. Declared as wrapping so the layout
+                        sweep holds it to the rule it was given rather than
+                        to the two lines a figure column gets. */}
+                    <TableCell
+                      width="money-wide"
+                      align="numeric"
+                      wrap="wrap"
+                      className="text-text"
+                    >
                       <Money amount={loan.totalOutstanding} />
                       {loan.penaltyRemaining > 0 ? (
                         <span className="text-danger block text-[10px] whitespace-nowrap">

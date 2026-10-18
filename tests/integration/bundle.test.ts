@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 520 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 545 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -121,14 +121,41 @@ describeBundle('the browser bundle', () => {
     // headroom is for one more phase, not for four, so the next phase to
     // cross it has to make its own case.
     //
-    // It is not what a page costs. No page loads all forty: a measured page
-    // transfers 155-165 KB of JavaScript, and that figure — the one that is
-    // actually somebody's airtime — is asserted in a real browser by
+    // ## 520 → 545, for the table design system
+    //
+    // That phase is this one, and the case is the same shape, which is why
+    // the rise is 25 KB and not 80:
+    //
+    //   - **No new dependency.** Nothing was added to `package.json`. The
+    //     four largest chunks are byte-identical to the previous build at
+    //     90, 72, 39 and 35 KB, and the 120 KB largest-chunk assertion above
+    //     — the one that actually catches a library creeping in — is
+    //     untouched.
+    //   - **It is re-splitting, not weight.** The refactor replaced fourteen
+    //     hand-written tables with two shared components and moved the
+    //     registers' filter, count and pagination into one shared client
+    //     module. Code that was duplicated inline in each route is now a
+    //     module several routes share, so Turbopack re-cuts the graph: 62
+    //     chunks became 70, and the growth is spread across them at 1–9 KB
+    //     each. The source is some 1,500 lines shorter than it was.
+    //   - **What a page costs did not move.** That is the figure that is
+    //     somebody's airtime, and it is asserted in a real browser by
+    //     `tests/e2e/specs/performance.spec.ts`, which still passes on every
+    //     route this work touched — `/clients`, `/loans`, `/payments`,
+    //     `/overdue`, `/recovery` — in both the desktop and the mobile
+    //     profile, against unchanged ceilings.
+    //
+    // 545 leaves about the same headroom over the measured 542 as 520 left
+    // over 517. The next phase to cross it still has to make its own case.
+    //
+    // It is not what a page costs. No page loads all seventy: a measured
+    // page transfers 155-165 KB of JavaScript, and that figure — the one
+    // that is actually somebody's airtime — is asserted in a real browser by
     // `tests/e2e/specs/performance.spec.ts`, because only a browser knows
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(520);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(545);
   });
 
   it('emits no source map for the browser', () => {

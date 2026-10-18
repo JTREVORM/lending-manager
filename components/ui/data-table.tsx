@@ -395,6 +395,10 @@ export function TableCell({
   const attrs = {
     className: classes,
     style: minWidthStyle(width),
+    // What this cell was allowed to do with a long value. Read by the layout
+    // sweep, which otherwise has to hold a deliberately wrapping note column
+    // to the same two lines as a figure.
+    'data-wrap': isLead ? 'lead' : mode,
     ...(hideBelow === undefined ? {} : { 'data-hide-below': hideBelow }),
     ...(colSpan === undefined ? {} : { colSpan }),
     ...(title === undefined ? {} : { title }),

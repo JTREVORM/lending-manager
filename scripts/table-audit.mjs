@@ -131,19 +131,59 @@ const PROBE = () => {
 
     const style = getComputedStyle(cell);
 
-    // A cell that holds a stacked pair — a name over an identifier — is two
-    // blocks, and each may use its own allowance.
-    const blocks = [...cell.querySelectorAll(':scope > span > span, :scope > span > a')];
-    const measured = blocks.length > 0 ? blocks : [cell];
+    /*
+      Hold the cell to the rule its author chose, not to one rule for all.
+
+      `data-wrap` is what the component was asked for. A note column that
+      opted into wrapping is doing its job at five lines; a figure column
+      that did not is broken at two. Judging both by the same number is how
+      a sweep produces a hundred findings nobody acts on.
+    */
+    const policy = cell.getAttribute('data-wrap') ?? 'nowrap';
+
+    // A disclosure the reader opened, or a block of preformatted JSON, is as
+    // long as its content and that is the point of it.
+    if (cell.querySelector('details, pre') !== null) continue;
+
+    const limit =
+      cell.tagName === 'TH' && cell.getAttribute('scope') === 'col'
+        ? 1
+        : policy === 'wrap'
+          ? 8
+          : 2;
+
+    /*
+      Measure each stacked block on its own.
+
+      A cell is often two things down the page — a name over a client
+      number, an amount over a penalty note, two badges — and each gets its
+      own allowance. Counting the cell as one run makes a tidy two-line pair
+      read as a four-line overflow.
+    */
+    const blocks = [...cell.querySelectorAll('*')].filter((node) => {
+      if (node.children.length > 0) return false;
+      const text = (node.textContent ?? '').trim();
+      if (text === '') return false;
+      const display = getComputedStyle(node).display;
+      return display === 'block' || display.startsWith('inline-');
+    });
+    const measured = blocks.length > 1 ? blocks : [cell];
 
     for (const part of measured) {
-      const lines = linesOf(part);
-      // Two lines is the clamp this system allows; a header never wraps.
-      const limit = cell.tagName === 'TH' && cell.getAttribute('scope') === 'col' ? 1 : 2;
-      if (lines > limit) {
+      // `-webkit-line-clamp` truncates what is painted; the line boxes are
+      // still there to be measured, so a correctly clamped cell would
+      // otherwise read as a fault.
+      const clampTarget = part.querySelector('.line-clamp-2') ?? part;
+      const clamped = getComputedStyle(clampTarget).webkitLineClamp;
+      const cap = clamped === 'none' || clamped === '' ? Infinity : Number(clamped);
+
+      const lines = Math.min(linesOf(part), cap);
+      const allowance = policy === 'lead' ? 2 : limit;
+
+      if (lines > allowance) {
         faults.push({
           kind: 'cell-wraps-past-its-limit',
-          detail: `${String(lines)} lines in <${cell.tagName.toLowerCase()}> "${(part.textContent ?? '').trim().slice(0, 48)}"`,
+          detail: `${String(lines)} lines (policy ${policy}, allowed ${String(allowance)}) in <${cell.tagName.toLowerCase()}> "${(part.textContent ?? '').trim().slice(0, 44)}"`,
         });
       }
     }
@@ -157,7 +197,9 @@ const PROBE = () => {
   }
 
   // A status pill broken over two lines.
-  for (const badge of document.querySelectorAll('[class*="rounded-full"], [class*="rounded"]')) {
+  for (const badge of document.querySelectorAll(
+    '[class*="rounded-full"], [class*="rounded"]',
+  )) {
     const text = (badge.textContent ?? '').trim();
     if (text === '' || text.length > 32) continue;
     const style = getComputedStyle(badge);

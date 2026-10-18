@@ -89,7 +89,7 @@ export function AuditLog({
               <TableHead width="datetime">When</TableHead>
               <TableHead width="status-wide">Action</TableHead>
               <TableHead width="status">Record</TableHead>
-              <TableHead width="name">Done by</TableHead>
+              <TableHead width="name-wide">Done by</TableHead>
               <TableHead width="prose">Detail</TableHead>
             </tr>
           </thead>
@@ -109,7 +109,7 @@ export function AuditLog({
                 <TableCell width="status">
                   <Badge>{entry.entityType.replace(/_/g, ' ')}</Badge>
                 </TableCell>
-                <TableCell width="name" wrap="clamp" className="text-text-muted">
+                <TableCell width="name-wide" wrap="wrap" className="text-text-muted">
                   {entry.actorLabel}
                 </TableCell>
                 <TableCell width="prose" wrap="wrap">
