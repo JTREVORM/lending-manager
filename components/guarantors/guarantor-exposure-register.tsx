@@ -292,7 +292,7 @@ export function GuarantorExposureRegister({
               <tbody>
                 {rows.map((row) => (
                   <TableRow key={row.loanGuarantorId}>
-                    <TableCell header width="name" wrap="clamp">
+                    <TableCell header width="name" wrap="wrap">
                       <span className="block min-w-0">
                         {row.guarantorClientId === null ? (
                           <span
@@ -325,7 +325,7 @@ export function GuarantorExposureRegister({
                         className="text-accent"
                       />
                     </TableCell>
-                    <TableCell width="name" wrap="clamp">
+                    <TableCell width="name" wrap="wrap">
                       <span className="block min-w-0">
                         <RowLink
                           href={`${ROUTES.clients}/${row.clientId}`}

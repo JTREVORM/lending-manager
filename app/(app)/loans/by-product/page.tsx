@@ -141,7 +141,7 @@ export default async function LoansByProductPage() {
               <tbody>
                 {rows.map((row) => (
                   <TableRow key={row.productId} interactive>
-                    <TableCell width="product" wrap="clamp">
+                    <TableCell width="product" wrap="wrap">
                       <span className="block min-w-0">
                         <Link
                           href={`${ROUTES.loans}?productId=${row.productId}`}

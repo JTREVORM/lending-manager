@@ -220,6 +220,32 @@ describe('a column', () => {
     expect(cell.querySelector('.line-clamp-2')).toBeTruthy();
   });
 
+  it('does not clamp a stacked pair, which would cut the identifier', () => {
+    // `TableLead` is two blocks and clamps its own first line. A second
+    // clamp around both counts their three lines together and truncates
+    // whichever falls third — the client number, the one thing in the cell
+    // that must never be cut.
+    render(
+      <DataTable caption="Register">
+        <tbody>
+          <TableRow>
+            <TableCell wrap="clamp">
+              <TableLead primary="Nakabugo Ssemakula Nabukeera" secondary="CL2600007" />
+            </TableCell>
+          </TableRow>
+        </tbody>
+      </DataTable>,
+    );
+
+    const cell = screen.getByRole('cell');
+    // The name still clamps; the cell does not clamp the pair.
+    expect(cell.querySelectorAll('.line-clamp-2')).toHaveLength(1);
+    expect(screen.getByTitle('Nakabugo Ssemakula Nabukeera').className).toContain(
+      'line-clamp-2',
+    );
+    expect(screen.getByText('CL2600007')).toBeTruthy();
+  });
+
   it('right-aligns a numeric column with tabular figures', () => {
     // A column of amounts only lines up on the thousands separator if the
     // digits are one width. Stated by the component so a column cannot

@@ -21,6 +21,7 @@
  *   node scripts/table-audit.mjs [--out DIR]
  */
 import { chromium } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -76,13 +77,50 @@ const SCREENS = [
 const PROBE = () => {
   const faults = [];
 
-  const doc = document.documentElement;
-  if (doc.scrollWidth > doc.clientWidth + 1) {
+  /*
+    Can a person actually scroll the page sideways?
+
+    `documentElement.scrollWidth` is the wrong signal and reports a false
+    positive on every screen with a scrolling table: the root's scroll width
+    counts a descendant's laid-out box even where an ancestor clips it, and a
+    table inside its own scroller is laid out at its full width by design.
+
+    `body.scrollWidth` respects the clip, and trying the scroll settles it.
+  */
+  const viewport = document.documentElement.clientWidth;
+  const before = window.scrollX;
+  window.scrollTo(viewport, 0);
+  const moved = window.scrollX;
+  window.scrollTo(before, 0);
+
+  if (moved > 0 || document.body.scrollWidth > viewport + 1) {
     faults.push({
       kind: 'page-scrolls-sideways',
-      detail: `${doc.scrollWidth}px of content in a ${doc.clientWidth}px viewport`,
+      detail: `body is ${String(document.body.scrollWidth)}px in a ${String(viewport)}px viewport; a scroll moved it ${String(moved)}px`,
     });
   }
+
+  /*
+    How many lines the cell's own text actually occupies.
+
+    Not the cell's height: a table equalises every cell in a row to the
+    tallest of them, so one legitimately wrapping note column would report
+    every figure beside it as five lines. A Range over the text yields one
+    client rect per line box, which is the text's own wrapping and nothing
+    else.
+  */
+  const linesOf = (element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const rects = [...range.getClientRects()].filter(
+      (rect) => rect.width > 0 && rect.height > 0,
+    );
+    if (rects.length === 0) return 0;
+
+    // Rects on the same line share a top edge; count distinct ones.
+    const tops = new Set(rects.map((rect) => Math.round(rect.top)));
+    return tops.size;
+  };
 
   for (const cell of document.querySelectorAll('td, th')) {
     const rect = cell.getBoundingClientRect();
@@ -92,17 +130,22 @@ const PROBE = () => {
     if (text === '') continue;
 
     const style = getComputedStyle(cell);
-    const lineHeight = parseFloat(style.lineHeight) || 16;
-    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-    const lines = Math.round((rect.height - padding) / lineHeight);
 
-    // Two lines is the clamp this system allows; a header never wraps.
-    const limit = cell.tagName === 'TH' && cell.getAttribute('scope') === 'col' ? 1 : 2;
-    if (lines > limit) {
-      faults.push({
-        kind: 'cell-wraps-past-its-limit',
-        detail: `${String(lines)} lines in <${cell.tagName.toLowerCase()}> "${text.slice(0, 48)}"`,
-      });
+    // A cell that holds a stacked pair — a name over an identifier — is two
+    // blocks, and each may use its own allowance.
+    const blocks = [...cell.querySelectorAll(':scope > span > span, :scope > span > a')];
+    const measured = blocks.length > 0 ? blocks : [cell];
+
+    for (const part of measured) {
+      const lines = linesOf(part);
+      // Two lines is the clamp this system allows; a header never wraps.
+      const limit = cell.tagName === 'TH' && cell.getAttribute('scope') === 'col' ? 1 : 2;
+      if (lines > limit) {
+        faults.push({
+          kind: 'cell-wraps-past-its-limit',
+          detail: `${String(lines)} lines in <${cell.tagName.toLowerCase()}> "${(part.textContent ?? '').trim().slice(0, 48)}"`,
+        });
+      }
     }
 
     if (style.whiteSpace === 'nowrap' && cell.scrollWidth > cell.clientWidth + 1) {
@@ -119,10 +162,8 @@ const PROBE = () => {
     if (text === '' || text.length > 32) continue;
     const style = getComputedStyle(badge);
     if (!style.display.includes('flex') && !style.display.includes('inline')) continue;
-    const lineHeight = parseFloat(style.lineHeight) || 14;
-    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-    const rect = badge.getBoundingClientRect();
-    if (rect.height - padding > lineHeight * 1.6 && badge.closest('td, th') !== null) {
+    if (badge.closest('td, th') === null) continue;
+    if (linesOf(badge) > 1) {
       faults.push({ kind: 'badge-wrapped', detail: text.slice(0, 32) });
     }
   }
@@ -140,7 +181,15 @@ const PROBE = () => {
 
 const results = [];
 
-const browser = await chromium.launch();
+/**
+ * The same browser `playwright.config.ts` uses: this sandbox ships a Chromium
+ * whose build number need not match the one the installed `@playwright/test`
+ * would fetch, and has no network to fetch another.
+ */
+const executablePath = process.env.E2E_CHROMIUM ?? '/opt/pw-browsers/chromium';
+const browser = await chromium.launch(
+  existsSync(executablePath) ? { executablePath } : {},
+);
 
 try {
   // Sign in once and reuse the session across every width.

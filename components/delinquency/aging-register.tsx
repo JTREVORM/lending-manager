@@ -258,7 +258,7 @@ export function AgingRegister({
               <tbody>
                 {rows.map((row) => (
                   <TableRow key={row.loanId}>
-                    <TableCell header width="name" wrap="clamp">
+                    <TableCell header width="name" wrap="wrap">
                       <span className="block min-w-0">
                         <RowLink
                           href={`${ROUTES.loans}/${row.loanId}`}

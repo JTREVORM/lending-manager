@@ -1,3 +1,4 @@
+import { isValidElement } from 'react';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 
 import { cn } from '@/lib/utils/cn';
@@ -301,6 +302,12 @@ export function TableHead({
  *                value the reader cannot get to in full is a silent
  *                truncation, and this system does not do those to anything
  *                that identifies a record.
+ *
+ * `clamp` is for a single run of text. A cell holding a stacked pair — a name
+ * over a client number — takes `wrap`, because the pair is three lines by
+ * design and an outer clamp over it would cut the identifier underneath
+ * rather than the name it was aimed at. `TableLead` clamps its own first
+ * line, which is where the clamp belongs; see the guard in `TableCell`.
  */
 const WRAP = {
   nowrap: 'whitespace-nowrap',
@@ -361,8 +368,25 @@ export function TableCell({
     className,
   );
 
+  /*
+    A clamp over a stacked pair would cut the identifier, not the name.
+
+    `TableLead` renders two blocks and clamps the first itself. Wrapping both
+    in a second `line-clamp-2` counts the pair's three lines together and
+    truncates whichever falls third — the client number, which is the one
+    thing in the cell that must never be cut. So a cell whose content is a
+    lead keeps its own clamping and the outer one is dropped.
+
+    Caught by the layout sweep in `scripts/table-audit.mjs` rather than by
+    reading the code, which is why it is a guard here and not a note in a
+    style guide: eight call sites had it, and the ninth would have too.
+  */
+  const isLead =
+    isValidElement(children) &&
+    (children as { readonly type?: unknown }).type === TableLead;
+
   const body =
-    mode === 'clamp' ? (
+    mode === 'clamp' && !isLead ? (
       <span className="line-clamp-2 break-words">{children}</span>
     ) : (
       children

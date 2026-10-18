@@ -163,7 +163,7 @@ export function ClientDirectory({
                         {client.clientNumber}
                       </RowLink>
                     </TableCell>
-                    <TableCell width="name-wide" wrap="clamp">
+                    <TableCell width="name-wide" wrap="wrap">
                       <TableLead primary={client.fullName} />
                     </TableCell>
                     <TableCell width="phone" className="text-text-muted">

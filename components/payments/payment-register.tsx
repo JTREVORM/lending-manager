@@ -286,7 +286,7 @@ export function PaymentRegister({
                         {payment.paymentNumber}
                       </RowLink>
                     </TableCell>
-                    <TableCell width="name" wrap="clamp">
+                    <TableCell width="name" wrap="wrap">
                       <TableLead
                         primary={payment.clientName}
                         secondary={payment.clientNumber}

@@ -297,7 +297,7 @@ export function OverdueList({
               <tbody>
                 {loans.map((loan) => (
                   <TableRow key={loan.loanId}>
-                    <TableCell header width="name" wrap="clamp" className="font-normal">
+                    <TableCell header width="name" wrap="wrap" className="font-normal">
                       <span className="block min-w-0">
                         <RowLink
                           href={`${ROUTES.clients}/${loan.clientId}`}

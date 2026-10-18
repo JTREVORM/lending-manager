@@ -226,13 +226,13 @@ export function LoanRegister({
                         {loan.loanNumber}
                       </RowLink>
                     </TableCell>
-                    <TableCell width="name" wrap="clamp">
+                    <TableCell width="name" wrap="wrap">
                       <TableLead
                         primary={loan.clientName}
                         secondary={loan.clientNumber}
                       />
                     </TableCell>
-                    <TableCell width="product" wrap="clamp" className="text-text-muted">
+                    <TableCell width="product" wrap="wrap" className="text-text-muted">
                       <TableLead
                         primary={loan.productName}
                         secondary={loan.productCode}
