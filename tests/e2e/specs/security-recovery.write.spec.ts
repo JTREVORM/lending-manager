@@ -323,8 +323,11 @@ test.describe('the collection summary', () => {
     await page.goto('/payments/summary?from=2026-01-01&to=2026-12-31');
     await expectNoErrorBoundary(page);
 
-    await expect(page.getByLabel('From')).toHaveValue('2026-01-01');
-    await expect(page.getByLabel('To')).toHaveValue('2026-12-31');
+    // Exact, because `To` is a substring of plenty of accessible names on
+    // this page — the summary's footer marks each column it deliberately
+    // does not total, and "Not totalled" contains it.
+    await expect(page.getByLabel('From', { exact: true })).toHaveValue('2026-01-01');
+    await expect(page.getByLabel('To', { exact: true })).toHaveValue('2026-12-31');
   });
 
   test('swaps a reversed range rather than showing an empty summary', async ({
@@ -335,8 +338,11 @@ test.describe('the collection summary', () => {
 
     // An empty summary reads as "nothing was collected" rather than as "those
     // dates are the wrong way round".
-    await expect(page.getByLabel('From')).toHaveValue('2026-01-01');
-    await expect(page.getByLabel('To')).toHaveValue('2026-12-31');
+    // Exact, because `To` is a substring of plenty of accessible names on
+    // this page — the summary's footer marks each column it deliberately
+    // does not total, and "Not totalled" contains it.
+    await expect(page.getByLabel('From', { exact: true })).toHaveValue('2026-01-01');
+    await expect(page.getByLabel('To', { exact: true })).toHaveValue('2026-12-31');
   });
 
   test('is reachable from the payment register', async ({ page }) => {
