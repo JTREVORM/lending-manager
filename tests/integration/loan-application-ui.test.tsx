@@ -8,8 +8,6 @@ import {
 } from '@/components/loans/application-details-form';
 import { LoanDocumentsPanel } from '@/components/loans/loan-documents-panel';
 import { LoanGuarantorSection } from '@/components/loans/loan-guarantor-section';
-import { LoanWorkflowTabs } from '@/components/loans/loan-workflow-tabs';
-import { LOAN_WORKFLOW_LABELS, LOAN_WORKFLOW_STAGES } from '@/lib/domain/loan';
 import type {
   GuarantorCandidate,
   GuarantorConsentTerms,
@@ -112,37 +110,13 @@ function candidate(overrides: Partial<GuarantorCandidate> = {}): GuarantorCandid
   };
 }
 
-// ---------------------------------------------------------------------------
-describe('the loan workflow strip', () => {
-  it('offers every view the loan module presents, plus the whole register', () => {
-    render(<LoanWorkflowTabs stage="" />);
-
-    for (const value of LOAN_WORKFLOW_STAGES) {
-      expect(screen.getByText(LOAN_WORKFLOW_LABELS[value])).toBeTruthy();
-    }
-
-    expect(screen.getByText('All loans')).toBeTruthy();
-  });
-
-  it('marks the view that is open', () => {
-    render(<LoanWorkflowTabs stage="arrears" />);
-
-    const current = screen.getByText(LOAN_WORKFLOW_LABELS.arrears);
-    expect(current.getAttribute('aria-current')).toBe('page');
-
-    expect(screen.getByText('All loans').getAttribute('aria-current')).toBeNull();
-  });
-
-  it('separates a rejection from a cancellation', () => {
-    // The whole reason Phase 13 added a closure kind: a refusal is a credit
-    // decision and a withdrawal is a change of mind, and only the first
-    // belongs in a report about lending standards.
-    render(<LoanWorkflowTabs stage="" />);
-
-    expect(screen.getByText('Rejected')).toBeTruthy();
-    expect(screen.getByText('Cancelled')).toBeTruthy();
-  });
-});
+/*
+  Phase 21 removed `LoanWorkflowTabs` and the three tests that rendered it.
+  The strip duplicated the sidebar's Loan Management module, and what replaced
+  it — the heading naming the open view — is a pure function, covered in
+  `tests/unit/loan-application-validation.test.ts`, and asserted in a browser
+  in `tests/e2e/specs/loan-application.write.spec.ts`.
+*/
 
 // ---------------------------------------------------------------------------
 describe('guarantors on an application', () => {

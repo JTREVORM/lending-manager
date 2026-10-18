@@ -666,6 +666,29 @@ export const LOAN_WORKFLOW_LABELS: Readonly<Record<LoanWorkflowStage, string>> =
   withdrawn: 'Cancelled',
 };
 
+/**
+ * The name this module's register carries in the sidebar, and so on the page.
+ *
+ * One string, used for the heading, the document title and the way back from a
+ * stage view, so the entry a person clicked and the heading they land on cannot
+ * drift apart.
+ */
+export const LOAN_REGISTER_TITLE = 'Loan Register';
+
+/**
+ * The heading over the register.
+ *
+ * The whole register when nothing narrows it, and the stage's own name when a
+ * sidebar entry does. Phase 21 removed the horizontal strip of workflow tabs
+ * this screen used to carry: the sidebar already lists every stage, and the
+ * heading is how the screen now says which of them is open. Keeping that choice
+ * in one function — beside the labels it reads — is what the page and its test
+ * both call, so the two cannot disagree.
+ */
+export function loanRegisterTitle(stage: LoanWorkflowStage | null): string {
+  return stage === null ? LOAN_REGISTER_TITLE : LOAN_WORKFLOW_LABELS[stage];
+}
+
 export const LOAN_WORKFLOW_DESCRIPTIONS: Readonly<Record<LoanWorkflowStage, string>> = {
   draft: 'Being entered. Not yet submitted for a decision.',
   pending_approval: 'Submitted and waiting for a decision.',
