@@ -99,9 +99,10 @@ export function LoanRegister({
 
           {/*
             Phase 13. The product, not the status: the status is what the
-            workflow strip above this card already navigates by, and two
-            controls answering the same question is how a filter row comes to
-            contradict itself.
+            sidebar's stage entries already navigate by, and two controls
+            answering the same question is how a filter row comes to
+            contradict itself. Phase 21 removed the workflow tab strip that
+            used to sit above this card for that same reason.
           */}
           <div className="min-w-0 space-y-1.5">
             <Label htmlFor="loan-product">Loan product</Label>

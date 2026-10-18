@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LOAN_CLOSURE_KINDS,
+  LOAN_REGISTER_TITLE,
+  LOAN_WORKFLOW_LABELS,
   LOAN_WORKFLOW_STAGES,
   describeLoanApprovalFailure,
   isLoanApprovalFailure,
   isLoanClosureKind,
   isLoanWorkflowStage,
+  loanRegisterTitle,
 } from '@/lib/domain/loan';
 import {
   GUARANTOR_SUBJECT_KINDS,
@@ -433,6 +436,52 @@ describe('the workflow stages', () => {
     expect(isLoanWorkflowStage('arrears')).toBe(true);
     expect(isLoanWorkflowStage('written_off')).toBe(false);
     expect(isLoanWorkflowStage(undefined)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+/**
+ * Phase 21 — the heading is now the register's navigation state.
+ *
+ * The screen used to carry a horizontal strip of eleven workflow tabs above
+ * the register, duplicating the sidebar's Loan Management module. The strip is
+ * gone, which leaves the heading to say which view is open: the whole register,
+ * or the one stage a sidebar entry asked for.
+ *
+ * That makes the heading load-bearing rather than decorative, so it is pinned
+ * here. A stage whose heading fell back to "Loan Register" would leave a
+ * filtered screen claiming to be the complete book — which, on a register of
+ * rejected applications, is the kind of wrong that gets acted on.
+ */
+describe('the heading over the loan register', () => {
+  it('names the whole register when no stage narrows it', () => {
+    expect(loanRegisterTitle(null)).toBe('Loan Register');
+    expect(loanRegisterTitle(null)).toBe(LOAN_REGISTER_TITLE);
+  });
+
+  it('names the stage instead, once one is open', () => {
+    for (const stage of LOAN_WORKFLOW_STAGES) {
+      expect(loanRegisterTitle(stage)).toBe(LOAN_WORKFLOW_LABELS[stage]);
+
+      // The register's own name is never reused for a filtered view.
+      expect(loanRegisterTitle(stage)).not.toBe(LOAN_REGISTER_TITLE);
+      expect(loanRegisterTitle(stage).trim()).not.toBe('');
+    }
+  });
+
+  it('gives no two stages the same heading', () => {
+    // Two views that read identically are two views a person cannot tell
+    // apart from a bookmark or a forwarded link.
+    const headings = LOAN_WORKFLOW_STAGES.map((stage) => loanRegisterTitle(stage));
+    expect(new Set(headings).size).toBe(LOAN_WORKFLOW_STAGES.length);
+  });
+
+  it('separates a rejection from a cancellation in the heading too', () => {
+    // Phase 13's closure kinds: a refusal is a credit decision, a withdrawal
+    // is a change of mind, and the two sidebar entries must not land on the
+    // same page title.
+    expect(loanRegisterTitle('rejected')).toBe('Rejected');
+    expect(loanRegisterTitle('withdrawn')).toBe('Cancelled');
   });
 });
 

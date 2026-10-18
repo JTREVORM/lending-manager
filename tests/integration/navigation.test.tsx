@@ -27,7 +27,12 @@ import { PhasePlaceholder } from '@/components/layout/phase-placeholder';
 import { PrimaryNav } from '@/components/layout/primary-nav';
 import { ROUTES } from '@/config/app';
 import { permissionForPath } from '@/lib/auth/routing';
-import { LOAN_WORKFLOW_STAGES } from '@/lib/domain/loan';
+import {
+  LOAN_REGISTER_TITLE,
+  LOAN_WORKFLOW_STAGES,
+  isLoanWorkflowStage,
+  loanRegisterTitle,
+} from '@/lib/domain/loan';
 import {
   REPORTS,
   REPORT_GROUPS,
@@ -424,6 +429,44 @@ describe('the Phase 9 modules the rail must not lose', () => {
     }
 
     expect(hrefs).toContain(`${ROUTES.loans}/by-product`);
+  });
+
+  it('is the only stage navigation the loan module has', () => {
+    // Phase 21. The register used to carry a horizontal strip of workflow
+    // tabs on top of these entries — one navigation drawn twice, and the copy
+    // that could fall out of step with the rail. The strip is gone, so the
+    // rail is now load-bearing: every stage the register can show has to be
+    // reachable from here, and each entry has to carry a stage the register
+    // recognises. An entry pinning a stage `isLoanWorkflowStage` rejects would
+    // silently land on the unfiltered book under the heading "Loan Register" —
+    // a filtered view claiming to be the whole loan book.
+    const loans = NAV_MODULES.find((module) => module.id === 'loans');
+    const entries = loans?.items ?? [];
+
+    const register = entries.filter((item) => item.href === ROUTES.loans);
+    expect(register).toHaveLength(1);
+    expect(register[0]?.label).toBe(LOAN_REGISTER_TITLE);
+
+    const staged = entries.flatMap((item) => {
+      const stage = new Map(navQuery(item.href)).get('stage');
+      return stage === undefined ? [] : [{ label: item.label, stage }];
+    });
+
+    // Ten stage entries, no more: a second entry on one stage is two rail
+    // rows that light together.
+    expect(staged).toHaveLength(LOAN_WORKFLOW_STAGES.length);
+    expect(new Set(staged.map((entry) => entry.stage)).size).toBe(staged.length);
+
+    for (const entry of staged) {
+      expect(isLoanWorkflowStage(entry.stage), entry.stage).toBe(true);
+
+      // The heading the entry opens names that stage rather than the whole
+      // register.
+      const heading = loanRegisterTitle(
+        isLoanWorkflowStage(entry.stage) ? entry.stage : null,
+      );
+      expect(heading, entry.label).not.toBe(LOAN_REGISTER_TITLE);
+    }
   });
 
   it('keeps Branch Network on the branch functionality that exists', () => {

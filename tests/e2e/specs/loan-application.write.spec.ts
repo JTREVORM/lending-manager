@@ -5,8 +5,9 @@ import { expect, expectNoErrorBoundary, fixtures, stateFile, test } from './fixt
  *
  * Three things this proves that nothing else can:
  *
- *   * the workflow strip really is thirteen filters over one register, so a
- *     view a person clicks shows loans rather than an error boundary;
+ *   * the sidebar's stage entries really are filters over one register, so a
+ *     view a person clicks shows loans under its own heading rather than an
+ *     error boundary;
  *   * a refusal is reachable, reasoned and distinguishable from a withdrawal
  *     once it is recorded — the whole point of `closure_kind`;
  *   * the guarantor picker shows ineligible candidates *with the reason*,
@@ -20,39 +21,68 @@ import { expect, expectNoErrorBoundary, fixtures, stateFile, test } from './fixt
 test.describe('the loan register', () => {
   test.use({ storageState: stateFile('owner') });
 
-  test('offers every view of the loan book', async ({ page }) => {
+  test('is a dedicated register, with the workflow navigation in the rail', async ({
+    page,
+  }) => {
     await page.goto('/loans');
     await expectNoErrorBoundary(page);
 
-    const strip = page.getByRole('navigation', { name: 'Loan views' });
-    await expect(strip).toBeVisible();
+    // Scoped to the content, because the rail beside it carries the same
+    // destinations by their own names — "Loans by Product" would answer an
+    // unscoped search for the register's own "By product" action.
+    const main = page.getByRole('main');
 
-    for (const label of [
-      'All loans',
-      'Draft applications',
-      'Pending approval',
-      'Approved',
-      'Awaiting disbursement',
-      'Active loans',
-      'Grace period',
-      'Arrears',
-      'Cleared loans',
-      'Rejected',
-      'Cancelled',
-    ]) {
-      await expect(strip.getByRole('button', { name: label, exact: true })).toBeVisible();
-    }
+    // Phase 21. The heading names the whole book, and the duplicate strip of
+    // workflow tabs that used to sit above the register is gone: the rail
+    // already lists the register and all ten stages.
+    await expect(
+      main.getByRole('heading', { level: 1, name: 'Loan Register' }),
+    ).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Loan views' })).toHaveCount(0);
+
+    // What the register itself offers is unchanged, and is what this screen is
+    // for: searching the book, slicing it by product, and opening a loan.
+    await expect(main.getByLabel('Search')).toBeVisible();
+    await expect(main.getByLabel('Loan product')).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: 'New application', exact: true }),
+    ).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: 'By product', exact: true }),
+    ).toBeVisible();
   });
 
-  test('each view filters the register rather than erroring', async ({ page }) => {
-    for (const stage of ['draft', 'pending_approval', 'active', 'arrears', 'cleared']) {
-      await page.goto(`/loans?stage=${stage}`);
+  test('each stage filters the register under its own heading', async ({ page }) => {
+    // The heading is how a filtered view says which view it is, now that no
+    // tab is marked current — so a person reading a reloaded page or a link
+    // somebody sent them can see where they are.
+    const views = [
+      { stage: 'draft', heading: 'Draft applications' },
+      { stage: 'pending_approval', heading: 'Pending approval' },
+      { stage: 'active', heading: 'Active loans' },
+      { stage: 'arrears', heading: 'Arrears' },
+      { stage: 'cleared', heading: 'Cleared loans' },
+      { stage: 'rejected', heading: 'Rejected' },
+      { stage: 'withdrawn', heading: 'Cancelled' },
+    ] as const;
+
+    for (const view of views) {
+      await page.goto(`/loans?stage=${view.stage}`);
       await expectNoErrorBoundary(page);
 
-      // The strip marks the view that is open, so a person can see where they
-      // are after a reload or when the link was sent to them.
-      const current = page.locator('[aria-current="page"]');
-      await expect(current.first()).toBeVisible();
+      await expect(
+        page.getByRole('heading', { level: 1, name: view.heading, exact: true }),
+      ).toBeVisible();
+
+      // No tab strip here either, and a way back to the whole register that
+      // does not need the rail — which is behind a menu button on a phone.
+      await expect(page.getByRole('navigation', { name: 'Loan views' })).toHaveCount(0);
+      await expect(
+        page.getByRole('main').getByRole('link', { name: 'Loan Register', exact: true }),
+      ).toBeVisible();
+
+      // Still the register: the search and the product filter travel with it.
+      await expect(page.getByLabel('Loan product')).toBeVisible();
     }
   });
 
