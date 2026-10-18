@@ -219,12 +219,21 @@ try {
     await mkdir(join(OUT, size.name), { recursive: true });
 
     for (const [name, path] of SCREENS) {
-      try {
-        await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle', timeout: 45_000 });
-      } catch {
-        await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-      }
-      await page.waitForTimeout(400);
+      /*
+        `domcontentloaded` plus a settle, not `networkidle`.
+
+        These pages are server-rendered: the table is in the first response,
+        which is the point of rendering a register on the server. And the
+        shell keeps connections open — a service worker, a prefetch — so
+        `networkidle` waits out its full timeout on screens that were ready
+        in 200ms, turning a four-minute sweep into an hour.
+      */
+      await page.goto(`${BASE}${path}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      });
+      await page.waitForLoadState('load').catch(() => undefined);
+      await page.waitForTimeout(500);
 
       await page.screenshot({
         path: join(OUT, size.name, `${name}.png`),
