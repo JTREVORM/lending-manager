@@ -90,7 +90,9 @@ export function ClientDirectory({
               ? 'Try a shorter search, or clear the status filter.'
               : 'Register the first client to get started.'
           }
-          {...(filtered ? {} : { action: { href: '/clients/new', label: 'Register a client' } })}
+          {...(filtered
+            ? {}
+            : { action: { href: '/clients/new', label: 'Register a client' } })}
         />
       ) : (
         <>

@@ -460,10 +460,7 @@ export function PaymentForm({
           </dl>
 
           <div className="mt-4">
-            <DataTable
-              caption="How this payment would be applied"
-              density="compact"
-            >
+            <DataTable caption="How this payment would be applied" density="compact">
               <thead>
                 <tr>
                   <TableHead width="count">Collection</TableHead>

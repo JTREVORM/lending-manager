@@ -5,12 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 
 import { Badge } from '@/components/ui/badge';
-import {
-  DataTable,
-  TableCell,
-  TableHead,
-  TableRow,
-} from '@/components/ui/data-table';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -168,7 +163,12 @@ export function UserDirectory({
               <tbody>
                 {users.map((user) => (
                   <TableRow key={user.id} interactive>
-                    <TableCell header width="name-wide" wrap="clamp" className="font-normal">
+                    <TableCell
+                      header
+                      width="name-wide"
+                      wrap="clamp"
+                      className="font-normal"
+                    >
                       <RowLink
                         href={`/users/${user.id}`}
                         className="font-medium hover:underline"

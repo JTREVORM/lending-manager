@@ -1795,4 +1795,37 @@
   .md\:hidden {
     display: none !important;
   }
+
+  /*
+    Every column comes back on paper.
+
+    A secondary column is dropped below a breakpoint so a laptop is not asked
+    to scroll past it (`hideBelow` in `DataTable`). A sheet of A4 is about
+    794 CSS pixels wide, which is under every one of those breakpoints, so
+    without this rule a printed register would quietly be missing its
+    columns — the one place where "scroll to reach it" is not an option and
+    the reader has no way to tell something is absent.
+
+    Paper has no space pressure the way a viewport does: `table-layout:
+    fixed` above already divides the sheet between whatever columns there
+    are, and a wrapped cell on paper costs a line, not a usable screen.
+  */
+  [data-hide-below] {
+    display: table-cell !important;
+  }
+
+  /*
+    And nothing is clamped on paper.
+
+    A name clamps to two lines on screen because the alternative is a row
+    six lines tall in a dense register, and the full value is a hover or a
+    click away. Neither of those exists in a printout, so a clamp there is a
+    silent truncation of exactly the thing that identifies the record.
+  */
+  .line-clamp-2,
+  .line-clamp-3 {
+    -webkit-line-clamp: unset !important;
+    display: block !important;
+    overflow: visible !important;
+  }
 }

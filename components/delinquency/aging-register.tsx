@@ -6,12 +6,7 @@ import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  DataTable,
-  TableCell,
-  TableHead,
-  TableRow,
-} from '@/components/ui/data-table';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { RowLink } from '@/components/ui/row-link';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
@@ -278,7 +273,11 @@ export function AgingRegister({
                       </span>
                     </TableCell>
                     <TableCell width="phone">
-                      <PhoneValue value={row.clientPhone} linked className="text-accent" />
+                      <PhoneValue
+                        value={row.clientPhone}
+                        linked
+                        className="text-accent"
+                      />
                     </TableCell>
                     <TableCell width="ref" className="text-text font-mono">
                       {row.loanNumber}

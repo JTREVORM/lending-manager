@@ -66,8 +66,19 @@ export interface ReportColumn<Row> {
  * factor that turns the set of them into a table that fills a laptop without
  * overflowing it on the common reports.
  */
+/**
+ * The narrowest a column may be, whatever its hint says.
+ *
+ * A short field — a date, a count — carries a small weight because it needs
+ * little room relative to a note. Multiplied out, the smallest of them asked
+ * for about 60px, which at 11px is `14 Oct` on one line and `2026` on the
+ * next. The hints stay relative to each other above this; below it they stop
+ * being hints and start being a squeeze.
+ */
+const MIN_REPORT_COLUMN = 76;
+
 function columnWidth(hint: number): number {
-  return Math.round(hint * 12);
+  return Math.max(MIN_REPORT_COLUMN, Math.round(hint * 12));
 }
 
 export function ReportTable<Row>({

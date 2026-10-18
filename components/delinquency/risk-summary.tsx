@@ -1,12 +1,7 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { MagnitudeChart } from '@/components/charts/magnitude-chart';
-import {
-  DataTable,
-  TableCell,
-  TableHead,
-  TableRow,
-} from '@/components/ui/data-table';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import {
   AGING_BUCKETS,

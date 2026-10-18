@@ -227,10 +227,16 @@ export function LoanRegister({
                       </RowLink>
                     </TableCell>
                     <TableCell width="name" wrap="clamp">
-                      <TableLead primary={loan.clientName} secondary={loan.clientNumber} />
+                      <TableLead
+                        primary={loan.clientName}
+                        secondary={loan.clientNumber}
+                      />
                     </TableCell>
                     <TableCell width="product" wrap="clamp" className="text-text-muted">
-                      <TableLead primary={loan.productName} secondary={loan.productCode} />
+                      <TableLead
+                        primary={loan.productName}
+                        secondary={loan.productCode}
+                      />
                     </TableCell>
                     <TableCell width="money" align="numeric">
                       <Money amount={toUgx(loan.principalAmount)} />

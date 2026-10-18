@@ -1,10 +1,5 @@
 import { Card } from '@/components/ui/card';
-import {
-  DataTable,
-  TableCell,
-  TableHead,
-  TableRow,
-} from '@/components/ui/data-table';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { type BusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';

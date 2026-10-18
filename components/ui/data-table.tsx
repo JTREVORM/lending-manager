@@ -269,6 +269,7 @@ export function TableHead({
   return (
     <th
       scope={scope}
+      {...(hideBelow === undefined ? {} : { 'data-hide-below': hideBelow })}
       className={cn(
         't-th border-border bg-surface-sunken border-b whitespace-nowrap',
         // Padding comes from the density the table declares, through a CSS
@@ -370,6 +371,7 @@ export function TableCell({
   const attrs = {
     className: classes,
     style: minWidthStyle(width),
+    ...(hideBelow === undefined ? {} : { 'data-hide-below': hideBelow }),
     ...(colSpan === undefined ? {} : { colSpan }),
     ...(title === undefined ? {} : { title }),
   };

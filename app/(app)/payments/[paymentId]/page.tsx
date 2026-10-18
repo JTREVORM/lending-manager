@@ -8,12 +8,7 @@ import { PaymentReceipt } from '@/components/payments/payment-receipt';
 import { PaymentReversalPanel } from '@/components/payments/payment-reversal-panel';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import {
-  DataTable,
-  TableCell,
-  TableHead,
-  TableRow,
-} from '@/components/ui/data-table';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
