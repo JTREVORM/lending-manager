@@ -42,7 +42,12 @@ export function AgingRegister({
   readonly rows: readonly AgingRow[];
   readonly page: number;
   readonly hasMore: boolean;
-  readonly slice: ParSlice;
+  /**
+   * The risk slice the bucket counts come from, or `null` when it could not be
+   * read. The filters still work without it; the counts are omitted rather
+   * than shown as zero, which would say every bucket is empty.
+   */
+  readonly slice: ParSlice | null;
   readonly businessDate: string;
 }) {
   const router = useRouter();
@@ -98,7 +103,7 @@ export function AgingRegister({
               : 'text-text-muted hover:bg-surface-hover hover:text-text',
           )}
         >
-          All active ({slice.loanCount})
+          All active{slice === null ? '' : ` (${String(slice.loanCount)})`}
         </button>
 
         {AGING_BUCKETS.map((value) => (
@@ -116,7 +121,8 @@ export function AgingRegister({
                 : 'text-text-muted hover:bg-surface-hover hover:text-text',
             )}
           >
-            {AGING_BUCKET_LABELS[value]} ({slice.loansByBucket[value]})
+            {AGING_BUCKET_LABELS[value]}
+            {slice === null ? '' : ` (${String(slice.loansByBucket[value])})`}
           </button>
         ))}
       </nav>

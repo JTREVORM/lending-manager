@@ -1,5 +1,7 @@
 import { ShieldAlert } from 'lucide-react';
 
+import { Alert } from '@/components/ui/alert';
+import { RetryButton } from '@/components/ui/retry-button';
 import { Card } from '@/components/ui/card';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { AgingRegister } from '@/components/delinquency/aging-register';
@@ -103,7 +105,31 @@ export default async function RecoveryPage({
   );
 
   if (view === 'risk') {
-    const { portfolio, byBranch, byProduct } = await getPortfolioAtRisk();
+    const risk = await getPortfolioAtRisk();
+
+    // Phase 19. `getPortfolioAtRisk` used to answer a failed read with a slice
+    // of zeroes, so a cancelled query (57014) drew a book with no arrears in
+    // it — on the one screen whose entire purpose is to show arrears. It now
+    // reports the failure, and the screen says so rather than inventing a
+    // clean portfolio.
+    if (risk === null) {
+      return (
+        <div className="min-w-0 space-y-6">
+          {header}
+          <RecoveryTabs view={view} />
+          <Alert tone="warning" title="Portfolio at risk could not be read">
+            The risk figures are derived from the live loan book and could not be read
+            just now. Nothing is lost. They are deliberately not shown as nil, because nil
+            would read as a book with no arrears in it.
+            <span className="mt-3 block">
+              <RetryButton label="Read the risk figures again" />
+            </span>
+          </Alert>
+        </div>
+      );
+    }
+
+    const { portfolio, byBranch, byProduct } = risk;
 
     return (
       <div className="min-w-0 space-y-6">
@@ -198,11 +224,20 @@ export default async function RecoveryPage({
     <div className="min-w-0 space-y-6">
       {header}
       <RecoveryTabs view={view} />
+      {risk === null ? (
+        <Alert tone="warning" title="Portfolio at risk could not be read">
+          The register below is accurate. The risk summary above it could not be read just
+          now and is left out rather than shown as nil.
+          <span className="mt-3 block">
+            <RetryButton label="Read the risk figures again" />
+          </span>
+        </Alert>
+      ) : null}
       <AgingRegister
         rows={aging.rows}
         page={aging.page}
         hasMore={aging.hasMore}
-        slice={risk.portfolio}
+        slice={risk === null ? null : risk.portfolio}
         businessDate={businessToday(new Date(), branding.timezone)}
       />
     </div>
