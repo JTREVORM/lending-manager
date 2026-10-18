@@ -9,7 +9,7 @@ concurrency**, and **a retry affordance**. This does both, and measures them.
 | --- | --- |
 | Branch | `claude/phase20-dashboard-concurrency`, on top of Phase 19 |
 | Production changed | **nothing** — no schema change, no data change, no deployment |
-| Verification | 2,193 unit/integration · 1,323 database · browser suite · three roles with real sessions |
+| Verification | 2,193 unit/integration · 1,323 database · 498 browser · three roles with real sessions |
 
 ---
 
@@ -214,7 +214,45 @@ drawn, and no zero is invented. At a 2 ms budget even
 `current_session_context()` is cancelled and the route redirects to `/login` —
 failing closed, which is correct.
 
-### 5.2 Financial figures unchanged
+### 5.2 Test results
+
+| Suite | Result |
+| --- | --- |
+| `tsc --noEmit`, `eslint`, `prettier --check` | clean |
+| Unit + integration | **2,193 passed** (8 new) |
+| Database, migrations applied from zero | **1,323 passed** |
+| Browser, production build, fresh seed | **498 passed, 27 skipped, 0 failed** |
+| Production build | succeeds |
+
+Two environment faults were hit on the way to that figure, both mine and both
+worth recording because each produced a misleading red.
+
+The first: the seed rewrites `tests/e2e/harness/fixtures.json` with fresh ids
+on every run, and that file was held back from the fix commit while the
+database had been reseeded. The specs address clients and loans *by id* from
+it, so thirty-two of them failed pointing at rows that no longer existed. The
+file and the database have to move together, which is why it is committed.
+
+The second: `scripts/pg-local.sh migrate` drops and recreates the database,
+and the auth shim holds one long-lived `pg.Client` that does not reconnect. It
+crashed with `ProcessInterrupts`, and the suite then failed all four
+`auth.setup.ts` sign-ins with 519 specs never running — **the exact shape of
+the CI symptom Phase 19 diagnosed, from an unrelated cause.** Phase 19's
+`verify.mjs` catches precisely this, and would have caught it at startup had
+the stack been brought up with `stack.sh up` rather than by starting the
+services by hand. After a proper restart it reported the shim's TLS valid,
+PostgREST reachable and the seeded owner able to sign in, and the suite went
+green.
+
+Two harness fragilities that exposes, neither changed here because neither
+affects production and the instruction was to prioritise the dashboard:
+
+1. Nothing asserts that the committed manifest matches the seeded database.
+   One id existence check in `verify.mjs` would cover it.
+2. The shim dies permanently when its connection drops rather than
+   reconnecting. Invisible in CI, where nothing reseeds mid-run.
+
+### 5.3 Financial figures unchanged
 
 Production, read-only, against the Phase 18 baseline: clients 28, loans 35,
 payments 470, allocations 522, penalties 5, journal entries 565, lines 1,603,
