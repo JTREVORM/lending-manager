@@ -1,6 +1,7 @@
 import { ShieldAlert } from 'lucide-react';
 
 import { Alert } from '@/components/ui/alert';
+import { RetryButton } from '@/components/ui/retry-button';
 import { Card } from '@/components/ui/card';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { AgingRegister } from '@/components/delinquency/aging-register';
@@ -118,8 +119,11 @@ export default async function RecoveryPage({
           <RecoveryTabs view={view} />
           <Alert tone="warning" title="Portfolio at risk could not be read">
             The risk figures are derived from the live loan book and could not be read
-            just now. Nothing is lost — reload in a moment. They are deliberately not
-            shown as nil, because nil would read as a book with no arrears in it.
+            just now. Nothing is lost. They are deliberately not shown as nil, because nil
+            would read as a book with no arrears in it.
+            <span className="mt-3 block">
+              <RetryButton label="Read the risk figures again" />
+            </span>
           </Alert>
         </div>
       );
@@ -224,6 +228,9 @@ export default async function RecoveryPage({
         <Alert tone="warning" title="Portfolio at risk could not be read">
           The register below is accurate. The risk summary above it could not be read just
           now and is left out rather than shown as nil.
+          <span className="mt-3 block">
+            <RetryButton label="Read the risk figures again" />
+          </span>
         </Alert>
       ) : null}
       <AgingRegister

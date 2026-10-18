@@ -2,6 +2,7 @@ import { CirclePlus, LayoutDashboard, Search, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 
 import { Alert } from '@/components/ui/alert';
+import { RetryButton } from '@/components/ui/retry-button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ActionLink } from '@/components/ui/page-header';
 import { AwaitingDecision } from '@/components/dashboard/awaiting-decision';
@@ -14,6 +15,7 @@ import { RecoveryWorkloadCards } from '@/components/dashboard/recovery-workload'
 import { RiskHeadline } from '@/components/dashboard/risk-headline';
 import { TodayCards } from '@/components/dashboard/today-cards';
 import { UpcomingCollections } from '@/components/dashboard/upcoming-collections';
+import { allWithLimit } from '@/lib/async/with-limit';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
@@ -39,6 +41,25 @@ export const metadata = { title: 'Dashboard' };
 
 /** How many of today's collections the dashboard shows before linking onward. */
 const SHEET_PREVIEW_ROWS = 8;
+
+/**
+ * How many dashboard reads may be in flight at once.
+ *
+ * Two, not eleven. `lib/async/with-limit.ts` carries the measurement: when
+ * the database is the constraint, wall clock does not improve with
+ * parallelism, but the slowest individual statement grows with it — and
+ * PostgreSQL cancels on a per-statement budget. Eleven concurrent reads made
+ * every one of them six times slower than it needed to be, burned nearly ten
+ * times the database's work-time, and got them cancelled with `57014` — and
+ * the page was 52% *slower* for it.
+ *
+ * Two rather than one because the Free tier has about two vCPU: two keeps
+ * both busy without oversubscribing either, and the measurement puts it within
+ * 10% of serial on wall clock (285 ms against 260 ms) while holding the worst
+ * statement to twice its uncontended cost instead of six times. One would
+ * under-use a provisioned instance; three already triples the worst statement.
+ */
+const DASHBOARD_READ_LIMIT = 2;
 
 /** "a", "a and b", "a, b and c" — an English list, for the notice below. */
 function listSections(names: readonly string[]): string {
@@ -123,38 +144,53 @@ export default async function DashboardPage() {
     risk,
     recoveryWorkload,
     pendingApprovals,
-  ] = await Promise.all([
-    seeFinancial || seeSensitive ? getPortfolioSummary() : Promise.resolve(null),
-    seeOperational ? getCollectionSummary() : Promise.resolve(null),
-    seeDelinquency
-      ? listCollectionSheet({ pageSize: SHEET_PREVIEW_ROWS })
-      : Promise.resolve(null),
-    seePayments ? listRecentPayments(6) : Promise.resolve([]),
-    seeDelinquency
-      ? listUpcomingCollections({ after: today, through: addBusinessDays(today, 7) })
-      : Promise.resolve([]),
-    // One read for all three lifecycle cards. Three separate reads each cost a
-    // scan of the whole loan book, which is what tipped them past the
-    // database's statement budget in production.
-    seeSensitive ? listRecentLoanActivity(4) : Promise.resolve(null),
+  ] = await allWithLimit(
+    [
+      // ---- Critical: the figures the page is read for. -------------------
+      // Ordered first deliberately. With a ceiling, order decides who runs
+      // while the budget is tightest, so the headline figures are the ones
+      // that get the quiet database.
+      () =>
+        seeFinancial || seeSensitive ? getPortfolioSummary() : Promise.resolve(null),
+      () => (seeOperational ? getCollectionSummary() : Promise.resolve(null)),
 
-    // Portfolio at risk is a reading of the live book, so it needs both the
-    // delinquency data and the entitlement to portfolio-wide figures — the
-    // same pair the aging report is behind.
-    seeFinancial && seeDelinquency ? getPortfolioAtRisk() : Promise.resolve(null),
+      // ---- Secondary: the activity panels. -------------------------------
+      () =>
+        seeDelinquency
+          ? listCollectionSheet({ pageSize: SHEET_PREVIEW_ROWS })
+          : Promise.resolve(null),
+      () => (seePayments ? listRecentPayments(6) : Promise.resolve(null)),
+      () =>
+        seeDelinquency
+          ? listUpcomingCollections({ after: today, through: addBusinessDays(today, 7) })
+          : Promise.resolve(null),
 
-    seeRecovery ? getRecoveryWorkload(today) : Promise.resolve(null),
+      // One read for all three lifecycle cards. Three separate reads each cost
+      // a scan of the whole loan book, which is what tipped them past the
+      // database's statement budget in production.
+      () => (seeSensitive ? listRecentLoanActivity(4) : Promise.resolve(null)),
 
-    // Each count is skipped for a caller who could not act on it, so the
-    // figure is absent from the page rather than hidden in its markup.
-    mayApproveAnything
-      ? getPendingApprovals({
-          transfers: mayApproveTransfers,
-          expenses: mayApproveExpenses,
-          reconciliations: mayApproveCounts,
-        })
-      : Promise.resolve(null),
-  ]);
+      // Portfolio at risk is a reading of the live book, so it needs both the
+      // delinquency data and the entitlement to portfolio-wide figures — the
+      // same pair the aging report is behind.
+      () =>
+        seeFinancial && seeDelinquency ? getPortfolioAtRisk() : Promise.resolve(null),
+
+      () => (seeRecovery ? getRecoveryWorkload(today) : Promise.resolve(null)),
+
+      // Each count is skipped for a caller who could not act on it, so the
+      // figure is absent from the page rather than hidden in its markup.
+      () =>
+        mayApproveAnything
+          ? getPendingApprovals({
+              transfers: mayApproveTransfers,
+              expenses: mayApproveExpenses,
+              reconciliations: mayApproveCounts,
+            })
+          : Promise.resolve(null),
+    ],
+    DASHBOARD_READ_LIMIT,
+  );
 
   /**
    * Which sections the caller is entitled to but could not be read.
@@ -300,7 +336,12 @@ export default async function DashboardPage() {
             drawn — so without the list, a missing section is indistinguishable
             from one this role never sees.
           */}
-          {`This dashboard could not read ${listSections(unreadable)}. Those sections are left out rather than shown as nil — every figure is derived from the ledger, so nothing is lost. Reload in a moment, and if it persists tell an administrator.`}
+          <p>
+            {`This dashboard could not read ${listSections(unreadable)}. Those sections are left out rather than shown as nil — every figure is derived from the ledger, so nothing is lost.`}
+          </p>
+          <p className="mt-3">
+            <RetryButton label="Read the figures again" />
+          </p>
         </Alert>
       ) : null}
 
