@@ -1,20 +1,25 @@
 'use client';
 
 import { RowLink } from '@/components/ui/row-link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { SearchX, UserPlus } from 'lucide-react';
 
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ClientStatusBadge } from './client-status-badge';
 import {
-  CLIENT_STATUSES,
-  CLIENT_STATUS_LABELS,
-  formatRecordedDate,
-} from '@/lib/domain/client';
+  DataTable,
+  TableCell,
+  TableHead,
+  TableLead,
+  TableRow,
+} from '@/components/ui/data-table';
+import {
+  RegisterCount,
+  RegisterFilters,
+  RegisterPagination,
+} from '@/components/ui/register';
+import { EmptyState } from '@/components/ui/states';
+import { ClientStatusBadge } from './client-status-badge';
+import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from '@/lib/domain/client';
 import type { ClientPage } from '@/lib/data/clients';
-import { PhoneValue } from '@/components/ui/data-value';
+import { DateValue, PhoneValue } from '@/components/ui/data-value';
 
 /**
  * The client directory.
@@ -39,97 +44,54 @@ export function ClientDirectory({
   readonly page: ClientPage;
   readonly filter: { readonly query: string; readonly status: string };
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-
-  function apply(key: string, value: string): void {
-    const next = new URLSearchParams(searchParams.toString());
-
-    if (value === '') next.delete(key);
-    else next.set(key, value);
-
-    // Any filter change returns to the first page. Staying on page four of a
-    // different result set shows an empty screen for no visible reason.
-    next.delete('page');
-
-    startTransition(() => {
-      router.replace(`${pathname}?${next.toString()}`);
-    });
-  }
-
-  function goToPage(target: number): void {
-    const next = new URLSearchParams(searchParams.toString());
-    next.set('page', String(target));
-    startTransition(() => {
-      router.replace(`${pathname}?${next.toString()}`);
-    });
-  }
+  const filtered = filter.query !== '' || filter.status !== '';
 
   return (
-    <div className="space-y-4">
-      <Card className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
-          <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="client-search">Search</Label>
-            <Input
-              id="client-search"
-              type="search"
-              inputMode="search"
-              defaultValue={filter.query}
-              placeholder="Name, client number or phone"
-              // Searching on every keystroke would issue a query per
-              // character. Committing on blur or Enter is both cheaper and
-              // calmer to use on a phone keyboard.
-              onBlur={(event) => {
-                apply('q', event.target.value.trim());
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  apply('q', event.currentTarget.value.trim());
-                }
-              }}
-            />
-          </div>
-
-          <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="client-status">Status</Label>
-            <select
-              id="client-status"
-              defaultValue={filter.status}
-              onChange={(event) => {
-                apply('status', event.target.value);
-              }}
-              className="border-border bg-surface text-text focus-visible:outline-accent h-11 w-full rounded-lg border px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              <option value="">Active and inactive</option>
-              {CLIENT_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {CLIENT_STATUS_LABELS[status]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <p aria-live="polite" className="text-text-muted text-sm">
-          {isPending
-            ? 'Searching…'
-            : `${String(page.clients.length)} client${page.clients.length === 1 ? '' : 's'}${page.hasMore ? ' on this page' : ''}`}
-        </p>
-      </Card>
+    <div className="min-w-0 space-y-4">
+      <RegisterFilters
+        search={{
+          id: 'client-search',
+          label: 'Search',
+          param: 'q',
+          value: filter.query,
+          placeholder: 'Name, client number or phone',
+        }}
+        selects={[
+          {
+            id: 'client-status',
+            label: 'Status',
+            param: 'status',
+            value: filter.status,
+            options: [
+              { value: '', label: 'Active and inactive' },
+              ...CLIENT_STATUSES.map((status) => ({
+                value: status,
+                label: CLIENT_STATUS_LABELS[status],
+              })),
+            ],
+          },
+        ]}
+        summary={
+          <RegisterCount
+            shown={page.clients.length}
+            page={page.page}
+            hasMore={page.hasMore}
+            noun="client"
+          />
+        }
+      />
 
       {page.clients.length === 0 ? (
-        <Card>
-          <p className="text-text-muted">
-            No clients match that search.{' '}
-            {filter.query === '' && filter.status === ''
-              ? 'Register the first one to get started.'
-              : 'Try a shorter search, or clear the status filter.'}
-          </p>
-        </Card>
+        <EmptyState
+          icon={filtered ? SearchX : UserPlus}
+          title={filtered ? 'No clients match this search' : 'No clients registered yet'}
+          description={
+            filtered
+              ? 'Try a shorter search, or clear the status filter.'
+              : 'Register the first client to get started.'
+          }
+          {...(filtered ? {} : { action: { href: '/clients/new', label: 'Register a client' } })}
+        />
       ) : (
         <>
           {/* Phone: cards. */}
@@ -142,7 +104,9 @@ export function ClientDirectory({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-text truncate font-medium">{client.fullName}</p>
+                      <p className="text-text font-medium break-words">
+                        {client.fullName}
+                      </p>
                       <p className="text-text-muted font-mono text-sm">
                         {client.clientNumber}
                       </p>
@@ -153,13 +117,13 @@ export function ClientDirectory({
                   <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="min-w-0">
                       <dt className="text-text-muted">Phone</dt>
-                      <dd className="text-text truncate">
+                      <dd className="text-text">
                         <PhoneValue value={client.phone} />
                       </dd>
                     </div>
                     <div className="min-w-0">
                       <dt className="text-text-muted">Location</dt>
-                      <dd className="text-text truncate">
+                      <dd className="text-text break-words">
                         {client.villageArea}, {client.district}
                       </dd>
                     </div>
@@ -170,92 +134,63 @@ export function ClientDirectory({
           </ul>
 
           {/* Tablet and up: a table. */}
-          <Card className="hidden overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Client directory, newest registration first
-              </caption>
+          <div className="hidden min-w-0 md:block">
+            <DataTable caption="Client directory, newest registration first">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Client number
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Name
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Phone
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                <tr>
+                  <TableHead width="ref">Client number</TableHead>
+                  <TableHead width="name-wide">Name</TableHead>
+                  <TableHead width="phone">Phone</TableHead>
+                  <TableHead width="place" hideBelow="lg">
                     Location
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="date" hideBelow="lg">
                     Registered
-                  </th>
-                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
-                    Status
-                  </th>
+                  </TableHead>
+                  <TableHead width="status">Status</TableHead>
                 </tr>
               </thead>
               <tbody>
                 {page.clients.map((client) => (
-                  <tr key={client.id} className="border-border border-b last:border-0">
-                    <td className="py-3 pr-4 font-mono">
+                  <TableRow key={client.id} interactive>
+                    <TableCell width="ref" className="font-mono">
                       <RowLink
                         href={`/clients/${client.id}`}
                         className="text-accent focus-visible:outline-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {client.clientNumber}
                       </RowLink>
-                    </td>
-                    <td className="text-text py-3 pr-4">{client.fullName}</td>
-                    <td className="text-text-muted py-3 pr-4">
+                    </TableCell>
+                    <TableCell width="name-wide" wrap="clamp">
+                      <TableLead primary={client.fullName} />
+                    </TableCell>
+                    <TableCell width="phone" className="text-text-muted">
                       <PhoneValue value={client.phone} />
-                    </td>
-                    <td className="text-text-muted py-3 pr-4">
+                    </TableCell>
+                    <TableCell
+                      width="place"
+                      wrap="clamp"
+                      hideBelow="lg"
+                      title={`${client.villageArea}, ${client.district}`}
+                      className="text-text-muted"
+                    >
                       {client.villageArea}, {client.district}
-                    </td>
-                    <td className="text-text-muted py-3 pr-4">
-                      {formatRecordedDate(client.registeredAt)}
-                    </td>
-                    <td className="py-3">
+                    </TableCell>
+                    <TableCell width="date" hideBelow="lg" className="text-text-muted">
+                      <DateValue value={client.registeredAt} />
+                    </TableCell>
+                    <TableCell width="status">
                       <ClientStatusBadge status={client.status} />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
-          </Card>
+            </DataTable>
+          </div>
         </>
       )}
 
-      {(page.hasMore || page.page > 1) && (
-        <nav className="flex items-center justify-between gap-3" aria-label="Pagination">
-          <button
-            type="button"
-            disabled={page.page <= 1}
-            onClick={() => {
-              goToPage(page.page - 1);
-            }}
-            className="border-border text-text focus-visible:outline-accent min-h-11 rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
-          >
-            Previous
-          </button>
-
-          <span className="text-text-muted text-sm">Page {String(page.page)}</span>
-
-          <button
-            type="button"
-            disabled={!page.hasMore}
-            onClick={() => {
-              goToPage(page.page + 1);
-            }}
-            className="border-border text-text focus-visible:outline-accent min-h-11 rounded-lg border px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
-          >
-            Next
-          </button>
-        </nav>
-      )}
+      <RegisterPagination page={page.page} hasMore={page.hasMore} />
     </div>
   );
 }

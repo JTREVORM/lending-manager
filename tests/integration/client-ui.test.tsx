@@ -181,7 +181,7 @@ describe('the client directory', () => {
       />,
     );
 
-    expect(screen.getByText(/No clients match that search/)).toBeTruthy();
+    expect(screen.getByText(/No clients match this search/)).toBeTruthy();
     expect(screen.getByText(/Try a shorter search/)).toBeTruthy();
   });
 
@@ -193,7 +193,10 @@ describe('the client directory', () => {
       />,
     );
 
-    expect(screen.getByText(/Register the first one/)).toBeTruthy();
+    // An unfiltered empty directory says so, and offers the next step rather
+    // than only naming the emptiness.
+    expect(screen.getByText(/No clients registered yet/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Register a client/ })).toBeTruthy();
   });
 
   it('labels its pagination and disables the unavailable direction', () => {

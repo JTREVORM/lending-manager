@@ -8,6 +8,12 @@ import { PaymentReceipt } from '@/components/payments/payment-receipt';
 import { PaymentReversalPanel } from '@/components/payments/payment-reversal-panel';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import {
+  DataTable,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
@@ -191,53 +197,40 @@ export default async function PaymentDetailPage({
             <p className="text-text-muted text-sm">No allocations are recorded.</p>
           </Card>
         ) : (
-          <Card className="min-w-0 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Allocations: collection number, principal, interest and total applied
-              </caption>
-              <thead>
-                <tr className="border-border text-text-muted border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Collection
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
-                    Principal
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
-                    Interest
-                  </th>
-                  <th scope="col" className="t-th py-2.5 text-right whitespace-nowrap">
-                    Applied
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {allocations.map((entry) => (
-                  <tr key={entry.id} className="border-border border-b">
-                    <th scope="row" className="text-text py-2 pr-4 font-normal">
-                      {entry.installmentNumber}
-                    </th>
-                    <td className="text-text py-2 pr-4 text-right tabular-nums">
-                      <Money amount={entry.allocatedPrincipal} />
-                    </td>
-                    <td className="text-text py-2 pr-4 text-right tabular-nums">
-                      <Money amount={entry.allocatedInterest} />
-                    </td>
-                    <td className="text-text py-2 text-right font-medium tabular-nums">
-                      <Money amount={entry.allocatedAmount} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+          <DataTable caption="Allocations: collection number, principal, interest and total applied">
+            <thead>
+              <tr>
+                <TableHead width="count">Collection</TableHead>
+                <TableHead width="money" align="numeric">
+                  Principal
+                </TableHead>
+                <TableHead width="money" align="numeric">
+                  Interest
+                </TableHead>
+                <TableHead width="money" align="numeric">
+                  Applied
+                </TableHead>
+              </tr>
+            </thead>
+            <tbody>
+              {allocations.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell header width="count" className="font-normal">
+                    {entry.installmentNumber}
+                  </TableCell>
+                  <TableCell width="money" align="numeric">
+                    <Money amount={entry.allocatedPrincipal} />
+                  </TableCell>
+                  <TableCell width="money" align="numeric">
+                    <Money amount={entry.allocatedInterest} />
+                  </TableCell>
+                  <TableCell width="money" align="numeric" className="font-medium">
+                    <Money amount={entry.allocatedAmount} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </DataTable>
         )}
 
         <p className="text-text-muted text-sm">

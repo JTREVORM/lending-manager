@@ -595,13 +595,18 @@ describe('the payment register', () => {
     expect(list?.className).toContain('md:hidden');
   });
 
-  it('gives the table a caption describing its columns', () => {
+  it('names the table, for a reader who arrives at it directly', () => {
     render(
       <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
     );
 
-    const caption = screen.getByText(/Payment register:/i);
+    // A name rather than a list of the columns. The same string names the
+    // scrolling region around the table, and a sentence enumerating eight
+    // headings makes a poor thing to hear announced — the headings
+    // themselves already say what the columns are.
+    const caption = screen.getByText('Payment register');
     expect(caption.tagName.toLowerCase()).toBe('caption');
+    expect(screen.getByRole('region', { name: 'Payment register' })).toBeTruthy();
   });
 });
 

@@ -7,8 +7,18 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  DataTable,
+  TableCell,
+  TableHead,
+  TableLead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Money } from '@/components/ui/money';
+import { RegisterCount, RegisterPagination } from '@/components/ui/register';
+import { EmptyState } from '@/components/ui/states';
+import { SearchX } from 'lucide-react';
 import { ROUTES } from '@/config/app';
 import { toUgx } from '@/lib/domain/money';
 import {
@@ -190,13 +200,23 @@ export function PaymentRegister({
         </Card>
       ) : null}
 
+      {payments.length === 0 ? null : (
+        <p aria-live="polite" className="text-text-muted text-[13px]">
+          <RegisterCount
+            shown={payments.length}
+            page={page}
+            hasMore={hasMore}
+            noun="payment"
+          />
+        </p>
+      )}
+
       {payments.length === 0 ? (
-        <Card>
-          <p className="text-text-muted text-sm">
-            No payments match. That is not the same as no payments existing — try clearing
-            the filters.
-          </p>
-        </Card>
+        <EmptyState
+          icon={SearchX}
+          title="No payments match"
+          description="That is not the same as no payments existing. Try clearing the method, status or date filters."
+        />
       ) : (
         <>
           {/* Phones: one card per payment. */}
@@ -235,116 +255,83 @@ export function PaymentRegister({
           </ul>
 
           {/* Tablet and up: the columns fit. */}
-          <Card className="hidden min-w-0 overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Payment register: receipt number, borrower, loan, amount, method, date,
-                status and who recorded it
-              </caption>
+          <div className="hidden min-w-0 md:block">
+            <DataTable caption="Payment register">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Receipt
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Borrower
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Loan
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                <tr>
+                  <TableHead width="ref">Receipt</TableHead>
+                  <TableHead width="name">Borrower</TableHead>
+                  <TableHead width="ref">Loan</TableHead>
+                  <TableHead width="money" align="numeric">
                     Amount
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="status" hideBelow="lg">
                     Method
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Received
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Status
-                  </th>
-                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="datetime">Received</TableHead>
+                  <TableHead width="status">Status</TableHead>
+                  <TableHead width="name" hideBelow="xl">
                     By
-                  </th>
+                  </TableHead>
                 </tr>
               </thead>
               <tbody>
                 {payments.map((payment) => (
-                  <tr key={payment.id} className="border-border border-b">
-                    <th scope="row" className="py-2 pr-4 font-normal">
+                  <TableRow key={payment.id} interactive>
+                    <TableCell header width="ref" className="font-normal">
                       <RowLink
                         href={`${ROUTES.payments}/${payment.id}`}
                         className="text-accent focus-visible:outline-accent font-mono underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {payment.paymentNumber}
                       </RowLink>
-                    </th>
-                    <td className="text-text py-2 pr-4 break-words">
-                      {payment.clientName}
-                      <span className="text-text-muted block font-mono text-xs">
-                        {payment.clientNumber}
-                      </span>
-                    </td>
-                    <td className="text-text-muted py-2 pr-4 font-mono">
+                    </TableCell>
+                    <TableCell width="name" wrap="clamp">
+                      <TableLead
+                        primary={payment.clientName}
+                        secondary={payment.clientNumber}
+                      />
+                    </TableCell>
+                    <TableCell width="ref" className="text-text-muted font-mono">
                       {payment.loanNumber}
-                    </td>
-                    <td className="py-2 pr-4 text-right">
+                    </TableCell>
+                    <TableCell width="money" align="numeric">
                       <Amount
                         amount={payment.amount}
                         reversed={payment.status === 'reversed'}
                       />
-                    </td>
-                    <td className="text-text-muted py-2 pr-4">
+                    </TableCell>
+                    <TableCell width="status" hideBelow="lg" className="text-text-muted">
                       {PAYMENT_METHOD_LABELS[payment.paymentMethod]}
-                    </td>
-                    <td className="text-text-muted py-2 pr-4">
+                    </TableCell>
+                    <TableCell width="datetime" className="text-text-muted">
                       <DateValue
                         value={payment.receivedAt}
                         variant="datetime"
                         timeZone={timeZone}
                       />
-                    </td>
-                    <td className="py-2 pr-4">
+                    </TableCell>
+                    <TableCell width="status">
                       <StatusBadge status={payment.status} />
-                    </td>
-                    <td className="text-text-muted py-2 break-words">
+                    </TableCell>
+                    <TableCell
+                      width="name"
+                      wrap="clamp"
+                      hideBelow="xl"
+                      title={payment.recordedByLabel}
+                      className="text-text-muted"
+                    >
                       {payment.recordedByLabel}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
-          </Card>
+            </DataTable>
+          </div>
         </>
       )}
 
-      {page > 1 || hasMore ? (
-        <nav className="flex items-center justify-between gap-2" aria-label="Pages">
-          <Button
-            variant="secondary"
-            disabled={page <= 1}
-            onClick={() => {
-              apply({ page: String(page - 1) });
-            }}
-          >
-            Previous
-          </Button>
-          <span className="text-text-muted text-sm">Page {page}</span>
-          <Button
-            variant="secondary"
-            disabled={!hasMore}
-            onClick={() => {
-              apply({ page: String(page + 1) });
-            }}
-          >
-            Next
-          </Button>
-        </nav>
-      ) : null}
+      <RegisterPagination page={page} hasMore={hasMore} />
     </div>
   );
 }

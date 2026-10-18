@@ -144,7 +144,9 @@ describe('the breakdown table', () => {
 
     // Proportional digits make a column of amounts genuinely harder to
     // compare, which matters when somebody is checking a figure against paper.
-    expect(container.querySelectorAll('.tabular-nums').length).toBeGreaterThan(5);
+    // `.tabular` is the shared utility a numeric column and every `Money`
+    // carry; the table no longer repeats `tabular-nums` per cell by hand.
+    expect(container.querySelectorAll('.tabular').length).toBeGreaterThan(5);
   });
 
   it('scrolls inside its own container rather than widening the page', () => {
@@ -158,7 +160,12 @@ describe('the breakdown table', () => {
     );
 
     // Six columns cannot fit 320px. The table scrolls; the page does not.
-    expect(container.querySelector('.overflow-x-auto')).toBeTruthy();
+    // The shared shell marks itself, and is focusable and named so the
+    // scrolling is reachable from a keyboard.
+    const shell = container.querySelector('[data-data-table]');
+    expect(shell).toBeTruthy();
+    expect(shell?.className).toContain('scroll-area');
+    expect(shell?.getAttribute('tabindex')).toBe('0');
     expect(container.querySelectorAll('.min-w-0').length).toBeGreaterThan(0);
   });
 
@@ -338,7 +345,7 @@ describe('the loan register', () => {
       />,
     );
 
-    expect(screen.getByText(/No loans have been recorded yet/)).toBeTruthy();
+    expect(screen.getByText(/No loans recorded yet/)).toBeTruthy();
   });
 });
 

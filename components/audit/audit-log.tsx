@@ -74,37 +74,45 @@ export function AuditLog({
 
       {/* Tablet and up: the log as a log. */}
       <div className="hidden md:block">
+        {/* Capped and scrolled, which is what makes the sticky header work:
+            a header can only stick inside a box that scrolls, and a table
+            whose wrapper scrolls horizontally has no vertical scroll of its
+            own unless its height is bounded. An audit page is the one screen
+            long enough to be read with the column names out of sight. */}
         <DataTable
           caption="Audit records: when, what was done, which record it touched, who did it, and what changed"
           stickyHeader
+          maxHeight="75vh"
         >
           <thead>
             <tr>
-              <TableHead nowrap>When</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Record</TableHead>
-              <TableHead>Done by</TableHead>
-              <TableHead>Detail</TableHead>
+              <TableHead width="datetime">When</TableHead>
+              <TableHead width="status-wide">Action</TableHead>
+              <TableHead width="status">Record</TableHead>
+              <TableHead width="name">Done by</TableHead>
+              <TableHead width="prose">Detail</TableHead>
             </tr>
           </thead>
           <tbody>
             {entries.map((entry) => (
               <TableRow key={entry.id}>
-                <TableCell className="text-text-muted text-xs">
+                <TableCell width="datetime" className="text-text-muted">
                   <DateValue
                     value={entry.occurredAt}
                     variant="datetime"
                     timeZone={timeZone}
                   />
                 </TableCell>
-                <TableCell header>
+                <TableCell header width="status-wide">
                   {AUDIT_ACTION_LABELS[entry.action] ?? entry.action}
                 </TableCell>
-                <TableCell>
+                <TableCell width="status">
                   <Badge>{entry.entityType.replace(/_/g, ' ')}</Badge>
                 </TableCell>
-                <TableCell className="text-text-muted">{entry.actorLabel}</TableCell>
-                <TableCell>
+                <TableCell width="name" wrap="clamp" className="text-text-muted">
+                  {entry.actorLabel}
+                </TableCell>
+                <TableCell width="prose" wrap="wrap">
                   <Changes entry={entry} />
                 </TableCell>
               </TableRow>

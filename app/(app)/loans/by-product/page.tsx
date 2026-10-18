@@ -2,6 +2,13 @@ import { PackageOpen } from 'lucide-react';
 import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
+import {
+  DataTable,
+  TableCell,
+  TableFootRow,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
@@ -35,6 +42,7 @@ export default async function LoansByProductPage() {
       loanCount: sum.loanCount + row.loanCount,
       activeCount: sum.activeCount + row.activeCount,
       arrearsCount: sum.arrearsCount + row.arrearsCount,
+      clearedCount: sum.clearedCount + row.clearedCount,
       principalDisbursed: sum.principalDisbursed + row.principalDisbursed,
       outstanding: sum.outstanding + row.outstanding,
     }),
@@ -42,6 +50,7 @@ export default async function LoansByProductPage() {
       loanCount: 0,
       activeCount: 0,
       arrearsCount: 0,
+      clearedCount: 0,
       principalDisbursed: 0,
       outstanding: 0,
     },
@@ -104,112 +113,96 @@ export default async function LoansByProductPage() {
             ))}
           </ul>
 
-          <Card className="hidden min-w-0 overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">The portfolio by loan product</caption>
+          <div className="hidden min-w-0 md:block">
+            <DataTable caption="The portfolio by loan product">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Product
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                <tr>
+                  <TableHead width="product">Product</TableHead>
+                  <TableHead width="count" align="numeric">
                     Loans
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="count" align="numeric">
                     Active
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="count" align="numeric">
                     In arrears
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="count" align="numeric">
                     Cleared
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Principal disbursed
-                  </th>
-                  <th scope="col" className="t-th py-2.5 text-right whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Outstanding
-                  </th>
+                  </TableHead>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr
-                    key={row.productId}
-                    className="border-border border-b last:border-0"
-                  >
-                    <td className="py-3 pr-4">
-                      <Link
-                        href={`${ROUTES.loans}?productId=${row.productId}`}
-                        className="text-accent focus-visible:outline-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                      >
-                        {row.productName}
-                      </Link>
-                      <span className="text-text-muted block font-mono text-xs">
-                        {row.productCode}
+                  <TableRow key={row.productId} interactive>
+                    <TableCell width="product" wrap="clamp">
+                      <span className="block min-w-0">
+                        <Link
+                          href={`${ROUTES.loans}?productId=${row.productId}`}
+                          className="text-accent focus-visible:outline-accent line-clamp-2 break-words underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          title={row.productName}
+                        >
+                          {row.productName}
+                        </Link>
+                        <span className="text-text-muted mt-0.5 block font-mono text-[11px] whitespace-nowrap">
+                          {row.productCode}
+                        </span>
                       </span>
-                    </td>
-                    <td className="text-text py-3 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="count" align="numeric">
                       {String(row.loanCount)}
-                    </td>
-                    <td className="text-text py-3 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="count" align="numeric">
                       {String(row.activeCount)}
-                    </td>
-                    <td className="text-text py-3 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="count" align="numeric">
                       {String(row.arrearsCount)}
-                    </td>
-                    <td className="text-text py-3 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="count" align="numeric">
                       {String(row.clearedCount)}
-                    </td>
-                    <td className="text-text py-3 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric">
                       <Money amount={toUgx(row.principalDisbursed)} />
-                    </td>
-                    <td className="text-text py-3 text-right font-medium tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric" className="font-medium">
                       <Money amount={toUgx(row.outstanding)} />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-border border-t-2">
-                  <th scope="row" className="text-text py-3 pr-4 text-left font-medium">
+                <TableFootRow>
+                  <TableCell header width="product">
                     All products
-                  </th>
-                  <td className="text-text py-3 pr-4 text-right font-medium tabular-nums">
+                  </TableCell>
+                  <TableCell width="count" align="numeric">
                     {String(totals.loanCount)}
-                  </td>
-                  <td className="text-text py-3 pr-4 text-right font-medium tabular-nums">
+                  </TableCell>
+                  <TableCell width="count" align="numeric">
                     {String(totals.activeCount)}
-                  </td>
-                  <td className="text-text py-3 pr-4 text-right font-medium tabular-nums">
+                  </TableCell>
+                  <TableCell width="count" align="numeric">
                     {String(totals.arrearsCount)}
-                  </td>
-                  <td className="py-3 pr-4" />
-                  <td className="text-text py-3 pr-4 text-right font-medium tabular-nums">
+                  </TableCell>
+                  <TableCell width="count" align="numeric">
+                    {String(totals.clearedCount)}
+                  </TableCell>
+                  <TableCell width="money" align="numeric">
                     <Money amount={toUgx(totals.principalDisbursed)} />
-                  </td>
-                  <td className="text-text py-3 text-right font-medium tabular-nums">
+                  </TableCell>
+                  <TableCell width="money" align="numeric">
                     <Money amount={toUgx(totals.outstanding)} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableFootRow>
               </tfoot>
-            </table>
-          </Card>
+            </DataTable>
+          </div>
         </>
       )}
     </div>

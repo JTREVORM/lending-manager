@@ -190,6 +190,16 @@
   */
   color-scheme: light;
 
+  /* -------------------------------------------------------------------------
+     Table density.
+
+     `DataTable` sets these per table from its `density` prop; the values here
+     are the comfortable default, so a header or body cell rendered outside a
+     `DataTable` still has padding rather than none.
+     ------------------------------------------------------------------------- */
+  --table-pad-x: 0.75rem;
+  --table-pad-y: 0.625rem;
+
   /* -- The interactive colour: the reference's working navy ---------------- */
   --color-accent: oklch(0.4016 0.1446 259.138); /* #0B4394 */
   --color-accent-contrast: oklch(1 0 0); /* white */
