@@ -1,4 +1,10 @@
 import { Card } from '@/components/ui/card';
+import {
+  DataTable,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { type BusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
@@ -136,72 +142,70 @@ export function RepaymentScheduleTable({
         })}
       </ul>
 
-      {/* Tablet and up: the columns fit, and the columns are the point. */}
-      <Card className="hidden min-w-0 overflow-x-auto sm:block">
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">
-            Repayment collection schedule: collection number, due date, contractual month,
-            principal, interest and total expected for each scheduled collection
-          </caption>
+      {/* Tablet and up: the columns fit, and the columns are the point.
+          Capped and scrolled so the header stays in view — a twenty-four
+          collection schedule is read down, and losing the column names
+          halfway is how a principal figure gets read as an interest one. */}
+      <div className="hidden min-w-0 sm:block">
+        <DataTable
+          caption="Repayment collection schedule"
+          density="compact"
+          stickyHeader
+          maxHeight="32rem"
+        >
           <thead>
-            <tr className="border-border bg-surface-sunken border-b">
-              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                #
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                Due date
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                Month
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            <tr>
+              <TableHead width="count">#</TableHead>
+              <TableHead width="date">Due date</TableHead>
+              <TableHead width="count">Month</TableHead>
+              <TableHead width="money" align="numeric">
                 Principal
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+              </TableHead>
+              <TableHead width="money" align="numeric">
                 Interest
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+              </TableHead>
+              <TableHead width="money" align="numeric">
                 Expected
-              </th>
-              {provisional ? null : (
-                <th scope="col" className="t-th py-2.5 whitespace-nowrap">
-                  Status
-                </th>
-              )}
+              </TableHead>
+              {provisional ? null : <TableHead width="status">Status</TableHead>}
             </tr>
           </thead>
           <tbody>
             {installments.map((row) => (
-              <tr key={row.id} className="border-border border-b">
-                <th scope="row" className="text-text-muted py-2 pr-4 font-normal">
+              <TableRow key={row.id}>
+                <TableCell header width="count" className="text-text-muted font-normal">
                   {row.installmentNumber}
-                </th>
-                <td className="text-text py-2 pr-4">
+                </TableCell>
+                <TableCell width="date" className="text-text">
                   <DateValue value={row.dueDate} />
-                </td>
-                <td className="text-text-muted py-2 pr-4">
+                </TableCell>
+                <TableCell width="count" className="text-text-muted">
                   {row.loanPeriodNumber}
                   <span className="sr-only"> of the contract</span>
-                </td>
-                <td className="text-text py-2 pr-4 text-right tabular-nums">
+                </TableCell>
+                <TableCell width="money" align="numeric" className="text-text">
                   <Money amount={toUgx(row.scheduledPrincipal)} />
-                </td>
-                <td className="text-text py-2 pr-4 text-right tabular-nums">
+                </TableCell>
+                <TableCell width="money" align="numeric" className="text-text">
                   <Money amount={toUgx(row.scheduledInterest)} />
-                </td>
-                <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
+                </TableCell>
+                <TableCell
+                  width="money"
+                  align="numeric"
+                  className="text-text font-medium"
+                >
                   <Money amount={toUgx(row.expectedAmount)} />
-                </td>
+                </TableCell>
                 {provisional ? null : (
-                  <td className="py-2">
+                  <TableCell width="status">
                     <DateStateBadge state={installmentDateState(row.dueDate, today)} />
-                  </td>
+                  </TableCell>
                 )}
-              </tr>
+              </TableRow>
             ))}
           </tbody>
-        </table>
-      </Card>
+        </DataTable>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,15 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { MagnitudeChart } from '@/components/charts/magnitude-chart';
+import {
+  DataTable,
+  NotRecorded,
+  NotTotalled,
+  TableCell,
+  TableFootRow,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { PAYMENT_METHOD_LABELS, isPaymentMethod } from '@/lib/domain/payment';
 import type { CollectionSlice, CollectionSummary } from '@/lib/data/collections';
@@ -185,90 +194,101 @@ function SliceTable({
   const total = slices.reduce((sum, slice) => sum + slice.totalCollected, 0);
 
   return (
-    /*
-      `tabIndex` and a labelled region, because this table scrolls sideways on
-      a phone and a scroller that only a mouse can reach is unreachable to
-      anybody navigating by keyboard. The wider registers in this phase hide
-      their table below `md` and show cards instead; these five are the same
-      table at every width, so they carry the affordance.
-    */
-    <Card
-      className="min-w-0 overflow-x-auto"
-      tabIndex={0}
-      role="region"
-      aria-label={heading}
-    >
-      <h2 id={id} className="text-text mb-3 text-lg font-semibold">
+    <div className="min-w-0 space-y-3">
+      <h2 id={id} className="text-text text-lg font-semibold">
         {heading}
       </h2>
 
-      <table className="w-full text-left text-sm">
-        <caption className="sr-only">{caption}</caption>
+      <DataTable caption={caption} density="compact">
         <thead>
-          <tr className="border-border bg-surface-sunken border-b">
-            <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-              Name
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+          <tr>
+            <TableHead width="name-wide">Name</TableHead>
+            <TableHead width="count" align="numeric">
               Receipts
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="count" align="numeric">
               Reversed
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="money" align="numeric">
               Collected
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="money" align="numeric">
               Principal
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="money" align="numeric">
               Interest
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="money" align="numeric">
               Penalties
-            </th>
+            </TableHead>
           </tr>
         </thead>
-        <tbody className="divide-border divide-y">
+        <tbody>
           {slices.map((slice) => (
-            <tr key={slice.key ?? slice.label}>
-              <th scope="row" className="text-text py-2.5 pr-4 font-medium break-words">
+            <TableRow key={slice.key ?? slice.label}>
+              <TableCell
+                header
+                width="name-wide"
+                wrap="clamp"
+                title={nameOf(slice)}
+                className="text-text"
+              >
                 {nameOf(slice)}
-              </th>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="count" align="numeric" className="text-text">
                 {slice.paymentCount}
-              </td>
-              <td className="text-text-muted py-2.5 pr-4 text-right tabular-nums">
-                {slice.reversedCount === 0 ? '—' : slice.reversedCount}
-              </td>
-              <td className="text-text py-2.5 pr-4 text-right font-semibold tabular-nums">
+              </TableCell>
+              <TableCell width="count" align="numeric" className="text-text-muted">
+                {slice.reversedCount === 0 ? <NotRecorded /> : slice.reversedCount}
+              </TableCell>
+              <TableCell
+                width="money"
+                align="numeric"
+                className="text-text font-semibold"
+              >
                 <Money amount={slice.totalCollected} />
-              </td>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text">
                 <Money amount={slice.principalCollected} />
-              </td>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text">
                 <Money amount={slice.interestCollected} />
-              </td>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text">
                 <Money amount={slice.penaltyCollected} />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-border bg-surface-sunken border-t">
-            <th scope="row" className="text-text py-2.5 pr-4 font-semibold">
+          <TableFootRow>
+            <TableCell header width="name-wide">
               Total
-            </th>
-            <td colSpan={2} />
-            <td className="text-text py-2.5 pr-4 text-right font-semibold tabular-nums">
+            </TableCell>
+            {/* Receipt and reversal counts are counts of rows, not a sum the
+                query returned, so they are deliberately not totalled here —
+                marked rather than left blank, which reads as a zero. */}
+            <TableCell width="count" align="numeric">
+              <NotTotalled />
+            </TableCell>
+            <TableCell width="count" align="numeric">
+              <NotTotalled />
+            </TableCell>
+            <TableCell width="money" align="numeric">
               <Money amount={total} />
-            </td>
-            <td colSpan={3} />
-          </tr>
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <NotTotalled />
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <NotTotalled />
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <NotTotalled />
+            </TableCell>
+          </TableFootRow>
         </tfoot>
-      </table>
+      </DataTable>
 
       <MagnitudeChart
         className="mt-4"
@@ -285,6 +305,6 @@ function SliceTable({
           }`,
         }))}
       />
-    </Card>
+    </div>
   );
 }

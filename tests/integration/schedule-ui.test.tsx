@@ -232,12 +232,18 @@ describe('the repayment schedule table', () => {
 
   // =======================================================================
   describe('accessibility', () => {
-    it('gives the table a caption describing its columns', () => {
+    it('names the table, for a reader who arrives at it directly', () => {
       render(<RepaymentScheduleTable installments={scheduleRows()} today={TODAY} />);
 
-      const caption = screen.getByText(/Repayment collection schedule:/i);
+      // A name rather than a list of the columns: the same string names the
+      // scrolling region around the table, and the headings already say what
+      // the columns are.
+      const caption = screen.getByText('Repayment collection schedule');
       expect(caption).toBeInTheDocument();
       expect(caption.tagName.toLowerCase()).toBe('caption');
+      expect(
+        screen.getByRole('region', { name: 'Repayment collection schedule' }),
+      ).toBeInTheDocument();
     });
 
     it('marks the collection number as a row header', () => {

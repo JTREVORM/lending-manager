@@ -6,6 +6,12 @@ import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  DataTable,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { RowLink } from '@/components/ui/row-link';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
@@ -221,113 +227,92 @@ export function AgingRegister({
             ))}
           </ul>
 
-          {/* Tablet and up: the columns fit. */}
-          <Card className="hidden min-w-0 overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Active loans by age: borrower, phone, loan, product, bucket, days late,
-                arrears, outstanding principal, total outstanding and the last payment
-              </caption>
+          {/* Tablet and up: the columns fit. Ten of them, so the table runs
+              past a laptop and scrolls inside its own box; the two that a
+              collections officer can work without — the product code and the
+              last payment date, both on the loan's own page — step out below
+              `xl`. */}
+          <div className="hidden min-w-0 md:block">
+            <DataTable caption="Active loans by age" density="compact">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Borrower
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Phone
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Loan
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                <tr>
+                  <TableHead width="name">Borrower</TableHead>
+                  <TableHead width="phone">Phone</TableHead>
+                  <TableHead width="ref">Loan</TableHead>
+                  <TableHead width="count" hideBelow="xl">
                     Product
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Age
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="status">Age</TableHead>
+                  <TableHead width="count" align="numeric">
                     Days
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Arrears
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Principal
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Outstanding
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="date" hideBelow="xl">
                     Last paid
-                  </th>
+                  </TableHead>
                 </tr>
               </thead>
-              <tbody className="divide-border divide-y">
+              <tbody>
                 {rows.map((row) => (
-                  <tr key={row.loanId} className="hover:bg-surface-hover">
-                    <th scope="row" className="py-2.5 pr-4 font-medium">
-                      <RowLink
-                        href={`${ROUTES.loans}/${row.loanId}`}
-                        className="text-brand-700 hover:underline"
-                      >
-                        {row.clientName}
-                      </RowLink>
-                      <span className="text-text-muted block text-xs">
-                        {row.clientNumber}
+                  <TableRow key={row.loanId}>
+                    <TableCell header width="name" wrap="clamp">
+                      <span className="block min-w-0">
+                        <RowLink
+                          href={`${ROUTES.loans}/${row.loanId}`}
+                          className="text-brand-700 line-clamp-2 break-words hover:underline"
+                          title={row.clientName}
+                        >
+                          {row.clientName}
+                        </RowLink>
+                        <span className="text-text-muted mt-0.5 block font-mono text-[10px] font-normal whitespace-nowrap">
+                          {row.clientNumber}
+                        </span>
                       </span>
-                    </th>
-                    <td className="py-2.5 pr-4 whitespace-nowrap">
-                      <PhoneValue
-                        value={row.clientPhone}
-                        linked
-                        className="text-accent"
-                      />
-                    </td>
-                    <td className="text-text py-2.5 pr-4 font-mono whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="phone">
+                      <PhoneValue value={row.clientPhone} linked className="text-accent" />
+                    </TableCell>
+                    <TableCell width="ref" className="text-text font-mono">
                       {row.loanNumber}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="count" hideBelow="xl" className="text-text">
                       {row.productCode}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="status" className="text-text">
                       {AGING_BUCKET_LABELS[row.agingBucket]}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="count" align="numeric" className="text-text">
                       {row.daysPastDue}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric" className="text-text">
                       <Money amount={row.arrearsAmount} />
-                    </td>
-                    <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric" className="text-text">
                       <Money amount={row.principalRemaining} />
-                    </td>
-                    <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric" className="text-text">
                       <Money amount={row.totalOutstanding} />
-                    </td>
-                    <td className="text-text-muted py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="date" hideBelow="xl" className="text-text-muted">
                       {row.lastPaymentDate === null ? (
                         'Never'
                       ) : (
                         <DateValue value={row.lastPaymentDate} />
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
-          </Card>
+            </DataTable>
+          </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-text-muted text-sm">Page {page}</p>
