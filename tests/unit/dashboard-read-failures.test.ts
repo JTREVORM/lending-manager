@@ -51,8 +51,18 @@ const CANCELLED = {
  * the same awaited result. `maybeSingle()` and `then()` both resolve to the
  * failure, because the readers use both shapes.
  */
-function failingBuilder(error: unknown): unknown {
-  const result = { data: null, error, count: null };
+/** What the next builder resolves to. Switched by the success-path tests. */
+let nextResult: { data: unknown; error: unknown; count: number | null } = {
+  data: null,
+  error: CANCELLED,
+  count: null,
+};
+
+/** Every `.order()` and `.limit()` the readers asked for, in order. */
+const shape: { table: string; order: unknown[]; limit: number | null }[] = [];
+
+function failingBuilder(_error: unknown): unknown {
+  const result = nextResult;
   const builder: Record<string, unknown> = {};
 
   for (const method of [
@@ -66,8 +76,6 @@ function failingBuilder(error: unknown): unknown {
     'not',
     'is',
     'in',
-    'order',
-    'limit',
     'range',
     'filter',
     'match',
@@ -75,6 +83,18 @@ function failingBuilder(error: unknown): unknown {
   ]) {
     builder[method] = () => builder;
   }
+
+  // Recorded rather than merely chained: whether the *database* does the
+  // ordering, and whether the read is bounded, is the property under test.
+  builder.order = (...args: unknown[]) => {
+    shape[shape.length - 1]?.order.push(args);
+    return builder;
+  };
+  builder.limit = (rows: number) => {
+    const current = shape[shape.length - 1];
+    if (current !== undefined) current.limit = rows;
+    return builder;
+  };
 
   builder.maybeSingle = () => Promise.resolve(result);
   builder.single = () => Promise.resolve(result);
@@ -87,7 +107,10 @@ function failingBuilder(error: unknown): unknown {
   return builder;
 }
 
-const fromMock = vi.fn((_table: string) => failingBuilder(CANCELLED));
+const fromMock = vi.fn((table: string) => {
+  shape.push({ table, order: [], limit: null });
+  return failingBuilder(CANCELLED);
+});
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: () => Promise.resolve({ from: fromMock }),
@@ -114,6 +137,8 @@ const { getPortfolioAtRisk } = await import('@/lib/data/security');
 describe('a cancelled dashboard query is reported, not rendered', () => {
   beforeEach(() => {
     fromMock.mockClear();
+    shape.length = 0;
+    nextResult = { data: null, error: CANCELLED, count: null };
   });
 
   it('the portfolio summary reports failure', async () => {
@@ -174,18 +199,71 @@ describe('a cancelled dashboard query is reported, not rendered', () => {
   });
 });
 
-describe('the lifecycle cards are one read, not three', () => {
-  it('reads loan_portfolio_report once', async () => {
+describe('the lifecycle cards are selected by the database', () => {
+  beforeEach(() => {
     fromMock.mockClear();
+    shape.length = 0;
+  });
+
+  it('orders and bounds every selection in the database', async () => {
+    // Phase 19 read `limit(2000)` with no ordering and sorted in JavaScript,
+    // so past the cap the "most recent" lists were ranked within an arbitrary
+    // subset. The fix is that the database chooses the rows. These assertions
+    // are what stop that regressing: every selection must carry a descending
+    // `order` and a bounded `limit`.
+    nextResult = { data: [], error: null, count: null };
+
     await listRecentLoanActivity(4);
 
-    // Three separate reads each cost a scan of the whole loan book, because
-    // the ordering columns are computed by the view and PostgREST's
-    // `order(...).limit(4)` cannot be answered from an index. Production
-    // measured 20,759–194,125 shared buffer hits per call for these.
-    const reads = fromMock.mock.calls.filter(
-      (call) => call[0] === 'loan_portfolio_report',
+    const selections = shape.filter(
+      (q) => q.table === 'loans' || q.table === 'loan_penalties',
     );
-    expect(reads).toHaveLength(1);
+
+    expect(selections.length).toBeGreaterThanOrEqual(3);
+
+    for (const selection of selections) {
+      expect(
+        selection.order,
+        `${selection.table} must order in the database`,
+      ).not.toEqual([]);
+      expect(selection.order[0]).toEqual([expect.any(String), { ascending: false }]);
+      expect(selection.limit, `${selection.table} must bound its read`).not.toBeNull();
+      expect(selection.limit).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('orders on the stored, indexable columns', async () => {
+    nextResult = { data: [], error: null, count: null };
+
+    await listRecentLoanActivity(4);
+
+    const columns = shape
+      .filter((q) => q.table === 'loans' || q.table === 'loan_penalties')
+      .map((q) => (q.order[0] as unknown[] | undefined)?.[0]);
+
+    // `disbursed_at` and `cleared_at` are columns on `loans`;
+    // `effective_date` is a column on `loan_penalties` with its own index.
+    // None of them is computed by a view, which is what makes the ordering
+    // answerable without scanning the book.
+    expect(columns).toContain('disbursed_at');
+    expect(columns).toContain('cleared_at');
+    expect(columns).toContain('effective_date');
+  });
+
+  it('never reads the whole-book view more than once', async () => {
+    // Three separate ordered reads of `loan_portfolio_report` were what
+    // Phase 19 removed, each costing a scan of the book. The enrichment read
+    // is filtered to the ids already chosen, so there is at most one.
+    nextResult = { data: [], error: null, count: null };
+
+    await listRecentLoanActivity(4);
+
+    const views = shape.filter((q) => q.table === 'loan_portfolio_report');
+    expect(views.length).toBeLessThanOrEqual(1);
+  });
+
+  it('reports failure when a selection cannot be read', async () => {
+    nextResult = { data: null, error: CANCELLED, count: null };
+    await expect(listRecentLoanActivity(4)).resolves.toBeNull();
   });
 });

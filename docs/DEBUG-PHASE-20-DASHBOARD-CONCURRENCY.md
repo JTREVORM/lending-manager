@@ -9,7 +9,7 @@ concurrency**, and **a retry affordance**. This does both, and measures them.
 | --- | --- |
 | Branch | `claude/phase20-dashboard-concurrency`, on top of Phase 19 |
 | Production changed | **nothing** — no schema change, no data change, no deployment |
-| Verification | 2,193 unit/integration · 1,323 database · 498 browser · three roles with real sessions |
+| Verification | 2,196 unit/integration · 1,328 database · 498 browser · three roles with real sessions |
 
 ---
 
@@ -161,11 +161,12 @@ route-level boundary, and the browser suite's status assertions still pass.
 
 Yes, and only partly fixably from the application.
 
-Phase 19 removed the clearest case: the three lifecycle cards were three
-separate reads of `loan_portfolio_report`, each paying for a scan of the whole
-book because the ordering columns are computed by the view and PostgREST's
-`order(...).limit(4)` cannot be answered from an index. One read now feeds all
-three — 5,452 buffer hits to 1,791, and 38.7 ms to 10.0 ms.
+Phase 19 removed the clearest case — three separate reads of
+`loan_portfolio_report` for the three lifecycle cards, each paying for a scan
+of the whole book — but did it with a capped, unordered read that was not
+correct past the cap. §4.1 has the correction: the selection now happens in the
+database, against stored columns, and costs about 12,100 buffers against the
+63,000+ those three ordered reads cost.
 
 What remains is four views that each independently aggregate the whole book:
 `dashboard_portfolio_summary`, `dashboard_collection_summary`,
@@ -174,6 +175,107 @@ re-derive today's collections, two re-derive the live book — but collapsing
 them means a new combined view, which is a migration and a change to how
 financial figures are derived. That is not a "smallest reliable change" and
 it is not something to do without approval, so it is left as §6.
+
+## 4.1 The capped read was wrong, and is gone
+
+An independent review caught a correctness bug in the Phase 19 change before
+it shipped. `listRecentLoanActivity` read
+
+```ts
+.limit(ACTIVITY_SCAN_CAP)   // 2000, with no order by
+```
+
+and sorted the rows in JavaScript. **Without `order by`, PostgreSQL returns
+whichever rows it finds first**, so the cap took an arbitrary 2,000 of them.
+Past the cap the "most recent" lists were ranked within an arbitrary subset: a
+loan disbursed today could be absent while one from last year was shown. The
+three queries it replaced ordered *server-side* and were correct at any size,
+so the optimisation had traded correctness for speed — and the comment I wrote
+claiming the capped window was equivalent to what those queries would have
+ranked within was simply wrong.
+
+### What it does now
+
+Each card's rows are **selected and ordered by the database**, from a source
+where the ordering column is *stored* rather than computed by a view, so the
+work is bounded by the limit rather than by the size of the book:
+
+| Card | Source | Column |
+| --- | --- | --- |
+| Recently paid out | `loans` | `disbursed_at` |
+| Recently settled | `loans` | `cleared_at` |
+| Recently charged | `loan_penalties` | `effective_date` (indexed) |
+
+Those yield at most `3 × limit` loan ids. One further read of
+`loan_portfolio_report`, filtered to exactly those ids, supplies the figures
+the cards display — and a `loan_id` filter is the one thing that view can push
+down, which is what Phase 18's delinquency rewrite was for. The in-memory step
+is now only putting twelve rows the database already chose back into the order
+it returned the ids in; it no longer decides *which* rows are recent.
+
+Row Level Security applies to `loans` and `loan_penalties` exactly as it does
+to the view, so a caller only ever selects among loans their policies admit — a
+borrower cannot learn that a loan they cannot see was disbursed today. The
+enrichment read re-applies them, and an id with no row is dropped rather than
+filled in.
+
+### Why the charge date moved to `loan_penalties`
+
+The view carries two penalty dates: `penalty_effective_date`, derived as
+`final_due_date + grace_period_days_applied + 1` for every loan whether charged
+or not, and `penalty_applied_effective_date`, the recorded charge's own date.
+The card was ordered on the derived one, which cannot be indexed.
+
+For a loan that actually carries a charge the two are the same date — the
+penalty row's `effective_date` is the day after its `grace_end_date`, which is
+the same arithmetic. Verified on production: all five recorded penalties agree,
+and `effective_date = grace_end_date + 1` in every one. A database test pins
+that agreement, so a future divergence fails a test rather than quietly
+changing which loans the card lists.
+
+### Cost, on production
+
+| Statement | Buffers | Time |
+| --- | --- | --- |
+| `loans` by `disbursed_at`, limit 4 | 436 | 12.5 ms |
+| `loans` by `cleared_at`, limit 4 | ~436 | ~12 ms |
+| `loan_penalties` by `effective_date`, limit 40 | 525 | 4.2 ms |
+| `loan_portfolio_report` filtered to 4 ids | 10,682 | 83.3 ms |
+| **all three cards** | **≈ 12,100** | **≈ 112 ms** |
+
+Against the three ordered view reads this replaces, which production's
+`pg_stat_statements` puts at **20,759–194,125 buffer hits each** — so roughly
+63,000 at best and far more at worst. The new shape is cheaper than Phase 19's
+single scan as well, and unlike it, correct at any size.
+
+Two honest qualifications. The enrichment read is **about half a full view
+scan**, not a trivial one: the `loan_id` filter pushes down, but only partly.
+And `loans` has no index on `disbursed_at`/`cleared_at`, so that selection is
+a sequential scan with a top-N heapsort — 26 rows on today's book, and cheap,
+but it would want an index on a large one. That is a migration, so it is noted
+here rather than taken.
+
+### Regression coverage
+
+`tests/db/recent-activity-selection.test.ts` builds a book of **2,100 loans**,
+larger than the old cap, with the newest activity deliberately **outside the
+window an unordered read returns** — inserted last, so it sits at the end of
+the heap. It asserts that an unordered capped read **misses** it (the defect,
+reproduced) and that an ordered, limited read **finds** it, reading a bounded
+number of rows. It also pins the charge-date equivalence above.
+
+`tests/unit/dashboard-read-failures.test.ts` asserts the reader's query shape
+directly: every selection carries a descending `order` and a bounded `limit`,
+the ordering columns are the stored ones, and the whole-book view is read at
+most once. A refactor that drops an `order` fails there.
+
+A note on what was tried and discarded: a performance assertion inside the
+2,100-loan test compared the capped scan against the bounded selection and
+measured the capped scan as *cheaper* (84 buffers against 186). That figure is
+meaningless — those fixture loans carry no schedules, so `loan_portfolio_report`
+barely returns them and there was no book for the capped read to scan. It was
+removed rather than tuned into looking right; the production figures above are
+the measurement that means something.
 
 ## 5. Measured results
 
@@ -219,8 +321,8 @@ failing closed, which is correct.
 | Suite | Result |
 | --- | --- |
 | `tsc --noEmit`, `eslint`, `prettier --check` | clean |
-| Unit + integration | **2,193 passed** (8 new) |
-| Database, migrations applied from zero | **1,323 passed** |
+| Unit + integration | **2,196 passed** |
+| Database, migrations applied from zero | **1,328 passed** (5 new, incl. the 2,100-loan selection test) |
 | Browser, production build, fresh seed | **498 passed, 27 skipped, 0 failed** |
 | Production build | succeeds |
 
