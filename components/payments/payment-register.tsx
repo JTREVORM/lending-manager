@@ -4,7 +4,7 @@ import { RowLink } from '@/components/ui/row-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
+import { StatusText } from '@/components/ui/status-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -362,8 +362,8 @@ function Amount({
 
 function StatusBadge({ status }: { readonly status: PaymentStatus }) {
   return (
-    <Badge tone={status === 'reversed' ? 'danger' : 'success'}>
+    <StatusText tone={status === 'reversed' ? 'critical' : 'positive'}>
       {PAYMENT_STATUS_LABELS[status]}
-    </Badge>
+    </StatusText>
   );
 }

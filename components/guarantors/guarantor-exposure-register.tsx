@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
-import { Badge } from '@/components/ui/badge';
+import { StatusText } from '@/components/ui/status-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -208,12 +208,12 @@ export function GuarantorExposureRegister({
                     >
                       {row.guarantorName}
                     </RowLink>
-                    <Badge
-                      tone={row.guaranteeStatus === 'binding' ? 'info' : 'neutral'}
+                    <StatusText
+                      tone={row.guaranteeStatus === 'binding' ? 'positive' : 'quiet'}
                       title={GUARANTEE_STATUS_DESCRIPTIONS[row.guaranteeStatus]}
                     >
                       {GUARANTEE_STATUS_LABELS[row.guaranteeStatus]}
-                    </Badge>
+                    </StatusText>
                   </div>
 
                   <div className="text-text-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -371,12 +371,12 @@ export function GuarantorExposureRegister({
                       {row.loanStatus}
                     </TableCell>
                     <TableCell width="status">
-                      <Badge
-                        tone={row.guaranteeStatus === 'binding' ? 'info' : 'neutral'}
+                      <StatusText
+                        tone={row.guaranteeStatus === 'binding' ? 'positive' : 'quiet'}
                         title={GUARANTEE_STATUS_DESCRIPTIONS[row.guaranteeStatus]}
                       >
                         {GUARANTEE_STATUS_LABELS[row.guaranteeStatus]}
-                      </Badge>
+                      </StatusText>
                     </TableCell>
                     <TableCell
                       width="prose"

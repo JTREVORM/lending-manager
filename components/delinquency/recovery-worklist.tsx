@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { StatusText, type StatusTone } from '@/components/ui/status-text';
 import { CalendarCheck, Handshake, ShieldCheck } from 'lucide-react';
 
 import { EmptyState } from '@/components/ui/states';
@@ -120,10 +120,10 @@ export function FollowUpWorklist({
   );
 }
 
-const PROMISE_TONES: Readonly<Record<PromiseStatus, 'info' | 'success' | 'danger'>> = {
-  pending: 'info',
-  kept: 'success',
-  broken: 'danger',
+const PROMISE_TONES: Readonly<Record<PromiseStatus, StatusTone>> = {
+  pending: 'attention',
+  kept: 'positive',
+  broken: 'critical',
 };
 
 /**
@@ -208,9 +208,9 @@ export function PromiseRegister({
                 {promise.promiseStatus === null ? (
                   <NotRecorded />
                 ) : (
-                  <Badge tone={PROMISE_TONES[promise.promiseStatus]}>
+                  <StatusText tone={PROMISE_TONES[promise.promiseStatus]}>
                     {PROMISE_STATUS_LABELS[promise.promiseStatus]}
-                  </Badge>
+                  </StatusText>
                 )}
               </TableCell>
               <TableCell width="name" wrap="clamp" className="text-text-muted">

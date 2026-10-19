@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation';
 import { PaymentRecorded } from '@/components/payments/payment-recorded';
 import { PaymentReceipt } from '@/components/payments/payment-receipt';
 import { PaymentReversalPanel } from '@/components/payments/payment-reversal-panel';
-import { Badge } from '@/components/ui/badge';
+import { StatusText } from '@/components/ui/status-text';
 import { Card } from '@/components/ui/card';
 import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
@@ -93,9 +93,9 @@ export default async function PaymentDetailPage({
           <Money amount={payment.amount} struck={isReversed} />
         }
         status={
-          <Badge tone={isReversed ? 'danger' : 'success'}>
+          <StatusText tone={isReversed ? 'critical' : 'positive'}>
             {PAYMENT_STATUS_LABELS[payment.status]}
-          </Badge>
+          </StatusText>
         }
         description={<span className="font-mono">{payment.paymentNumber}</span>}
       />

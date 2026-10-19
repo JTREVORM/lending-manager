@@ -46,6 +46,7 @@ const WIDTHS = [
   { name: '768-tablet', width: 768, height: 1024 },
   { name: '1024-tablet-landscape', width: 1024, height: 800 },
   { name: '1366-laptop', width: 1366, height: 850 },
+  { name: '1440-laptop-large', width: 1440, height: 900 },
   { name: '1920-desktop', width: 1920, height: 1080 },
 ];
 
