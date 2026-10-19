@@ -19,6 +19,14 @@
  *
  * Run against a stack that is already up:
  *   node scripts/table-audit.mjs [--out DIR]
+ *
+ * ## Run it after the browser tests, or on its own stack
+ *
+ * It signs in and loads 132 pages, which is enough traffic to put the
+ * harness's rate limiter in a state where the next write is refused. Running
+ * it before `npm run test:e2e` on the same stack fails three recovery write
+ * tests with the record simply absent — a refusal, not a regression. Either
+ * order the sweep last, or bring a fresh stack up between the two.
  */
 import { chromium } from '@playwright/test';
 import { existsSync } from 'node:fs';
