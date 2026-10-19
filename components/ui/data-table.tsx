@@ -122,11 +122,23 @@ function minWidthStyle(width: ColumnWidth | undefined): CSSProperties | undefine
  * Only ever applied to a column whose value is also reachable somewhere else:
  * the row's detail view, or the record panel the same screen renders on a
  * phone. Nothing is hidden that is needed to identify the record.
+ *
+ * ## Pick one step higher than the arithmetic suggests
+ *
+ * These are **viewport** widths, and the table is not in the viewport — it is
+ * in a content area the 256px navigation rail has already taken its share of.
+ * On a 1366px laptop a table has about 1,070px, so a column set that needs
+ * 1,280px still scrolls at `xl` even though `xl` matched.
+ *
+ * The first pass got this wrong on the loan register and it showed: `Status`
+ * sat off the right edge at 1366 because `Period` and `Rate` were only
+ * dropped below `xl`, which 1366 clears. Subtract the rail before choosing.
  */
 const HIDE_BELOW = {
   md: 'hidden md:table-cell',
   lg: 'hidden lg:table-cell',
   xl: 'hidden xl:table-cell',
+  '2xl': 'hidden 2xl:table-cell',
 } as const;
 
 export type HideBelow = keyof typeof HIDE_BELOW;

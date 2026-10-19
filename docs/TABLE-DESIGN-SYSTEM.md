@@ -161,6 +161,13 @@ split over two lines stops being one.
 on a column whose value is also on the row's own detail page and in the phone
 card, so nothing becomes unreachable — it is a priority order, not a deletion.
 
+**Subtract the rail before choosing one.** These are viewport widths, and the
+table is not in the viewport: it is in a content area the 256px navigation
+rail has already taken its share of, so a 1366px laptop draws in about
+1,070px. A column set needing 1,280px still scrolls at `xl` even though `xl`
+matched. The loan register's first pass made exactly this mistake and pushed
+`Status` off the right edge; its secondary columns now step out below `2xl`.
+
 Three guarantees hold at every width:
 
 - **Horizontal scrolling stays inside the table.** `body { overflow-x: hidden }`

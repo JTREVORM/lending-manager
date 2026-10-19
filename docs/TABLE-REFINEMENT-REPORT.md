@@ -75,6 +75,15 @@ rewritten separately.
    by the layout sweep: `TableLead` inside a clamping cell counted a name's two
    lines and an identifier's one as three and truncated the third — the client
    number. Fixed, and `TableCell` now refuses to clamp a lead at all.
+7. **Breakpoints measured the wrong box.** Also introduced during this work,
+   and caught by looking at the screenshots rather than by any test: Tailwind's
+   `xl` is 1280px of *viewport*, but the table sits in a content area the
+   256px navigation rail has already taken its share of, so a 1366px laptop
+   draws in about 1,070px. The loan register's secondary columns were only
+   dropped below `xl`, which 1366 clears — and `Status` sat off the right
+   edge. The term, the rate and the start date now step out below `2xl`,
+   which brings the register to about 1,012px: every remaining column visible
+   on a laptop with nothing to scroll.
 
 ## 5. Test results
 

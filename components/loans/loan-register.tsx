@@ -32,11 +32,26 @@ import type { LoanPage } from '@/lib/data/loans';
  * ## The shape of the table
  *
  * Ten columns, each with a floor from the shared scale, so the table reaches
- * about 1,320px with every column shown. On a 1920px screen it sits
- * comfortably inside the content area; on a 1366px laptop two secondary
- * columns — the rate and the term — drop out below `xl`, both of which the
- * loan's own page states in full, and the rest fits. Below that the wrapper
- * scrolls. What it never does is squeeze a borrower's name until it folds,
+ * about 1,280px with every column shown. The content area is the viewport
+ * less the 256px rail, so that fits a 1920px screen and not a 1366px one:
+ * there the term and the rate step out — both stated in full on the loan's
+ * own page — and the eight that remain come to about 1,120px against 1,070,
+ * so the register scrolls by a column's width rather than by three.
+ *
+ * `2xl` rather than `xl` for exactly that reason: `xl` is 1280px of
+ * *viewport*, which a 1366px laptop clears while still only having 1,070px
+ * to draw in. The first pass used `xl` and pushed `Status` off the right
+ * edge.
+ *
+ * Three columns step out, not two. With the term and the rate gone the table
+ * still came to 1,116px and clipped `Stage` — and `Stage` is the bucket the
+ * whole register is organised around, the thing the sidebar navigates by.
+ * The start date went with them: it is a date on a row a reader opens for
+ * the date, where `Stage` is what they are scanning the register to find. At
+ * 1,012px the laptop now shows every remaining column with nothing to
+ * scroll.
+ *
+ * What the table never does is squeeze a borrower's name until it folds,
  * which is what `w-full` auto layout did to this screen before.
  *
  * Name and product clamp at two lines and carry their full value as a
@@ -199,16 +214,16 @@ export function LoanRegister({
                   <TableHead width="money" align="numeric">
                     Principal
                   </TableHead>
-                  <TableHead width="count" hideBelow="xl">
+                  <TableHead width="count" hideBelow="2xl">
                     Period
                   </TableHead>
-                  <TableHead width="rate" align="numeric" hideBelow="xl">
+                  <TableHead width="rate" align="numeric" hideBelow="2xl">
                     Rate
                   </TableHead>
                   <TableHead width="money" align="numeric">
                     Repayable
                   </TableHead>
-                  <TableHead width="date" hideBelow="lg">
+                  <TableHead width="date" hideBelow="2xl">
                     Started
                   </TableHead>
                   <TableHead width="status">Status</TableHead>
@@ -241,13 +256,13 @@ export function LoanRegister({
                     <TableCell width="money" align="numeric">
                       <Money amount={toUgx(loan.principalAmount)} />
                     </TableCell>
-                    <TableCell width="count" hideBelow="xl" className="text-text-muted">
+                    <TableCell width="count" hideBelow="2xl" className="text-text-muted">
                       {String(loan.loanTermMonths)} mo
                     </TableCell>
                     <TableCell
                       width="rate"
                       align="numeric"
-                      hideBelow="xl"
+                      hideBelow="2xl"
                       className="text-text-muted"
                     >
                       {formatBps(toBps(loan.interestRateBps))}
@@ -259,7 +274,7 @@ export function LoanRegister({
                         <Money amount={toUgx(loan.totalExpectedRepayment)} />
                       )}
                     </TableCell>
-                    <TableCell width="date" hideBelow="lg" className="text-text-muted">
+                    <TableCell width="date" hideBelow="2xl" className="text-text-muted">
                       <DateValue value={loan.createdAt} />
                     </TableCell>
                     <TableCell width="status">
