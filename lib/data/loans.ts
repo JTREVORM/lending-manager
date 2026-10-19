@@ -4,6 +4,7 @@ import { mapDatabaseError } from '@/lib/db-errors';
 import { logger } from '@/lib/logger';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
+  type LoanSortColumn,
   isLoanStatus,
   isLoanApprovalFailure,
   isLoanClosureKind,
@@ -15,7 +16,7 @@ import {
   type LoanWorkflowStage,
 } from '@/lib/domain/loan';
 import { toUgx } from '@/lib/domain/money';
-import type { LoanSearchInput } from '@/lib/validation/loan';
+import { DEFAULT_PAGE_SIZE, toPageSize } from '@/lib/domain/pagination';
 
 /**
  * Reading loans.
@@ -35,7 +36,7 @@ import type { LoanSearchInput } from '@/lib/validation/loan';
  * rather than an error.
  */
 
-export const LOANS_PAGE_SIZE = 20;
+export const LOANS_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export interface LoanSummary {
   readonly id: string;
@@ -90,7 +91,41 @@ export interface LoanDetail extends LoanSummary {
 export interface LoanPage {
   readonly loans: readonly LoanSummary[];
   readonly page: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
+  /**
+   * How many loans match the filter, in total.
+   *
+   * From PostgREST's `count=exact`, which rides on the **same request** as
+   * the rows — the count is a window function over the filtered set, not a
+   * second round trip. That is what lets the register say "Showing 1–20 of
+   * 35 loans" rather than "20 loans on this page", and what lets it offer
+   * numbered pages at all.
+   *
+   * Null when the count was not asked for or the driver did not return one.
+   * The register then falls back to wording that claims no total, because a
+   * figure beside the word "of" has to be right.
+   */
+  readonly total: number | null;
+}
+
+/**
+ * What a caller may ask the register for.
+ *
+ * The ordering and the page size are optional: most callers want the
+ * register's own default, and only the register screen itself passes a sort
+ * the reader chose.
+ */
+export interface LoanListFilter {
+  readonly stage: string | null;
+  readonly productId: string | null;
+  readonly query: string | null;
+  readonly status: string | null;
+  readonly clientId: string | null;
+  readonly page: number;
+  readonly sort?: LoanSortColumn | null;
+  readonly dir?: 'asc' | 'desc';
+  readonly pageSize?: number;
 }
 
 /** A client snapshot as captured at approval. */
@@ -258,20 +293,43 @@ function escapeSearchTerm(term: string): string {
  * Searched by loan number, client number and client name — the three things a
  * staff member has when somebody is standing in front of them.
  */
-export async function listLoans(filter: LoanSearchInput): Promise<LoanPage> {
+export async function listLoans(filter: LoanListFilter): Promise<LoanPage> {
   const supabase = await createSupabaseServerClient();
 
   const page = Math.max(1, filter.page);
-  const from = (page - 1) * LOANS_PAGE_SIZE;
-  // One extra row, to learn whether there is a next page without a count
-  // query on every keystroke.
-  const to = from + LOANS_PAGE_SIZE;
+  const pageSize = toPageSize(filter.pageSize ?? LOANS_PAGE_SIZE);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  /*
+    Ordered in the database, before the page is cut.
+
+    Sorting the rows this function returns would reorder twenty fetched rows
+    and call it the register: "largest principal" would mean "largest of the
+    twenty most recent", which on a book of several thousand loans is not an
+    answer to the question. `sort` is an allow-listed column name, so the
+    value reaching `order` can only be one of nine the view publishes.
+
+    The created-at tiebreaker keeps the order total. Two loans written on the
+    same product for the same amount would otherwise be free to swap places
+    between page one and page two, and a row can then appear twice or not at
+    all as a reader pages through.
+  */
+  const direction = filter.dir ?? 'desc';
+  const ascending = direction === 'asc';
 
   let query = supabase
     .from('loan_workflow_register')
-    .select(REGISTER_COLUMNS)
-    .order('created_at', { ascending: false })
-    .range(from, to);
+    // `count: 'exact'` is the whole of the "of 35" in the pagination line,
+    // and it costs one request rather than two.
+    .select(REGISTER_COLUMNS, { count: 'exact' });
+
+  query =
+    filter.sort === null || filter.sort === undefined
+      ? query.order('created_at', { ascending: false })
+      : query.order(filter.sort, { ascending }).order('created_at', { ascending: false });
+
+  query = query.range(from, to);
 
   if (filter.stage !== null) {
     query = query.eq('workflow_stage', filter.stage);
@@ -305,7 +363,7 @@ export async function listLoans(filter: LoanSearchInput): Promise<LoanPage> {
     }
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error !== null) {
     logger.warn('Could not list loans.', { code: error.code });
@@ -313,12 +371,16 @@ export async function listLoans(filter: LoanSearchInput): Promise<LoanPage> {
   }
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
-  const hasMore = rows.length > LOANS_PAGE_SIZE;
+  const total = typeof count === 'number' ? count : null;
 
   return {
-    loans: rows.slice(0, LOANS_PAGE_SIZE).map(toSummary),
+    loans: rows.map(toSummary),
     page,
-    hasMore,
+    pageSize,
+    // From the count where there is one; a short page otherwise. Both say
+    // the same thing, and neither fetches a row it will not show.
+    hasMore: total === null ? rows.length === pageSize : from + rows.length < total,
+    total,
   };
 }
 

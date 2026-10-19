@@ -490,6 +490,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -508,6 +509,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -524,6 +526,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -544,6 +547,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -565,6 +569,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -590,6 +595,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -627,6 +633,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={pending}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -641,6 +648,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -671,6 +679,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -687,6 +696,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -705,6 +715,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -723,6 +734,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={[]}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -739,6 +751,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -755,6 +768,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"
@@ -774,6 +788,7 @@ describe('the overdue list', () => {
       <OverdueList
         loans={ROWS}
         page={1}
+        pageSize={25}
         hasMore={false}
         counts={COUNTS}
         businessDate="2026-11-03"

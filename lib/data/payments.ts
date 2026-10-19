@@ -3,6 +3,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { toBusinessDate, type BusinessDate } from '@/lib/domain/datetime';
+import { toPageSize } from '@/lib/domain/pagination';
 import { toUgx, type UgxAmount } from '@/lib/domain/money';
 import {
   assertBalanceInvariants,
@@ -87,7 +88,10 @@ export interface PaymentAllocationRow {
 export interface PaymentPage {
   readonly payments: readonly PaymentSummary[];
   readonly page: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
+  /** From `count=exact` on the same request. See `LoanPage.total`. */
+  readonly total: number | null;
 }
 
 /** A loan's position, as the database derives it. */
@@ -197,14 +201,16 @@ function toSummary(raw: RawSummary): PaymentSummary {
 export async function listPayments(filter: PaymentSearchInput): Promise<PaymentPage> {
   const supabase = await createSupabaseServerClient();
   const page = filter.page ?? 1;
-  const from = (page - 1) * PAYMENTS_PAGE_SIZE;
+  const pageSize = toPageSize(filter.pageSize ?? PAYMENTS_PAGE_SIZE);
+  const from = (page - 1) * pageSize;
 
   let request = supabase
     .from('loan_payments')
-    .select(SUMMARY_COLUMNS)
+    // The count rides on this request, not a second one, and is what lets
+    // the register say "of 412" and offer numbered pages.
+    .select(SUMMARY_COLUMNS, { count: 'exact' })
     .order('received_at', { ascending: false })
-    // One extra row, to learn whether there is a next page without counting.
-    .range(from, from + PAYMENTS_PAGE_SIZE);
+    .range(from, from + pageSize - 1);
 
   if (filter.method !== undefined && filter.method !== 'all') {
     request = request.eq('payment_method', filter.method);
@@ -243,20 +249,22 @@ export async function listPayments(filter: PaymentSearchInput): Promise<PaymentP
     }
   }
 
-  const { data, error } = await request;
+  const { data, error, count } = await request;
 
   if (error !== null) {
     logger.warn('Could not read the payment register.', { code: error.code });
-    return { payments: [], page, hasMore: false };
+    return { payments: [], page, pageSize, hasMore: false, total: null };
   }
 
   const rows = (data ?? []) as unknown as RawSummary[];
-  const hasMore = rows.length > PAYMENTS_PAGE_SIZE;
+  const total = typeof count === 'number' ? count : null;
 
   return {
-    payments: rows.slice(0, PAYMENTS_PAGE_SIZE).map(toSummary),
+    payments: rows.map(toSummary),
     page,
-    hasMore,
+    pageSize,
+    hasMore: total === null ? rows.length === pageSize : from + rows.length < total,
+    total,
   };
 }
 

@@ -1,13 +1,11 @@
-import { Badge } from '@/components/ui/badge';
+import { StatusText, type StatusTone } from '@/components/ui/status-text';
 import { PROFILE_STATUS_LABELS, type ProfileStatus } from '@/lib/domain/status';
 
-const TONES: Readonly<
-  Record<ProfileStatus, 'success' | 'neutral' | 'danger' | 'warning'>
-> = {
-  active: 'success',
+const TONES: Readonly<Record<ProfileStatus, StatusTone>> = {
+  active: 'positive',
   inactive: 'neutral',
-  suspended: 'danger',
-  archived: 'warning',
+  suspended: 'critical',
+  archived: 'attention',
 };
 
 /**
@@ -17,5 +15,5 @@ const TONES: Readonly<
  * for a colour-blind reader and in a printout.
  */
 export function UserStatusBadge({ status }: { readonly status: ProfileStatus }) {
-  return <Badge tone={TONES[status]}>{PROFILE_STATUS_LABELS[status]}</Badge>;
+  return <StatusText tone={TONES[status]}>{PROFILE_STATUS_LABELS[status]}</StatusText>;
 }

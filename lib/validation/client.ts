@@ -37,6 +37,7 @@ import {
   SEXES,
   normalizeNin,
 } from '@/lib/domain/client';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '@/lib/domain/pagination';
 import { fullNameSchema, ugandanPhoneSchema, uuidSchema } from './common';
 
 // ---------------------------------------------------------------------------
@@ -290,6 +291,17 @@ export const clientSearchSchema = z.object({
     .optional()
     .transform((value) => value ?? null),
   page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  /** One of a fixed set; see `lib/domain/pagination.ts`. */
+  pageSize: z.coerce
+    .number()
+    .int()
+    .optional()
+    .catch(DEFAULT_PAGE_SIZE)
+    .transform((value) =>
+      value !== undefined && (PAGE_SIZES as readonly number[]).includes(value)
+        ? value
+        : DEFAULT_PAGE_SIZE,
+    ),
 });
 
 export type ClientSearchInput = z.infer<typeof clientSearchSchema>;

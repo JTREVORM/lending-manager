@@ -28,7 +28,8 @@
 
 import { z } from 'zod';
 
-import { MAX_SUPPORTED_TERM_MONTHS } from '@/lib/domain/loan';
+import { LOAN_SORT_COLUMNS, MAX_SUPPORTED_TERM_MONTHS } from '@/lib/domain/loan';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '@/lib/domain/pagination';
 import { MAX_BPS } from '@/lib/domain/rate';
 import { ugxAmountFromText, uuidSchema } from './common';
 
@@ -263,6 +264,40 @@ export const loanSearchSchema = z.object({
     .optional()
     .transform((value) => value ?? null),
   page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  /**
+   * Which column to order by, as one of a fixed set.
+   *
+   * An allow-list, never the raw parameter: a sort key reaches PostgREST's
+   * `order` and a free-text one would let a URL choose a column — including
+   * one the register does not publish. An unrecognised value falls back to
+   * the default order rather than erroring, because a stale bookmark should
+   * show the register, not a failure.
+   */
+  sort: z
+    .enum(LOAN_SORT_COLUMNS)
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
+  dir: z
+    .enum(['asc', 'desc'])
+    .optional()
+    .catch('desc')
+    .transform((value) => value ?? 'desc'),
+  /**
+   * Rows per page. A fixed set, for the same reason: it becomes a `range`,
+   * and an arbitrary one is an invitation to ask for fifty thousand rows.
+   */
+  pageSize: z.coerce
+    .number()
+    .int()
+    .optional()
+    .catch(DEFAULT_PAGE_SIZE)
+    .transform((value) =>
+      value !== undefined && (PAGE_SIZES as readonly number[]).includes(value)
+        ? value
+        : DEFAULT_PAGE_SIZE,
+    ),
 });
 
 export type LoanSearchInput = z.infer<typeof loanSearchSchema>;

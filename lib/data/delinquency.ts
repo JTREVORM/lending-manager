@@ -241,6 +241,7 @@ export interface DelinquencyFilters {
 export interface DelinquentLoanPage {
   readonly loans: readonly DelinquentLoanRow[];
   readonly page: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
 }
 
@@ -291,14 +292,14 @@ export async function listDelinquentLoans(
 
   if (error !== null) {
     logger.warn('Could not read the overdue list.', { code: error.code });
-    return { loans: [], page, hasMore: false };
+    return { loans: [], page, pageSize, hasMore: false };
   }
 
   const rows = (data ?? []).map((row) => toPosition(row as RawDelinquency));
   const hasMore = rows.length > pageSize;
   const visible = hasMore ? rows.slice(0, pageSize) : rows;
 
-  if (visible.length === 0) return { loans: [], page, hasMore: false };
+  if (visible.length === 0) return { loans: [], page, pageSize, hasMore: false };
 
   const { data: clients, error: clientError } = await supabase
     .from('clients')
@@ -334,6 +335,7 @@ export async function listDelinquentLoans(
       };
     }),
     page,
+    pageSize,
     hasMore,
   };
 }

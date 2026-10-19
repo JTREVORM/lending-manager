@@ -10,11 +10,7 @@ import {
   TableLead,
   TableRow,
 } from '@/components/ui/data-table';
-import {
-  RegisterCount,
-  RegisterFilters,
-  RegisterPagination,
-} from '@/components/ui/register';
+import { RegisterFilters, RegisterPagination } from '@/components/ui/register';
 import { EmptyState } from '@/components/ui/states';
 import { ClientStatusBadge } from './client-status-badge';
 import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from '@/lib/domain/client';
@@ -71,14 +67,6 @@ export function ClientDirectory({
             ],
           },
         ]}
-        summary={
-          <RegisterCount
-            shown={page.clients.length}
-            page={page.page}
-            hasMore={page.hasMore}
-            noun="client"
-          />
-        }
       />
 
       {page.clients.length === 0 ? (
@@ -192,7 +180,14 @@ export function ClientDirectory({
         </>
       )}
 
-      <RegisterPagination page={page.page} hasMore={page.hasMore} />
+      <RegisterPagination
+        page={page.page}
+        pageSize={page.pageSize}
+        rows={page.clients.length}
+        hasMore={page.hasMore}
+        total={page.total}
+        noun="client"
+      />
     </div>
   );
 }

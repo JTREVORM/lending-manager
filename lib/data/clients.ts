@@ -3,6 +3,7 @@ import 'server-only';
 import { unstable_rethrow } from 'next/navigation';
 
 import { mapDatabaseError } from '@/lib/db-errors';
+import { DEFAULT_PAGE_SIZE, toPageSize } from '@/lib/domain/pagination';
 import { logger } from '@/lib/logger';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { isClientStatus, isSex, type ClientStatus, type Sex } from '@/lib/domain/client';
@@ -31,7 +32,7 @@ import type { ClientSearchInput } from '@/lib/validation/client';
  * capability sees "not available" rather than an error page.
  */
 
-export const CLIENTS_PAGE_SIZE = 20;
+export const CLIENTS_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 /** A client as the directory and search results show them. No NIN. */
 export interface ClientSummary {
@@ -71,7 +72,10 @@ export interface ClientIdentity {
 export interface ClientPage {
   readonly clients: readonly ClientSummary[];
   readonly page: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
+  /** From `count=exact` on the same request. See `LoanPage.total`. */
+  readonly total: number | null;
 }
 
 /** The columns the directory needs. Deliberately not `select('*')`. */
@@ -135,14 +139,16 @@ export async function listClients(filter: ClientSearchInput): Promise<ClientPage
   const supabase = await createSupabaseServerClient();
 
   const page = Math.max(1, filter.page);
-  const from = (page - 1) * CLIENTS_PAGE_SIZE;
-  // One extra row, to learn whether there is a next page without a count
-  // query. A `count: 'exact'` on every keystroke is a full scan.
-  const to = from + CLIENTS_PAGE_SIZE;
+  const pageSize = toPageSize(filter.pageSize ?? CLIENTS_PAGE_SIZE);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
+  // `count: 'exact'` rides on this request rather than adding a second one,
+  // and is what lets the directory say "Showing 1–20 of 143 clients" and
+  // offer numbered pages instead of only Previous and Next.
   let query = supabase
     .from('clients')
-    .select(SUMMARY_COLUMNS)
+    .select(SUMMARY_COLUMNS, { count: 'exact' })
     .order('registered_at', { ascending: false })
     .range(from, to);
 
@@ -176,7 +182,7 @@ export async function listClients(filter: ClientSearchInput): Promise<ClientPage
     }
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error !== null) {
     logger.warn('Could not list clients.', { code: error.code });
@@ -184,12 +190,14 @@ export async function listClients(filter: ClientSearchInput): Promise<ClientPage
   }
 
   const rows = (data ?? []) as SummaryRow[];
-  const hasMore = rows.length > CLIENTS_PAGE_SIZE;
+  const total = typeof count === 'number' ? count : null;
 
   return {
-    clients: rows.slice(0, CLIENTS_PAGE_SIZE).map(toSummary),
+    clients: rows.map(toSummary),
     page,
-    hasMore,
+    pageSize,
+    hasMore: total === null ? rows.length === pageSize : from + rows.length < total,
+    total,
   };
 }
 

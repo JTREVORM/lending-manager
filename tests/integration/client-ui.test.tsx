@@ -91,6 +91,8 @@ const CLIENT_PAGE: ClientPage = {
     },
   ],
   page: 1,
+  pageSize: 20,
+  total: 2,
   hasMore: false,
 };
 
@@ -176,7 +178,7 @@ describe('the client directory', () => {
   it('explains an empty result instead of showing a blank page', () => {
     render(
       <ClientDirectory
-        page={{ clients: [], page: 1, hasMore: false }}
+        page={{ clients: [], page: 1, pageSize: 20, hasMore: false, total: 0 }}
         filter={{ query: 'zzz', status: '' }}
       />,
     );
@@ -188,7 +190,7 @@ describe('the client directory', () => {
   it('suggests registering the first client when nothing is filtered', () => {
     render(
       <ClientDirectory
-        page={{ clients: [], page: 1, hasMore: false }}
+        page={{ clients: [], page: 1, pageSize: 20, hasMore: false, total: 0 }}
         filter={{ query: '', status: '' }}
       />,
     );
@@ -202,20 +204,43 @@ describe('the client directory', () => {
   it('labels its pagination and disables the unavailable direction', () => {
     render(
       <ClientDirectory
-        page={{ ...CLIENT_PAGE, page: 1, hasMore: true }}
+        /*
+          A total of 40 over pages of 20, so there genuinely is a second
+          page. Where a count is known it governs, and `hasMore` cannot
+          contradict it: "of 40" and "no next page" cannot both be true, and
+          the figure beside "of" is the one a reader will believe.
+        */
+        page={{ ...CLIENT_PAGE, page: 1, pageSize: 20, total: 40, hasMore: true }}
         filter={{ query: '', status: '' }}
       />,
     );
 
     expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Previous' })).toHaveProperty(
+
+    // Icon-only steps, as the reference draws them, so the accessible name
+    // carries the whole label — a bare chevron tells a screen reader
+    // nothing, and "Previous" alone does not say previous *what*.
+    expect(screen.getByRole('button', { name: 'Previous page' })).toHaveProperty(
       'disabled',
       true,
     );
-    expect(screen.getByRole('button', { name: 'Next' })).toHaveProperty(
+    expect(screen.getByRole('button', { name: 'Next page' })).toHaveProperty(
       'disabled',
       false,
     );
+  });
+
+  it('states the range and the total it was given', () => {
+    render(
+      <ClientDirectory
+        page={{ ...CLIENT_PAGE, page: 1, pageSize: 20, total: 143, hasMore: true }}
+        filter={{ query: '', status: '' }}
+      />,
+    );
+
+    // The figure after "of" comes from the query's own count. A register
+    // that cannot afford one says only what it knows, and never estimates.
+    expect(screen.getByText(/Showing 1–2 of 143 clients/)).toBeTruthy();
   });
 
   it('renders a hostile name as text rather than as markup', () => {

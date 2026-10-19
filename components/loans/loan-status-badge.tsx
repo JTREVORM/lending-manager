@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { StatusText, type StatusTone } from '@/components/ui/status-text';
 import { LOAN_STATUS_LABELS, type LoanStatus } from '@/lib/domain/loan';
 
 /**
@@ -9,17 +9,15 @@ import { LOAN_STATUS_LABELS, type LoanStatus } from '@/lib/domain/loan';
  * decision is made and the money has *not* moved, which is a distinction
  * somebody handling cash needs to see at a glance.
  */
-const TONES: Readonly<
-  Record<LoanStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'>
-> = {
+const TONES: Readonly<Record<LoanStatus, StatusTone>> = {
   draft: 'neutral',
-  pending_approval: 'warning',
-  approved: 'info',
-  active: 'success',
+  pending_approval: 'attention',
+  approved: 'positive',
+  active: 'positive',
   cleared: 'neutral',
-  cancelled: 'danger',
+  cancelled: 'critical',
 };
 
 export function LoanStatusBadge({ status }: { readonly status: LoanStatus }) {
-  return <Badge tone={TONES[status]}>{LOAN_STATUS_LABELS[status]}</Badge>;
+  return <StatusText tone={TONES[status]}>{LOAN_STATUS_LABELS[status]}</StatusText>;
 }

@@ -504,7 +504,9 @@ export default async function LoanDetailPage({
           <PaymentRegister
             payments={payments}
             page={1}
+            pageSize={payments.length}
             hasMore={false}
+            total={payments.length}
             timeZone={companyBranding.branding.timezone}
             showFilters={false}
           />

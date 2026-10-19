@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { ArrowLeft, type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+import { Chevron } from '@/components/ui/chevron';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cn } from '@/lib/utils/cn';
@@ -7,36 +9,35 @@ import { cn } from '@/lib/utils/cn';
 /**
  * The top of every page, and the one place a page-level action is styled.
  *
- * ## The reference's page banner
+ * ## It used to be a gradient banner
  *
- * Every screen in the reference project opens with the same block: a navy →
- * blue → amber gradient panel (`.page-banner`) carrying a small translucent
- * "eyebrow" chip, the title in `text-2xl font-bold tracking-tight`, and one
- * line of explanation in `text-[13px] text-blue-100`. It is the single most
- * recognisable thing about the design, and it is what makes forty unrelated
- * screens read as one product. `PageHeader` is that banner.
+ * Every screen opened with a navy → blue → amber panel carrying a
+ * translucent eyebrow chip and white text. It was the loudest thing in the
+ * product, repeated forty times, and it pushed the actual content — the
+ * register somebody came to read — a couple of hundred pixels down the page.
  *
- * The gradient is defined once in `globals.css`, with the amber stop pushed
- * to 118% so the right-hand end reads as the sign-in screen's warm edge
- * rather than desaturating to grey, plus a blurred white bloom in the
- * top-right corner. In print it collapses to a plain heading with a rule
- * under it — a block of ink is not a report.
+ * The reference design has none of it: a breadcrumb, a dark title, one line
+ * of description, and the page's actions on the right of the same block. The
+ * colour in a banking screen should be in the figures that need attention,
+ * not behind the heading. So that is what this is now.
+ *
+ * The props did not change, because forty call sites use them and the
+ * meanings still hold — they are simply drawn differently:
+ *
+ *   - `eyebrow` was the chip above the title; it is now the first segment of
+ *     the breadcrumb, which is the same fact (what part of the business this
+ *     screen belongs to) in the place a reader looks for it.
+ *   - `back` was a link above the banner; it is now the linked parent in the
+ *     breadcrumb, which is what a breadcrumb is for.
  *
  * ## Actions
- *
- * Actions sit *below* the banner rather than inside it, which is where the
- * reference puts them (`LoanProducts.tsx`, `Clients.tsx`): full-width and
- * 52px tall on a phone, auto-width and 40px on the desktop, via
- * `.page-header-actions`. Three styles exist and no more:
  *
  *   - **Primary action** — one per page at most, the navy fill. The thing a
  *     person came to this page to do.
  *   - **Secondary actions** — bordered white. Export, print, a second route.
- *   - **Back link** — a text link with a left arrow, above the banner, never
- *     a button. It navigates; it does not act.
  *
- * A page that wants a fourth is a page that has outgrown this header, and
- * should say so in review rather than inventing one inline.
+ * A page that wants a fourth has outgrown this header and should say so in
+ * review rather than inventing one inline.
  */
 export interface PageHeaderProps {
   /**
@@ -63,7 +64,13 @@ export interface PageHeaderProps {
    * The reference puts one on every screen.
    */
   readonly eyebrow?: string;
-  /** The amber icon inside the eyebrow chip. */
+  /**
+   * Accepted and ignored. It was the amber glyph inside the eyebrow chip,
+   * and the chip is now a breadcrumb segment, which the reference sets in
+   * plain text. Kept so the forty call sites that pass one keep compiling.
+   *
+   * @deprecated The header draws no icon; drop the prop.
+   */
   readonly icon?: LucideIcon;
   readonly className?: string;
 }
@@ -76,56 +83,55 @@ export function PageHeader({
   secondaryActions,
   status,
   eyebrow,
-  icon: Icon,
   className,
 }: PageHeaderProps) {
   const hasActions = primaryAction !== undefined || secondaryActions !== undefined;
+  const hasTrail = eyebrow !== undefined || back !== undefined;
 
   return (
-    <div className={cn('mb-4 min-w-0 space-y-3', className)}>
-      {back !== undefined ? (
-        <Link
-          href={back.href}
-          className="text-text-muted hover:text-accent inline-flex min-h-8 items-center gap-1.5 text-xs font-medium print:hidden"
+    <div className={cn('mb-5 min-w-0', className)}>
+      {hasTrail ? (
+        <nav
+          aria-label="Breadcrumb"
+          className="text-text-muted mb-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] print:hidden"
         >
-          <ArrowLeft aria-hidden="true" className="size-4" />
-          {back.label}
-        </Link>
+          {eyebrow !== undefined ? <span>{eyebrow}</span> : null}
+          {eyebrow !== undefined && back !== undefined ? (
+            <Chevron direction="right" className="text-border-strong size-3.5" />
+          ) : null}
+          {back !== undefined ? (
+            <Link
+              href={back.href}
+              className="hover:text-accent underline-offset-2 hover:underline"
+            >
+              {back.label}
+            </Link>
+          ) : null}
+        </nav>
       ) : null}
 
-      {/* The banner. `p-5 sm:p-6` is the reference's own padding. */}
-      <div className="page-banner p-5 sm:p-6">
-        {/* The eyebrow chip: a translucent white pill with an amber icon,
-            naming the area of the business this screen belongs to. */}
-        {eyebrow !== undefined ? (
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
-            {Icon === undefined ? null : (
-              <Icon aria-hidden="true" className="size-3.5 text-amber-400" />
-            )}
-            {eyebrow}
-          </p>
-        ) : null}
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {/* `text-text`, not white: the banner behind it is gone. */}
+            <h1 className="t-page-title text-text min-w-0 break-words">{title}</h1>
+            {status}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="t-page-title min-w-0 break-words text-white">{title}</h1>
-          {status}
+          {description !== undefined ? (
+            <p className="text-text-muted mt-1 max-w-3xl text-sm leading-relaxed">
+              {description}
+            </p>
+          ) : null}
         </div>
 
-        {description !== undefined ? (
-          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
-            {description}
-          </p>
+        {hasActions ? (
+          <div className="page-header-actions print:hidden">
+            {primaryAction}
+            {secondaryActions}
+          </div>
         ) : null}
       </div>
-
-      {hasActions ? (
-        // `.page-header-actions` is the reference's rule: stacked and
-        // thumb-sized on a phone, inline and compact from `md` up.
-        <div className="page-header-actions print:hidden">
-          {primaryAction}
-          {secondaryActions}
-        </div>
-      ) : null}
     </div>
   );
 }

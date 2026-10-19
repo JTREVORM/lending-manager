@@ -60,7 +60,7 @@ export default async function OverduePage({
   const rawPage = Number(single('page'));
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
 
-  const [{ loans, hasMore }, counts, { branding }] = await Promise.all([
+  const [{ loans, pageSize, hasMore }, counts, { branding }] = await Promise.all([
     listDelinquentLoans({
       states,
       minDaysPastDue,
@@ -85,6 +85,7 @@ export default async function OverduePage({
       <OverdueList
         loans={loans}
         page={page}
+        pageSize={pageSize}
         hasMore={hasMore}
         counts={counts}
         businessDate={today}

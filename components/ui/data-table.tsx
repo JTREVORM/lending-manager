@@ -69,39 +69,51 @@ import { cn } from '@/lib/utils/cn';
    the viewport is a table that scrolls, and that is the intended outcome —
    see the note above. Columns that should take the slack (a name, a note)
    simply have a larger minimum than the ones that should not.
+
+   ## Tuned so a full register fits a laptop
+
+   They were measured a second time against the reference design, which
+   shows all ten of the loan register's columns at once. A column's floor is
+   now the wider of its longest realistic value and its own heading — the
+   rate column is 118px not because `15%` needs it but because `INTEREST
+   RATE` does — and no wider. Ten of them come to about 1,180px, which is
+   the content area of a 1440px screen; a 1366px laptop scrolls by roughly a
+   column's width, which the brief prefers to dropping a column.
    =========================================================================== */
 export const TABLE_COLUMN_WIDTHS = {
   /** A loan, client, receipt or transfer number. Set in mono. */
-  ref: 124,
+  ref: 96,
   /** A person's or a business's full name. Three Ugandan names fit on two. */
-  name: 184,
+  name: 148,
   /** A name that is the row's whole subject, e.g. the client register. */
-  'name-wide': 224,
+  'name-wide': 200,
   /** A loan product's name, with its code beneath. */
-  product: 168,
+  product: 136,
   /** `UGX 123,456,789`. */
-  money: 124,
+  money: 120,
   /** A grand total, which runs longer than any single row. */
-  'money-wide': 148,
+  'money-wide': 144,
   /** `14 Oct 2026`. */
-  date: 104,
+  date: 100,
   /** `14 Oct 2026, 14:32`. */
-  datetime: 144,
-  /** One status badge. */
-  status: 128,
-  /** A badge with a long label — "Awaiting disbursement". */
-  'status-wide': 160,
-  /** A small whole number: a term in months, a count, days late. */
-  count: 76,
-  /** A percentage. */
-  rate: 88,
-  phone: 136,
+  datetime: 140,
+  /** A status in words — `Awaiting approval`. */
+  status: 136,
+  /** A long one — `Awaiting disbursement`. */
+  'status-wide': 162,
+  /** A small whole number: a count, days late. */
+  count: 72,
+  /** A percentage. Sized by its heading, which is longer than `15%`. */
+  rate: 118,
+  /** A loan term written in full — `12 months`. */
+  term: 98,
+  phone: 132,
   /** A village and a district. */
-  place: 168,
+  place: 160,
   /** Free text that is allowed to wrap: a note, a reason, a remark. */
-  prose: 240,
-  /** A strip of row actions. */
-  actions: 104,
+  prose: 228,
+  /** A strip of row actions, or the three-dot menu. */
+  actions: 68,
 } as const;
 
 export type ColumnWidth = keyof typeof TABLE_COLUMN_WIDTHS;
@@ -142,6 +154,27 @@ const HIDE_BELOW = {
 } as const;
 
 export type HideBelow = keyof typeof HIDE_BELOW;
+
+/**
+ * Pin a column to the right edge while the rest of the table scrolls under
+ * it.
+ *
+ * For the actions column, and only for it. A ten-column register is wider
+ * than a 1366px laptop's content area by about a column's width, so the
+ * last column is the one that scrolls out of sight — and the last column is
+ * the row's menu. "Actions must remain accessible" is not satisfied by "you
+ * can reach them if you scroll", so the menu stays put and the data moves
+ * beneath it.
+ *
+ * It is the right edge rather than the left on purpose. Pinning the
+ * identifier column instead would cover the data as a reader scrolls
+ * towards it, and the identifier is the one column they can already see
+ * without scrolling.
+ *
+ * The fill is opaque and the left border is what tells a reader the column
+ * is floating above the rest rather than attached to it.
+ */
+const STICKY_END = 'sticky right-0 z-10 border-l border-border';
 
 const DENSITY = {
   /** Registers and worklists: read all day, six to ten columns. */
@@ -245,7 +278,14 @@ export function DataTable({
 
 const ALIGN = {
   text: 'text-left',
+  /** A figure: right-aligned **and** tabular, so a column lines up. */
   numeric: 'text-right',
+  /**
+   * Right-aligned without tabular figures — for a control at the end of a
+   * row, such as the actions menu, which is not a number and should not be
+   * given a number's letter-spacing.
+   */
+  right: 'text-right',
   center: 'text-center',
 } as const;
 
@@ -258,7 +298,17 @@ export interface TableHeadProps {
   readonly width?: ColumnWidth;
   /** Drop this column below a breakpoint. See `HIDE_BELOW`. */
   readonly hideBelow?: HideBelow;
+  /** Pin to the right edge while the table scrolls. See `STICKY_END`. */
+  readonly stickyEnd?: boolean;
   readonly colSpan?: number;
+  /**
+   * Which way this column is sorted, for a screen reader.
+   *
+   * It belongs on the `<th>` rather than on the control inside it: the
+   * column is what is sorted, and `aria-sort` is read when the header is
+   * announced. `ariaSortFor` in `sort-header.tsx` works it out.
+   */
+  readonly ariaSort?: 'ascending' | 'descending' | 'none';
   /**
    * Accepted for the callers that pass it, and ignored: a header cell is
    * always `nowrap`. Kept rather than removed so the `<TableHead nowrap>`
@@ -277,14 +327,18 @@ export function TableHead({
   className,
   width,
   hideBelow,
+  stickyEnd = false,
   colSpan,
+  ariaSort,
 }: TableHeadProps) {
   return (
     <th
       scope={scope}
+      {...(ariaSort === undefined ? {} : { 'aria-sort': ariaSort })}
       {...(hideBelow === undefined ? {} : { 'data-hide-below': hideBelow })}
       className={cn(
         't-th border-border bg-surface-sunken border-b whitespace-nowrap',
+        stickyEnd ? STICKY_END : undefined,
         // Padding comes from the density the table declares, through a CSS
         // variable the table sets, so a header does not have to be told which
         // density it is in.
@@ -338,6 +392,8 @@ export interface TableCellProps {
   readonly header?: boolean;
   readonly width?: ColumnWidth;
   readonly hideBelow?: HideBelow;
+  /** Pin to the right edge while the table scrolls. See `STICKY_END`. */
+  readonly stickyEnd?: boolean;
   /** See `WRAP`. Defaults to `nowrap`. */
   readonly wrap?: CellWrap;
   /**
@@ -362,6 +418,7 @@ export function TableCell({
   header = false,
   width,
   hideBelow,
+  stickyEnd = false,
   wrap,
   title,
   nowrap,
@@ -377,6 +434,9 @@ export function TableCell({
     // digits are one width. Stated here so a numeric column cannot forget it.
     align === 'numeric' ? 'tabular' : undefined,
     header ? 'text-text font-semibold' : 'text-text',
+    // Opaque, so the scrolling data passes behind it rather than through it.
+    // `group-hover` keeps the pinned cell in step with its row's hover.
+    stickyEnd ? cn(STICKY_END, 'bg-surface') : undefined,
     className,
   );
 
@@ -529,6 +589,10 @@ export function TableRow({
         // it is how a reader keeps their place across ten columns.
         // `interactive` additionally marks the pointer.
         'hover:bg-surface-hover transition-colors duration-150',
+        // A right-pinned cell carries its own opaque fill, so it has to be
+        // told about the row's hover too — otherwise the actions column
+        // stays white while the row behind it shades.
+        'hover:[&>[class*=sticky]]:bg-surface-hover',
         interactive ? 'cursor-pointer' : undefined,
         className,
       )}

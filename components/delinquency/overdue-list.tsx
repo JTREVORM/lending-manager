@@ -61,12 +61,14 @@ const FILTERABLE_STATES: readonly DelinquencyState[] = [
 export function OverdueList({
   loans,
   page,
+  pageSize,
   hasMore,
   counts,
   businessDate,
 }: {
   readonly loans: readonly DelinquentLoanRow[];
   readonly page: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
   readonly counts: Readonly<Record<DelinquencyState, number>>;
   readonly businessDate: string;
@@ -381,7 +383,21 @@ export function OverdueList({
         </>
       )}
 
-      <RegisterPagination page={page} hasMore={hasMore} />
+      {/*
+        No exact total here, deliberately.
+
+        The overdue list is derived per row from the collection schedule
+        rather than read straight off a table, so a count would be a second
+        pass over the same derivation. The pagination says what it honestly
+        knows — the range on this page — and offers Previous and Next.
+      */}
+      <RegisterPagination
+        page={page}
+        pageSize={pageSize}
+        rows={loans.length}
+        hasMore={hasMore}
+        noun="loan"
+      />
     </div>
   );
 }

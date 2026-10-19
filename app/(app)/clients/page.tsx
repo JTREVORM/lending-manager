@@ -5,6 +5,7 @@ import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { listClients } from '@/lib/data/clients';
+import { DEFAULT_PAGE_SIZE } from '@/lib/domain/pagination';
 import { clientSearchSchema } from '@/lib/validation/client';
 
 export const metadata = { title: 'Clients' };
@@ -31,11 +32,14 @@ export default async function ClientsPage({
     query: typeof params.q === 'string' ? params.q : '',
     status: typeof params.status === 'string' ? params.status : '',
     page: typeof params.page === 'string' ? params.page : '1',
+    pageSize: typeof params.pageSize === 'string' ? params.pageSize : undefined,
   });
 
   // A malformed filter in the URL falls back to the default view rather than
   // erroring: the filter is a convenience, not a control.
-  const filter = parsed.success ? parsed.data : { query: null, status: null, page: 1 };
+  const filter = parsed.success
+    ? parsed.data
+    : { query: null, status: null, page: 1, pageSize: DEFAULT_PAGE_SIZE };
 
   const page = await listClients(filter);
 

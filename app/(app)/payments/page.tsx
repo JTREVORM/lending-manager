@@ -5,6 +5,7 @@ import { Money } from '@/components/ui/money';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
+import { DEFAULT_PAGE_SIZE } from '@/lib/domain/pagination';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getCollectionTotals, listPayments } from '@/lib/data/payments';
@@ -55,15 +56,18 @@ export default async function PaymentsPage({
     page: single('page'),
   });
 
-  const filter = parsed.success ? parsed.data : { page: 1 as const };
+  const filter = parsed.success
+    ? parsed.data
+    : { page: 1 as const, pageSize: DEFAULT_PAGE_SIZE };
 
   const today = businessToday();
 
-  const [{ payments, page, hasMore }, totals, { branding }] = await Promise.all([
-    listPayments(filter),
-    getCollectionTotals(today),
-    getCompanyBranding(),
-  ]);
+  const [{ payments, page, pageSize, hasMore, total }, totals, { branding }] =
+    await Promise.all([
+      listPayments(filter),
+      getCollectionTotals(today),
+      getCompanyBranding(),
+    ]);
 
   const collectedToday = totals.reduce((sum, row) => sum + row.totalAmount, 0);
 
@@ -147,7 +151,9 @@ export default async function PaymentsPage({
         <PaymentRegister
           payments={payments}
           page={page}
+          pageSize={pageSize}
           hasMore={hasMore}
+          total={total}
           timeZone={branding.timezone}
         />
       </section>

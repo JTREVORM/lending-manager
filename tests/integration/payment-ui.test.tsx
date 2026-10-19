@@ -501,7 +501,13 @@ describe('the payment register', () => {
 
   it('lists every payment with its receipt number and method', () => {
     render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     expect(screen.getAllByText('PAY260001').length).toBeGreaterThan(0);
@@ -514,7 +520,13 @@ describe('the payment register', () => {
     // reconcile against a cash drawer, and would hide the one event a
     // reviewer most wants to see.
     render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     expect(screen.getAllByText('PAY260002').length).toBeGreaterThan(0);
@@ -523,7 +535,13 @@ describe('the payment register', () => {
 
   it('strikes through a reversed amount and says so for a screen reader', () => {
     const { container } = render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     const struck = container.querySelectorAll('.line-through');
@@ -534,7 +552,13 @@ describe('the payment register', () => {
 
   it('never describes a reversal as a deletion', () => {
     render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     const text = document.body.textContent ?? '';
@@ -543,7 +567,13 @@ describe('the payment register', () => {
 
   it('offers filters by method, status and date', () => {
     render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     expect(screen.getByLabelText(/Method/i)).toBeInTheDocument();
@@ -554,7 +584,13 @@ describe('the payment register', () => {
 
   it('offers a search by receipt number or transaction reference', () => {
     render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     expect(
@@ -567,6 +603,7 @@ describe('the payment register', () => {
       <PaymentRegister
         payments={ROWS}
         page={1}
+        pageSize={20}
         hasMore={false}
         timeZone={TIMEZONE}
         showFilters={false}
@@ -578,7 +615,13 @@ describe('the payment register', () => {
 
   it('distinguishes an empty filter result from an empty ledger', () => {
     render(
-      <PaymentRegister payments={[]} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={[]}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     expect(screen.getByText(/not the same as no payments existing/i)).toBeInTheDocument();
@@ -586,7 +629,13 @@ describe('the payment register', () => {
 
   it('renders cards as well as a table, for narrow screens', () => {
     const { container } = render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     const list = container.querySelector('ul');
@@ -597,7 +646,13 @@ describe('the payment register', () => {
 
   it('names the table, for a reader who arrives at it directly', () => {
     render(
-      <PaymentRegister payments={ROWS} page={1} hasMore={false} timeZone={TIMEZONE} />,
+      <PaymentRegister
+        payments={ROWS}
+        page={1}
+        pageSize={20}
+        hasMore={false}
+        timeZone={TIMEZONE}
+      />,
     );
 
     // A name rather than a list of the columns. The same string names the

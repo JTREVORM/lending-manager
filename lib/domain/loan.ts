@@ -417,6 +417,30 @@ export function isLoanStatus(value: unknown): value is LoanStatus {
   );
 }
 
+/**
+ * The columns the loan register may be ordered by.
+ *
+ * An allow-list, because the chosen value reaches PostgREST's `order` and a
+ * free-text parameter would let a URL name a column — including one the
+ * register deliberately does not publish. Each of these is a real column on
+ * `loan_workflow_register`, so the database does the ordering before the
+ * page is cut; a value assembled in TypeScript could not be sorted this way
+ * and so is not offered.
+ */
+export const LOAN_SORT_COLUMNS = [
+  'loan_number',
+  'client_name',
+  'product_name',
+  'principal_amount',
+  'interest_rate_bps',
+  'loan_term_months',
+  'created_at',
+  'status',
+  'workflow_stage',
+] as const;
+
+export type LoanSortColumn = (typeof LOAN_SORT_COLUMNS)[number];
+
 export const LOAN_STATUS_LABELS: Readonly<Record<LoanStatus, string>> = {
   draft: 'Draft',
   pending_approval: 'Awaiting approval',
@@ -662,6 +686,28 @@ export const LOAN_WORKFLOW_LABELS: Readonly<Record<LoanWorkflowStage, string>> =
   grace_period: 'Grace period',
   arrears: 'Arrears',
   cleared: 'Cleared loans',
+  rejected: 'Rejected',
+  withdrawn: 'Cancelled',
+};
+
+/**
+ * The stage, as it reads on a single row.
+ *
+ * `LOAN_WORKFLOW_LABELS` names the *bucket* — it is the sidebar's wording,
+ * and a bucket of applications is plural. A cell in the Stage column is one
+ * loan, so it reads "Draft application" and "Active", not "Draft
+ * applications" and "Active loans". Same stages, different grammatical
+ * number, and getting it wrong reads as a label that was never looked at.
+ */
+export const LOAN_WORKFLOW_ROW_LABELS: Readonly<Record<LoanWorkflowStage, string>> = {
+  draft: 'Draft application',
+  pending_approval: 'Pending approval',
+  approved: 'Approved',
+  awaiting_disbursement: 'Awaiting disbursement',
+  active: 'Active',
+  grace_period: 'Grace period',
+  arrears: 'Arrears',
+  cleared: 'Cleared',
   rejected: 'Rejected',
   withdrawn: 'Cancelled',
 };

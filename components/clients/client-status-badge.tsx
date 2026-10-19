@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { StatusText, type StatusTone } from '@/components/ui/status-text';
 import { CLIENT_STATUS_LABELS, type ClientStatus } from '@/lib/domain/client';
 
 /**
@@ -10,16 +10,14 @@ import { CLIENT_STATUS_LABELS, type ClientStatus } from '@/lib/domain/client';
  * to be resolved, while a blacklisting is a standing decision. Showing them
  * identically would flatten a distinction the business cares about.
  */
-const TONES: Readonly<
-  Record<ClientStatus, 'success' | 'neutral' | 'warning' | 'danger'>
-> = {
-  active: 'success',
+const TONES: Readonly<Record<ClientStatus, StatusTone>> = {
+  active: 'positive',
   inactive: 'neutral',
-  suspended: 'warning',
-  blacklisted: 'danger',
+  suspended: 'attention',
+  blacklisted: 'critical',
   archived: 'neutral',
 };
 
 export function ClientStatusBadge({ status }: { readonly status: ClientStatus }) {
-  return <Badge tone={TONES[status]}>{CLIENT_STATUS_LABELS[status]}</Badge>;
+  return <StatusText tone={TONES[status]}>{CLIENT_STATUS_LABELS[status]}</StatusText>;
 }

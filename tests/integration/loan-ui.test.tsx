@@ -253,10 +253,28 @@ describe('the loan register', () => {
       },
     ],
     page: 1,
+    pageSize: 20,
     hasMore: false,
+    total: 2,
   };
 
-  const EMPTY_FILTER = { query: '', stage: '', productId: '' } as const;
+  const EMPTY_FILTER = {
+    query: '',
+    stage: '',
+    productId: '',
+    status: '',
+    sort: null,
+    dir: 'desc',
+  } as const;
+
+  /** Everything this person may do, so the row menu renders in full. */
+  const ALL_CAPABILITIES = {
+    'loans:update_draft': true,
+    'loans:submit': true,
+    'loans:approve': true,
+    'loans:disburse': true,
+    'payments:create': true,
+  } as const;
 
   const PRODUCTS = [
     { id: '5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b', name: 'Salary Loan' },
@@ -264,7 +282,14 @@ describe('the loan register', () => {
   ];
 
   it('offers a labelled search box and product filter', () => {
-    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
+    render(
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
+    );
 
     expect(screen.getByLabelText('Search')).toBeTruthy();
     // Phase 13. The product, not the status: the workflow strip above the
@@ -274,21 +299,42 @@ describe('the loan register', () => {
   });
 
   it('offers every product as a filter', () => {
-    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
+    render(
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
+    );
 
     const options = within(screen.getByLabelText('Loan product')).getAllByRole('option');
     expect(options).toHaveLength(PRODUCTS.length + 1);
   });
 
   it('names the product each loan was written under', () => {
-    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
+    render(
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
+    );
 
     expect(screen.getAllByText('Salary Loan').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Quick Loan').length).toBeGreaterThan(0);
   });
 
   it('shows an em dash rather than zero for a draft with no total', () => {
-    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
+    render(
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
+    );
 
     // A zero would read as "this loan is worth nothing". The figure does not
     // exist yet, and saying so is different from saying it is zero.
@@ -297,7 +343,12 @@ describe('the loan register', () => {
 
   it('renders both a card list and a table', () => {
     const { container } = render(
-      <LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />,
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
     );
 
     expect(container.querySelector('ul.md\\:hidden')).toBeTruthy();
@@ -305,7 +356,14 @@ describe('the loan register', () => {
   });
 
   it('states each status in words', () => {
-    render(<LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />);
+    render(
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
+    );
 
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
@@ -313,7 +371,12 @@ describe('the loan register', () => {
 
   it('announces the result count politely', () => {
     const { container } = render(
-      <LoanRegister page={PAGE} filter={EMPTY_FILTER} products={PRODUCTS} />,
+      <LoanRegister
+        page={PAGE}
+        filter={EMPTY_FILTER}
+        products={PRODUCTS}
+        can={ALL_CAPABILITIES}
+      />,
     );
 
     const live = container.querySelector('[aria-live="polite"]');
@@ -329,6 +392,7 @@ describe('the loan register', () => {
         }}
         filter={EMPTY_FILTER}
         products={PRODUCTS}
+        can={ALL_CAPABILITIES}
       />,
     );
 
@@ -339,9 +403,10 @@ describe('the loan register', () => {
   it('explains an empty register', () => {
     render(
       <LoanRegister
-        page={{ loans: [], page: 1, hasMore: false }}
+        page={{ loans: [], page: 1, pageSize: 20, hasMore: false, total: 0 }}
         filter={EMPTY_FILTER}
         products={PRODUCTS}
+        can={ALL_CAPABILITIES}
       />,
     );
 

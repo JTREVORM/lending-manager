@@ -27,6 +27,7 @@
  * All of those are derived server-side.
  */
 
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '@/lib/domain/pagination';
 import { z } from 'zod';
 
 import { PAYMENT_METHODS } from '@/lib/domain/payment';
@@ -181,6 +182,17 @@ export const paymentSearchSchema = z.object({
   from: z.union([businessDateSchema, z.literal('')]).optional(),
   to: z.union([businessDateSchema, z.literal('')]).optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1).optional(),
+  /** One of a fixed set; see `lib/domain/pagination.ts`. */
+  pageSize: z.coerce
+    .number()
+    .int()
+    .optional()
+    .catch(DEFAULT_PAGE_SIZE)
+    .transform((value) =>
+      value !== undefined && (PAGE_SIZES as readonly number[]).includes(value)
+        ? value
+        : DEFAULT_PAGE_SIZE,
+    ),
 });
 
 export type PaymentSearchInput = z.infer<typeof paymentSearchSchema>;

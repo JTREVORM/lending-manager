@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Money } from '@/components/ui/money';
-import { RegisterCount, RegisterPagination } from '@/components/ui/register';
+import { RegisterPagination } from '@/components/ui/register';
 import { EmptyState } from '@/components/ui/states';
 import { SearchX } from 'lucide-react';
 import { ROUTES } from '@/config/app';
@@ -63,13 +63,18 @@ export interface PaymentRow {
 export function PaymentRegister({
   payments,
   page,
+  pageSize,
   hasMore,
+  total = null,
   timeZone,
   showFilters = true,
 }: {
   readonly payments: readonly PaymentRow[];
   readonly page: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
+  /** Null where the caller did not buy an exact count. */
+  readonly total?: number | null;
   readonly timeZone: string;
   readonly showFilters?: boolean;
 }) {
@@ -200,17 +205,6 @@ export function PaymentRegister({
         </Card>
       ) : null}
 
-      {payments.length === 0 ? null : (
-        <p aria-live="polite" className="text-text-muted text-[13px]">
-          <RegisterCount
-            shown={payments.length}
-            page={page}
-            hasMore={hasMore}
-            noun="payment"
-          />
-        </p>
-      )}
-
       {payments.length === 0 ? (
         <EmptyState
           icon={SearchX}
@@ -331,7 +325,14 @@ export function PaymentRegister({
         </>
       )}
 
-      <RegisterPagination page={page} hasMore={hasMore} />
+      <RegisterPagination
+        page={page}
+        pageSize={pageSize}
+        rows={payments.length}
+        hasMore={hasMore}
+        total={total}
+        noun="payment"
+      />
     </div>
   );
 }

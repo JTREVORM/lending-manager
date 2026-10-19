@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 545 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 560 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -148,6 +148,30 @@ describeBundle('the browser bundle', () => {
     // 545 leaves about the same headroom over the measured 542 as 520 left
     // over 517. The next phase to cross it still has to make its own case.
     //
+    // ## 545 → 560, for the register redesign
+    //
+    // Twice in two phases is a smell, so this one is stated plainly: the
+    // 8 KB is **new interactive behaviour**, not the same screens grown
+    // heavier.
+    //
+    //   - a row action menu with real focus management — open and close on
+    //     the keyboard, Escape returning focus, arrow keys within it,
+    //     dismissal on an outside click or a scroll;
+    //   - sortable column headers that write the sort into the URL;
+    //   - a rows-per-page control;
+    //   - numbered pagination with a window over long registers.
+    //
+    // None of it existed before; each is a thing the brief asked for. Still
+    // no new dependency, still nothing added to `package.json`, and the
+    // largest-chunk assertion above — the one that catches a library
+    // creeping in — is untouched and still passes at 120 KB. An attempt to
+    // pay for it by replacing six `lucide-react` chevrons with one inline
+    // SVG is kept because it is tidier, but it is honest to record that it
+    // saved nothing measurable: the chunk boundaries absorbed it.
+    //
+    // What a page costs did not move; `tests/e2e/specs/performance.spec.ts`
+    // still passes on every route, against unchanged ceilings.
+    //
     // It is not what a page costs. No page loads all seventy: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -155,7 +179,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(545);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(560);
   });
 
   it('emits no source map for the browser', () => {

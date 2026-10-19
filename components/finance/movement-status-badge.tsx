@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { StatusText, type StatusTone } from '@/components/ui/status-text';
 import {
   MOVEMENT_STATUS_LABELS,
   RECONCILIATION_STATUS_LABELS,
@@ -6,13 +6,11 @@ import {
   type ReconciliationStatus,
 } from '@/lib/domain/finance';
 
-const MOVEMENT_TONES: Readonly<
-  Record<MovementStatus, 'neutral' | 'success' | 'warning' | 'danger'>
-> = {
-  pending_approval: 'warning',
-  posted: 'success',
+const MOVEMENT_TONES: Readonly<Record<MovementStatus, StatusTone>> = {
+  pending_approval: 'attention',
+  posted: 'positive',
   rejected: 'neutral',
-  reversed: 'danger',
+  reversed: 'critical',
 };
 
 /**
@@ -23,18 +21,20 @@ const MOVEMENT_TONES: Readonly<
  * and then had to be taken back — which is the one a reader should stop at.
  */
 export function MovementStatusBadge({ status }: { readonly status: MovementStatus }) {
-  return <Badge tone={MOVEMENT_TONES[status]}>{MOVEMENT_STATUS_LABELS[status]}</Badge>;
+  return (
+    <StatusText tone={MOVEMENT_TONES[status]}>
+      {MOVEMENT_STATUS_LABELS[status]}
+    </StatusText>
+  );
 }
 
-const RECONCILIATION_TONES: Readonly<
-  Record<ReconciliationStatus, 'neutral' | 'success' | 'warning' | 'danger'>
-> = {
-  balanced: 'success',
+const RECONCILIATION_TONES: Readonly<Record<ReconciliationStatus, StatusTone>> = {
+  balanced: 'positive',
   // Amber, not red: an unresolved difference is a thing to deal with today,
   // not a failure. It turns red only if nobody does.
-  submitted: 'warning',
+  submitted: 'attention',
   approved: 'neutral',
-  rejected: 'danger',
+  rejected: 'critical',
 };
 
 export function ReconciliationStatusBadge({
@@ -43,8 +43,8 @@ export function ReconciliationStatusBadge({
   readonly status: ReconciliationStatus;
 }) {
   return (
-    <Badge tone={RECONCILIATION_TONES[status]}>
+    <StatusText tone={RECONCILIATION_TONES[status]}>
       {RECONCILIATION_STATUS_LABELS[status]}
-    </Badge>
+    </StatusText>
   );
 }

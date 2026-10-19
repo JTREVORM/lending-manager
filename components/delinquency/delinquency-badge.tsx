@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { StatusText, type StatusTone } from '@/components/ui/status-text';
 import {
   DELINQUENCY_STATE_DESCRIPTIONS,
   DELINQUENCY_STATE_LABELS,
@@ -19,22 +19,20 @@ import {
  * who is unsure what "Expired, unpaid" means can find out from the thing
  * itself rather than from a manual.
  */
-const TONES: Readonly<
-  Record<DelinquencyState, 'neutral' | 'success' | 'warning' | 'danger' | 'info'>
-> = {
-  current: 'success',
-  due_today: 'info',
-  in_arrears: 'warning',
-  grace_period: 'warning',
-  expired_unpaid: 'danger',
-  penalty_due: 'danger',
+const TONES: Readonly<Record<DelinquencyState, StatusTone>> = {
+  current: 'positive',
+  due_today: 'positive',
+  in_arrears: 'attention',
+  grace_period: 'attention',
+  expired_unpaid: 'critical',
+  penalty_due: 'critical',
   cleared: 'neutral',
 };
 
 export function DelinquencyBadge({ state }: { readonly state: DelinquencyState }) {
   return (
-    <Badge tone={TONES[state]} title={DELINQUENCY_STATE_DESCRIPTIONS[state]}>
+    <StatusText tone={TONES[state]} title={DELINQUENCY_STATE_DESCRIPTIONS[state]}>
       {DELINQUENCY_STATE_LABELS[state]}
-    </Badge>
+    </StatusText>
   );
 }

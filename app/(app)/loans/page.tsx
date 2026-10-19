@@ -14,6 +14,7 @@ import {
   isLoanWorkflowStage,
   loanRegisterTitle,
 } from '@/lib/domain/loan';
+import { DEFAULT_PAGE_SIZE } from '@/lib/domain/pagination';
 import { loanSearchSchema } from '@/lib/validation/loan';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -33,6 +34,9 @@ function readFilter(params: SearchParams) {
     status: typeof params.status === 'string' ? params.status : '',
     clientId: typeof params.clientId === 'string' ? params.clientId : '',
     page: typeof params.page === 'string' ? params.page : '1',
+    sort: typeof params.sort === 'string' ? params.sort : undefined,
+    dir: typeof params.dir === 'string' ? params.dir : undefined,
+    pageSize: typeof params.pageSize === 'string' ? params.pageSize : undefined,
   });
 
   return parsed.success
@@ -44,6 +48,9 @@ function readFilter(params: SearchParams) {
         status: null,
         clientId: null,
         page: 1,
+        sort: null,
+        dir: 'desc' as const,
+        pageSize: DEFAULT_PAGE_SIZE,
       };
 }
 
@@ -166,11 +173,31 @@ export default async function LoansPage({
           query: filter.query ?? '',
           stage: stage ?? '',
           productId: filter.productId ?? '',
+          status: filter.status ?? '',
+          sort: filter.sort,
+          dir: filter.dir,
         }}
         products={products.map((product) => ({
           id: product.productId,
           name: product.name,
         }))}
+        /*
+          Resolved here, on the server, and shipped as four booleans.
+
+          The row menu needs to know what this person may do; it does not
+          need the auth context, which carries their identity, their branch
+          and their whole permission set. Four answers to four questions is
+          the smallest thing that does the job, and hiding an entry is a
+          courtesy either way — every destination re-checks its own
+          permission and Row Level Security applies underneath.
+        */
+        can={{
+          'loans:update_draft': contextCan(context, 'loans:update_draft'),
+          'loans:submit': contextCan(context, 'loans:submit'),
+          'loans:approve': contextCan(context, 'loans:approve'),
+          'loans:disburse': contextCan(context, 'loans:disburse'),
+          'payments:create': contextCan(context, 'payments:create'),
+        }}
       />
     </div>
   );
