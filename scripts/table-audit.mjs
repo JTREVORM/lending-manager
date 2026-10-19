@@ -153,9 +153,28 @@ const PROBE = () => {
 
     if (rects.length === 0) return 0;
 
-    // Rects on the same line share a top edge; count distinct ones.
-    const tops = new Set(rects.map((rect) => Math.round(rect.top)));
-    return tops.size;
+    /*
+      Rects on the same visual line do not share an exact top edge.
+
+      A header is an inline-flex of a word and a chevron; the glyph sits a
+      pixel or two off the text's box, and rounding to the pixel counted
+      that as a second line. Two rects belong to the same line when their
+      tops are within half a line-height of each other.
+    */
+    const lineHeight =
+      parseFloat(getComputedStyle(element).lineHeight) || rects[0].height || 16;
+    const tolerance = Math.max(4, lineHeight / 2);
+
+    const tops = [...rects].map((rect) => rect.top).sort((a, b) => a - b);
+    let lines = 1;
+    let anchor = tops[0];
+    for (const top of tops) {
+      if (top - anchor > tolerance) {
+        lines += 1;
+        anchor = top;
+      }
+    }
+    return lines;
   };
 
   for (const cell of document.querySelectorAll('td, th')) {
