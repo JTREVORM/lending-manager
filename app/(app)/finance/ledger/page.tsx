@@ -95,16 +95,20 @@ export default async function GeneralLedgerPage({
         </ul>
       </nav>
 
-      <DataTable caption="General ledger">
+      <DataTable caption="General ledger" density="compact" stickyHeader maxHeight="75vh">
         <thead>
           <tr>
-            <TableHead>Entry</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Event</TableHead>
-            <TableHead>Account</TableHead>
-            <TableHead>Narrative</TableHead>
-            <TableHead align="numeric">Debit</TableHead>
-            <TableHead align="numeric">Credit</TableHead>
+            <TableHead width="ref">Entry</TableHead>
+            <TableHead width="date">Date</TableHead>
+            <TableHead width="status">Event</TableHead>
+            <TableHead width="place">Account</TableHead>
+            <TableHead width="prose">Narrative</TableHead>
+            <TableHead width="money" align="numeric">
+              Debit
+            </TableHead>
+            <TableHead width="money" align="numeric">
+              Credit
+            </TableHead>
           </tr>
         </thead>
         <tbody className="divide-border/60 divide-y">

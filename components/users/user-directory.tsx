@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -149,63 +150,54 @@ export function UserDirectory({
           </ul>
 
           {/* Tablet and up: a table. */}
-          <div className="hidden md:block">
-            <Card className="p-0">
-              <table className="w-full text-sm">
-                <caption className="sr-only">Staff and client accounts</caption>
-                <thead>
-                  <tr className="border-border border-b text-left">
-                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
-                      Name
-                    </th>
-                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
-                      Phone
-                    </th>
-                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
-                      Role
-                    </th>
-                    <th scope="col" className="t-th px-4 py-3 whitespace-nowrap">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="border-border hover:bg-surface-raised border-b last:border-0"
+          <div className="hidden min-w-0 md:block">
+            <DataTable caption="Staff and client accounts">
+              <thead>
+                <tr>
+                  <TableHead width="name-wide">Name</TableHead>
+                  <TableHead width="phone">Phone</TableHead>
+                  <TableHead width="prose">Role</TableHead>
+                  <TableHead width="status">Status</TableHead>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <TableRow key={user.id} interactive>
+                    <TableCell
+                      header
+                      width="name-wide"
+                      wrap="clamp"
+                      className="font-normal"
                     >
-                      <th scope="row" className="px-4 py-3 text-left font-normal">
-                        <RowLink
-                          href={`/users/${user.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {user.fullName}
-                        </RowLink>
-                        {user.mustChangePassword ? (
-                          <Badge tone="warning" className="ml-2">
-                            Temporary password
-                          </Badge>
-                        ) : null}
-                      </th>
-                      <td className="text-text-muted px-4 py-3">
-                        <PhoneValue value={user.phone} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          {user.roles.map((role) => (
-                            <Badge key={role}>{ROLES[role].label}</Badge>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <UserStatusBadge status={user.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
+                      <RowLink
+                        href={`/users/${user.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {user.fullName}
+                      </RowLink>
+                      {user.mustChangePassword ? (
+                        <Badge tone="warning" className="ml-2">
+                          Temporary password
+                        </Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell width="phone" className="text-text-muted">
+                      <PhoneValue value={user.phone} />
+                    </TableCell>
+                    <TableCell width="prose" wrap="wrap">
+                      <span className="flex flex-wrap gap-1.5">
+                        {user.roles.map((role) => (
+                          <Badge key={role}>{ROLES[role].label}</Badge>
+                        ))}
+                      </span>
+                    </TableCell>
+                    <TableCell width="status">
+                      <UserStatusBadge status={user.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </tbody>
+            </DataTable>
           </div>
         </>
       )}

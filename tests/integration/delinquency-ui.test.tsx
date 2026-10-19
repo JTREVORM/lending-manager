@@ -432,7 +432,10 @@ describe('the overdue list', () => {
    * which one they mean.
    */
   const overdueTable = (): HTMLElement => {
-    const caption = screen.getByText(/Overdue loans:/i);
+    // The caption names the table rather than enumerating its columns: the
+    // same string names the scrolling region around it, and the headings
+    // already say what the columns are.
+    const caption = screen.getByText('Overdue loans');
     const table = caption.closest('table');
     expect(table).not.toBeNull();
     return table as HTMLElement;
@@ -747,7 +750,7 @@ describe('the overdue list', () => {
     expect(list?.querySelectorAll('li')).toHaveLength(2);
   });
 
-  it('gives the table a caption describing its columns', () => {
+  it('names the table, for a reader who arrives at it directly', () => {
     render(
       <OverdueList
         loans={ROWS}
@@ -758,8 +761,9 @@ describe('the overdue list', () => {
       />,
     );
 
-    const caption = screen.getByText(/Overdue loans:/i);
+    const caption = screen.getByText('Overdue loans');
     expect(caption.tagName.toLowerCase()).toBe('caption');
+    expect(screen.getByRole('region', { name: 'Overdue loans' })).toBeTruthy();
   });
 
   it('never shows a settled loan as overdue', () => {

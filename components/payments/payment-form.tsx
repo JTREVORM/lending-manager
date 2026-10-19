@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button';
 import { useFocusWhen } from '@/components/ui/focus-on-appear';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
+import {
+  DataTable,
+  NotRecorded,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { ROUTES } from '@/config/app';
 import { recordPaymentAction } from '@/lib/payments/actions';
@@ -452,44 +459,24 @@ export function PaymentForm({
             </Confirm>
           </dl>
 
-          <div className="border-border mt-4 min-w-0 overflow-x-auto rounded-lg border">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                How this payment would be applied: obligation, date, principal, interest,
-                penalty and the total applied
-              </caption>
+          <div className="mt-4">
+            <DataTable caption="How this payment would be applied" density="compact">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th px-3 py-2.5 whitespace-nowrap">
-                    Collection
-                  </th>
-                  <th scope="col" className="t-th px-3 py-2.5 whitespace-nowrap">
-                    Due
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
-                  >
+                <tr>
+                  <TableHead width="count">Collection</TableHead>
+                  <TableHead width="date">Due</TableHead>
+                  <TableHead width="money" align="numeric">
                     Principal
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Interest
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Penalty
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th px-3 py-2.5 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Applied
-                  </th>
+                  </TableHead>
                 </tr>
               </thead>
               <tbody>
@@ -499,37 +486,41 @@ export function PaymentForm({
                   );
 
                   return (
-                    <tr key={entry.obligationId} className="border-border border-b">
-                      <th scope="row" className="text-text px-3 py-2 font-normal">
+                    <TableRow key={entry.obligationId}>
+                      <TableCell header width="count" className="text-text font-normal">
                         {/* A penalty is named, not numbered: "1" in a column
                             of collection numbers would read as the first
                             collection. */}
                         {entry.kind === 'penalty' ? 'Penalty' : entry.sequenceNumber}
-                      </th>
-                      <td className="text-text-muted px-3 py-2">
+                      </TableCell>
+                      <TableCell width="date" className="text-text-muted">
                         {target === undefined ? (
-                          '—'
+                          <NotRecorded />
                         ) : (
                           <DateValue value={target.effectiveDate} />
                         )}
-                      </td>
-                      <td className="text-text px-3 py-2 text-right tabular-nums">
+                      </TableCell>
+                      <TableCell width="money" align="numeric" className="text-text">
                         <Money amount={entry.allocatedPrincipal} />
-                      </td>
-                      <td className="text-text px-3 py-2 text-right tabular-nums">
+                      </TableCell>
+                      <TableCell width="money" align="numeric" className="text-text">
                         <Money amount={entry.allocatedInterest} />
-                      </td>
-                      <td className="text-text px-3 py-2 text-right tabular-nums">
+                      </TableCell>
+                      <TableCell width="money" align="numeric" className="text-text">
                         <Money amount={entry.allocatedPenalty} />
-                      </td>
-                      <td className="text-text px-3 py-2 text-right font-medium tabular-nums">
+                      </TableCell>
+                      <TableCell
+                        width="money"
+                        align="numeric"
+                        className="text-text font-medium"
+                      >
                         <Money amount={entry.allocatedAmount} />
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
               </tbody>
-            </table>
+            </DataTable>
           </div>
 
           <p className="text-text-muted mt-3 text-sm">

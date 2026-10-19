@@ -7,6 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  DataTable,
+  NotRecorded,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { RowLink } from '@/components/ui/row-link';
 import { DateValue, PhoneValue } from '@/components/ui/data-value';
@@ -249,155 +256,150 @@ export function GuarantorExposureRegister({
             ))}
           </ul>
 
-          {/* Large screens: the thirteen columns the register is asked for. */}
-          <Card className="hidden min-w-0 overflow-x-auto lg:block">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Guarantor register: guarantor, type, phone, borrower, loan, product,
-                guaranteed amount, outstanding exposure, guarantee date, loan status,
-                guarantee status and release details
-              </caption>
+          {/* Large screens: the twelve columns the register is asked for.
+              They do not fit any screen made, so the table scrolls inside its
+              own box; the three a reviewer can work without at 1024px — the
+              product code, the loan's status and the release note, all of
+              them on the loan's own page — step out below `xl`. */}
+          <div className="hidden min-w-0 lg:block">
+            <DataTable caption="Guarantor register" density="compact">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Guarantor
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Type
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Phone
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Borrower
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Loan
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                <tr>
+                  <TableHead width="name">Guarantor</TableHead>
+                  <TableHead width="count">Type</TableHead>
+                  <TableHead width="phone">Phone</TableHead>
+                  <TableHead width="name">Borrower</TableHead>
+                  <TableHead width="ref">Loan</TableHead>
+                  <TableHead width="count" hideBelow="xl">
                     Product
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Guaranteed
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money" align="numeric">
                     Outstanding
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Signed
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="date">Signed</TableHead>
+                  <TableHead width="status" hideBelow="xl">
                     Loan status
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Guarantee
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="status">Guarantee</TableHead>
+                  <TableHead width="prose" hideBelow="xl">
                     Released
-                  </th>
+                  </TableHead>
                 </tr>
               </thead>
-              <tbody className="divide-border divide-y">
+              <tbody>
                 {rows.map((row) => (
-                  <tr key={row.loanGuarantorId} className="hover:bg-surface-hover">
-                    <th scope="row" className="py-2.5 pr-4 font-medium">
-                      {row.guarantorClientId === null ? (
-                        <span className="text-text">{row.guarantorName}</span>
-                      ) : (
-                        <RowLink
-                          href={`${ROUTES.clients}/${row.guarantorClientId}`}
-                          className="text-brand-700 hover:underline"
-                        >
-                          {row.guarantorName}
-                        </RowLink>
-                      )}
-                      <span className="text-text-muted block text-xs">
-                        {row.relationshipToClient}
+                  <TableRow key={row.loanGuarantorId}>
+                    <TableCell header width="name" wrap="wrap">
+                      <span className="block min-w-0">
+                        {row.guarantorClientId === null ? (
+                          <span
+                            className="text-text line-clamp-2 break-words"
+                            title={row.guarantorName}
+                          >
+                            {row.guarantorName}
+                          </span>
+                        ) : (
+                          <RowLink
+                            href={`${ROUTES.clients}/${row.guarantorClientId}`}
+                            className="text-brand-700 line-clamp-2 break-words hover:underline"
+                            title={row.guarantorName}
+                          >
+                            {row.guarantorName}
+                          </RowLink>
+                        )}
+                        <span className="text-text-muted mt-0.5 block text-[10px] font-normal">
+                          {row.relationshipToClient}
+                        </span>
                       </span>
-                    </th>
-                    <td className="text-text py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="count" className="text-text">
                       {GUARANTOR_SUBJECT_LABELS[row.subjectKind]}
-                    </td>
-                    <td className="py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="phone">
                       <PhoneValue
                         value={row.guarantorPhone}
                         linked
                         className="text-accent"
                       />
-                    </td>
-                    <td className="py-2.5 pr-4">
-                      <RowLink
-                        href={`${ROUTES.clients}/${row.clientId}`}
-                        className="text-brand-700 hover:underline"
-                      >
-                        {row.clientName}
-                      </RowLink>
-                      <span className="text-text-muted block text-xs">
-                        {row.clientNumber}
+                    </TableCell>
+                    <TableCell width="name" wrap="wrap">
+                      <span className="block min-w-0">
+                        <RowLink
+                          href={`${ROUTES.clients}/${row.clientId}`}
+                          className="text-brand-700 line-clamp-2 break-words hover:underline"
+                          title={row.clientName}
+                        >
+                          {row.clientName}
+                        </RowLink>
+                        <span className="text-text-muted mt-0.5 block font-mono text-[10px] whitespace-nowrap">
+                          {row.clientNumber}
+                        </span>
                       </span>
-                    </td>
-                    <td className="py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="ref">
                       <RowLink
                         href={`${ROUTES.loans}/${row.loanId}`}
                         className="text-brand-700 font-mono hover:underline"
                       >
                         {row.loanNumber}
                       </RowLink>
-                    </td>
-                    <td className="text-text py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="count" hideBelow="xl" className="text-text">
                       {row.productCode}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric" className="text-text">
                       <Money amount={row.guaranteedAmount} />
-                    </td>
-                    <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="money" align="numeric" className="text-text">
                       {row.outstandingBalance === null ? (
-                        '—'
+                        <NotRecorded />
                       ) : (
                         <Money amount={row.outstandingBalance} />
                       )}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="date" className="text-text">
                       {row.guaranteeDate === null ? (
                         'Not signed'
                       ) : (
                         <DateValue value={row.guaranteeDate} />
                       )}
-                    </td>
-                    <td className="text-text py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="status" hideBelow="xl" className="text-text">
                       {row.loanStatus}
-                    </td>
-                    <td className="py-2.5 pr-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell width="status">
                       <Badge
                         tone={row.guaranteeStatus === 'binding' ? 'info' : 'neutral'}
                         title={GUARANTEE_STATUS_DESCRIPTIONS[row.guaranteeStatus]}
                       >
                         {GUARANTEE_STATUS_LABELS[row.guaranteeStatus]}
                       </Badge>
-                    </td>
-                    <td className="text-text-muted py-2.5 pr-4">
+                    </TableCell>
+                    <TableCell
+                      width="prose"
+                      wrap="wrap"
+                      hideBelow="xl"
+                      className="text-text-muted"
+                    >
                       {row.releasedAt === null ? (
-                        '—'
+                        <NotRecorded />
                       ) : (
                         <>
                           <DateValue value={row.releasedAt} />
-                          <span className="block text-xs break-words">
+                          <span className="block text-[10px] break-words">
                             {row.releaseReason}
                           </span>
                         </>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
-          </Card>
+            </DataTable>
+          </div>
 
           <Card className="min-w-0">
             <p className="text-text-muted text-sm">

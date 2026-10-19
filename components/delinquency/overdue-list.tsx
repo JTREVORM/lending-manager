@@ -8,7 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { DelinquencyBadge } from '@/components/delinquency/delinquency-badge';
+import {
+  DataTable,
+  NotRecorded,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
+import { RegisterPagination } from '@/components/ui/register';
 import { ROUTES } from '@/config/app';
 import {
   DELINQUENCY_STATE_LABELS,
@@ -257,144 +265,123 @@ export function OverdueList({
             ))}
           </ul>
 
-          {/* Tablet and up: the columns fit. */}
-          <Card className="hidden min-w-0 overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Overdue loans: borrower, phone, loan number, due now, total outstanding,
-                collections missed, days late, final collection date and state
-              </caption>
+          {/* Tablet and up: the columns fit. Nine of them; the two a
+              collections officer can work without — the missed count and the
+              final due date, both on the loan's own page — step out below
+              `xl`. */}
+          <div className="hidden min-w-0 md:block">
+            <DataTable caption="Overdue loans" density="compact">
               <thead>
-                <tr className="border-border bg-surface-sunken border-b">
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Borrower
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Phone
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                    Loan
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                <tr>
+                  <TableHead width="name">Borrower</TableHead>
+                  <TableHead width="phone">Phone</TableHead>
+                  <TableHead width="ref">Loan</TableHead>
+                  <TableHead width="money" align="numeric">
                     Due now
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="money-wide" align="numeric">
                     Outstanding
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="count" align="numeric" hideBelow="xl">
                     Missed
-                  </th>
-                  <th
-                    scope="col"
-                    className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                  >
+                  </TableHead>
+                  <TableHead width="count" align="numeric">
                     Days late
-                  </th>
-                  <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
+                  </TableHead>
+                  <TableHead width="date" hideBelow="xl">
                     Final due
-                  </th>
-                  <th scope="col" className="t-th py-2.5 whitespace-nowrap">
-                    State
-                  </th>
+                  </TableHead>
+                  <TableHead width="status">State</TableHead>
                 </tr>
               </thead>
               <tbody>
                 {loans.map((loan) => (
-                  <tr key={loan.loanId} className="border-border border-b">
-                    <th scope="row" className="py-2 pr-4 font-normal">
-                      <RowLink
-                        href={`${ROUTES.clients}/${loan.clientId}`}
-                        className="text-accent focus-visible:outline-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                      >
-                        {loan.clientName}
-                      </RowLink>
-                      <span className="text-text-muted block font-mono text-xs">
-                        {loan.clientNumber}
+                  <TableRow key={loan.loanId}>
+                    <TableCell header width="name" wrap="wrap" className="font-normal">
+                      <span className="block min-w-0">
+                        <RowLink
+                          href={`${ROUTES.clients}/${loan.clientId}`}
+                          className="text-accent focus-visible:outline-accent line-clamp-2 break-words underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          title={loan.clientName}
+                        >
+                          {loan.clientName}
+                        </RowLink>
+                        <span className="text-text-muted mt-0.5 block font-mono text-[10px] whitespace-nowrap">
+                          {loan.clientNumber}
+                        </span>
                       </span>
-                    </th>
-                    <td className="text-text-muted py-2 pr-4">
+                    </TableCell>
+                    <TableCell width="phone" className="text-text-muted">
                       <PhoneValue value={loan.clientPhone} linked />
-                    </td>
-                    <td className="py-2 pr-4">
+                    </TableCell>
+                    <TableCell width="ref">
                       <RowLink
                         href={`${ROUTES.loans}/${loan.loanId}`}
                         className="text-accent focus-visible:outline-accent font-mono underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                       >
                         {loan.loanNumber}
                       </RowLink>
-                    </td>
-                    <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
+                    </TableCell>
+                    <TableCell
+                      width="money"
+                      align="numeric"
+                      className="text-text font-medium"
+                    >
                       <Money amount={loan.currentDue} />
-                    </td>
-                    <td className="text-text py-2 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    {/* The one cell allowed extra lines: a penalty note under
+                        the figure is the reason the officer is looking at
+                        this row at all. Declared as wrapping so the layout
+                        sweep holds it to the rule it was given rather than
+                        to the two lines a figure column gets. */}
+                    <TableCell
+                      width="money-wide"
+                      align="numeric"
+                      wrap="wrap"
+                      className="text-text"
+                    >
                       <Money amount={loan.totalOutstanding} />
                       {loan.penaltyRemaining > 0 ? (
-                        <span className="text-danger block text-xs">
+                        <span className="text-danger block text-[10px] whitespace-nowrap">
                           incl. <Money amount={loan.penaltyRemaining} /> penalty
                         </span>
                       ) : null}
                       {loan.penaltyEligible ? (
-                        <span className="text-danger block text-xs">
+                        <span className="text-danger block text-[10px] whitespace-nowrap">
                           + <Money amount={loan.penaltyProjectedAmount} /> penalty pending
                         </span>
                       ) : null}
-                    </td>
-                    <td className="text-text-muted py-2 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell
+                      width="count"
+                      align="numeric"
+                      hideBelow="xl"
+                      className="text-text-muted"
+                    >
                       {loan.missedInstallmentCount}
-                    </td>
-                    <td className="text-text-muted py-2 pr-4 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell width="count" align="numeric" className="text-text-muted">
                       {loan.daysPastDue}
-                    </td>
-                    <td className="text-text-muted py-2 pr-4">
+                    </TableCell>
+                    <TableCell width="date" hideBelow="xl" className="text-text-muted">
                       {loan.scheduledCompletionDate === null ? (
-                        '—'
+                        <NotRecorded />
                       ) : (
                         <DateValue value={loan.scheduledCompletionDate} />
                       )}
-                    </td>
-                    <td className="py-2">
+                    </TableCell>
+                    <TableCell width="status">
                       <DelinquencyBadge state={loan.state} />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
-          </Card>
+            </DataTable>
+          </div>
         </>
       )}
 
-      {page > 1 || hasMore ? (
-        <nav className="flex items-center justify-between gap-2" aria-label="Pages">
-          <Button
-            variant="secondary"
-            disabled={page <= 1}
-            onClick={() => {
-              apply({ page: String(page - 1) });
-            }}
-          >
-            Previous
-          </Button>
-          <span className="text-text-muted text-sm">Page {page}</span>
-          <Button
-            variant="secondary"
-            disabled={!hasMore}
-            onClick={() => {
-              apply({ page: String(page + 1) });
-            }}
-          >
-            Next
-          </Button>
-        </nav>
-      ) : null}
+      <RegisterPagination page={page} hasMore={hasMore} />
     </div>
   );
 }

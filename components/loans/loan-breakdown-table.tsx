@@ -1,4 +1,12 @@
 import { Card } from '@/components/ui/card';
+import {
+  DataTable,
+  NotTotalled,
+  TableCell,
+  TableFootRow,
+  TableHead,
+  TableRow,
+} from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { toUgx } from '@/lib/domain/money';
 import type { LoanPeriod } from '@/lib/domain/loan';
@@ -59,78 +67,83 @@ export function LoanBreakdownTable({
         </p>
       ) : null}
 
-      <Card className="min-w-0 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">
-            Monthly reducing-balance breakdown: opening balance, principal, interest,
-            amount due, and closing balance for each month
-          </caption>
-          <thead>
-            <tr className="border-border bg-surface-sunken border-b">
-              <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-                Month
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
-                Opening
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
-                Principal
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
-                Interest
-              </th>
-              <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
-                Amount due
-              </th>
-              <th scope="col" className="t-th py-2.5 text-right whitespace-nowrap">
-                Closing
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {periods.map((period) => (
-              <tr key={period.periodNumber} className="border-border border-b">
-                <th scope="row" className="text-text py-2 pr-4 font-normal">
-                  {period.periodNumber}
-                </th>
-                <td className="text-text-muted py-2 pr-4 text-right tabular-nums">
-                  <Money amount={period.openingPrincipal} />
-                </td>
-                <td className="text-text py-2 pr-4 text-right tabular-nums">
-                  <Money amount={period.principalPortion} />
-                </td>
-                <td className="text-text py-2 pr-4 text-right tabular-nums">
-                  <Money amount={period.interest} />
-                </td>
-                <td className="text-text py-2 pr-4 text-right font-medium tabular-nums">
-                  <Money amount={period.totalObligation} />
-                </td>
-                <td className="text-text-muted py-2 text-right tabular-nums">
-                  <Money amount={period.closingPrincipal} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="font-medium">
-              <th scope="row" className="text-text py-2 pr-4 text-left">
-                Total
-              </th>
-              <td />
-              <td className="text-text py-2 pr-4 text-right tabular-nums">
-                <Money amount={toUgx(principal)} />
-              </td>
-              <td className="text-text py-2 pr-4 text-right tabular-nums">
-                <Money amount={toUgx(totalInterest)} />
-              </td>
-              <td className="text-text py-2 pr-4 text-right tabular-nums">
-                <Money amount={toUgx(totalExpected)} />
-              </td>
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </Card>
+      <DataTable
+        caption="Monthly reducing-balance breakdown: opening balance, principal, interest, amount due, and closing balance for each month"
+        density="compact"
+        stickyHeader
+        maxHeight="26rem"
+      >
+        <thead>
+          <tr>
+            <TableHead width="count">Month</TableHead>
+            <TableHead width="money" align="numeric">
+              Opening
+            </TableHead>
+            <TableHead width="money" align="numeric">
+              Principal
+            </TableHead>
+            <TableHead width="money" align="numeric">
+              Interest
+            </TableHead>
+            <TableHead width="money" align="numeric">
+              Amount due
+            </TableHead>
+            <TableHead width="money" align="numeric">
+              Closing
+            </TableHead>
+          </tr>
+        </thead>
+        <tbody>
+          {periods.map((period) => (
+            <TableRow key={period.periodNumber}>
+              <TableCell header width="count" className="font-normal">
+                {period.periodNumber}
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text-muted">
+                <Money amount={period.openingPrincipal} />
+              </TableCell>
+              <TableCell width="money" align="numeric">
+                <Money amount={period.principalPortion} />
+              </TableCell>
+              <TableCell width="money" align="numeric">
+                <Money amount={period.interest} />
+              </TableCell>
+              <TableCell width="money" align="numeric" className="font-medium">
+                <Money amount={period.totalObligation} />
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text-muted">
+                <Money amount={period.closingPrincipal} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </tbody>
+        <tfoot>
+          <TableFootRow>
+            <TableCell header width="count">
+              Total
+            </TableCell>
+            {/* Opening and closing balances are a running position, not a
+                series that sums to anything — a total under them would be a
+                number with no meaning. Marked as deliberately not totalled
+                rather than left blank, which reads as a zero. */}
+            <TableCell width="money" align="numeric">
+              <NotTotalled />
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <Money amount={toUgx(principal)} />
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <Money amount={toUgx(totalInterest)} />
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <Money amount={toUgx(totalExpected)} />
+            </TableCell>
+            <TableCell width="money" align="numeric">
+              <NotTotalled />
+            </TableCell>
+          </TableFootRow>
+        </tfoot>
+      </DataTable>
 
       <dl className="grid min-w-0 gap-3 sm:grid-cols-3">
         <div className="border-border bg-surface min-w-0 rounded-lg border p-3">

@@ -51,14 +51,16 @@ export function TransferRegister({
     <DataTable caption="Transfers between the company's own accounts">
       <thead>
         <tr>
-          <TableHead>Number</TableHead>
-          <TableHead>Date</TableHead>
-          <TableHead>Out of</TableHead>
-          <TableHead>Into</TableHead>
-          <TableHead align="numeric">Amount</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Recorded by</TableHead>
-          {canDecide ? <TableHead>Decision</TableHead> : null}
+          <TableHead width="ref">Number</TableHead>
+          <TableHead width="date">Date</TableHead>
+          <TableHead width="place">Out of</TableHead>
+          <TableHead width="place">Into</TableHead>
+          <TableHead align="numeric" width="money">
+            Amount
+          </TableHead>
+          <TableHead width="status">Status</TableHead>
+          <TableHead width="name">Recorded by</TableHead>
+          {canDecide ? <TableHead width="actions">Decision</TableHead> : null}
         </tr>
       </thead>
       <tbody className="divide-border/60 divide-y">
@@ -128,14 +130,16 @@ export function ExpenseRegister({
     <DataTable caption="Expenses">
       <thead>
         <tr>
-          <TableHead>Number</TableHead>
-          <TableHead>Date</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Paid from</TableHead>
-          <TableHead align="numeric">Amount</TableHead>
-          <TableHead>Status</TableHead>
-          {canDecide ? <TableHead>Decision</TableHead> : null}
+          <TableHead width="ref">Number</TableHead>
+          <TableHead width="date">Date</TableHead>
+          <TableHead width="status">Category</TableHead>
+          <TableHead width="prose">Description</TableHead>
+          <TableHead width="place">Paid from</TableHead>
+          <TableHead align="numeric" width="money">
+            Amount
+          </TableHead>
+          <TableHead width="status">Status</TableHead>
+          {canDecide ? <TableHead width="actions">Decision</TableHead> : null}
         </tr>
       </thead>
       <tbody className="divide-border/60 divide-y">
@@ -212,14 +216,16 @@ export function IncomeRegister({
     <DataTable caption="Fees and other income">
       <thead>
         <tr>
-          <TableHead>Number</TableHead>
-          <TableHead>Date</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Into</TableHead>
-          <TableHead align="numeric">Amount</TableHead>
-          <TableHead>Status</TableHead>
-          {canReverse ? <TableHead>Decision</TableHead> : null}
+          <TableHead width="ref">Number</TableHead>
+          <TableHead width="date">Date</TableHead>
+          <TableHead width="status">Category</TableHead>
+          <TableHead width="prose">Description</TableHead>
+          <TableHead width="place">Into</TableHead>
+          <TableHead align="numeric" width="money">
+            Amount
+          </TableHead>
+          <TableHead width="status">Status</TableHead>
+          {canReverse ? <TableHead width="actions">Decision</TableHead> : null}
         </tr>
       </thead>
       <tbody className="divide-border/60 divide-y">
@@ -287,15 +293,21 @@ export function ReconciliationRegister({
     <DataTable caption="Account reconciliations">
       <thead>
         <tr>
-          <TableHead>Number</TableHead>
-          <TableHead>Date</TableHead>
-          <TableHead>Account</TableHead>
-          <TableHead align="numeric">Ledger</TableHead>
-          <TableHead align="numeric">Counted</TableHead>
-          <TableHead align="numeric">Difference</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Counted by</TableHead>
-          {canDecide ? <TableHead>Decision</TableHead> : null}
+          <TableHead width="ref">Number</TableHead>
+          <TableHead width="date">Date</TableHead>
+          <TableHead width="place">Account</TableHead>
+          <TableHead align="numeric" width="money">
+            Ledger
+          </TableHead>
+          <TableHead align="numeric" width="money">
+            Counted
+          </TableHead>
+          <TableHead align="numeric" width="money">
+            Difference
+          </TableHead>
+          <TableHead width="status">Status</TableHead>
+          <TableHead width="name">Counted by</TableHead>
+          {canDecide ? <TableHead width="actions">Decision</TableHead> : null}
         </tr>
       </thead>
       <tbody className="divide-border/60 divide-y">

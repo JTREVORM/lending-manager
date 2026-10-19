@@ -1,6 +1,7 @@
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { MagnitudeChart } from '@/components/charts/magnitude-chart';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import {
   AGING_BUCKETS,
@@ -172,69 +173,58 @@ export function RiskBreakdown({
   }
 
   return (
-    <Card
-      className="min-w-0 overflow-x-auto"
-      tabIndex={0}
-      role="region"
-      aria-label={heading}
-    >
-      <h2 className="text-text mb-3 text-lg font-semibold">{heading}</h2>
+    <div className="min-w-0 space-y-3">
+      <h2 className="text-text text-lg font-semibold">{heading}</h2>
 
-      <table className="w-full text-left text-sm">
-        <caption className="sr-only">{caption}</caption>
+      <DataTable caption={caption} density="compact">
         <thead>
-          <tr className="border-border bg-surface-sunken border-b">
-            <th scope="col" className="t-th py-2.5 pr-4 whitespace-nowrap">
-              Name
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+          <tr>
+            <TableHead width="name">Name</TableHead>
+            <TableHead width="count" align="numeric">
               Loans
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="money" align="numeric">
               Principal
-            </th>
-            <th scope="col" className="t-th py-2.5 pr-4 text-right whitespace-nowrap">
+            </TableHead>
+            <TableHead width="money" align="numeric">
               Arrears
-            </th>
+            </TableHead>
             {PAR_THRESHOLDS.map((threshold) => (
-              <th
-                key={threshold}
-                scope="col"
-                className="t-th py-2.5 pr-4 text-right whitespace-nowrap"
-                title={PAR_DESCRIPTIONS[threshold]}
-              >
-                {PAR_LABELS[threshold]}
-              </th>
+              <TableHead key={threshold} width="rate" align="numeric">
+                <span title={PAR_DESCRIPTIONS[threshold]}>{PAR_LABELS[threshold]}</span>
+              </TableHead>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-border divide-y">
+        <tbody>
           {slices.map((slice) => (
-            <tr key={`${slice.branchId ?? ''}:${slice.productId ?? ''}`}>
-              <th scope="row" className="text-text py-2.5 pr-4 font-medium">
+            <TableRow key={`${slice.branchId ?? ''}:${slice.productId ?? ''}`}>
+              <TableCell header width="name" wrap="clamp" title={nameOf(slice)}>
                 {nameOf(slice)}
-              </th>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="count" align="numeric" className="text-text">
                 {slice.loanCount}
-              </td>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text">
                 <Money amount={slice.principalOutstanding} />
-              </td>
-              <td className="text-text py-2.5 pr-4 text-right tabular-nums">
+              </TableCell>
+              <TableCell width="money" align="numeric" className="text-text">
                 <Money amount={slice.arrearsAmount} />
-              </td>
+              </TableCell>
               {PAR_THRESHOLDS.map((threshold) => (
-                <td
+                <TableCell
                   key={threshold}
-                  className="text-text py-2.5 pr-4 text-right tabular-nums"
+                  width="rate"
+                  align="numeric"
+                  className="text-text"
                 >
                   {formatRatioBps(slice.parBps[threshold])}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
         </tbody>
-      </table>
-    </Card>
+      </DataTable>
+    </div>
   );
 }
