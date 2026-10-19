@@ -86,7 +86,12 @@ be true.
 
 ## 6. Responsive
 
-Checked at 375, 430, 768, 1024, 1366, 1440 and 1920.
+Checked at 375, 430, 768, 1024, 1366, 1440 and 1920 — all seven the brief
+names. `scripts/table-audit.mjs` drives every record-based screen at each
+and measures what a screenshot cannot: a page that scrolls sideways, a cell
+taller than the rule its author gave it, a clipped value, a wrapped badge,
+a scroller a keyboard cannot reach. The final run reports none of any of
+them.
 
 The ten columns come to about 1,180px, which is the content area of a 1440px
 screen. 1920 and 1440 show everything with no scroll; 1366 scrolls by about
@@ -103,8 +108,9 @@ of sight.
 | TypeScript, ESLint, Prettier | clean |
 | Unit + integration | **2238 passed**, 0 failed (+22 new) |
 | Production build | clean |
-| Playwright | see below |
-| Layout sweep | 132 screens × 6 widths |
+| Playwright | **498 passed**, 0 failed, 27 skipped — including the full WCAG AA sweep |
+| Layout sweep | **154 screens** (22 × 7 widths): 0 page overflows, 0 clipped values, 0 wrapped badges, 0 unreachable scrollers, 0 cells past their wrap limit |
+| Per-page transfer | unchanged on every route, desktop and mobile |
 
 ## 8. Performance
 
@@ -122,7 +128,27 @@ assertion is untouched. Replacing six `lucide-react` chevrons with one
 inline SVG was kept for tidiness but saved nothing measurable, and the test
 says so.
 
-## 9. What did not change
+## 9. Remaining issues, and why
+
+1. **The loan register scrolls by about a column's width at 1366.** Ten
+   columns with every word written out come to ~1,180px and a 1366px laptop
+   has ~1,070px of content area. The brief prefers a controlled scroll to a
+   dropped column, so all ten stay and the actions menu is pinned to the
+   right edge. 1440 and 1920 show everything with no scroll.
+2. **The date filters render in the browser's locale.** `<input type="date">`
+   draws its own placeholder, so a machine set to US English shows
+   `mm/dd/yyyy` on the payment register's From and To. The value sent is
+   ISO either way. Changing it means replacing the native control with a
+   custom date picker, which is a larger change than this pass should make
+   unasked.
+3. **No visual-regression baseline.** The sweep measures geometry and the
+   154 screenshots are for a person to look at; nothing yet fails a build
+   on a pixel change.
+4. **The sweep must run after the browser tests, or on its own stack.** 154
+   page loads leave the harness's rate limiter in a state where the next
+   write is refused.
+
+## 10. What did not change
 
 RLS, authentication, role permissions, interest, penalties, repayment
 schedules, accounting balances, journal entries, historical transactions,
