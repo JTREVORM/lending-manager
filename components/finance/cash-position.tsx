@@ -128,7 +128,12 @@ export function CashPosition({ positions, lowBalances, className }: CashPosition
                   ] as const
                 ).map(([kind, amount]) => (
                   <div key={kind} className="flex min-w-0 justify-between gap-2 text-xs">
-                    <dt className="text-text-muted truncate">{CASH_KIND_LABELS[kind]}</dt>
+                    {/* The label wraps rather than clipping: "Mobile money
+                        float" shortened to "Mobile money f…" names a
+                        different thing. */}
+                    <dt className="text-text-muted min-w-0 break-words">
+                      {CASH_KIND_LABELS[kind]}
+                    </dt>
                     <dd className="text-text shrink-0 tabular-nums">
                       <Money amount={amount} />
                     </dd>

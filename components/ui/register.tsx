@@ -286,7 +286,17 @@ export function RegisterPagination({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
-          <label htmlFor={sizeId} className="text-text-muted text-[13px]">
+          {/*
+            The label is there on every width and visible from `sm` up. On a
+            375px phone the bar is already two rows, and "Rows per page"
+            wrapping to three lines beside a 60px select is the control
+            taking more room than the thing it controls. Hidden, not
+            removed: the select keeps the label as its accessible name.
+          */}
+          <label
+            htmlFor={sizeId}
+            className="text-text-muted sr-only text-[13px] sm:not-sr-only"
+          >
             Rows per page
           </label>
           <select

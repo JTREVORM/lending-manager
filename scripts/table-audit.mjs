@@ -118,11 +118,39 @@ const PROBE = () => {
     else.
   */
   const linesOf = (element) => {
+    /*
+      Visually hidden text does not occupy a line.
+
+      A sortable header carries an `sr-only` sentence — "Status, not sorted.
+      Activate to sort ascending." — which is clipped to a 1px box and never
+      painted. A Range still reports its line boxes, so measuring it made
+      every sorted header look like a three-line header. What is hidden from
+      the eye is not a layout fault for the eye.
+    */
+    const clone = element.cloneNode(true);
+    for (const hidden of clone.querySelectorAll('.sr-only, [aria-hidden="true"]')) {
+      hidden.remove();
+    }
+    if ((clone.textContent ?? '').trim() === '') return 0;
+
+    // Measure in place: a detached clone has no layout. The hidden parts are
+    // skipped by walking the real node's children instead.
     const range = document.createRange();
+    const hiddenNodes = [...element.querySelectorAll('.sr-only')];
+    const restore = hiddenNodes.map((node) => {
+      const previous = node.style.display;
+      node.style.display = 'none';
+      return () => {
+        node.style.display = previous;
+      };
+    });
+
     range.selectNodeContents(element);
     const rects = [...range.getClientRects()].filter(
       (rect) => rect.width > 0 && rect.height > 0,
     );
+    for (const undo of restore) undo();
+
     if (rects.length === 0) return 0;
 
     // Rects on the same line share a top edge; count distinct ones.

@@ -129,8 +129,11 @@ export function UserDirectory({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{user.fullName}</p>
-                      <p className="text-text-muted truncate text-sm">
+                      {/* A person's name wraps; it is never clipped. An
+                          ellipsis in the middle of somebody's name is the
+                          one truncation this system does not make. */}
+                      <p className="font-medium break-words">{user.fullName}</p>
+                      <p className="text-text-muted text-sm">
                         <PhoneValue value={user.phone} />
                       </p>
                     </div>
