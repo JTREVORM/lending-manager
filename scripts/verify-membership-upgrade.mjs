@@ -105,6 +105,36 @@ const BASELINE = {
   installment_total: `select coalesce(sum(expected_amount), 0)::text as v
                         from public.loan_installments`,
 
+  // Every collection date and every scheduled figure, loan by loan, in order.
+  // The counts and the sums above would both survive a schedule that was
+  // regenerated with the same totals on different days — which is exactly
+  // what a change to the repayment engine would do, and exactly what a
+  // borrower would notice first. This is the figure that refuses it.
+  installment_schedule: `select l.loan_number,
+                                pg_catalog.string_agg(
+                                  i.due_date::text || '/' ||
+                                  i.scheduled_principal::text || '/' ||
+                                  i.scheduled_interest::text || '/' ||
+                                  i.expected_amount::text,
+                                  ',' order by i.installment_number) as v
+                           from public.loan_installments i
+                           join public.loans l on l.id = i.loan_id
+                          group by l.loan_number
+                          order by l.loan_number`,
+
+  // The contractual breakdown each schedule was built from, the same way.
+  period_breakdown: `select l.loan_number,
+                            pg_catalog.string_agg(
+                              p.opening_principal::text || '/' ||
+                              p.principal_portion::text || '/' ||
+                              p.interest::text || '/' ||
+                              p.closing_principal::text,
+                              ',' order by p.period_number) as v
+                       from public.loan_periods p
+                       join public.loans l on l.id = p.loan_id
+                      group by l.loan_number
+                      order by l.loan_number`,
+
   payment_rows: `select count(*)::text as v from public.loan_payments`,
   payment_total: `select coalesce(sum(amount), 0)::text as v from public.loan_payments`,
   allocation_rows: `select count(*)::text as v from public.payment_allocations`,

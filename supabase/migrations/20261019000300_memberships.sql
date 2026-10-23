@@ -236,9 +236,29 @@ create trigger memberships_assign_number
 -- Three things the caller does not get to choose. `created_by` comes from the
 -- session, so "who enrolled this member" cannot be attributed to somebody
 -- else. The branch comes from the client, because a membership is held where
--- the relationship is. The policy version defaults to whichever is in force,
--- so a caller cannot enrol somebody under a superseded or draft version by
--- naming its id.
+-- the relationship is. The policy version is whichever is in force.
+--
+-- ## Derived always, not merely defaulted
+--
+-- The first draft of this trigger filled the branch and the policy version
+-- in **when they arrived NULL**, which is a default rather than a rule. A
+-- caller with `membership:create` and a copy of curl supplies them, and a
+-- supplied value went through untouched: a member enrolled into a branch
+-- they have no relationship with, or under a draft nobody approved, a
+-- superseded version, or one that does not begin until next year. The RLS
+-- policy did not close it either — it scopes a branch-assigned profile to
+-- their own branch, and every profile in this system is unassigned, so the
+-- clause was vacuously true.
+--
+-- So both are derived on every insert, and a value that disagrees with the
+-- derivation is **refused** rather than silently corrected — the same choice
+-- `memberships_assign_number` makes about a supplied membership number, and
+-- for the same reason: silently correcting it hides a caller that believes
+-- it is choosing.
+--
+-- These rules are stated before any trusted-path exemption, so they bind
+-- `service_role` and the table owner too. What a membership *is* does not
+-- depend on which key opened the connection.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.memberships_stamp_provenance()
@@ -253,32 +273,57 @@ declare
 begin
   new.created_by := public.current_profile_id();
 
-  if new.branch_id is null then
-    select c.branch_id into v_client_branch
-    from public.clients c where c.id = new.client_id;
+  -- --- The branch is the client's ----------------------------------------
 
-    if v_client_branch is null then
-      select b.id into v_client_branch
-      from public.branches b
-      where b.status = 'active'
-      order by b.branch_code
-      limit 1;
-    end if;
+  select c.branch_id into v_client_branch
+  from public.clients c where c.id = new.client_id;
 
-    new.branch_id := v_client_branch;
+  if v_client_branch is null then
+    select b.id into v_client_branch
+    from public.branches b
+    where b.status = 'active'
+    order by b.branch_code
+    limit 1;
   end if;
 
-  if new.policy_version_id is null then
-    v_active_policy := public.active_membership_policy_id();
-
-    if v_active_policy is null then
-      raise exception
-        'No membership policy version is in force. Activate one before enrolling a member.'
-        using errcode = 'P0001';
-    end if;
-
-    new.policy_version_id := v_active_policy;
+  if v_client_branch is null then
+    raise exception
+      'A membership is held at a branch, and the business has no active branch to hold this one at.'
+      using errcode = 'P0001';
   end if;
+
+  if new.branch_id is not null and new.branch_id <> v_client_branch then
+    raise exception
+      'A membership is held at the client''s own branch. Move the client to the other branch first if that is what was meant.'
+      using errcode = 'P0001';
+  end if;
+
+  new.branch_id := v_client_branch;
+
+  -- --- The terms are the ones in force -----------------------------------
+
+  v_active_policy := public.active_membership_policy_id();
+
+  if v_active_policy is null then
+    raise exception
+      'No membership policy version is in force. Approve and activate one, on or before today, before enrolling a member.'
+      using errcode = 'P0001';
+  end if;
+
+  if new.policy_version_id is not null
+     and new.policy_version_id <> v_active_policy then
+    raise exception
+      'A member is enrolled under the membership policy version in force, not under a draft, a superseded version, or one that has not started.'
+      using errcode = 'P0001';
+  end if;
+
+  if not public.membership_policy_allows(v_active_policy, 'enrolment') then
+    raise exception
+      'The membership policy version in force does not open enrolment.'
+      using errcode = 'P0001';
+  end if;
+
+  new.policy_version_id := v_active_policy;
 
   -- A membership arrives pending. Enrolling somebody straight into `active`
   -- would skip the registration fee and the terms acceptance that Polytos
@@ -299,7 +344,7 @@ end;
 $$;
 
 comment on function public.memberships_stamp_provenance() is
-  'BEFORE INSERT on memberships: derives created_by from the session, the branch from the client, and the policy version from whichever is in force. Refuses a membership created in any status but pending.';
+  'BEFORE INSERT on memberships: derives created_by from the session, the branch from the client and the policy version from the one in force on the business date — always, refusing a supplied value that disagrees rather than defaulting around it. Refuses a membership created in any status but pending, and one opened when no version is in force. Binds every caller, service_role included.';
 
 create trigger memberships_stamp_provenance
   before insert on public.memberships
@@ -349,10 +394,61 @@ begin
       using errcode = 'P0001';
   end if;
 
-  if new.policy_version_id is distinct from old.policy_version_id then
+  -- The branch follows the client, on an update as on an insert. A
+  -- membership moved to a branch the client has no relationship with would
+  -- put the row outside the branch rule that decides who may read it.
+  if new.branch_id is distinct from old.branch_id
+     and new.branch_id is distinct from (
+       select c.branch_id from public.clients c where c.id = old.client_id
+     ) then
     raise exception
-      'A member is held to the policy version they were enrolled under. Publish a new version and enrol new members under it.'
+      'A membership is held at the client''s own branch. Move the client, and the membership follows.'
       using errcode = 'P0001';
+  end if;
+
+  -- A member's terms move only through a recorded re-acceptance.
+  --
+  -- The version a member is held to is the contract they signed, so a plain
+  -- UPDATE of this column is refused — but "never" was the wrong rule. The
+  -- business will publish version 1.1, and the law and the programme both
+  -- allow existing members to be asked to accept it. What that needs is
+  -- evidence, not an open column. So the change is permitted on three
+  -- conditions, each checked independently:
+  --
+  --   * it arrived through `accept_membership_policy_version()`, which sets
+  --     the transaction-local marker this reads;
+  --   * the member's acceptance of the new version is already recorded in
+  --     `membership_terms_acceptances`; and
+  --   * the new version is itself approved and in force today.
+  --
+  -- The marker alone would be a weak boundary — it is a routing flag, not a
+  -- permission — which is why the other two are asserted here rather than
+  -- trusted to the function that set it.
+  if new.policy_version_id is distinct from old.policy_version_id then
+    if coalesce(
+         pg_catalog.current_setting('app.membership_policy_reacceptance', true), ''
+       ) <> old.id::text then
+      raise exception
+        'A member is held to the policy version they were enrolled under. Record a re-acceptance with accept_membership_policy_version() to move them onto new terms.'
+        using errcode = 'P0001';
+    end if;
+
+    if not exists (
+      select 1
+      from public.membership_terms_acceptances a
+      where a.membership_id = old.id
+        and a.policy_version_id = new.policy_version_id
+    ) then
+      raise exception
+        'Moving a member onto a new policy version needs their recorded acceptance of it.'
+        using errcode = 'P0001';
+    end if;
+
+    if not public.membership_policy_allows(new.policy_version_id, 'enrolment') then
+      raise exception
+        'A member can only be moved onto a membership policy version that is approved and in force.'
+        using errcode = 'P0001';
+    end if;
   end if;
 
   if new.status is distinct from old.status then
@@ -467,7 +563,7 @@ end;
 $$;
 
 comment on function public.memberships_guard_transition() is
-  'BEFORE UPDATE on memberships: enforces the lifecycle, stamps the dates and the attribution each transition needs, and applies per-column authorization. Rules binding every caller, including service_role, are stated before the trusted-path exemption.';
+  'BEFORE UPDATE on memberships: enforces the lifecycle, keeps the branch following the client, permits a change of policy version only through a recorded re-acceptance onto a version in force, stamps the dates and the attribution each transition needs, and applies per-column authorization. Rules binding every caller, including service_role, are stated before the trusted-path exemption.';
 
 create trigger memberships_guard_transition
   before update on public.memberships

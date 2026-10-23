@@ -6,7 +6,11 @@ import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getActiveMembershipPolicy, listMemberships } from '@/lib/data/membership';
-import { policyBlockedReason } from '@/lib/domain/membership';
+import {
+  MEMBERSHIP_ACTIVITY_LABELS,
+  activityBlockedReason,
+  membershipActivityReadiness,
+} from '@/lib/domain/membership';
 import { membershipSearchSchema } from '@/lib/validation/membership';
 
 export const metadata = { title: 'Membership' };
@@ -30,10 +34,18 @@ export const metadata = { title: 'Membership' };
  * the system telling a clerk that members can be taken on today.
  *
  * What the page does say, at the top, is *why*: the policy version is a
- * draft with nine rules still undecided, and until the client settles them
- * nothing can be enrolled, saved or paid out. That sentence is read from the
- * policy row rather than hard-coded, so it stops appearing the moment the
- * policy is approved.
+ * draft, and until it is approved and in force nobody can be enrolled. That
+ * sentence is read from the policy row rather than hard-coded, so it stops
+ * appearing the moment the policy is approved.
+ *
+ * ## The banner is about enrolment, and says so
+ *
+ * It used to say that no membership transaction could run while any of the
+ * nine rules was undecided. That is not true and was never going to be:
+ * enrolment and the registration fee wait on none of them. So this banner
+ * asks only whether *enrolment* is open, and a second line names the
+ * activities that are still held up — because a register that overstates its
+ * own paralysis teaches the reader to scroll past the warning.
  */
 export default async function MembershipPage({
   searchParams,
@@ -61,10 +73,19 @@ export default async function MembershipPage({
   // `null` means no version has been activated at all, which is the state
   // today and a different sentence from "a version is in force but
   // incomplete".
-  const blocked =
+  const enrolmentBlocked =
     policy === null
       ? 'No membership policy version is in force yet. Enrolment, savings and benefits all wait on one being approved.'
-      : policyBlockedReason(policy);
+      : activityBlockedReason(policy, 'enrolment');
+
+  // Everything else that is not open, named. Enrolment is excluded because
+  // the banner above is about exactly that.
+  const heldUp =
+    policy === null
+      ? []
+      : membershipActivityReadiness(policy).filter(
+          (row) => row.activity !== 'enrolment' && !row.ready,
+        );
 
   return (
     <div className="min-w-0 space-y-6">
@@ -80,9 +101,20 @@ export default async function MembershipPage({
         }
       />
 
-      {blocked === null ? null : (
+      {enrolmentBlocked === null ? (
+        heldUp.length === 0 ? null : (
+          <Alert tone="info" title="Enrolment is open">
+            {heldUp.length === 1
+              ? 'One activity is'
+              : `${String(heldUp.length)} activities are`}{' '}
+            still waiting on decisions the client has not made:{' '}
+            {heldUp.map((row) => MEMBERSHIP_ACTIVITY_LABELS[row.activity]).join(', ')}.
+          </Alert>
+        )
+      ) : (
         <Alert tone="warning" title="Enrolment is not open yet">
-          {blocked} The register below is live and will fill as members are enrolled.
+          {enrolmentBlocked} The register below is live and will fill as members are
+          enrolled.
         </Alert>
       )}
 

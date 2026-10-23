@@ -86,9 +86,13 @@ beforeAll(async () => {
       createTestUser('client'),
     ]);
 
+  // Active, approved and started: "in force" is all three, and the seeded
+  // version does not begin until 1 November 2026. Backdating it is the
+  // fixture saying the programme is running.
   const policy = await queryOne<{ id: string }>(
     `update public.membership_policy_versions
-        set approved_at = pg_catalog.now(), status = 'active'
+        set approved_at = pg_catalog.now(), status = 'active',
+            effective_from = public.business_date() - 1
       where version = '1.0'
       returning id`,
   );
@@ -167,7 +171,7 @@ afterAll(async () => {
     await query(
       `update public.membership_policy_versions
           set status = 'draft', approved_at = null, approved_by = null,
-              approved_by_label = null
+              approved_by_label = null, effective_from = '2026-11-01'
         where version = '1.0'`,
     );
   } finally {

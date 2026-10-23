@@ -9,10 +9,13 @@ import { Money } from '@/components/ui/money';
 import {
   MEMBER_INTEREST_BASIS_LABELS,
   MEMBER_INTEREST_METHOD_LABELS,
+  MEMBERSHIP_ACTIVITY_DESCRIPTIONS,
+  MEMBERSHIP_ACTIVITY_LABELS,
   MEMBERSHIP_POLICY_STATUS_LABELS,
   PROFIT_DISTRIBUTION_BASIS_LABELS,
   SAVINGS_WITHDRAWAL_RULE_LABELS,
   UNDECIDED_POLICY_RULE_LABELS,
+  membershipActivityReadiness,
   outstandingPolicyDecisions,
   policyBlockedReason,
   type MembershipPolicyStatus,
@@ -22,6 +25,17 @@ import type { MembershipPolicy } from '@/lib/data/membership';
 
 /**
  * A membership policy version, read-only.
+ *
+ * ## Why each activity gets its own row
+ *
+ * One "this version enables nothing" banner was wrong, and wrong in the
+ * direction that costs money: it said the registration fee could not be
+ * taken because the year-end profit formula was unsettled. The readiness
+ * table below asks the five questions separately — enrolment, savings,
+ * lending, benefits, profit sharing — and each answer names only the
+ * decisions that activity actually waits on. It is the same split the
+ * database enforces in `membership_policy_allows()`, so a reader of this
+ * screen and a posting in Polytos Phase 2 are told the same thing.
  *
  * ## Why "undecided" is rendered as a word and never as a blank
  *
@@ -63,6 +77,7 @@ function NotDecided() {
 export function MembershipPolicyPanel({ policy }: { readonly policy: MembershipPolicy }) {
   const outstanding = outstandingPolicyDecisions(policy);
   const blocked = policyBlockedReason(policy);
+  const readiness = membershipActivityReadiness(policy);
 
   return (
     <div className="min-w-0 space-y-4">
@@ -71,6 +86,61 @@ export function MembershipPolicyPanel({ policy }: { readonly policy: MembershipP
           <span className="font-medium">{blocked}</span>
         </Alert>
       )}
+
+      <Card>
+        <CardHeader
+          title="What this version authorises"
+          description="Each activity waits on its own decisions, and on nothing else. The database enforces the same five gates separately."
+        />
+
+        <DataTable caption="Membership activities and whether this version opens them">
+          <thead>
+            <tr>
+              <TableHead width="prose">Activity</TableHead>
+              {/* "Status" rather than "Open": the badges below read Open or
+                  Closed, and a header carrying one of those two words is a
+                  cell a reader — and a screen reader — has to disambiguate
+                  from the values under it. */}
+              <TableHead width="status">Status</TableHead>
+              <TableHead width="prose">Waiting on</TableHead>
+            </tr>
+          </thead>
+          <tbody>
+            {readiness.map((row) => (
+              <TableRow key={row.activity}>
+                <TableCell width="prose" wrap="wrap">
+                  <span className="text-text font-medium">
+                    {MEMBERSHIP_ACTIVITY_LABELS[row.activity]}
+                  </span>
+                  <span className="text-text-muted block text-xs">
+                    {MEMBERSHIP_ACTIVITY_DESCRIPTIONS[row.activity]}
+                  </span>
+                </TableCell>
+                <TableCell width="status">
+                  <Badge tone={row.ready ? 'success' : 'warning'}>
+                    {row.ready ? 'Open' : 'Closed'}
+                  </Badge>
+                </TableCell>
+                <TableCell width="prose" wrap="wrap">
+                  {row.ready ? (
+                    <span className="text-text-muted">Nothing</span>
+                  ) : row.outstanding.length === 0 ? (
+                    <span className="text-text-muted">{row.blockedReason}</span>
+                  ) : (
+                    <ul className="space-y-1">
+                      {row.outstanding.map((rule) => (
+                        <li key={rule} className="text-text-muted">
+                          {UNDECIDED_POLICY_RULE_LABELS[rule]}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </tbody>
+        </DataTable>
+      </Card>
 
       <Card>
         <CardHeader
@@ -236,7 +306,7 @@ export function MembershipPolicyPanel({ policy }: { readonly policy: MembershipP
         <Card>
           <CardHeader
             title="Decisions still needed from the client"
-            description={`${String(outstanding.length)} of the programme's rules have not been settled. Until every one of them is, this version enables no membership transaction.`}
+            description={`${String(outstanding.length)} of the programme's rules have not been settled. The table above says which activity each one is holding up.`}
           />
 
           <DataTable caption="Membership policy decisions still outstanding">

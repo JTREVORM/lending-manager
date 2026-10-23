@@ -2611,9 +2611,11 @@ export type Database = {
        * Polytos Phase 1. The membership programme's rules, effective-dated.
        *
        * Nullable columns are decisions the client has not made — never a
-       * default. `is_financially_enabled` is generated and therefore absent
-       * from `Insert` and `Update`: the database computes it, and no write
-       * can set it.
+       * default. The six readiness booleans are generated and therefore
+       * absent from `Insert` and `Update`: the database computes them, and no
+       * write can set one. Five are per-activity — enrolment does not wait on
+       * the profit formula — and `is_financially_enabled` is the overall
+       * completeness indicator.
        */
       membership_policy_versions: {
         Row: {
@@ -2650,6 +2652,11 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          is_enrolment_enabled: boolean;
+          is_savings_enabled: boolean;
+          is_member_lending_enabled: boolean;
+          is_benefits_enabled: boolean;
+          is_profit_sharing_enabled: boolean;
           is_financially_enabled: boolean;
         };
         Insert: {
@@ -2686,6 +2693,11 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          is_enrolment_enabled?: never;
+          is_savings_enabled?: never;
+          is_member_lending_enabled?: never;
+          is_benefits_enabled?: never;
+          is_profit_sharing_enabled?: never;
           is_financially_enabled?: never;
         };
         Update: {
@@ -2722,6 +2734,11 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          is_enrolment_enabled?: never;
+          is_savings_enabled?: never;
+          is_member_lending_enabled?: never;
+          is_benefits_enabled?: never;
+          is_profit_sharing_enabled?: never;
           is_financially_enabled?: never;
         };
         Relationships: [];
@@ -3859,7 +3876,11 @@ export type Database = {
           ended_on: string | null;
           policy_version_id: string | null;
           policy_version: string | null;
-          policy_is_financially_enabled: boolean | null;
+          policy_enrolment_enabled: boolean | null;
+          policy_savings_enabled: boolean | null;
+          policy_member_lending_enabled: boolean | null;
+          policy_benefits_enabled: boolean | null;
+          policy_profit_sharing_enabled: boolean | null;
           notes: string | null;
           created_at: string | null;
           updated_at: string | null;
@@ -4396,11 +4417,35 @@ export type Database = {
         Args: { p_permission_key: string };
         Returns: boolean;
       };
-      // Polytos Phase 1. The membership policy version in force, or null when
-      // none has been activated. Reads as the caller.
+      // Polytos Phase 1. The membership policy version in force on the
+      // business date — active, approved and started — or null when there is
+      // none. One answer for every caller, because it is what the enrolment
+      // rule is written against.
       active_membership_policy_id: {
         Args: Record<PropertyKey, never>;
         Returns: string | null;
+      };
+      // Polytos Phase 1. Whether one named activity is open on a version
+      // today: the decisions that activity needs have been made, and the
+      // version is approved, active and started. The gate every later phase
+      // posts behind.
+      membership_policy_allows: {
+        Args: { p_version_id: string; p_activity: string };
+        Returns: boolean;
+      };
+      // Polytos Phase 1. Records a member's acceptance of a newly published
+      // policy version and moves them onto it, in one transaction. The only
+      // route by which memberships.policy_version_id changes.
+      accept_membership_policy_version: {
+        Args: {
+          p_membership_id: string;
+          p_policy_version_id: string;
+          p_signature_name: string;
+          p_accepted_place?: string | null;
+          p_witness_name?: string | null;
+          p_witness_phone?: string | null;
+        };
+        Returns: string;
       };
       link_client_profile: {
         Args: { p_client_id: string; p_profile_id: string };

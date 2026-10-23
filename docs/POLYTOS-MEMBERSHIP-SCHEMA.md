@@ -70,7 +70,7 @@ its figures changed.
 | Benefits | `medical_benefit_rate_bps`, `medical_benefit_min_admission_days`, `family_condolence_benefit`, `member_bereavement_benefit` |
 | **Undecided** (all nullable, no defaults) | `interest_basis`, `interest_method`, `savings_to_loan_multiplier_bps`, `qualifying_months_consecutive`, `savings_withdrawal_with_active_loan`, `profit_distribution_basis`, `medical_benefit_annual_cap`, `medical_benefit_claims_per_year`, `benefit_waiting_period_days` |
 | Approval | `approved_at`, `approved_by`, `approved_by_label`, `approval_reference` |
-| Gate | `is_financially_enabled` — **generated always as stored** |
+| Gates (all **generated always as stored**) | `is_enrolment_enabled`, `is_savings_enabled`, `is_member_lending_enabled`, `is_benefits_enabled`, `is_profit_sharing_enabled`, and `is_financially_enabled` as the overall completeness indicator |
 | Metadata | `notes`, `created_by`, `created_at`, `updated_at` |
 
 ### Constraints
@@ -118,9 +118,42 @@ its figures changed.
 | Trigger | When | What it does |
 | --- | --- | --- |
 | `membership_policy_versions_set_updated_at` | BEFORE UPDATE | The shared `set_updated_at()` |
-| `membership_policy_versions_guard` | BEFORE UPDATE | Freezes every figure of a version members are enrolled under; stamps `approved_at`/`approved_by`/`approved_by_label` from the session; refuses a second approval; requires `membership:manage_policies` from a session |
+| `membership_policy_versions_guard` | BEFORE UPDATE | Enforces the one-way status sequence; freezes **every contractual column, the nine undecided rules included** once the version is approved *or* anybody is enrolled under it; stamps `approved_at`/`approved_by`/`approved_by_label` from the session; refuses a second approval; requires `membership:manage_policies` from a session |
 | `membership_policy_versions_no_delete` | BEFORE DELETE (statement) | `reject_mutation()` |
 | `audit_membership_policy_change` | AFTER INSERT/UPDATE | Full before-and-after into `audit_log` |
+
+#### The status moves one way
+
+```
+draft      -> active       (publishing it; the approval constraint already
+                            requires an approval for anything but a draft)
+active     -> superseded   (retiring it)
+superseded -> nothing
+```
+
+Nothing returns to draft. A version that has been in force governed
+somebody's terms for a period of time, and "draft" would assert it never
+did. Nothing returns from superseded either: bringing an old version back is
+publishing a new one carrying the old figures, which leaves the dates telling
+the truth. The rule binds every caller, `service_role` included.
+
+#### What the freeze covers, and when it starts
+
+Every contractual column — the twelve confirmed figures, the **nine
+undecided rules**, the version string, the effective date and the title a
+printed form carries. It starts at **either** of two events: the business
+approves the version, or anybody is enrolled under it.
+
+Freezing the nine matters more than freezing the twelve. A member who
+enrolled while "may savings be withdrawn against a live loan" was open did
+not agree to whatever answer the business later writes into that column; they
+agreed to a version in which it was open. Filling it in afterwards is a
+retroactive variation of their terms in the more dangerous form, because it
+leaves no trace of having changed a value.
+
+What stays editable on a frozen version: `notes`, which is operational
+commentary rather than a term, and `status`, because retiring a version is
+how the next one takes effect.
 
 The guard places approval **attribution** below the trusted-path exemption
 and the **figure freeze** above it, deliberately: `approved_by` is
@@ -207,13 +240,37 @@ benefit waiting period both restart and a reused row could not express that.
 | Trigger | When | What it does |
 | --- | --- | --- |
 | `memberships_assign_number` | BEFORE INSERT | Mints the number; refuses a supplied one |
-| `memberships_stamp_provenance` | BEFORE INSERT | `created_by` from the session, branch from the client, policy from whichever is in force; refuses a non-pending opening status; refuses an enrolment when no version is in force |
-| `memberships_guard_transition` | BEFORE UPDATE | The lifecycle, the date stamps, the attribution, and per-column authorization |
+| `memberships_stamp_provenance` | BEFORE INSERT | `created_by` from the session, the branch from the client and the policy from the version in force — **always**, refusing a supplied value that disagrees rather than defaulting around it; refuses a non-pending opening status; refuses an enrolment when no version is in force |
+| `memberships_guard_transition` | BEFORE UPDATE | The lifecycle, the branch following the client, the policy version moving only through a recorded re-acceptance, the date stamps, the attribution, and per-column authorization |
 | `memberships_set_updated_at` | BEFORE UPDATE | The shared `set_updated_at()` |
 | `memberships_record_status_on_insert` | AFTER INSERT | Writes the opening history row |
 | `memberships_record_status_on_update` | AFTER UPDATE OF status | Writes the transition history row |
 | `memberships_no_delete` | BEFORE DELETE (statement) | `reject_mutation()` |
-| `audit_membership_change` | AFTER INSERT/UPDATE | `membership.enrolled`, `membership.status_changed`, `membership.updated` |
+| `audit_membership_change` | AFTER INSERT/UPDATE | `membership.enrolled`, `membership.policy_reaccepted`, `membership.status_changed`, `membership.updated` |
+
+#### Derived always, not merely defaulted
+
+The branch and the policy version were originally filled in **when they
+arrived NULL**, which is a default rather than a rule. A caller with
+`membership:create` and a copy of curl supplies them, and a supplied value
+went through untouched: a member enrolled into a branch they have no
+relationship with, or under a draft nobody approved, a superseded version, or
+one that does not begin until next year.
+
+The RLS policy did not close it either. Its branch clause reads *"a
+branch-assigned profile may enrol only into their own branch"*, and **every
+profile in this system is unassigned** — so the clause was vacuously true.
+
+Both are now derived on every insert, and a value that disagrees with the
+derivation is **refused** rather than silently corrected, which is the same
+choice `memberships_assign_number` makes about a supplied membership number
+and for the same reason: silently correcting it hides a caller that believes
+it is choosing. The rules sit above the trusted-path exemption, so they bind
+`service_role` and the table owner too.
+
+The insert policy now states the same two rules independently — WITH CHECK is
+evaluated on the finished row, after the BEFORE INSERT trigger — so the
+refusal does not depend on a trigger that somebody could disable.
 
 ---
 
@@ -289,16 +346,72 @@ underlying policies. Two tests assert the flag: the catalogue one in
 
 ---
 
-## 7. `public.active_membership_policy_id()`
+## 7. The policy functions
 
-`stable`, **SECURITY INVOKER**, `EXECUTE` granted to `authenticated`. It
-returns the id of the version in force, or NULL.
+### `public.active_membership_policy_id()`
 
-Invoker rather than definer deliberately: it discloses nothing the caller
-could not read from the table directly, so there is no reason to let it run
-with more authority than the caller has. It exists so "the current policy"
-has one definition rather than a `where status = 'active'` repeated in every
-caller.
+`stable`, **SECURITY DEFINER**, `EXECUTE` granted to `authenticated`. Returns
+the id of the version in force, or NULL.
+
+**In force means active, approved _and_ started.** `status = 'active'` alone
+was not enough: a version is activated when the business decides it is next,
+and `effective_from` is the day it begins. A programme announced in October
+and starting in November is the ordinary case. Without the date comparison,
+enrolling somebody in October bound them to terms that do not take effect
+until November, and the register said they joined under rules nobody was
+operating yet.
+
+DEFINER rather than INVOKER, which is a deliberate change from the first
+draft: this function is what the enrolment rule is written against, and a
+rule that gives a different answer depending on who asks is not a rule. It
+returns an opaque id and nothing else; the row behind it is still governed by
+`membership_policy_versions_select`, so holding the id gets a caller no
+further than they could already go.
+
+### `public.membership_policy_allows(p_version_id uuid, p_activity text)`
+
+`stable`, **SECURITY DEFINER**, `EXECUTE` granted to `authenticated`. The one
+gate Polytos Phases 2–5 consult before posting anything. Two questions in one
+answer, both of which must be yes: the decisions *that activity* needs have
+been made (the generated column, which no write can forge), and the version
+is in force on the business date (which no generated column can express,
+because the business date is not immutable).
+
+Activities: `enrolment`, `savings`, `lending`, `benefits`, `profit_sharing`.
+Anything else **raises** — failing shut is safe, but a typo that silently
+disables a module looks exactly like a policy that has not been decided, and
+the two need very different responses. See
+`docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md` §4 for which decisions gate
+which activity.
+
+### `public.accept_membership_policy_version(...)`
+
+**SECURITY DEFINER**, `EXECUTE` granted to `authenticated`, and the **only**
+route by which `memberships.policy_version_id` changes.
+
+A frozen version plus an immutable column together said something the
+programme cannot live with: that a member enrolled under version 1.0 is held
+to version 1.0 for as long as they are a member, whatever the business and
+that member later agree. That is not how terms change. The business publishes
+version 1.1 and existing members are asked to accept it, and what makes that
+lawful is evidence — not an editable column.
+
+So this function writes the acceptance into
+`membership_terms_acceptances` and moves the member in **one transaction**,
+having first established that the caller holds `membership:manage_policies`
+(when there is a session), that the membership is still live, that the target
+version is approved and in force, and that it does not take effect earlier
+than the version the member is already on.
+
+The transaction-local marker it sets is a **route, not a permission**.
+`memberships_guard_transition` re-checks on its own account that the
+acceptance exists and that the target is approved and in force, so a caller
+who found some way to set the marker still could not move a member onto a
+draft, and still could not move one without their signature.
+
+Phase 1 ships no screen for it. It exists so the rule above it can be strict
+without being a trap, and so the authorization around re-acceptance is
+reviewed before Polytos Phase 2 builds the form that calls it.
 
 ---
 
@@ -362,6 +475,7 @@ guard.
 | `20261019000500_membership_terms_acceptances.sql` | The acceptance table and its guard |
 | `20261019000600_membership_rls.sql` | Every grant, every policy, and the register view |
 | `20261019000700_membership_audit_triggers.sql` | Three audit triggers |
+| `20261019000800_membership_policy_reacceptance.sql` | `accept_membership_policy_version()` — the only route onto newly published terms |
 
 They apply in filename order, which is what the timestamp prefix is for.
 `20261019000200` creates a function whose body reads `public.memberships`,

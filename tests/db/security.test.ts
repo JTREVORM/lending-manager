@@ -858,6 +858,18 @@ describeDb('privileged functions', () => {
     // so a function gaining it by accident gains the ability to ignore every
     // policy in the system.
     expect(rows.map((row) => row.proname)).toEqual([
+      // Polytos Phase 1. The re-acceptance route: it records the member's
+      // acceptance of a newly published policy version and moves them onto
+      // it in one transaction, and it is the only route by which
+      // `memberships.policy_version_id` changes. DEFINER because it writes
+      // two tables a session may not write between, and it checks
+      // `membership:manage_policies` on the session itself.
+      'accept_membership_policy_version',
+      // Polytos Phase 1. Which version is in force. DEFINER so that the rule
+      // the enrolment trigger enforces and the answer a screen reads are one
+      // rule; it returns an id, and the row behind it stays behind the
+      // select policy.
+      'active_membership_policy_id',
       'apply_eligible_penalties',
       'approve_expense',
       'approve_loan',
@@ -971,6 +983,20 @@ describeDb('privileged functions', () => {
       // `membership_status_history`, which no session may write. EXECUTE is
       // revoked from `anon` and `authenticated` on every one, which the
       // assertion below enforces.
+      //
+      // The three that are *not* triggers are DEFINER for a different
+      // reason, and each is granted to `authenticated` below:
+      //
+      //   `accept_membership_policy_version` writes the member's acceptance
+      //   and moves them onto the new version in one transaction. It is the
+      //   only route by which `memberships.policy_version_id` changes, and
+      //   it checks `membership:manage_policies` itself.
+      //
+      //   `active_membership_policy_id` and `membership_policy_allows` are
+      //   what the enrolment rule is written against, so they must give the
+      //   same answer to every caller. Each returns an opaque id or a
+      //   boolean; the rows behind them stay governed by the select policy.
+      'membership_policy_allows',
       'membership_policy_versions_guard',
       'membership_terms_acceptances_guard',
       'memberships_assign_number',
@@ -1093,6 +1119,13 @@ describeDb('privileged functions', () => {
     // Each acts on the calling user alone and takes either no argument or one
     // that cannot identify another person, so there is nothing to forge.
     //
+    // `accept_membership_policy_version` is the exception that proves it: it
+    // names a membership and a policy version, and it is granted because it
+    // checks `membership:manage_policies` on the session before it writes
+    // anything, refuses a version that is not approved and in force, and
+    // records the member's signature as the evidence of the move. Its
+    // refusals are asserted in tests/db/membership-hardening.test.ts.
+    //
     // `next_reference` and `record_audit_event` are deliberately absent:
     // nothing in this phase issues a reference, and audit rows are written by
     // triggers precisely so the actor cannot be supplied by a caller.
@@ -1106,11 +1139,13 @@ describeDb('privileged functions', () => {
     // reachable only through the server, by `service_role`. See migration
     // 20261002000800 and tests/db/password-change.test.ts.
     expect(rows.map((row) => row.proname)).toEqual([
-      // Polytos Phase 1. Which membership policy version is in force.
-      // SECURITY INVOKER, so it discloses nothing the caller could not read
-      // from the table directly — it exists so that "the current policy" has
-      // one definition rather than a `where status = 'active'` in every
-      // caller.
+      // Polytos Phase 1. The re-acceptance route. See the note above.
+      'accept_membership_policy_version',
+      // Polytos Phase 1. Which membership policy version is in force —
+      // active, approved and started. SECURITY DEFINER, so that the rule the
+      // enrolment trigger enforces and the answer a screen reads are the
+      // same rule. It returns an id and nothing else; the row behind it is
+      // still governed by `membership_policy_versions_select`.
       'active_membership_policy_id',
       'approve_expense',
       'approve_loan',
@@ -1180,6 +1215,12 @@ describeDb('privileged functions', () => {
       // already see. Nothing to forge.
       'mark_notifications_read',
       'mask_nin',
+      // Polytos Phase 1. The gate every later phase posts behind: whether one
+      // named activity is open on this version today. Granted for the same
+      // reason `active_membership_policy_id` is — a gate that answers
+      // differently depending on who asks is not a gate. It discloses one
+      // boolean about a version the caller has already named.
+      'membership_policy_allows',
       'payment_business_date',
       // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.
       'payment_method_cash_kind',

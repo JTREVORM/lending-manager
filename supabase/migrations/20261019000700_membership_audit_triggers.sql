@@ -62,7 +62,14 @@ begin
     -- A status change and an ordinary correction are different events, and a
     -- reader of the trail should not have to diff two blobs to tell them
     -- apart.
+    -- A move onto newly published terms is named first, because it is the
+    -- rarest and the most consequential of the three: it is the only thing
+    -- that changes what a member was promised, and a reader scanning for
+    -- "when did this member's terms change" should not have to infer it from
+    -- two ids in a blob.
     v_action := case
+      when new.policy_version_id is distinct from old.policy_version_id
+        then 'membership.policy_reaccepted'
       when new.status is distinct from old.status then 'membership.status_changed'
       else 'membership.updated'
     end;
@@ -72,6 +79,7 @@ begin
       'status_reason', old.status_reason,
       'activated_on', old.activated_on,
       'ended_on', old.ended_on,
+      'policy_version_id', old.policy_version_id,
       'notes', old.notes
     );
     v_new := pg_catalog.jsonb_build_object(
@@ -79,6 +87,7 @@ begin
       'status_reason', new.status_reason,
       'activated_on', new.activated_on,
       'ended_on', new.ended_on,
+      'policy_version_id', new.policy_version_id,
       'notes', new.notes
     );
   end if;
@@ -100,7 +109,7 @@ end;
 $$;
 
 comment on function public.audit_membership_change() is
-  'AFTER INSERT/UPDATE on memberships: records the enrolment and every subsequent change. Carries no personal data — the member is the client, and the client trail already covers them.';
+  'AFTER INSERT/UPDATE on memberships: records the enrolment, every status change, every re-acceptance onto new terms, and every other change. Carries no personal data — the member is the client, and the client trail already covers them.';
 
 create trigger audit_membership_change
   after insert or update on public.memberships

@@ -69,7 +69,8 @@ const q = async (sql, params = []) => (await db.query(sql, params)).rows;
  * which the policy screenshot then shows truthfully.
  */
 await q(`update public.membership_policy_versions
-            set approved_at = pg_catalog.now(), status = 'active'
+            set approved_at = pg_catalog.now(), status = 'active',
+                effective_from = public.business_date() - 1
           where version = '1.0' and status = 'draft'`);
 
 const clients = await q(

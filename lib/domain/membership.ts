@@ -349,6 +349,149 @@ export function outstandingPolicyDecisions(
   return UNDECIDED_POLICY_RULES.filter((rule) => policy[rule] === null);
 }
 
+// ---------------------------------------------------------------------------
+// The gates, one per activity
+// ---------------------------------------------------------------------------
+
+/**
+ * The five things a membership policy version can authorise.
+ *
+ * They are listed in the order they can first happen to a member: they join,
+ * they save, they borrow, they claim, they are paid a share. That is also the
+ * order of dependency — lending waits on the savings rules, because the loan
+ * is secured against the savings — and it is the order the configuration
+ * screen shows them in.
+ */
+export const MEMBERSHIP_ACTIVITIES = [
+  'enrolment',
+  'savings',
+  'lending',
+  'benefits',
+  'profit_sharing',
+] as const;
+
+export type MembershipActivity = (typeof MEMBERSHIP_ACTIVITIES)[number];
+
+export const MEMBERSHIP_ACTIVITY_LABELS: Readonly<Record<MembershipActivity, string>> = {
+  enrolment: 'Enrolment and registration fees',
+  savings: 'Member savings',
+  lending: 'Member loans',
+  benefits: 'Benefit payments',
+  profit_sharing: 'Year-end profit sharing',
+} as const;
+
+export const MEMBERSHIP_ACTIVITY_DESCRIPTIONS: Readonly<
+  Record<MembershipActivity, string>
+> = {
+  enrolment: 'Taking an application and the UGX 5,000 registration fee.',
+  savings: 'Taking monthly savings, and returning them.',
+  lending: 'Lending to a member against their savings.',
+  benefits: 'Paying medical, condolence and bereavement support.',
+  profit_sharing: 'Declaring and paying a member’s share of the year’s surplus.',
+} as const;
+
+/**
+ * Which of the nine undecided rules each activity actually waits on.
+ *
+ * This mapping is the whole correction. One `is_financially_enabled` switch
+ * held the registration fee hostage to the year-end profit formula: a counter
+ * could not take UGX 5,000 — a figure the client's own documents confirm —
+ * because nobody had decided how December's surplus is divided. Those are
+ * different promises, made to different people, at different times.
+ *
+ * It mirrors, column for column, the generated readiness columns on
+ * `membership_policy_versions`, and a database test asserts the two agree on
+ * the same row. The database is the authority; this exists so an interface
+ * can say *which* decision is holding *what* up without a second round trip.
+ */
+export const MEMBERSHIP_ACTIVITY_RULES: Readonly<
+  Record<MembershipActivity, readonly UndecidedPolicyRule[]>
+> = {
+  // Nothing. The fee is confirmed, and enrolment waits on no open question.
+  enrolment: [],
+  // The qualification clock is what savings are for here, and a module that
+  // takes money without knowing whether it may be given back is worse than
+  // one that is closed.
+  savings: ['qualifyingMonthsConsecutive', 'savingsWithdrawalWithActiveLoan'],
+  // Everything savings needs, because the loan is secured against them, plus
+  // the price, the method and the size of the loan.
+  lending: [
+    'qualifyingMonthsConsecutive',
+    'savingsWithdrawalWithActiveLoan',
+    'interestBasis',
+    'interestMethod',
+    'savingsToLoanMultiplierBps',
+  ],
+  // The three amounts are confirmed; what is missing is the ceiling. 5% of an
+  // uncapped bill is an uncapped liability.
+  benefits: [
+    'medicalBenefitAnnualCap',
+    'medicalBenefitClaimsPerYear',
+    'benefitWaitingPeriodDays',
+  ],
+  // One decision, and it is the whole activity.
+  profit_sharing: ['profitDistributionBasis'],
+} as const;
+
+/** Which decisions this activity is still waiting on, in screen order. */
+export function activityOutstandingDecisions(
+  policy: PolicyDecisionState,
+  activity: MembershipActivity,
+): readonly UndecidedPolicyRule[] {
+  const needed = MEMBERSHIP_ACTIVITY_RULES[activity];
+  return UNDECIDED_POLICY_RULES.filter(
+    (rule) => needed.includes(rule) && policy[rule] === null,
+  );
+}
+
+/**
+ * Is this activity open on this version?
+ *
+ * The version must be in force and approved, and the decisions *this*
+ * activity needs must have been made. It deliberately says nothing about the
+ * effective date: whether a version has started is a question about today,
+ * and the authoritative answer is `membership_policy_allows()` in the
+ * database, which asks both halves. This is the half an interface can answer
+ * about a row it is already holding.
+ */
+export function isActivityReady(
+  policy: PolicyDecisionState,
+  activity: MembershipActivity,
+): boolean {
+  return (
+    policy.status === 'active' &&
+    policy.approvedAt !== null &&
+    activityOutstandingDecisions(policy, activity).length === 0
+  );
+}
+
+/** Why this activity is not open, as a sentence. `null` when it is. */
+export function activityBlockedReason(
+  policy: PolicyDecisionState,
+  activity: MembershipActivity,
+): string | null {
+  if (policy.status === 'draft') {
+    return 'The version is a draft.';
+  }
+
+  if (policy.status === 'superseded') {
+    return 'The version has been superseded.';
+  }
+
+  if (policy.approvedAt === null) {
+    return 'The version has not been approved.';
+  }
+
+  const outstanding = activityOutstandingDecisions(policy, activity);
+
+  if (outstanding.length === 0) {
+    return null;
+  }
+
+  const count = outstanding.length;
+  return `${String(count)} ${count === 1 ? 'decision' : 'decisions'} outstanding.`;
+}
+
 /**
  * May financial operations run against this policy version?
  *
@@ -370,6 +513,26 @@ export function isPolicyFinanciallyEnabled(policy: PolicyDecisionState): boolean
 }
 
 /**
+ * Every activity, with whether it is open and why not.
+ *
+ * One call, so a screen cannot show four of the five and quietly omit the
+ * one it forgot to ask about.
+ */
+export function membershipActivityReadiness(policy: PolicyDecisionState): readonly {
+  readonly activity: MembershipActivity;
+  readonly ready: boolean;
+  readonly blockedReason: string | null;
+  readonly outstanding: readonly UndecidedPolicyRule[];
+}[] {
+  return MEMBERSHIP_ACTIVITIES.map((activity) => ({
+    activity,
+    ready: isActivityReady(policy, activity),
+    blockedReason: activityBlockedReason(policy, activity),
+    outstanding: activityOutstandingDecisions(policy, activity),
+  }));
+}
+
+/**
  * Why a policy cannot yet carry financial operations, as a sentence.
  *
  * Returns `null` when it can. Written here rather than in a component so the
@@ -377,8 +540,13 @@ export function isPolicyFinanciallyEnabled(policy: PolicyDecisionState): boolean
  * posting all give the same reason.
  */
 export function policyBlockedReason(policy: PolicyDecisionState): string | null {
+  // These three say "every activity", and they mean it: a version that is
+  // not active and approved opens none of the five. The wording avoids "no
+  // membership transaction can run against this version", which was the
+  // sentence the single gate put on the screen for an *approved, in-force*
+  // version with an open benefit rule — where it was simply false.
   if (policy.status === 'draft') {
-    return 'This policy version is a draft. No membership transaction can run against it.';
+    return 'This policy version is a draft. It opens no membership activity until it is approved and in force.';
   }
 
   if (policy.status === 'superseded') {
@@ -386,14 +554,18 @@ export function policyBlockedReason(policy: PolicyDecisionState): string | null 
   }
 
   if (policy.approvedAt === null) {
-    return 'This policy version has not been approved. No membership transaction can run against it.';
+    return 'This policy version has not been approved. It opens no membership activity until it is.';
   }
 
   const outstanding = outstandingPolicyDecisions(policy);
 
   if (outstanding.length > 0) {
     const count = outstanding.length;
-    return `${String(count)} membership ${count === 1 ? 'rule has' : 'rules have'} not been decided. No membership transaction can run against this version until they are.`;
+    // Deliberately no longer "no membership transaction can run". Enrolment
+    // waits on none of the nine, so saying so would be false the moment a
+    // version is approved and in force — and a banner that overstates its
+    // case is the kind a reader learns to scroll past.
+    return `${String(count)} membership ${count === 1 ? 'rule has' : 'rules have'} not been decided. Only the activities that depend on them are held up.`;
   }
 
   return null;

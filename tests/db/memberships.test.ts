@@ -78,11 +78,18 @@ async function makeClient(name: string, phone: string): Promise<string> {
  * membership cannot be enrolled against it as shipped. Activating it here is
  * what lets the lifecycle be exercised at all, and it is reverted in
  * `afterAll` so the suite leaves the database as it found it.
+ *
+ * The effective date is moved back with it. The seed carries 1 November
+ * 2026, which is when the programme begins; "in force" means active,
+ * approved **and** started, so a version that has not started yet enrols
+ * nobody. Backdating it here is the fixture saying "the programme is
+ * running", which is the premise every test below is written against.
  */
 async function activateSeededPolicy(): Promise<string> {
   const row = await queryOne<{ id: string }>(
     `update public.membership_policy_versions
-        set approved_at = pg_catalog.now(), status = 'active'
+        set approved_at = pg_catalog.now(), status = 'active',
+            effective_from = public.business_date() - 1
       where version = '1.0'
       returning id`,
   );
@@ -106,7 +113,7 @@ async function restoreSeededPolicy(): Promise<void> {
     await query(
       `update public.membership_policy_versions
           set status = 'draft', approved_at = null, approved_by = null,
-              approved_by_label = null
+              approved_by_label = null, effective_from = '2026-11-01'
         where version = '1.0'`,
     );
   } finally {
@@ -611,20 +618,24 @@ describeDb('the financial gate', () => {
             qualifying_months_consecutive, savings_withdrawal_with_active_loan,
             profit_distribution_basis, medical_benefit_annual_cap,
             medical_benefit_claims_per_year, benefit_waiting_period_days)
-         values ('9.1', 'Fully decided', current_date + 10, 'superseded',
+         values ('9.1', 'Fully decided', current_date + 10, 'draft',
                  pg_catalog.now(), 'test',
                  5000, 50000, 6, 500, 5, 2, 3, 500, 1, 100000, 200000,
                  'per_month', 'flat', 20000, true, 'blocked',
                  'pro_rata_savings', 500000, 2, 90)`,
       );
 
-      // Superseded, so still not enabled — being complete is necessary and
-      // not sufficient.
-      const superseded = await client.query<{ enabled: boolean }>(
+      // Not in force, so still not enabled — being complete is necessary and
+      // not sufficient. It is seeded as a draft rather than as a superseded
+      // version because a policy version's status moves one way only and a
+      // superseded one is never brought back; `membership-hardening.test.ts`
+      // asserts that rule, in both directions and for the privileged path
+      // too. For this gate the two are the same case: not active.
+      const notInForce = await client.query<{ enabled: boolean }>(
         `select is_financially_enabled as enabled
            from public.membership_policy_versions where version = '9.1'`,
       );
-      expect(superseded.rows[0]?.enabled).toBe(false);
+      expect(notInForce.rows[0]?.enabled).toBe(false);
 
       // Retire the seeded one and put this in force.
       await client.query(

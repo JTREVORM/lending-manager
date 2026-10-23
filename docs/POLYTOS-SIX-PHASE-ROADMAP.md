@@ -29,14 +29,23 @@ added and no journal source type is changed.
   withdraws and rejoins keeps both rows.
 - The policy is versioned and frozen once referenced. Changing the programme
   publishes a new version; it cannot vary an existing member's terms.
-- `is_financially_enabled` is a **generated** column. It cannot be true while
-  any of nine undecided rules is outstanding, and no write can make it so.
+- Readiness is **five generated columns, one per activity**, not one switch.
+  Enrolment and the registration fee wait on none of the nine undecided
+  rules; savings waits on two of them; benefits and profit sharing on their
+  own. None can be ticked, and `membership_policy_allows()` adds the
+  effective date on top.
+- The branch and the policy version are **derived on every enrolment**, and a
+  supplied value that disagrees is refused — for `service_role` too.
+- A policy version's status moves one way, and every contractual column
+  freezes on approval. Moving a member onto new terms is a recorded
+  re-acceptance, never an UPDATE.
 
-**Proof.** 2,280 unit and integration tests, 1,375 database tests across 57
+**Proof.** 2,294 unit and integration tests, 1,412 database tests across 58
 files, 587 browser tests across four viewports, and a dedicated upgrade
 check that applies the Phase 1 migrations to a seeded book of 14 loans, 159
-payments and 172 journal entries and compares 26 financial figures before and
-after. See `docs/POLYTOS-PHASE-1-TEST-REPORT.md`.
+payments and 172 journal entries and compares 28 financial figures — every
+collection date among them — before and after. See
+`docs/POLYTOS-PHASE-1-TEST-REPORT.md`.
 
 ---
 

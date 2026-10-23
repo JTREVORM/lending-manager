@@ -163,10 +163,25 @@ create policy memberships_insert_with_permission
       or (select public.current_user_branch_id()) is null
       or branch_id = (select public.current_user_branch_id())
     )
+    -- The terms. WITH CHECK is evaluated on the finished row, after the
+    -- BEFORE INSERT trigger has derived both — so this is a second,
+    -- independent statement of the same rule rather than a duplicate of it,
+    -- and it is what still holds if the trigger is ever disabled. The branch
+    -- clause above is not that second statement: every profile in this
+    -- system is unassigned, which makes it vacuously true, and that is
+    -- precisely how a membership could be opened into another branch.
+    and (
+      (select c.branch_id from public.clients c where c.id = memberships.client_id)
+        is null
+      or branch_id = (
+           select c.branch_id from public.clients c where c.id = memberships.client_id
+         )
+    )
+    and policy_version_id = (select public.active_membership_policy_id())
   );
 
 comment on policy memberships_insert_with_permission on public.memberships is
-  'Only membership:create may enrol a member, the membership arrives pending, and a branch-scoped profile may enrol only into their own branch.';
+  'Only membership:create may enrol a member; the membership arrives pending, at the client''s own branch, under the policy version in force on the business date.';
 
 create policy memberships_update_with_permission
   on public.memberships
@@ -302,7 +317,18 @@ select
   m.ended_on,
   m.policy_version_id,
   v.version               as policy_version,
-  v.is_financially_enabled as policy_is_financially_enabled,
+  -- The gates, one per activity, as the version governing this member
+  -- computes them. Not `is_financially_enabled`: that is one boolean about
+  -- five different activities, and a member screen that showed it would say
+  -- "no" about a version under which enrolment and savings are both open.
+  -- "Has it started" is deliberately absent here too — the register is a
+  -- list of members, not the gate a posting consults, and that gate is
+  -- `membership_policy_allows()`.
+  v.is_enrolment_enabled   as policy_enrolment_enabled,
+  v.is_savings_enabled     as policy_savings_enabled,
+  v.is_member_lending_enabled as policy_member_lending_enabled,
+  v.is_benefits_enabled    as policy_benefits_enabled,
+  v.is_profit_sharing_enabled as policy_profit_sharing_enabled,
   m.notes,
   m.created_at,
   m.updated_at

@@ -97,6 +97,14 @@ const DRAFT_POLICY: MembershipPolicy = {
   approvedAt: null,
   approvedByLabel: null,
   approvalReference: null,
+  // A draft opens nothing at all, which is what the five say here. They are
+  // the database's own generated columns, so a fixture states them rather
+  // than deriving them — deriving them would test the fixture.
+  isEnrolmentEnabled: false,
+  isSavingsEnabled: false,
+  isMemberLendingEnabled: false,
+  isBenefitsEnabled: false,
+  isProfitSharingEnabled: false,
   isFinanciallyEnabled: false,
   notes: null,
 };
@@ -116,7 +124,37 @@ const DECIDED_POLICY: MembershipPolicy = {
   approvedAt: '2026-10-01T09:00:00.000Z',
   approvedByLabel: 'Trevor Mwesigwa',
   approvalReference: 'Board minute 2026/04',
+  isEnrolmentEnabled: true,
+  isSavingsEnabled: true,
+  isMemberLendingEnabled: true,
+  isBenefitsEnabled: true,
+  isProfitSharingEnabled: true,
   isFinanciallyEnabled: true,
+};
+
+/**
+ * Approved and in force, with only the savings and lending rules settled.
+ *
+ * The case the single switch could not express: a counter may take a
+ * registration fee and monthly savings while nobody has decided the medical
+ * cap or the profit formula.
+ */
+const PARTLY_DECIDED_POLICY: MembershipPolicy = {
+  ...DRAFT_POLICY,
+  status: 'active',
+  interestBasis: 'per_month',
+  interestMethod: 'flat',
+  savingsToLoanMultiplierBps: toBps(20_000),
+  qualifyingMonthsConsecutive: true,
+  savingsWithdrawalWithActiveLoan: 'blocked',
+  approvedAt: '2026-10-01T09:00:00.000Z',
+  approvedByLabel: 'Trevor Mwesigwa',
+  isEnrolmentEnabled: true,
+  isSavingsEnabled: true,
+  isMemberLendingEnabled: true,
+  isBenefitsEnabled: false,
+  isProfitSharingEnabled: false,
+  isFinanciallyEnabled: false,
 };
 
 const HISTORY: readonly MembershipStatusEvent[] = [
@@ -284,6 +322,63 @@ describe('the policy panel', () => {
     expect(
       screen.queryByRole('table', { name: /decisions still outstanding/i }),
     ).toBeNull();
+  });
+
+  it('answers the five activities separately, not with one verdict', () => {
+    render(<MembershipPolicyPanel policy={PARTLY_DECIDED_POLICY} />);
+
+    const table = screen.getByRole('table', {
+      name: /whether this version opens them/i,
+    });
+
+    // Enrolment, savings and lending are open; benefits and profit sharing
+    // are not. One switch could express none of this.
+    const rows = within(table).getAllByRole('row').slice(1);
+    const verdicts = rows.map((row) => ({
+      activity: within(row).getAllByRole('cell')[0]?.textContent ?? '',
+      open: (within(row).getAllByRole('cell')[1]?.textContent ?? '').trim(),
+    }));
+
+    expect(verdicts).toHaveLength(5);
+    expect(verdicts.find((v) => v.activity.includes('Enrolment'))?.open).toBe('Open');
+    expect(verdicts.find((v) => v.activity.includes('Member savings'))?.open).toBe(
+      'Open',
+    );
+    expect(verdicts.find((v) => v.activity.includes('Member loans'))?.open).toBe('Open');
+    expect(verdicts.find((v) => v.activity.includes('Benefit payments'))?.open).toBe(
+      'Closed',
+    );
+    expect(verdicts.find((v) => v.activity.includes('profit sharing'))?.open).toBe(
+      'Closed',
+    );
+  });
+
+  it('names the decision holding each closed activity up, and nothing else', () => {
+    render(<MembershipPolicyPanel policy={PARTLY_DECIDED_POLICY} />);
+
+    const table = screen.getByRole('table', {
+      name: /whether this version opens them/i,
+    });
+    const benefits = within(table)
+      .getAllByRole('row')
+      .find((row) => row.textContent?.includes('Benefit payments'));
+
+    expect(benefits).toBeDefined();
+    // Its own three, and not the profit formula, which holds up a different
+    // activity entirely.
+    expect(benefits).toHaveTextContent(/medical benefit pays one member in a year/i);
+    expect(benefits).toHaveTextContent(/medical claims/i);
+    expect(benefits).toHaveTextContent(/benefit may first be claimed/i);
+    expect(benefits).not.toHaveTextContent(/profit share is calculated/i);
+  });
+
+  it('never tells a reader that an open activity cannot run', () => {
+    render(<MembershipPolicyPanel policy={PARTLY_DECIDED_POLICY} />);
+
+    // The old banner said "No membership transaction can run against this
+    // version", which was false the moment a version was approved and in
+    // force: the registration fee waits on none of the nine.
+    expect(screen.queryByText(/no membership transaction can run/i)).toBeNull();
   });
 
   it('offers no control that would publish or approve a version', () => {

@@ -147,6 +147,36 @@ test.describe('the membership policy screen', () => {
     ).toBeVisible();
   });
 
+  test('answers the five activities separately, in a real browser', async ({ page }) => {
+    await page.goto('/membership/policies');
+
+    const readiness = page.getByRole('table', {
+      name: /whether this version opens them/i,
+    });
+    await expect(readiness).toBeVisible();
+
+    // The seeded version is an unapproved draft that does not begin until 1
+    // November, so every one of the five is shut — and the table says so five
+    // times rather than once, which is the whole point of splitting it.
+    await expect(readiness.getByText('Closed')).toHaveCount(5);
+    await expect(readiness.getByText('Open', { exact: true })).toHaveCount(0);
+
+    // Each activity named, so a reader can tell which is which.
+    for (const activity of [
+      'Enrolment and registration fees',
+      'Member savings',
+      'Member loans',
+      'Benefit payments',
+      'Year-end profit sharing',
+    ]) {
+      await expect(readiness.getByText(activity, { exact: true })).toBeVisible();
+    }
+
+    // And the sentence that was false: one switch claiming nothing at all can
+    // run. Enrolment waits on none of the nine.
+    await expect(page.getByText(/no membership transaction can run/i)).toHaveCount(0);
+  });
+
   test('keeps every rendered amount whole, with its currency on the same line', async ({
     page,
   }) => {

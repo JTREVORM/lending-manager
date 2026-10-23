@@ -43,8 +43,8 @@ statements. Each is a later phase; none has a configuration value yet.
 
 It means the figure came from the client's document rather than from this
 system. It does **not** mean the figure is approved for operation: version 1.0
-is a **draft**, it is unapproved, and `is_financially_enabled` is `false`.
-See §4.
+is a **draft**, it is unapproved and does not take effect until 1 November
+2026, so every one of the five activity gates is shut. See §4.
 
 ---
 
@@ -112,37 +112,85 @@ shape guessed for them:
 
 ---
 
-## 4. The gate: nothing financial runs on an undecided policy
+## 4. The gates: five of them, one per activity
 
-`public.membership_policy_versions.is_financially_enabled` is a **stored
-generated column**:
+### What was wrong with one switch
+
+The first version of this foundation carried a single stored generated
+column, `is_financially_enabled`, true only when a version was active,
+approved and every one of the nine questions answered. Polytos Phases 2–5
+were to read it before posting anything.
+
+It was the wrong shape, and wrong in the direction that costs money. It held
+the **UGX 5,000 registration fee** — a figure the client's own documents
+confirm, which waits on no open question at all — hostage to **how December's
+surplus is divided**. A counter could not take a fee, and savings could not be
+collected, because nobody had settled the year-end profit formula. Those are
+different promises, made to different people, at different times, and they
+fail independently.
+
+### The five gates
+
+Each activity carries its own stored generated column, and each names only
+the decisions that activity actually waits on:
+
+| Gate | Column | Waits on |
+| --- | --- | --- |
+| Enrolment and registration fees | `is_enrolment_enabled` | **Nothing.** Active and approved is the whole condition |
+| Member savings | `is_savings_enabled` | 4 (consecutive months), 5 (withdrawal against a live loan) |
+| Member loans | `is_member_lending_enabled` | the savings rules, because the loan is secured against them, plus 1 (basis), 2 (method), 3 (multiplier) |
+| Benefit payments | `is_benefits_enabled` | 7 (annual cap), 8 (claims a year), 9 (waiting period) |
+| Year-end profit sharing | `is_profit_sharing_enabled` | 6 (distribution basis) |
+
+Every one of the nine questions holds something up, and nothing is held up by
+a question that is not its own. A unit test asserts exactly that: the union of
+the five rule sets is the nine, with nothing left over on either side.
+
+`is_financially_enabled` is **kept**, and is now what it should always have
+been — the overall completeness indicator, the answer to "is this version
+finished", which the configuration screen counts outstanding decisions from.
+It is not the gate anything posts behind.
+
+### The gate a posting actually calls
 
 ```sql
-is_financially_enabled boolean generated always as (
-  status = 'active'
-  and approved_at is not null
-  and interest_basis is not null
-  and ... every other undecided column ...
-) stored
+public.membership_policy_allows(p_version_id uuid, p_activity text) -> boolean
 ```
 
-Three properties follow, and they are the reason it is generated rather than
-set:
+Two questions in one answer, and both must be yes:
 
-1. **It cannot be ticked.** There is no write path that makes it true while a
-   column is NULL. `tests/db/memberships.test.ts` attempts the write and
-   asserts the refusal.
-2. **It cannot drift from the TypeScript gate.**
-   `isPolicyFinanciallyEnabled()` in `lib/domain/membership.ts` computes the
-   same answer for the interface, and a database test asserts the two agree
-   on the same row.
-3. **It says why.** `policyBlockedReason()` turns the same state into a
-   sentence, so the register and the configuration screen explain the hold
-   rather than merely enforcing it.
+1. the decisions **that activity** needs have been made — the generated
+   column, which no write can forge; and
+2. the version is **in force on the business date**: active, approved, and
+   `effective_from <= business_date()`.
 
-Version 1.0 as shipped is `draft`, unapproved, with all nine questions open.
-`is_financially_enabled` is therefore `false`, and Polytos Phases 2–5 must
-read it before posting anything.
+The second half cannot live in a generated column, because the business date
+is not immutable. That is the whole reason the function exists beside the
+columns rather than instead of them.
+
+An activity nobody has defined **raises** rather than returning false.
+Failing shut is the safe direction, but a typo that silently disables a
+module looks exactly like a policy that has not been decided, and the two
+need very different responses.
+
+### The properties that made the original generated column right, kept
+
+1. **It cannot be ticked.** There is no write path that makes any of the six
+   true while a column it depends on is NULL.
+   `tests/db/membership-hardening.test.ts` attempts the write on every one of
+   them and asserts the refusal.
+2. **It cannot drift from the TypeScript gate.** `isActivityReady()` in
+   `lib/domain/membership.ts` computes the same five answers for the
+   interface, and a database test reads every in-force version three ways —
+   the generated column, `membership_policy_allows()`, and the TypeScript
+   function — and asserts all three agree.
+3. **It says why.** `activityBlockedReason()` and
+   `activityOutstandingDecisions()` turn the same state into a sentence and a
+   list, so the configuration screen names the decision holding each activity
+   up rather than merely refusing.
+
+Version 1.0 as shipped is `draft`, unapproved, effective 1 November 2026, with
+all nine questions open. Every one of the five gates is therefore shut.
 
 ---
 

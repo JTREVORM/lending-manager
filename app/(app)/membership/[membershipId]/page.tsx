@@ -19,6 +19,7 @@ import {
   listMembershipHistory,
 } from '@/lib/data/membership';
 import {
+  MEMBERSHIP_ACTIVITY_LABELS,
   MEMBERSHIP_STATUS_DESCRIPTIONS,
   membershipTransitionsFrom,
   MEMBERSHIP_STATUS_LABELS,
@@ -78,6 +79,22 @@ export default async function MembershipDetailPage({
 
   const canSeeClient = contextCan(context, 'clients:view');
   const next = membershipTransitionsFrom(membership.status);
+
+  // What the version *this member is held to* opens — not the programme in
+  // general. A member on a superseded version is authorised for nothing, and
+  // saying so here is more honest than a single "financially enabled" flag
+  // that collapses five different activities into one word.
+  const authorised = (
+    [
+      [membership.policyEnrolmentEnabled, MEMBERSHIP_ACTIVITY_LABELS.enrolment],
+      [membership.policySavingsEnabled, MEMBERSHIP_ACTIVITY_LABELS.savings],
+      [membership.policyMemberLendingEnabled, MEMBERSHIP_ACTIVITY_LABELS.lending],
+      [membership.policyBenefitsEnabled, MEMBERSHIP_ACTIVITY_LABELS.benefits],
+      [membership.policyProfitSharingEnabled, MEMBERSHIP_ACTIVITY_LABELS.profit_sharing],
+    ] as const
+  )
+    .filter(([open]) => open)
+    .map(([, label]) => label);
 
   return (
     <div className="min-w-0 space-y-6">
@@ -158,6 +175,15 @@ export default async function MembershipDetailPage({
               <DateValue value={membership.endedOn} />
             </Detail>
             <Detail label="Governed by">Policy version {membership.policyVersion}</Detail>
+            <Detail label="Those terms authorise">
+              {authorised.length === 0 ? (
+                <span className="text-warning font-medium">
+                  Nothing yet — the version is not approved and in force
+                </span>
+              ) : (
+                authorised.map((label) => label).join(', ')
+              )}
+            </Detail>
 
             {membership.notes === null ? null : (
               <div className="min-w-0 sm:col-span-2">

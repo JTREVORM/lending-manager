@@ -20,8 +20,8 @@ project was contacted at any point, and no production database was touched.
 | Production build | `npm run build` | **Passed**, 3 new routes emitted |
 | Unit tests | `npm run test:run` (unit project) | **Passed** — see §3 |
 | Integration tests | `npm run test:run` (integration project) | **Passed** — see §3 |
-| PostgreSQL migration tests | `npm run test:db` | **Passed** — 57 files, 1,375 tests |
-| Upgrade-path migration test | `node scripts/verify-membership-upgrade.mjs` | **Passed** — 26 financial figures identical |
+| PostgreSQL migration tests | `npm run test:db` | **Passed** — 58 files, 1,417 tests |
+| Upgrade-path migration test | `node scripts/verify-membership-upgrade.mjs` | **Passed** — 28 financial figures identical |
 | RLS / security tests | `npm run test:db` (`rls-*`, `security`, `privilege-escalation`) | **Passed** — see §5 |
 | Playwright browser tests | `npx playwright test` | **Passed** — see §7 |
 | Financial regression tests | `node scripts/verify-membership-upgrade.mjs` + `npm run test:db` | **Passed** — no figure changed |
@@ -33,9 +33,9 @@ a bigger number:
 
 | Suite | Before this phase | After | Added |
 | --- | --- | --- | --- |
-| Unit + integration | 71 files, 2,220 tests | 71 files, 2,280 tests | 60 |
-| Database | 55 files, 1,328 tests | 57 files, 1,375 tests | 47 |
-| Browser | 525 tests | 587 tests | 62 |
+| Unit + integration | 71 files, 2,220 tests | 71 files, 2,294 tests | 74 |
+| Database | 55 files, 1,328 tests | 58 files, 1,417 tests | 89 |
+| Browser | 525 tests | 589 tests | 64 |
 
 **No existing test was deleted, skipped, weakened or had its expected value
 changed to make a new one pass.** The nine existing assertions this work
@@ -183,7 +183,7 @@ $ node scripts/verify-membership-upgrade.mjs
   ... (all 26)
 
 Upgrade verified: 95 existing migrations, a seeded book, then 7 new
-migrations. Every one of 26 financial figures is identical, and the four
+migrations. Every one of 28 financial figures is identical, and the four
 membership tables exist and are empty.
 ```
 
@@ -258,7 +258,7 @@ so nothing the application does can account for a pass.
 | 6. A suspended account cannot bypass access | Passed — a still-valid token on a suspended profile reads nothing, because `current_profile_id()` resolves only active profiles | `gives a suspended account nothing, although its token is still valid` |
 | 7. Forged or unverified claims are rejected | Passed — inherited: PostgREST verifies the signature before `auth.uid()` has a value, and `tests/db/rls-identity.test.ts` asserts the existing behaviour. The membership policies add no path around it |
 | 8. Unauthorized direct API calls expose nothing | Passed — every assertion in this file *is* a direct call; the browser suite additionally drives `/membership` as a borrower and as an anonymous visitor |
-| 9. New policies do not weaken Clients, Loans, Finance or Audit | Passed — asserted explicitly, and the full 57-file database suite (1,375 tests) is green, including every existing `rls-*` file |
+| 9. New policies do not weaken Clients, Loans, Finance or Audit | Passed — asserted explicitly, and the full 58-file database suite (1,417 tests) is green, including every existing `rls-*` file |
 | 10. Privileged functions have explicit authorization and restricted grants | Passed — all nine new SECURITY DEFINER functions are triggers, each with `set search_path = ''` and EXECUTE revoked from `public`, `anon` and `authenticated`; `tests/db/security.test.ts` asserts the whole inventory and would fail on a tenth |
 
 Both directions are tested throughout: a denial is asserted as a denial
@@ -309,11 +309,11 @@ $ npx playwright test
 
 Result: see §7.1 for the final figures.
 
-Sixty-two of the 587 are new, and they are not all in one file:
+Sixty-four of the 589 are new, and they are not all in one file:
 
-| Where | Added | How it comes to 62 |
+| Where | Added | How it comes to 64 |
 | --- | --- | --- |
-| `tests/e2e/specs/membership.spec.ts` | 50 | 25 cases, run on both the desktop (1440×900) and mobile (390×844) projects, with four viewports driven explicitly inside the spec |
+| `tests/e2e/specs/membership.spec.ts` | 52 | 26 cases, run on both the desktop (1440×900) and mobile (390×844) projects, with four viewports driven explicitly inside the spec |
 | `tests/e2e/specs/auth.spec.ts` | 6 | `/membership` and `/membership/policies` added to the borrower confinement list, `/membership` to the anonymous list — 3 paths × 2 projects |
 | `tests/e2e/specs/accessibility.spec.ts` | 4 | `/membership` and `/membership/policies` added to the axe sweep — 2 screens × 2 projects |
 | `tests/e2e/specs/performance.spec.ts` | 2 | `/membership` added to the budgeted pages — 1 page × 2 projects |
@@ -394,15 +394,18 @@ invalid, so it was re-run rather than reinterpreted.
 | After that fix | 583 | 556 | 27 | 0 | Green, before the axe sweep was extended |
 | Next full run | 583 | — | — | 7 | **Invalid.** The manifest was clobbered mid-suite (above) |
 | Full run | 587 | 560 | 27 | 0 | Green, in 13.8m — on the code as first committed |
-| **Authoritative run** | **587** | **560** | **27** | **0** | Green, in 13.4m — after the undecided-count correction below, on a stack torn down and reseeded first |
+| Full run | 587 | 560 | 27 | 0 | Green, in 13.4m — after the undecided-count correction below |
+| Hardening run | 589 | 558 | 27 | 2 | The new readiness assertion's locator caught the column header; see §11.5a |
+| **Authoritative run** | **589** | **562** | **27** | **0** | Green, in 12.4m — the final code, on a stack torn down and reseeded first |
 
 The counts grow between runs because the suite itself grew: 575 → 583 as the
 confinement and budget lists were extended, 583 → 587 as the two membership
-screens joined the accessibility sweep. The totals are listed rather than
+screens joined the accessibility sweep, and 587 → 589 as the readiness table
+gained an assertion of its own. The totals are listed rather than
 averaged so that a reviewer can see that the number went up because tests
 were added and never because a test stopped being counted.
 
-### Why there are two green 587-test runs
+### Why there is more than one green run
 
 The screenshots caught a defect in this phase's own work after the first of
 them. The policy version seeded by migration `20261019000200` carried a
@@ -540,27 +543,28 @@ every fix above.
 | `npm run lint` | **Passed** |
 | `npm run format:check` | **Passed** |
 | `npm run build` | **Passed** |
-| `npm run test:run` | **71 files, 2,280 passed, 0 failed, 0 skipped** |
-| `npm run test:db` | **57 files, 1,375 passed, 0 failed, 0 skipped** |
+| `npm run test:run` | **71 files, 2,294 passed, 0 failed, 0 skipped** |
+| `npm run test:db` | **58 files, 1,417 passed, 0 failed, 0 skipped** |
 | `npm run audit:money` | **Passed**, 60 files, no hazard |
-| `node scripts/verify-membership-upgrade.mjs` | **Passed**, 26/26 figures identical |
-| `npx playwright test` | **587 tests, 560 passed, 27 skipped, 0 failed** (13.4m) |
+| `node scripts/verify-membership-upgrade.mjs` | **Passed**, 28/28 figures identical |
+| `npx playwright test` | **589 tests, 562 passed, 27 skipped, 0 failed** |
 
 ### Browser suite, authoritative run
 
 ```
 $ bash tests/e2e/harness/stack.sh down && bash tests/e2e/harness/stack.sh up
 $ npx playwright test
-  Running 587 tests using 1 worker
+  Running 589 tests using 1 worker
   ...
   27 skipped
-  560 passed (13.4m)
+  562 passed (12.4m)
 ```
 
-**587 tests — 560 passed, 27 skipped, 0 failed, in 13.4 minutes.** Run
-against the final code on a stack torn down and reseeded first, with nothing
-else touching the database. The four earlier runs, and why each does not
-stand in its place, are in §7.1.
+**589 tests — 562 passed, 27 skipped, 0 failed, in 12.4 minutes.** Run
+against the final code
+on a stack torn down and reseeded first, with nothing else touching the
+database. The earlier runs, and why none of them stands in its place, are in
+§7.1.
 
 The 27 skipped are the pre-existing `*.write.spec.ts` exclusions on the
 mobile project, which `playwright.config.ts` documents and which run on
@@ -614,7 +618,199 @@ changed that database; any further suite run needs
 `.e2e/` is gitignored, as it is for every previous phase of this codebase, so
 the images are not in the commit. They are attached to the delivery instead.
 
-### Nothing was executed against production
+## 11. The hardening review
+
+Three defects were raised against the delivered Phase 1 and fixed on the same
+branch. Each was **reproduced by a failing test before anything was changed**,
+in `tests/db/membership-hardening.test.ts`: 35 adversarial cases written
+against the delivered code, of which **28 failed and 7 passed**. The file now
+holds **42** cases — the original 35, two added once the fixes revealed
+rules worth asserting in both directions, and five on who may write a policy
+version at all — and every one passes.
+
+Every case runs as a real database role — `asUser` sets
+`request.jwt.claim.sub` and `set local role authenticated`, which is what
+PostgREST does for a request carrying a token — and each rule that is meant
+to bind every caller is attacked a second time as the table owner, because a
+rule that only stops a session is one a leaked service key walks through.
+
+### 11.1 Enrolment integrity
+
+**The defect.** `memberships_stamp_provenance()` filled `branch_id` and
+`policy_version_id` in *when they arrived NULL*, which is a default rather
+than a rule. A supplied value went through untouched, so a caller holding
+`membership:create` could enrol a member into another branch, or under a
+draft nobody had approved, a superseded version, or one not yet in effect.
+
+**Why RLS did not stop it.** The insert policy's branch clause reads *"a
+branch-assigned profile may enrol only into their own branch"* — and every
+profile in this system is unassigned, so the clause was vacuously true.
+
+**The fix.** Both are derived on every insert and a disagreeing value is
+*refused* rather than silently corrected, above the trusted-path exemption so
+the rule binds `service_role` too. The insert policy now states the same two
+rules independently in `WITH CHECK`, which is evaluated on the finished row
+after the BEFORE INSERT trigger — so the refusal does not depend on a trigger
+somebody could disable.
+
+| Reproduced before the fix | Now |
+| --- | --- |
+| A manager enrols into a branch that is not the client's | Refused |
+| The table owner does the same | Refused |
+| An existing membership is moved to another branch | Refused |
+| Enrolment under an explicit **draft** version | Refused |
+| Enrolment under an explicit **superseded** version | Refused |
+| Enrolment under a version that is active but **has not started** | Refused — no version is in force |
+| The table owner enrols under the wrong version | Refused |
+
+### 11.2 Policy immutability
+
+**The defect.** The freeze covered the twelve confirmed figures and left the
+**nine undecided rules writable** on a version members were already enrolled
+under. That is the more dangerous form of a retroactive variation: a member
+who enrolled while a rule was open did not agree to the answer written into
+it afterwards, and filling in a blank leaves no trace of having changed a
+value. Status was unconstrained as well, so an active version could be put
+back to draft, or a superseded one brought back into force.
+
+**The fix.** Every contractual column — the twelve, the nine, the version
+string, the effective date and the title a printed form carries — is frozen
+once the version is approved **or** once anybody is enrolled under it. Status
+moves `draft → active → superseded` and nowhere else.
+
+**And the escape hatch, because "never" was also wrong.** A frozen version
+plus an immutable `memberships.policy_version_id` said a member is held to
+their enrolment terms forever, whatever they and the business later agree.
+`public.accept_membership_policy_version()` records the member's acceptance
+of a newly published version and moves them onto it in one transaction, and
+is the only route by which that column changes. Its transaction-local marker
+is a *route, not a permission*: the transition guard independently re-checks
+that the acceptance exists and that the target version is approved and in
+force.
+
+| Reproduced before the fix | Now |
+| --- | --- |
+| Writing a decision into a version members are enrolled under | Refused — all nine, one at a time |
+| Changing the title on such a version | Refused |
+| The table owner doing the same | Refused |
+| Changing a figure after approval, before anybody enrols | Refused |
+| `active → draft` | Refused |
+| `superseded → active`, `superseded → draft` | Refused |
+| A direct UPDATE of a member's policy version | Refused |
+| Re-acceptance onto a draft or a version not in force | Refused |
+| Re-acceptance onto terms that took effect **earlier** | Refused |
+| Re-acceptance without `membership:manage_policies` | Refused |
+| Re-acceptance through the function, onto an approved version in force | **Permitted** — acceptance row written, member moved, `membership.policy_reaccepted` in the audit trail |
+
+The member's terms are read back after every refusal and asserted unchanged,
+figure by figure, so the test proves the state and not only the error.
+
+Editing a draft nobody is enrolled under, and correcting an operational
+`notes` line on a frozen version, both remain permitted and are asserted.
+
+### 11.3 Effective dates and per-activity gates
+
+**The defect, part one.** `active_membership_policy_id()` ignored
+`effective_from`. A version activated in October for a 1 November start
+enrolled members in October, under rules nobody was operating yet.
+
+**The defect, part two.** `is_financially_enabled` was one switch for five
+activities. It held the **UGX 5,000 registration fee** — a figure the
+client's own documents confirm, waiting on no open question — hostage to
+**how December's surplus is divided**.
+
+**The fix.** Five stored generated columns, each naming only the decisions
+its activity waits on, and `public.membership_policy_allows(version,
+activity)` as the gate a posting consults: the generated column **and**
+`effective_from <= business_date()`. The date cannot live in a generated
+column because `business_date()` is not immutable, which is why the function
+exists beside the columns rather than instead of them.
+`is_financially_enabled` is kept as the overall completeness indicator.
+
+| Activity | Waits on |
+| --- | --- |
+| Enrolment and registration fees | **Nothing**; active and approved is the whole condition |
+| Member savings | consecutive-months rule, withdrawal-against-a-live-loan rule |
+| Member loans | the savings rules, plus interest basis, method and multiplier |
+| Benefit payments | medical annual cap, claims a year, waiting period |
+| Year-end profit sharing | the distribution basis |
+
+| Reproduced before the fix | Now |
+| --- | --- |
+| The lookup returns a version that has not started | Returns NULL |
+| Enrolment blocked while only benefit rules are open | Enrolment **opens** |
+| Savings open before the savings rules are decided | Shut until both land, then open |
+| Savings blocked by the profit formula | Not blocked |
+| Lending open before its pricing rules are decided | Shut |
+| Benefits and profit sharing blocking each other | Independent |
+| A complete version that has not started | Every gate shut; the completeness indicator still true |
+| An activity name nobody defined | **Raises**, rather than failing quietly shut |
+| A write to any of the six readiness columns | Refused — they are generated |
+
+**Three implementations, one answer.** A test reads every in-force version
+three ways — the generated column, `membership_policy_allows()`, and
+`isActivityReady()` in `lib/domain/membership.ts` — and asserts all three
+agree, across versions whose decisions differ. A unit test asserts the five
+rule sets **partition** the nine exactly: every question holds something up,
+and nothing is held up by a question that does not exist.
+
+### 11.4 What the interface now says
+
+The register banner used to read *"Enrolment is not open yet — 9 membership
+rules have not been decided. No membership transaction can run against this
+version until they are."* The second sentence became false the moment a
+version is approved and in force, so the banner now asks only whether
+*enrolment* is open and a second line names the activities still held up. The
+policy screen gained a five-row readiness table naming, per activity, the
+decisions holding it up — and an integration test asserts the benefits row
+names its own three rules and **not** the profit formula.
+
+### 11.5 Existing tests: adapted where the rule changed, never weakened
+
+Four fixtures changed, each because the production rule became stricter:
+
+| File | Change | Why it is not a weakening |
+| --- | --- | --- |
+| `tests/db/memberships.test.ts` | `activateSeededPolicy()` also backdates `effective_from` | "In force" now means active, approved **and** started. The fixture says "the programme is running", which is the premise every test in the file was always written against |
+| `tests/db/memberships.test.ts` | The complete-version fixture is seeded `draft` rather than `superseded` before being activated | A version's status moves one way now, so a superseded one is never brought back. For the gate being tested the two are the same case — not active — and the one-way rule itself is asserted in both directions, and for the privileged path, in the hardening file |
+| `tests/db/rls-membership.test.ts` | Same backdating | Same reason |
+| `tests/db/security.test.ts` | Three function names added to two inventories | Extending an inventory is how a new object is declared. `active_membership_policy_id` moved from the invoker list to the definer list, with the reasoning recorded beside it |
+
+No test was deleted, skipped, or had an assertion loosened, and no timeout
+was raised.
+
+### 11.5a One browser failure, which was the test's and not the code's
+
+The new browser assertion on the readiness table failed on both projects:
+`getByText('Open', { exact: true })` expected 0 matches inside the table and
+found 1. The application was right — five Closed badges, no Open ones — and
+the single match was the **column header**, which read "Open".
+
+Fixed in the component rather than in the locator: the header now reads
+"Status", so the word "Open" appears only as a value. A header carrying one
+of the two words its own column uses as values is a cell a reader, and a
+screen reader, has to disambiguate from the rows beneath it. No timeout was
+raised and no assertion was weakened.
+
+### 11.6 Per-column and per-role write authorization
+
+Asked of the database as each role, not inferred from the capability matrix:
+
+| Attempt | Result |
+| --- | --- |
+| A Manager — who holds `membership:view`, `:create`, `:update` and `:manage_status` — edits a policy version's notes, status, or approval | Refused, all three |
+| A Manager publishes a version of their own | Refused |
+| The Owner publishes a version that arrives already `active` and approved | Refused — publishing is a second, deliberate act the update guard attributes and timestamps |
+| The Owner publishes a draft and corrects it | **Permitted** |
+| A Secretary/Treasurer, who holds `membership:view` alone, enrols a member | Refused |
+
+Each asserts `rowCount` as well as the error, because RLS refuses by
+filtering rather than by raising: a test that accepted only an exception
+would pass for the wrong reason on a policy that silently matched no row.
+
+---
+
+## 12. Nothing was executed against production
 
 - No hosted Supabase project was contacted.
 - No migration was applied to any database but the two local throwaway
@@ -622,3 +818,7 @@ the images are not in the commit. They are attached to the delivery instead.
   (`lending_upgrade`).
 - No deployment was triggered. The work is on a branch and nothing is
   merged.
+- The hardening in §11 was verified the same way: the local test database was
+  rebuilt from zero, the upgrade check ran against its own throwaway
+  database, and the browser stack was torn down and reseeded before the
+  suite.

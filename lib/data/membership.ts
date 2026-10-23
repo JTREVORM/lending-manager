@@ -74,7 +74,12 @@ export interface MembershipDetail extends MembershipSummary {
   readonly clientStatus: string;
   readonly branchId: string | null;
   readonly policyVersionId: string;
-  readonly policyIsFinanciallyEnabled: boolean;
+  /** The gates on the version governing this member, one per activity. */
+  readonly policyEnrolmentEnabled: boolean;
+  readonly policySavingsEnabled: boolean;
+  readonly policyMemberLendingEnabled: boolean;
+  readonly policyBenefitsEnabled: boolean;
+  readonly policyProfitSharingEnabled: boolean;
   readonly statusReason: string | null;
   readonly statusChangedAt: string | null;
   readonly notes: string | null;
@@ -140,6 +145,13 @@ export interface MembershipPolicy {
   readonly approvedAt: string | null;
   readonly approvedByLabel: string | null;
   readonly approvalReference: string | null;
+  /** The database's own answer, one per activity. See `MEMBERSHIP_ACTIVITIES`. */
+  readonly isEnrolmentEnabled: boolean;
+  readonly isSavingsEnabled: boolean;
+  readonly isMemberLendingEnabled: boolean;
+  readonly isBenefitsEnabled: boolean;
+  readonly isProfitSharingEnabled: boolean;
+  /** The overall completeness indicator, not the gate anything posts behind. */
   readonly isFinanciallyEnabled: boolean;
   readonly notes: string | null;
 }
@@ -150,7 +162,7 @@ const SUMMARY_COLUMNS =
   'village_area, district, branch_name, status, applied_on, activated_on, ' +
   'ended_on, policy_version';
 
-const DETAIL_COLUMNS = `${SUMMARY_COLUMNS}, client_status, branch_id, policy_version_id, policy_is_financially_enabled, status_reason, status_changed_at, notes, created_at, updated_at`;
+const DETAIL_COLUMNS = `${SUMMARY_COLUMNS}, client_status, branch_id, policy_version_id, policy_enrolment_enabled, policy_savings_enabled, policy_member_lending_enabled, policy_benefits_enabled, policy_profit_sharing_enabled, status_reason, status_changed_at, notes, created_at, updated_at`;
 
 interface SummaryRow {
   id: string;
@@ -269,7 +281,11 @@ type DetailRow = SummaryRow & {
   client_status: string;
   branch_id: string | null;
   policy_version_id: string;
-  policy_is_financially_enabled: boolean;
+  policy_enrolment_enabled: boolean;
+  policy_savings_enabled: boolean;
+  policy_member_lending_enabled: boolean;
+  policy_benefits_enabled: boolean;
+  policy_profit_sharing_enabled: boolean;
   status_reason: string | null;
   status_changed_at: string | null;
   notes: string | null;
@@ -283,7 +299,11 @@ function toDetail(row: DetailRow): MembershipDetail {
     clientStatus: row.client_status,
     branchId: row.branch_id,
     policyVersionId: row.policy_version_id,
-    policyIsFinanciallyEnabled: row.policy_is_financially_enabled === true,
+    policyEnrolmentEnabled: row.policy_enrolment_enabled === true,
+    policySavingsEnabled: row.policy_savings_enabled === true,
+    policyMemberLendingEnabled: row.policy_member_lending_enabled === true,
+    policyBenefitsEnabled: row.policy_benefits_enabled === true,
+    policyProfitSharingEnabled: row.policy_profit_sharing_enabled === true,
     statusReason: row.status_reason,
     statusChangedAt: row.status_changed_at,
     notes: row.notes,
@@ -408,6 +428,8 @@ const POLICY_COLUMNS =
   'profit_distribution_basis, medical_benefit_annual_cap, ' +
   'medical_benefit_claims_per_year, benefit_waiting_period_days, ' +
   'approved_at, approved_by_label, approval_reference, ' +
+  'is_enrolment_enabled, is_savings_enabled, is_member_lending_enabled, ' +
+  'is_benefits_enabled, is_profit_sharing_enabled, ' +
   'is_financially_enabled, notes';
 
 interface PolicyRow {
@@ -439,6 +461,11 @@ interface PolicyRow {
   approved_at: string | null;
   approved_by_label: string | null;
   approval_reference: string | null;
+  is_enrolment_enabled: boolean;
+  is_savings_enabled: boolean;
+  is_member_lending_enabled: boolean;
+  is_benefits_enabled: boolean;
+  is_profit_sharing_enabled: boolean;
   is_financially_enabled: boolean;
   notes: string | null;
 }
@@ -500,6 +527,15 @@ function toPolicy(row: PolicyRow): MembershipPolicy {
     approvedAt: row.approved_at,
     approvedByLabel: row.approved_by_label,
     approvalReference: row.approval_reference,
+    // Read from the database rather than recomputed, so the screen shows the
+    // answer the gate will give rather than a second opinion about it. The
+    // domain module computes the same five from the same row, and
+    // tests/db/membership-hardening.test.ts asserts the two agree.
+    isEnrolmentEnabled: row.is_enrolment_enabled === true,
+    isSavingsEnabled: row.is_savings_enabled === true,
+    isMemberLendingEnabled: row.is_member_lending_enabled === true,
+    isBenefitsEnabled: row.is_benefits_enabled === true,
+    isProfitSharingEnabled: row.is_profit_sharing_enabled === true,
     isFinanciallyEnabled: row.is_financially_enabled === true,
     notes: row.notes,
   };

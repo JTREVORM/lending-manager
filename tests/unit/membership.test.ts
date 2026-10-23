@@ -10,9 +10,16 @@ import {
   MEMBERSHIP_STATUS_LABELS,
   MEMBERSHIP_TRANSITIONS,
   TERMINAL_MEMBERSHIP_STATUSES,
+  MEMBERSHIP_ACTIVITIES,
+  MEMBERSHIP_ACTIVITY_LABELS,
+  MEMBERSHIP_ACTIVITY_RULES,
   UNDECIDED_POLICY_RULES,
   UNDECIDED_POLICY_RULE_LABELS,
+  activityBlockedReason,
+  activityOutstandingDecisions,
   canTransitionMembership,
+  isActivityReady,
+  membershipActivityReadiness,
   isLiveMembershipStatus,
   isMembershipNumber,
   isMembershipPolicyStatus,
@@ -321,6 +328,141 @@ describe('the financial gate', () => {
     expect(policyBlockedReason({ ...one, interestMethod: null })).toContain(
       '2 membership rules have',
     );
+  });
+});
+
+// ===========================================================================
+describe('the gates, one per activity', () => {
+  /** Approved and in force, with every rule still open. */
+  const open: PolicyDecisionState = {
+    status: 'active',
+    approvedAt: '2026-10-01T00:00:00.000Z',
+    interestBasis: null,
+    interestMethod: null,
+    savingsToLoanMultiplierBps: null,
+    qualifyingMonthsConsecutive: null,
+    savingsWithdrawalWithActiveLoan: null,
+    profitDistributionBasis: null,
+    medicalBenefitAnnualCap: null,
+    medicalBenefitClaimsPerYear: null,
+    benefitWaitingPeriodDays: null,
+  };
+
+  it('opens enrolment on an approved version with every rule undecided', () => {
+    // The defect: one switch held the UGX 5,000 registration fee hostage to
+    // the year-end profit formula.
+    expect(isActivityReady(open, 'enrolment')).toBe(true);
+    expect(activityBlockedReason(open, 'enrolment')).toBeNull();
+    expect(activityOutstandingDecisions(open, 'enrolment')).toEqual([]);
+  });
+
+  it('shuts every other activity on that same version', () => {
+    for (const activity of MEMBERSHIP_ACTIVITIES.filter((a) => a !== 'enrolment')) {
+      expect(isActivityReady(open, activity), activity).toBe(false);
+    }
+  });
+
+  it('opens savings on the two savings rules alone', () => {
+    const savings = {
+      ...open,
+      qualifyingMonthsConsecutive: false,
+      savingsWithdrawalWithActiveLoan: 'blocked' as const,
+    };
+
+    expect(isActivityReady(savings, 'savings')).toBe(true);
+    // And on nothing else: benefits and the profit share are still shut, and
+    // lending still wants its price.
+    expect(isActivityReady(savings, 'benefits')).toBe(false);
+    expect(isActivityReady(savings, 'profit_sharing')).toBe(false);
+    expect(isActivityReady(savings, 'lending')).toBe(false);
+  });
+
+  it('treats a decided false as decided, because only null is an absence', () => {
+    // `qualifyingMonthsConsecutive: false` is the client answering "no". A
+    // falsy check here would hold up a programme that is ready to run.
+    const answered = {
+      ...open,
+      qualifyingMonthsConsecutive: false,
+      savingsWithdrawalWithActiveLoan: 'allowed' as const,
+    };
+
+    expect(activityOutstandingDecisions(answered, 'savings')).toEqual([]);
+  });
+
+  it('makes lending wait on the savings rules as well as its own', () => {
+    const priced = {
+      ...open,
+      interestBasis: 'per_month' as const,
+      interestMethod: 'flat' as const,
+      savingsToLoanMultiplierBps: 20_000,
+    };
+
+    // Priced, but the loan is secured against savings whose rules are open.
+    expect(isActivityReady(priced, 'lending')).toBe(false);
+    expect(activityOutstandingDecisions(priced, 'lending')).toEqual([
+      'qualifyingMonthsConsecutive',
+      'savingsWithdrawalWithActiveLoan',
+    ]);
+  });
+
+  it('opens benefits and profit sharing independently of each other', () => {
+    const benefits = {
+      ...open,
+      medicalBenefitAnnualCap: 500_000,
+      medicalBenefitClaimsPerYear: 2,
+      benefitWaitingPeriodDays: 90,
+    };
+    const profit = { ...open, profitDistributionBasis: 'equal_shares' as const };
+
+    expect(isActivityReady(benefits, 'benefits')).toBe(true);
+    expect(isActivityReady(benefits, 'profit_sharing')).toBe(false);
+    expect(isActivityReady(profit, 'profit_sharing')).toBe(true);
+    expect(isActivityReady(profit, 'benefits')).toBe(false);
+  });
+
+  it('shuts everything on a draft, and says why in the same words', () => {
+    const draft = { ...open, status: 'draft' as const };
+
+    for (const activity of MEMBERSHIP_ACTIVITIES) {
+      expect(isActivityReady(draft, activity), activity).toBe(false);
+      expect(activityBlockedReason(draft, activity), activity).toContain('draft');
+    }
+  });
+
+  it('shuts everything on an unapproved version', () => {
+    const unapproved = { ...open, approvedAt: null };
+
+    for (const activity of MEMBERSHIP_ACTIVITIES) {
+      expect(isActivityReady(unapproved, activity), activity).toBe(false);
+    }
+  });
+
+  it('accounts for all nine rules across the activities, and invents none', () => {
+    const claimed = new Set(
+      MEMBERSHIP_ACTIVITIES.flatMap((activity) => [
+        ...MEMBERSHIP_ACTIVITY_RULES[activity],
+      ]),
+    );
+
+    // Every rule holds something up — a rule that gated nothing would be a
+    // question nobody needed answered — and nothing is gated on a rule that
+    // does not exist.
+    expect([...claimed].sort()).toEqual([...UNDECIDED_POLICY_RULES].sort());
+  });
+
+  it('labels every activity, so no screen has to invent a name', () => {
+    for (const activity of MEMBERSHIP_ACTIVITIES) {
+      expect(MEMBERSHIP_ACTIVITY_LABELS[activity], activity).toBeTruthy();
+    }
+  });
+
+  it('reports all five activities in one call, in the order they happen', () => {
+    const readiness = membershipActivityReadiness(open);
+
+    expect(readiness.map((row) => row.activity)).toEqual([...MEMBERSHIP_ACTIVITIES]);
+    expect(readiness.filter((row) => row.ready).map((row) => row.activity)).toEqual([
+      'enrolment',
+    ]);
   });
 });
 
