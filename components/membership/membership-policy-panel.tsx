@@ -25,13 +25,13 @@ import type { MembershipPolicy } from '@/lib/data/membership';
  *
  * ## Why "undecided" is rendered as a word and never as a blank
  *
- * Eight of the programme's rules have not been settled with the client. Their
+ * Nine of the programme's rules have not been settled with the client. Their
  * columns are NULL, and a panel that rendered NULL as an em dash would read
  * exactly like a figure of zero that nobody typed. So an outstanding decision
  * is rendered as the amber word **Not decided**, counted at the top of the
  * panel, and named in a list — because the gap is the most important thing on
  * this screen. A member cannot be enrolled, savings cannot be taken and no
- * benefit can be paid until those eight are answered, and the person reading
+ * benefit can be paid until those nine are answered, and the person reading
  * this screen is usually the person who can answer them.
  *
  * ## Why there is no edit control

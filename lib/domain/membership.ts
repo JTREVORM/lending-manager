@@ -30,14 +30,14 @@
  * each mirrored by a `CHECK` constraint, with a database test asserting the
  * two representations agree.
  *
- * ## Eight rules are undecided, and stay that way
+ * ## Nine rules are undecided, and stay that way
  *
- * The client has not answered eight questions — whether the advertised 5% is
+ * The client has not answered nine questions — whether the advertised 5% is
  * per month or per loan, whether interest is flat or reducing, the
  * savings-to-loan multiplier, whether six qualifying months must be
  * consecutive, whether savings may be withdrawn against a live loan, the
- * profit distribution formula, the medical benefit's cap and claim frequency,
- * and any benefit waiting period. Every one of them is modelled as a nullable
+ * profit distribution formula, the medical benefit's annual cap, how many
+ * claims a year it allows, and any benefit waiting period. Every one of them is modelled as a nullable
  * field whose `null` means *undecided*, never as a default somebody invented.
  * `isPolicyFinanciallyEnabled` is the single gate that later phases consult,
  * and it is false while any of them is outstanding.
@@ -281,7 +281,7 @@ export const PROFIT_DISTRIBUTION_BASIS_LABELS: Readonly<
 // ---------------------------------------------------------------------------
 
 /**
- * The eight rules the client has not decided, in the order they appear on the
+ * The nine rules the client has not decided, in the order they appear on the
  * configuration screen.
  *
  * Exported because three places need the same list and must not drift: the
@@ -335,7 +335,7 @@ export interface PolicyDecisionState {
 }
 
 /**
- * Which of the eight rules are still outstanding on this version.
+ * Which of the nine rules are still outstanding on this version.
  *
  * `false` is a decision; only `null` is an absence. That distinction is the
  * reason this is written out rather than expressed as a falsy check —

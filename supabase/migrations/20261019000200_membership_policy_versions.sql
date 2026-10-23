@@ -45,12 +45,12 @@
 --     maximum, the weekly/monthly cadence split, the three benefit figures.
 --     These are `NOT NULL` columns, carrying the documented values.
 --
---   * **Undecided** — eight questions the client has not answered. Whether
+--   * **Undecided** — nine questions the client has not answered. Whether
 --     5% is per month or per loan. Whether interest is flat or reducing
 --     balance. The savings-to-loan multiplier. Whether six qualifying months
 --     must be consecutive. Whether savings may be withdrawn against a live
---     loan. The profit distribution formula. The medical benefit's annual cap
---     and claim frequency. Any waiting period. Every one of these is a
+--     loan. The profit distribution formula. The medical benefit's annual cap.
+--     Its claim frequency. Any waiting period. Every one of these is a
 --     **nullable** column, and NULL means "the client has not decided" — not
 --     zero, not a default somebody invented.
 --
@@ -510,7 +510,7 @@ grant execute on function public.active_membership_policy_id() to authenticated;
 --
 -- Seeded as `draft` and unapproved, with every undecided column left NULL.
 -- That is the truthful state: the figures below come from the client's own
--- documents, and the eight questions in
+-- documents, and the nine questions in
 -- docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md are unanswered. Nothing may
 -- post against it, which `is_financially_enabled = false` enforces.
 --
@@ -556,7 +556,7 @@ values (
   1,
   100000,
   200000,
-  'Drafted from the client''s membership and lending documents. Eight rules remain undecided and are held NULL: the basis and method of the 5% rate, the savings-to-loan multiplier, whether the six qualifying months must be consecutive, whether savings may be withdrawn against a live loan, the profit distribution formula, the medical benefit annual cap and claim frequency, and the benefit waiting period. This version is a draft and enables no financial operation.'
+  'Drafted from the client''s membership and lending documents. Nine rules remain undecided and are held NULL: the basis and method of the 5% rate, the savings-to-loan multiplier, whether the six qualifying months must be consecutive, whether savings may be withdrawn against a live loan, the profit distribution formula, the medical benefit annual cap and claim frequency, and the benefit waiting period. This version is a draft and enables no financial operation.'
 )
 on conflict (version) do nothing;
 

@@ -30,7 +30,7 @@ export const metadata = { title: 'Membership' };
  * the system telling a clerk that members can be taken on today.
  *
  * What the page does say, at the top, is *why*: the policy version is a
- * draft with eight rules still undecided, and until the client settles them
+ * draft with nine rules still undecided, and until the client settles them
  * nothing can be enrolled, saved or paid out. That sentence is read from the
  * policy row rather than hard-coded, so it stops appearing the moment the
  * policy is approved.

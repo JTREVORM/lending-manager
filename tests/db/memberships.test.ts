@@ -36,7 +36,7 @@ import { REFERENCE_FORMAT_DEFAULTS } from '@/lib/domain/reference';
  * reworded; and that the financial gate cannot be opened while a decision is
  * outstanding.
  *
- * The last of those is the one that matters most for Polytos Phase 1. Eight
+ * The last of those is the one that matters most for Polytos Phase 1. Nine
  * of the programme's rules are undecided, and the whole design rests on the
  * claim that nothing financial can run until they are settled. A claim like
  * that is worth nothing without a test that tries.
@@ -577,7 +577,7 @@ describeDb('the policy version', () => {
 describeDb('the financial gate', () => {
   it('stays shut while any decision is outstanding, however the version is edited', async () => {
     // The seeded version is active and approved for the duration of this
-    // suite, and still must not be financially enabled: eight rules are
+    // suite, and still must not be financially enabled: nine rules are
     // undecided, and the generated column cannot be talked round.
     const row = await queryOne<{ is_financially_enabled: boolean }>(
       `select is_financially_enabled

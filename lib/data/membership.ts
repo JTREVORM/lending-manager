@@ -509,7 +509,7 @@ function toPolicy(row: PolicyRow): MembershipPolicy {
  * The membership policy version currently in force, or null when none has
  * been activated.
  *
- * Null is the honest answer today: version 1.0 is a draft, because eight of
+ * Null is the honest answer today: version 1.0 is a draft, because nine of
  * its rules are undecided. A caller must not substitute a default for it.
  */
 export async function getActiveMembershipPolicy(): Promise<MembershipPolicy | null> {
