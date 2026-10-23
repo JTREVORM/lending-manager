@@ -595,6 +595,11 @@ describeDb('payment row level security', () => {
         // Phase 13. The loan module's register: the loan, its product, its
         // collection state and its guarantor count.
         'loan_workflow_register',
+        // Polytos Phase 1. The membership register, `security_invoker` like
+        // every other view here: it joins `memberships` to `clients`, and
+        // running as its owner would hand every member's record to anybody
+        // who could select from it.
+        'membership_register',
         // Phase 15. `security_invoker` on both, which is what makes the
         // notification policy — and therefore the per-reader audience — apply
         // to a view read rather than the view owner's.

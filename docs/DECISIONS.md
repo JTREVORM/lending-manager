@@ -1897,3 +1897,98 @@ query *and* a test that pins it to the table — not the other way round.
   downloaded.
 * `truncated` is part of the report type, so a caller cannot forget to handle
   it; the UI test asserts the warning appears and the totals do not.
+
+---
+
+## ADR-043 — Membership hangs off `clients`, and is not a role
+
+**Decision.** A membership is a row in `public.memberships` keyed on
+`clients.id`. It carries no name, phone number, date of birth or National
+Identification Number. Membership adds five capabilities to the existing
+matrix and no new role.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| A `members` table with its own identity columns | A second identity record for the same person is how a register comes to hold two of somebody with different phone numbers. It would also mean the NIN protection built into `client_identities` had to be built again — and the second copy would be the one that leaked. |
+| A `member` role in `public.roles` | Roles answer "what may this person do to the system". Membership answers "what does the business owe this customer". A `member` role would mean a borrower whose savings lapse loses their portal login, and it would give the business two answers to "who is this person". |
+| A `is_member` boolean on `clients` | Records nothing about when they joined, under what terms, or why they left — and a membership has a lifecycle with an auditable history, which a boolean cannot hold. |
+
+**Consequences.** A non-member remains a perfectly valid client, which is
+what the business asked for. A borrower reads their own membership through
+`clients.profile_id`, the one optional, indirect link the system already has
+between a login and a customer — so no new identity path exists to be got
+wrong. The cost is a join wherever a member's name is needed, which is what
+`public.membership_register` exists for.
+
+---
+
+## ADR-044 — The membership policy is effective-dated versions, not a settings row
+
+**Decision.** The programme's rules live in
+`public.membership_policy_versions`, one row per version, each with an
+`effective_from` date. A membership references the version it was enrolled
+under, and a version anybody is enrolled under can never have its figures
+changed — publishing a change inserts a new version.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| A singleton, like `business_settings` | A member who joined in March must keep March's terms when the business raises the savings minimum in June. A singleton makes that unanswerable: there is one row, and editing it silently rewrites what everybody was promised. |
+| A snapshot on each membership, like `loan_product_snapshots` | A loan is an agreement struck once and then run off, so a snapshot at approval is exactly right. A membership is a standing relationship with a monthly obligation, an accruing qualification and an annual distribution, all evaluated against the rules that applied *at the time*. Thirty columns copied onto every membership row would be the same facts stored once per member. |
+
+**Consequences.** This is the shape `guarantor_consent_terms` already takes,
+and for the same reason: a guarantor cannot be held to words the business
+edited afterwards. The guard freezes every figure once a membership
+references the version, and refuses a second approval. Status may still move
+— draft to active to superseded — because that is how a version is retired.
+
+---
+
+## ADR-045 — `is_financially_enabled` is generated, so an undecided policy cannot transact
+
+**Decision.** Nine of the programme's rules are undecided. Each is a
+**nullable** column whose `NULL` means *the client has not decided*, with no
+default. `is_financially_enabled` is a **stored generated column** that is
+true only when the version is active, approved, and all nine are decided.
+
+**Reasoning.** The design rests on the claim that nothing financial can run
+until the rules are settled. A boolean an administrator ticks cannot carry
+that claim — it can be ticked on an incomplete policy, and the day somebody
+does, savings are being taken under rules nobody agreed. A generated column
+cannot be true while a column is NULL, and no `UPDATE` makes it so.
+
+Giving the nine a default was rejected outright: a default here is an
+invented policy, and the one thing worse than an unanswered question is an
+answer the client never gave.
+
+**Consequences.** Version 1.0 ships as an unapproved draft with the gate
+shut, which is the honest state of the programme. `false` and `0` count as
+*decided*, which is why the check is written as `is not null` per column
+rather than as a falsy test — "the months need not be consecutive" and "there
+is no waiting period" are real answers. `isPolicyFinanciallyEnabled()` in
+`lib/domain/membership.ts` computes the same answer for the interface so it
+can explain the hold without a second round trip, and a database test asserts
+the two agree on the same row.
+
+---
+
+## ADR-046 — One live membership per client, by partial unique index
+
+**Decision.** `memberships_one_live_per_client` is unique on `client_id`
+where `status in ('pending', 'active', 'suspended')`.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| A check in the Server Action | Two concurrent enrolments both pass it and both commit. This is the duplicate-invoice bug in another costume. |
+| `unique (client_id)` | A client who withdrew in 2026 and rejoins in 2028 is a legitimate second row. A total unique constraint would force either deleting the history or reusing the row — and reusing it would carry the old activation date forward, silently crediting the savings qualification period and the benefit waiting period the member is supposed to start again. |
+
+**Consequences.** Rejoining mints a new membership number, which is correct:
+the two relationships are different, and the card says so. Reactivating a
+withdrawn membership is deliberately not a transition — `withdrawn → active`
+is refused by the lifecycle guard, by the domain module and by the validation
+schema.

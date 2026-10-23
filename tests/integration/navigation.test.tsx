@@ -170,6 +170,8 @@ describe('navigation items', () => {
     // so nothing in the rail would ever light up for it.
     const reads: Readonly<Record<string, readonly string[]>> = {
       [ROUTES.clients]: ['status'],
+      // Polytos Phase 1. The membership register's four status views.
+      [ROUTES.membership]: ['status'],
       // Phase 13's workflow register: ten stages, one query.
       [ROUTES.loans]: ['stage'],
       [ROUTES.payments]: ['status'],

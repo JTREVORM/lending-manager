@@ -27,6 +27,11 @@ import { expect, stateFile, test } from './fixtures';
 const PAGES = [
   '/',
   '/clients',
+  // Polytos Phase 1. The membership register joins the budgeted pages, not
+  // because it is heavy today — it reads one paged view — but because it is a
+  // register a Secretary/Treasurer will open every morning from Phase 2, and
+  // a page that gets its budget only once it is slow gets it too late.
+  '/membership',
   '/loans',
   '/payments',
   '/payments/new',

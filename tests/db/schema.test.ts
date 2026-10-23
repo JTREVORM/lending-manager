@@ -93,6 +93,14 @@ describeDb('tables', () => {
     'loan_salary_details',
     'loan_schedules',
     'loans',
+    // Polytos Phase 1: the membership foundation — the effective-dated
+    // policy, the membership itself, its lifecycle history and the terms a
+    // member signed. No savings, fee or benefit table, because nothing posts
+    // them yet; they arrive with the workflows that do.
+    'membership_policy_versions',
+    'membership_status_history',
+    'membership_terms_acceptances',
+    'memberships',
     // Phase 15: one row per noteworthy event, addressed to the capability
     // that may read it, and who has read which. Both append-only.
     'notification_reads',
@@ -418,6 +426,31 @@ describeDb('foreign keys', () => {
       'loans.loan_product_id -> loan_products (r)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
+      // Polytos Phase 1. RESTRICT on everything a membership's identity or
+      // its history depends on — the client it belongs to, the branch it is
+      // held at, the policy version governing it — because none of those may
+      // vanish from under a live relationship. SET NULL only on the
+      // *attribution* columns of the mutable tables, which is how provenance
+      // degrades everywhere else here.
+      //
+      // `membership_status_history.changed_by` is RESTRICT rather than SET
+      // NULL, and that one is not merely conventional: the table refuses
+      // every UPDATE, and an ON DELETE SET NULL *is* an UPDATE, so the
+      // cascade would be refused by the append-only trigger instead of by
+      // the key — the same confusing failure the Phase 15 note below
+      // describes. `changed_by_label` is what makes RESTRICT affordable.
+      'membership_policy_versions.approved_by -> profiles (n)',
+      'membership_policy_versions.created_by -> profiles (n)',
+      'membership_status_history.changed_by -> profiles (r)',
+      'membership_status_history.membership_id -> memberships (r)',
+      'membership_terms_acceptances.membership_id -> memberships (r)',
+      'membership_terms_acceptances.policy_version_id -> membership_policy_versions (r)',
+      'membership_terms_acceptances.recorded_by -> profiles (n)',
+      'memberships.branch_id -> branches (r)',
+      'memberships.client_id -> clients (r)',
+      'memberships.created_by -> profiles (n)',
+      'memberships.policy_version_id -> membership_policy_versions (r)',
+      'memberships.status_changed_by -> profiles (n)',
       // Phase 15. `r` on every reference both tables hold, and that is the
       // whole point: they refuse UPDATE and DELETE, and SET NULL and CASCADE
       // are both mutations. A nulling reference would make deleting a profile

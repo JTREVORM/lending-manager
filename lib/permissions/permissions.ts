@@ -166,6 +166,44 @@ export const PERMISSIONS = [
   /** Create a loan product, change its terms, or retire it. */
   'products:manage',
 
+  // --- Membership ----------------------------------------------------------
+  // Polytos Phase 1. Membership is a fact about a *client record*, not a
+  // role: a `member` role would mean a borrower whose savings lapse loses
+  // their portal login, and it would give the business two answers to "who is
+  // this person". So these govern a row in `public.memberships` keyed on
+  // `clients.id`, and the four existing roles are untouched.
+  //
+  // Enrolling is withheld from the Secretary/Treasurer for the same reason
+  // `clients:create` is: it mints a membership number, binds the business to
+  // a benefits programme and starts a savings qualification clock. They hold
+  // the read, because from Polytos Phase 2 they are the people taking savings
+  // over the counter and cannot do that without looking a member up.
+  //
+  // There is deliberately no `membership:view_sensitive` yet. The Phase 1
+  // schema holds no personal data of its own — the member *is* the client,
+  // behind `clients:view`, and their National Identification Number is behind
+  // `clients:view_nin`. The capability arrives in Polytos Phase 4 with the
+  // beneficiary and benefit-claim tables it would actually guard; declaring
+  // it now would promise a restriction over nothing.
+  /** See the membership register, a membership record and the published policy. */
+  'membership:view',
+  /** Enrol an existing client as a member. */
+  'membership:create',
+  /** Correct a membership's ordinary details. */
+  'membership:update',
+  /** Move a membership between pending, active, suspended, withdrawn and deceased. */
+  'membership:manage_status',
+  /**
+   * Publish or approve a version of the membership policy.
+   *
+   * The Owner's alone, for the reason `settings:update` and
+   * `guarantor_terms:manage` are: it sets the registration fee, the savings
+   * minimum, the interest rule and the benefit amounts. A Manager who could
+   * change those could change what the business charges and what it owes
+   * without asking anybody.
+   */
+  'membership:manage_policies',
+
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
   // `permissions` table constrains. Where the Phase 3 specification suggested
@@ -444,6 +482,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'clients:remarks_view',
     'guarantors:view',
 
+    // Polytos Phase 1. Reads only. The counter looks a member up; it does
+    // not enrol one, for the same reason it does not register a client.
+    'membership:view',
+
     // The business's own description of this role is that they record loan
     // details and amounts. So: everything up to asking for a decision, and
     // nothing that makes one.
@@ -540,6 +582,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'guarantors:view_nin',
     'guarantors:link',
     'guarantors:release',
+
+    // Polytos Phase 1. The Manager runs membership operations as they run
+    // lending operations. Not `membership:manage_policies`: see above.
+    'membership:view',
+    'membership:create',
+    'membership:update',
+    'membership:manage_status',
 
     // Reviews and approves, and may return a draft for correction.
     //
@@ -642,6 +691,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'guarantors:view_nin',
     'guarantors:link',
     'guarantors:release',
+
+    'membership:view',
+    'membership:create',
+    'membership:update',
+    'membership:manage_status',
+    'membership:manage_policies',
 
     'loans:view',
     'loans:create',

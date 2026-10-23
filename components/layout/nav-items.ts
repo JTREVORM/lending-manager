@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   Banknote,
   Bell,
   ChartColumn,
@@ -105,6 +106,7 @@ export interface NavModule {
 
 export const NAV_MODULE_IDS = [
   'clients',
+  'membership',
   'loans',
   'collections',
   'debt',
@@ -225,6 +227,70 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Client History',
         permission: 'audit:view',
         phase: 2,
+      },
+    ],
+  },
+  {
+    // Polytos Phase 1. Membership, immediately after Clients, because a
+    // membership is a fact about a client and that is where a reader looks
+    // for it.
+    //
+    // Seven entries: the register, its four status views, the read-only
+    // configuration, and the audit trail filtered to membership. There is
+    // deliberately **no** "Enrol
+    // member", "Collect savings", "Withdraw" or "Pay benefit" here. Those
+    // workflows arrive in Polytos Phases 2 and 4, and a rail entry that
+    // opened onto a form which could not complete would be worse than no
+    // entry — it would be the system telling a clerk that savings can be
+    // taken today.
+    id: 'membership',
+    label: 'Membership',
+    icon: BadgeCheck,
+    items: [
+      {
+        href: ROUTES.membership,
+        label: 'Membership Register',
+        permission: 'membership:view',
+        phase: 21,
+      },
+      {
+        href: `${ROUTES.membership}?status=active`,
+        label: 'Active Members',
+        permission: 'membership:view',
+        phase: 21,
+      },
+      {
+        href: `${ROUTES.membership}?status=pending`,
+        label: 'Pending Applications',
+        permission: 'membership:view',
+        phase: 21,
+      },
+      {
+        href: `${ROUTES.membership}?status=suspended`,
+        label: 'Suspended Members',
+        permission: 'membership:view',
+        phase: 21,
+      },
+      {
+        href: `${ROUTES.membership}?status=withdrawn`,
+        label: 'Former Members',
+        permission: 'membership:view',
+        phase: 21,
+      },
+      {
+        href: ROUTES.membershipPolicies,
+        label: 'Membership Policy',
+        permission: 'membership:view',
+        phase: 21,
+      },
+      {
+        // The audit trail filtered to membership records: who enrolled whom,
+        // who changed a status, and when. The same shape the Clients module
+        // gives its own history entry.
+        href: `${ROUTES.audit}?entity=membership`,
+        label: 'Membership History',
+        permission: 'audit:view',
+        phase: 21,
       },
     ],
   },

@@ -2606,6 +2606,292 @@ export type Database = {
         };
         Relationships: [];
       };
+
+      /**
+       * Polytos Phase 1. The membership programme's rules, effective-dated.
+       *
+       * Nullable columns are decisions the client has not made — never a
+       * default. `is_financially_enabled` is generated and therefore absent
+       * from `Insert` and `Update`: the database computes it, and no write
+       * can set it.
+       */
+      membership_policy_versions: {
+        Row: {
+          id: string;
+          version: string;
+          title: string;
+          effective_from: string;
+          status: string;
+          registration_fee: number;
+          monthly_savings_minimum: number;
+          savings_qualifying_months: number;
+          member_loan_interest_rate_bps: number;
+          member_loan_max_term_months: number;
+          member_loan_weekly_cadence_max_months: number;
+          non_member_loan_max_term_months: number;
+          medical_benefit_rate_bps: number;
+          medical_benefit_min_admission_days: number;
+          family_condolence_benefit: number;
+          member_bereavement_benefit: number;
+          interest_basis: string | null;
+          interest_method: string | null;
+          savings_to_loan_multiplier_bps: number | null;
+          qualifying_months_consecutive: boolean | null;
+          savings_withdrawal_with_active_loan: string | null;
+          profit_distribution_basis: string | null;
+          medical_benefit_annual_cap: number | null;
+          medical_benefit_claims_per_year: number | null;
+          benefit_waiting_period_days: number | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          approved_by_label: string | null;
+          approval_reference: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          is_financially_enabled: boolean;
+        };
+        Insert: {
+          id?: string;
+          version: string;
+          title: string;
+          effective_from: string;
+          status?: string;
+          registration_fee: number;
+          monthly_savings_minimum: number;
+          savings_qualifying_months: number;
+          member_loan_interest_rate_bps: number;
+          member_loan_max_term_months: number;
+          member_loan_weekly_cadence_max_months: number;
+          non_member_loan_max_term_months: number;
+          medical_benefit_rate_bps: number;
+          medical_benefit_min_admission_days: number;
+          family_condolence_benefit: number;
+          member_bereavement_benefit: number;
+          interest_basis?: string | null;
+          interest_method?: string | null;
+          savings_to_loan_multiplier_bps?: number | null;
+          qualifying_months_consecutive?: boolean | null;
+          savings_withdrawal_with_active_loan?: string | null;
+          profit_distribution_basis?: string | null;
+          medical_benefit_annual_cap?: number | null;
+          medical_benefit_claims_per_year?: number | null;
+          benefit_waiting_period_days?: number | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          approved_by_label?: string | null;
+          approval_reference?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          is_financially_enabled?: never;
+        };
+        Update: {
+          id?: string;
+          version?: string;
+          title?: string;
+          effective_from?: string;
+          status?: string;
+          registration_fee?: number;
+          monthly_savings_minimum?: number;
+          savings_qualifying_months?: number;
+          member_loan_interest_rate_bps?: number;
+          member_loan_max_term_months?: number;
+          member_loan_weekly_cadence_max_months?: number;
+          non_member_loan_max_term_months?: number;
+          medical_benefit_rate_bps?: number;
+          medical_benefit_min_admission_days?: number;
+          family_condolence_benefit?: number;
+          member_bereavement_benefit?: number;
+          interest_basis?: string | null;
+          interest_method?: string | null;
+          savings_to_loan_multiplier_bps?: number | null;
+          qualifying_months_consecutive?: boolean | null;
+          savings_withdrawal_with_active_loan?: string | null;
+          profit_distribution_basis?: string | null;
+          medical_benefit_annual_cap?: number | null;
+          medical_benefit_claims_per_year?: number | null;
+          benefit_waiting_period_days?: number | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          approved_by_label?: string | null;
+          approval_reference?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          is_financially_enabled?: never;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Polytos Phase 1. A client's membership of the savings and benefits
+       * programme.
+       *
+       * Carries no identity data: the member *is* the client it references.
+       * `membership_number` is minted by a trigger and refused from a caller,
+       * which is why it is absent from `Insert`.
+       */
+      memberships: {
+        Row: {
+          id: string;
+          membership_number: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          status: string;
+          status_reason: string | null;
+          status_changed_at: string | null;
+          status_changed_by: string | null;
+          applied_on: string;
+          activated_on: string | null;
+          ended_on: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          membership_number?: never;
+          client_id: string;
+          branch_id?: string;
+          policy_version_id?: string;
+          status?: string;
+          status_reason?: string | null;
+          status_changed_at?: string | null;
+          status_changed_by?: string | null;
+          applied_on: string;
+          activated_on?: string | null;
+          ended_on?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          membership_number?: never;
+          client_id?: string;
+          branch_id?: string;
+          policy_version_id?: string;
+          status?: string;
+          status_reason?: string | null;
+          status_changed_at?: string | null;
+          status_changed_by?: string | null;
+          applied_on?: string;
+          activated_on?: string | null;
+          ended_on?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Polytos Phase 1. Every membership status change, in order.
+       *
+       * Append-only and written only by the trigger on `memberships`, so
+       * there is no session `Insert` path. The shape is declared in full
+       * because the trigger is still a writer of this table.
+       */
+      membership_status_history: {
+        Row: {
+          id: number;
+          membership_id: string;
+          from_status: string | null;
+          to_status: string;
+          reason: string | null;
+          effective_on: string;
+          changed_by: string | null;
+          changed_by_label: string;
+          occurred_at: string;
+        };
+        Insert: {
+          id?: never;
+          membership_id: string;
+          from_status?: string | null;
+          to_status: string;
+          reason?: string | null;
+          effective_on: string;
+          changed_by?: string | null;
+          changed_by_label?: string;
+          occurred_at?: string;
+        };
+        Update: {
+          id?: never;
+          membership_id?: string;
+          from_status?: string | null;
+          to_status?: string;
+          reason?: string | null;
+          effective_on?: string;
+          changed_by?: string | null;
+          changed_by_label?: string;
+          occurred_at?: string;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Polytos Phase 1. The record that a member was shown a version of the
+       * membership terms and signed it.
+       *
+       * `policy_version` is derived from the referenced row by the guard
+       * trigger, never trusted from the caller.
+       */
+      membership_terms_acceptances: {
+        Row: {
+          id: string;
+          membership_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          accepted_at: string;
+          signature_name: string;
+          signature_path: string | null;
+          witness_name: string | null;
+          witness_phone: string | null;
+          accepted_place: string | null;
+          recorded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          membership_id: string;
+          policy_version_id: string;
+          policy_version?: never;
+          accepted_at: string;
+          signature_name: string;
+          signature_path?: string | null;
+          witness_name?: string | null;
+          witness_phone?: string | null;
+          accepted_place?: string | null;
+          recorded_by?: never;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          membership_id?: string;
+          policy_version_id?: string;
+          policy_version?: never;
+          accepted_at?: string;
+          signature_name?: string;
+          signature_path?: string | null;
+          witness_name?: string | null;
+          witness_phone?: string | null;
+          accepted_place?: string | null;
+          recorded_by?: never;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
 
     /**
@@ -3548,6 +3834,38 @@ export type Database = {
         };
         Relationships: [];
       };
+      /**
+       * Polytos Phase 1. A membership with its member's name and the policy
+       * version governing them, as one read.
+       */
+      membership_register: {
+        Row: {
+          id: string | null;
+          membership_number: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          full_name: string | null;
+          phone: string | null;
+          village_area: string | null;
+          district: string | null;
+          client_status: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          status: string | null;
+          status_reason: string | null;
+          status_changed_at: string | null;
+          applied_on: string | null;
+          activated_on: string | null;
+          ended_on: string | null;
+          policy_version_id: string | null;
+          policy_version: string | null;
+          policy_is_financially_enabled: boolean | null;
+          notes: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [];
+      };
       guarantor_exposure: {
         Row: {
           loan_guarantor_id: string | null;
@@ -4077,6 +4395,12 @@ export type Database = {
       user_has_permission: {
         Args: { p_permission_key: string };
         Returns: boolean;
+      };
+      // Polytos Phase 1. The membership policy version in force, or null when
+      // none has been activated. Reads as the caller.
+      active_membership_policy_id: {
+        Args: Record<PropertyKey, never>;
+        Returns: string | null;
       };
       link_client_profile: {
         Args: { p_client_id: string; p_profile_id: string };

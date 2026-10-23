@@ -33,6 +33,13 @@ const SCREENS = [
   '/',
   '/clients',
   '/clients/new',
+  // Polytos Phase 1. Both membership screens. The register because it is a
+  // seven-column table, which is the shape that fails a contrast or a scroll
+  // check first; the policy screen because its amber "Not decided" marker is
+  // the one piece of new colour in the system, and 12px text on a tinted
+  // surface is exactly where a contrast ratio quietly lands under 4.5:1.
+  '/membership',
+  '/membership/policies',
   '/guarantors',
   '/loans',
   '/loans/new',

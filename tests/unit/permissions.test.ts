@@ -235,6 +235,23 @@ describe('authorization matrix', () => {
     // the same reason pricing is: somebody has to answer for them.
     'guarantor_terms:manage': ['owner_admin'],
 
+    // --- Polytos Phase 1: membership ----------------------------------------
+    // A borrower is absent from every row, as they are from the client rows
+    // above and for the same reason: they read their own membership through
+    // the identity clause on `clients.profile_id`, never through a
+    // capability. Granting `membership:view` to `client` would hand them the
+    // whole register, which is what the capability means everywhere else.
+    //
+    // The Secretary/Treasurer reads and does not enrol, mirroring
+    // `clients:create`. `membership:manage_policies` is the Owner's alone:
+    // it sets the registration fee, the savings minimum, the interest rule
+    // and the benefit amounts.
+    'membership:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'membership:create': ['manager', 'owner_admin'],
+    'membership:update': ['manager', 'owner_admin'],
+    'membership:manage_status': ['manager', 'owner_admin'],
+    'membership:manage_policies': ['owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

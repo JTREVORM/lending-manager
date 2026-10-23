@@ -49,6 +49,8 @@ export const REFERENCE_SCOPES = [
   'expense',
   'other_income',
   'reconciliation',
+  // Polytos Phase 1. Membership numbers, e.g. MB260001.
+  'membership',
 ] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
 
@@ -69,6 +71,7 @@ export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = 
   expense: 'Expenses',
   other_income: 'Other income',
   reconciliation: 'Daily counts',
+  membership: 'Memberships',
 };
 
 export interface ReferenceFormat {
@@ -96,6 +99,10 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   expense: { scope: 'expense', prefix: 'EX', padding: 5 },
   other_income: { scope: 'other_income', prefix: 'OI', padding: 5 },
   reconciliation: { scope: 'reconciliation', prefix: 'RC', padding: 5 },
+  // Padded to four like loans and payments rather than three like clients: a
+  // membership number is quoted on a card and in a meeting register, and
+  // widening it later would put two shapes into circulation.
+  membership: { scope: 'membership', prefix: 'MB', padding: 4 },
 } as const;
 
 export class ReferenceError extends Error {

@@ -64,6 +64,12 @@ const ROUTE_PERMISSIONS: readonly {
   { prefix: ROUTES.loanProducts, permission: 'products:view' },
   { prefix: ROUTES.settings, permission: 'settings:view' },
   { prefix: ROUTES.clients, permission: 'clients:view' },
+  // Polytos Phase 1. `membership:view` is the floor for the whole membership
+  // surface, including the read-only policy screen at
+  // `/membership/policies` — reading the registration fee and the savings
+  // minimum is ordinary counter work, and publishing a version is a write
+  // the page does not offer and the policy refuses.
+  { prefix: ROUTES.membership, permission: 'membership:view' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },
   { prefix: ROUTES.loans, permission: 'loans:view' },
   // Its own capability as of Phase 6, rather than `dashboard:view`. The same

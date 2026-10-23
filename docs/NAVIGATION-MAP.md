@@ -57,6 +57,36 @@ Asserted by: `tests/integration/navigation.test.tsx`,
 Statuses are `CLIENT_STATUSES` (`lib/domain/client.ts`), parsed by
 `clientSearchSchema`.
 
+## Membership
+
+Polytos Phase 1. Immediately after Clients, because a membership is a fact
+about a client and that is where a reader looks for it.
+
+| Entry | Destination | Reuses | Capability |
+| --- | --- | --- | --- |
+| Membership Register | `/membership` | — | `membership:view` |
+| Active Members | `/membership?status=active` | membership register filter | `membership:view` |
+| Pending Applications | `/membership?status=pending` | membership register filter | `membership:view` |
+| Suspended Members | `/membership?status=suspended` | membership register filter | `membership:view` |
+| Former Members | `/membership?status=withdrawn` | membership register filter | `membership:view` |
+| Membership Policy | `/membership/policies` | — | `membership:view` |
+| Membership History | `/audit?entity=membership` | audit trail entity filter | `audit:view` |
+
+Statuses are `MEMBERSHIP_STATUSES` (`lib/domain/membership.ts`), parsed by
+`membershipSearchSchema`.
+
+There is deliberately **no** "Enrol member", "Collect savings", "Withdraw" or
+"Pay benefit" entry. Those workflows arrive in Polytos Phases 2 and 4, and a
+rail entry opening onto a form that cannot complete would be worse than no
+entry — it would be the system telling a clerk that savings can be taken
+today. `tests/integration/membership-ui.test.tsx` asserts that no entry in
+this module carries such a label.
+
+`/membership/policies` sits under the `membership:view` prefix rather than
+behind `membership:manage_policies`: reading the registration fee and the
+savings minimum is ordinary counter work, and publishing a version is a write
+the page does not offer and the database policy refuses.
+
 ## Loan Management
 
 Phase 13 reorganised the register around the **workflow**, and its ten stages

@@ -103,6 +103,23 @@ export const ROUTES = {
    */
   notifications: '/notifications',
 
+  /**
+   * Polytos Phase 1. Membership.
+   *
+   * `/membership`, singular, because the section is the programme rather
+   * than a bag of member records — the same reading that makes `/finance`
+   * singular and `/clients` plural. The register lives at the root of it,
+   * a membership record at `/membership/{id}`, and the read-only policy at
+   * `/membership/policies`.
+   *
+   * Its own capability prefix, `membership:view`, rather than borrowing
+   * `clients:view`: the defect Phases 3, 6 and 8 each found once was a
+   * placeholder route left behind a broad capability after the real screen
+   * landed.
+   */
+  membership: '/membership',
+  membershipPolicies: '/membership/policies',
+
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',
   transfers: '/finance/transfers',
