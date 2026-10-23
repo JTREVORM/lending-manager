@@ -393,13 +393,36 @@ invalid, so it was re-run rather than reinterpreted.
 | First full run | 575 | 547 | 27 | 1 | The client-register assertion was wrong (above) |
 | After that fix | 583 | 556 | 27 | 0 | Green, before the axe sweep was extended |
 | Next full run | 583 | — | — | 7 | **Invalid.** The manifest was clobbered mid-suite (above) |
-| **Authoritative run** | **587** | **560** | **27** | **0** | The final code, on a freshly reseeded stack, nothing else running |
+| Full run | 587 | 560 | 27 | 0 | Green, in 13.8m — on the code as first committed |
+| **Authoritative run** | **587** | **560** | **27** | **0** | Green, in 13.4m — after the undecided-count correction below, on a stack torn down and reseeded first |
 
 The counts grow between runs because the suite itself grew: 575 → 583 as the
 confinement and budget lists were extended, 583 → 587 as the two membership
 screens joined the accessibility sweep. The totals are listed rather than
 averaged so that a reviewer can see that the number went up because tests
 were added and never because a test stopped being counted.
+
+### Why there are two green 587-test runs
+
+The screenshots caught a defect in this phase's own work after the first of
+them. The policy version seeded by migration `20261019000200` carried a
+`notes` line reading *"Eight rules remain undecided"* and then listed nine of
+them — and that line renders on the Membership Policy screen, directly under
+a banner, a panel and a table that each correctly say nine.
+
+Nine is right. The client's documents leave eight *questions* open, but one
+of them, the limits on the medical benefit, is two separate figures — an
+annual cap and a claim frequency — held in two nullable columns because
+either could be answered without the other.
+`docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md` has always listed nine,
+`UNDECIDED_POLICY_RULES` has always held nine, and a unit test has always
+asserted nine. Only the prose lagged, in one rendered string and five comment
+blocks.
+
+Because the correction changes a string the browser renders, the whole suite
+was run again rather than reasoned about — on a database re-migrated from
+zero and a stack torn down and reseeded, which the screenshot capture had
+made necessary anyway. That second run is the authoritative one.
 
 **The 27 skipped are not new and are not membership-related.** They are the
 `*.write.spec.ts` files, which `playwright.config.ts` excludes from the
@@ -430,16 +453,22 @@ four synthetic members in the register:
 
 | Screen | Desktop 1440 | Laptop 1366 | Tablet 820 | Mobile 390 |
 | --- | --- | --- | --- | --- |
-| Membership Register | 154 | 156 | 120 | 180 |
-| Membership Register, filtered to active | 102 | 112 | 97 | 86 |
-| Membership Policy | 105 | 100 | 90 | 88 |
-| Membership Profile | 102 | 108 | 115 | 94 |
-| Membership Profile, suspended member | 97 | 96 | 114 | 92 |
+| Membership Register | 146 | 118 | 153 | 127 |
+| Membership Register, filtered to active | 99 | 97 | 90 | 94 |
+| Membership Policy | 74 | 93 | 85 | 80 |
+| Membership Profile | 109 | 91 | 86 | 104 |
+| Membership Profile, suspended member | 97 | 97 | 87 | 84 |
 
 For scale, the same method on four existing screens in the same session:
-dashboard **410 ms**, client register **128 ms**, loan register **133 ms**,
-client profile **155 ms**. The membership register sits with the other
+dashboard **309 ms**, client register **92 ms**, loan register **128 ms**,
+client profile **148 ms**. The membership register sits with the other
 registers and well inside the dashboard, which is the page that aggregates.
+
+The spread between a cell and its neighbour — 118 ms against 153 ms for the
+same register at two desktop-class widths — is sampling noise on a shared
+machine, not a property of the viewport. Three samples per cell is enough to
+place a page in the right order of magnitude and not enough to rank two
+cells against each other.
 
 **Document overflow was 0 px in all 24 measurements** — five membership
 screens × four viewports, plus the four existing screens at desktop width.
@@ -515,22 +544,23 @@ every fix above.
 | `npm run test:db` | **57 files, 1,375 passed, 0 failed, 0 skipped** |
 | `npm run audit:money` | **Passed**, 60 files, no hazard |
 | `node scripts/verify-membership-upgrade.mjs` | **Passed**, 26/26 figures identical |
-| `npx playwright test` | **587 tests, 560 passed, 27 skipped, 0 failed** (13.8m) |
+| `npx playwright test` | **587 tests, 560 passed, 27 skipped, 0 failed** (13.4m) |
 
 ### Browser suite, authoritative run
 
 ```
+$ bash tests/e2e/harness/stack.sh down && bash tests/e2e/harness/stack.sh up
 $ npx playwright test
   Running 587 tests using 1 worker
   ...
   27 skipped
-  560 passed (13.8m)
+  560 passed (13.4m)
 ```
 
-**587 tests — 560 passed, 27 skipped, 0 failed, in 13.8 minutes.** Run
-against the final code on a freshly reseeded stack, with nothing else
-touching the database. The three earlier runs and why they do not stand are
-in §7.1.
+**587 tests — 560 passed, 27 skipped, 0 failed, in 13.4 minutes.** Run
+against the final code on a stack torn down and reseeded first, with nothing
+else touching the database. The four earlier runs, and why each does not
+stand in its place, are in §7.1.
 
 The 27 skipped are the pre-existing `*.write.spec.ts` exclusions on the
 mobile project, which `playwright.config.ts` documents and which run on
@@ -550,6 +580,17 @@ through the same local stack and writes 24 screenshots to
 | Membership Profile, an active member | all four |
 | Membership Profile, a suspended member | all four |
 | Dashboard, Client Register, Loan Register, Client Profile | desktop, as evidence the existing screens are unchanged |
+
+**The policy shows as IN FORCE in the screenshots, and ships as a draft.**
+The capture script activates and approves the seeded version before enrolling
+anybody, because `memberships_stamp_provenance` refuses an enrolment when no
+version is in force — which is the gate working, and which means a screenshot
+of a populated register cannot be taken without first opening it. The shipped
+state is the unapproved draft that migration `20261019000200` seeds. The
+version's own `notes` line still reads "This version is a draft and enables
+no financial operation", because it is the shipped text left unedited; it
+reads as a contradiction against the badge above it only in the capture, not
+in the delivered system.
 
 **The four members in those screenshots are synthetic and exist only in the
 local throwaway e2e database.** The script enrols them itself —
