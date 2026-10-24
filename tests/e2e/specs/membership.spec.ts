@@ -125,18 +125,22 @@ test.describe('the register is honest about what exists', () => {
   test('offers enrolment to somebody who may enrol', async ({ page }) => {
     await page.goto('/membership');
 
-    // Twice, deliberately, and both are asserted rather than one of them
-    // dismissed: the rail entry is how somebody gets there from anywhere, and
-    // the page's primary action is how somebody gets there from the register
-    // they are already looking at. A bare role locator matches both and trips
-    // strict mode, which is the locator's problem and not the page's.
-    await expect(
-      page.locator('nav').getByRole('link', { name: 'Enrol a Member', exact: true }),
-    ).toBeVisible();
-
+    // Both are asserted, and they are asserted differently on purpose.
+    //
+    // The page's primary action has to be **visible at every width**, because
+    // that is how somebody standing at a counter with a phone reaches
+    // enrolment.
     await expect(
       page.locator('main').getByRole('link', { name: /enrol a member/i }),
     ).toBeVisible();
+
+    // The rail entry has to be **present**, but on a phone the rail is
+    // collapsed behind a menu button — so asserting it visible would be
+    // asserting that the rail does not collapse, which is a different claim
+    // and one `app-shell.spec.ts` already covers.
+    await expect(
+      page.locator('nav').getByRole('link', { name: 'Enrol a Member', exact: true }),
+    ).toBeAttached();
   });
 
   test('offers no control for a workflow that still does not exist', async ({ page }) => {
