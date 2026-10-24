@@ -674,9 +674,16 @@ describeDb('the consent bucket', () => {
     );
 
     try {
+      // Scoped to the two objects this test created, not to the bucket.
+      // `storage.objects` is global state that no fixture teardown clears, so
+      // a count over the whole bucket would be asserting which suite ran
+      // first rather than which member may read what.
       const mine = await asUser(
         fx.member,
-        `select name from storage.objects where bucket_id = 'membership-consent'`,
+        `select name from storage.objects
+          where bucket_id = 'membership-consent' and name = any($1::text[])
+          order by name`,
+        [[own, other]],
       );
       expect(mine.ok).toBe(true);
       expect(mine.rows.map((r) => r.name)).toEqual([own]);
@@ -693,11 +700,17 @@ describeDb('the consent bucket', () => {
       // branch produce the evidence when a member disputes an acceptance.
       const staff = await asUser(
         fx.manager,
-        `select name from storage.objects where bucket_id = 'membership-consent'`,
+        `select name from storage.objects
+          where bucket_id = 'membership-consent' and name = any($1::text[])`,
+        [[own, other]],
       );
-      expect(staff.rowCount).toBe(2);
+      expect(staff.rowCount, 'staff read both members’ signatures').toBe(2);
     } finally {
-      await query(`delete from storage.objects where bucket_id = 'membership-consent'`);
+      await query(
+        `delete from storage.objects
+          where bucket_id = 'membership-consent' and name = any($1::text[])`,
+        [[own, other]],
+      );
     }
   });
 

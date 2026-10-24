@@ -105,6 +105,12 @@ afterAll(async () => {
   if (!hasDatabase) return;
 
   await deleteTestUsers();
+  // The signature object this suite uploads. `storage.objects` is global
+  // state that `deleteTestUsers` knows nothing about, so a file left here
+  // would be counted by the next suite that asks what is in the bucket —
+  // which is exactly how `rls-savings.test.ts` started failing in a full run
+  // and passing on its own.
+  await query(`delete from storage.objects where bucket_id = 'membership-consent'`);
   await forcePolicyStatus(fx.policyId, 'superseded');
   await query(
     `alter table public.membership_policy_versions

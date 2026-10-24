@@ -107,9 +107,14 @@ failure mode.
 The two readable tables hold vocabulary — four role keys, three cadences — with
 no personal or financial data. See ADR-011.
 
-### Deferred to Phase 2
+### Deferred past Phase 1 — all since delivered
 
-Intentionally absent, and named in each migration at the point they belong:
+This list was written in Phase 1, when each of these was intentionally absent
+and named in the migration at the point it belonged. **Every one has since
+been delivered**, in the delivery phase numbering (2–21) rather than in the
+Polytos phases — so the list reads as history, not as a gap. It is kept
+because the *reasoning* beside each entry is still the reasoning behind the
+policy that now exists.
 
 - `profiles` — read/update own; staff read clients; owner_admin manages all.
 - `user_roles` — read for self and staff; grant/revoke for owner_admin.
@@ -192,15 +197,34 @@ Phase 1 emits no events — the actions worth auditing do not exist yet.
 
 ## Storage
 
-| Bucket | Public | Size limit | Types |
-| --- | --- | --- | --- |
-| `client-documents` | no | 10 MiB | JPEG, PNG, WebP, HEIC, PDF |
-| `guarantor-documents` | no | 10 MiB | JPEG, PNG, WebP, HEIC, PDF |
-| `company-assets` | no | 2 MiB | JPEG, PNG, WebP |
+| Bucket | Public | Size limit | Types | Added |
+| --- | --- | --- | --- | --- |
+| `client-documents` | no | 10 MiB | JPEG, PNG, WebP, HEIC, PDF | Phase 1 |
+| `guarantor-documents` | no | 10 MiB | JPEG, PNG, WebP, HEIC, PDF | Phase 1 |
+| `company-assets` | no | 2 MiB | JPEG, PNG, WebP | Phase 1 |
+| `loan-documents` | no | 10 MiB | JPEG, PNG, WebP, HEIC, PDF | Phase 13 |
+| `membership-consent` | no | 10 MiB | JPEG, PNG, WebP, HEIC, PDF | Polytos Phase 2 |
 
-SVG is excluded everywhere: it is executable XML and therefore a stored-XSS
-vector. Path convention and the reasoning behind private-by-default are in
-ADR-010. No storage policies exist yet, so `storage.objects` denies everything.
+Every bucket is private. SVG is excluded everywhere: it is executable XML and
+therefore a stored-XSS vector. The path convention and the reasoning behind
+private-by-default are in ADR-010.
+
+**`storage.objects` carries policies now**, which the Phase 1 version of this
+document said it did not — the claim was true when written and stopped being
+true in Phase 13. Each bucket's policies read the *path* to decide who may see
+an object, which is what makes "this client's photograph" or "this member's own
+signature" expressible as a predicate rather than as a check some caller
+remembered to make. The helpers are `storage_path_client_id`,
+`storage_path_guarantor_id`, `storage_path_kind` and — Polytos Phase 2 —
+`storage_path_membership_id`; each returns NULL for a path of the wrong shape,
+which denies every policy that uses it.
+
+`membership-consent` has three policies and, deliberately, **no UPDATE or
+DELETE policy at all**: a signature is evidence, and evidence is not replaced.
+Staff holding `membership:view` read it, a member reads their own through
+`clients.profile_id`, and whoever may enrol writes one — into the path of a
+membership that exists, because a path naming no real membership would be an
+object no read policy could ever match again.
 
 ## Migrations
 
@@ -214,6 +238,18 @@ ADR-010. No storage policies exist yet, so `storage.objects` denies everything.
 20261001000700_storage_buckets.sql               three private buckets
 20261001000800_seed_reference_data.sql           baseline data
 ```
+
+That list is Phase 1's. Later phases added their own, and the authoritative
+list is `supabase/migrations/` itself — `ls` is more honest than a table that
+has to be remembered. The two most recent groups:
+
+```
+20261019000100–20261019000800   Polytos Phase 1: membership foundation
+20261020000100–20261020001400   Polytos Phase 2: enrolment, consent, savings
+```
+
+See `docs/POLYTOS-MEMBERSHIP-SCHEMA.md` and `docs/POLYTOS-SAVINGS.md` for what
+each of those two groups contains and why.
 
 Rules:
 

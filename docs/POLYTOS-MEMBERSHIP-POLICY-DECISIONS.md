@@ -73,12 +73,54 @@ is a real answer and not an absence.
 | 1 | Is the 5% charged **per month** or **once per loan**? | `interest_basis` | On a five-month loan the difference is five-fold. Phase 3 cannot price a member loan without it. |
 | 2 | Is member interest **flat** on the original principal, or on a **reducing balance**? | `interest_method` | The existing engine computes reducing balance monthly. A flat member product needs its own method and its own schedule. |
 | 3 | What multiple of savings may a member borrow? | `savings_to_loan_multiplier_bps` | The documents say a loan may exceed total savings "subject to a defined eligibility formula". The formula is the one thing not defined. Phase 3's eligibility engine is entirely this number. |
-| 4 | Must the six qualifying months be **consecutive**? | `qualifying_months_consecutive` | Decides whether a missed month restarts the clock. Phase 2 cannot compute qualification without it. |
-| 5 | May savings be **withdrawn** while a member loan is active? | `savings_withdrawal_with_active_loan` | Three readings are plausible — allowed, blocked, or only the excess above what secures the loan. Phase 2 cannot offer a withdrawal at all. |
+| 4 | Must the six qualifying months be **consecutive**? | `qualifying_months_consecutive` | Decides whether a missed month restarts the clock. **Phase 2 built both arms; savings do not open until this is answered.** |
+| 5 | May savings be **withdrawn** while a member loan is active? | `savings_withdrawal_with_active_loan` | Three readings are plausible — allowed, blocked, or only the excess above what secures the loan. **Phase 2 built the first two; the third is refused with a message, because the excess needs question 3.** |
 | 6 | How is the year-end profit share **calculated**? | `profit_distribution_basis` | Pro-rata on savings, pro-rata weighted by months held, or equal shares. Phase 5 is this formula. |
 | 7 | What is the **annual cap** on the medical benefit per member? | `medical_benefit_annual_cap` | 5% of an uncapped bill is an uncapped liability. Phase 4 cannot assess a claim against no ceiling. |
 | 8 | How many medical **claims a year** may a member make? | `medical_benefit_claims_per_year` | Same reason. |
 | 9 | Is there a **waiting period** between enrolment and a first benefit claim? | `benefit_waiting_period_days` | Zero and "none" are the same answer; "nobody has said" is not. Phase 4 needs the number. |
+
+### What Polytos Phase 2 did with questions 4 and 5
+
+Both of these gate **savings**, and only savings — which is the whole reason
+the gates are per-activity (§4). Phase 2 shipped the savings module behind
+`is_savings_enabled`, which is a generated column waiting on exactly these
+two. So:
+
+- **Nothing about savings is guessed.** With either question open,
+  `open_savings_account` refuses and no deposit can be recorded. Enrolment and
+  the registration fee carry on, because they wait on neither.
+- **Both arms of question 4 are implemented**, in
+  `member_savings_qualification`, and neither is a default. While the question
+  is open the function refuses to show anybody as qualified and says why —
+  rather than picking the lenient reading and being wrong the day a loan is
+  refused.
+- **Two of the three readings of question 5 are implemented.** `allowed` and
+  `blocked` are enforced in `request_savings_withdrawal`. The third,
+  `above_pledged`, is **refused with a message naming what has to be
+  settled**, because "the excess over what secures the loan" needs a pledged
+  amount, which depends on question 3 — the savings-to-loan multiplier. A
+  figure invented here would be inventing the member's security.
+
+So answering questions 4 and 5 opens the savings module. Answering 3 as well
+is what makes `above_pledged` usable and opens member lending.
+
+### Two of the further questions below now have consequences in code
+
+- **"What counts as a qualifying month?"** Phase 2 implemented *a deposit, or
+  several deposits, totalling at least the monthly minimum within the calendar
+  month* — in Africa/Kampala, net of reversals attributed back to the month
+  they correct. Several deposits accumulating is how a member who cannot find
+  UGX 50,000 at once still makes the month, and that reading is the one the
+  documents' "minimum monthly savings" most naturally supports. **If the client
+  means a cumulative balance reaching six multiples of the minimum instead,
+  `member_savings_contributions` and `member_savings_qualification` are where
+  it changes.** Flagged here because the module is live under this reading.
+- **"What happens to savings when a membership is withdrawn or the member
+  dies?"** Phase 2 stops deposits to an ended membership's account and leaves
+  the balance where it is — still a liability, still owed. Nothing pays it
+  out, nothing offsets it against a loan, and nothing closes the account,
+  because each of those is a payment instruction the documents do not give.
 
 ### Further questions these raise, which the documents do not reach
 

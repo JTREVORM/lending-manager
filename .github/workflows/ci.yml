@@ -121,10 +121,21 @@ jobs:
       - name: Build a local throwaway cluster and apply every migration
         run: npm run db:local:setup
 
-      - name: Database tests
+      # `test:db` runs two vitest projects in sequence: the database suite, then
+      # the demonstration seeder's. The seeder's is separate because the policy
+      # version it publishes is global state that would collide with every
+      # membership suite — see the header of vitest.config.mts. Its own
+      # globalSetup rebuilds the cluster the previous step created, so this one
+      # step covers both.
+      - name: Database tests, then the demonstration seeder
         run: npm run test:db
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test
+          # `POLYTOS_SEED_DEMO` is deliberately **not** set here. The seeder
+          # refuses without it, and tests/db/demo-seed.test.ts supplies the
+          # phrase per child process — which is also how it can assert the
+          # refusals. Putting it in this job's environment would hand it to
+          # every other step for no gain.
 
   # --------------------------------------------------------------------------
   # Browser suite: the production build driven by Playwright against the

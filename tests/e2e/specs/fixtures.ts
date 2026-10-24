@@ -30,6 +30,61 @@ export interface Fixtures {
     readonly draft: string;
     readonly approvedNotDisbursed: string;
   };
+  /**
+   * Polytos Phase 2. Each member is named by what they *are*, so a savings
+   * spec says "the member who has served the qualifying period" rather than
+   * pasting a uuid that stops meaning anything the next time the seed runs.
+   *
+   *   qualified      six unbroken qualifying months. Also the portal
+   *                  borrower, and also holds a loan in arrears — so this is
+   *                  the member who exercises the live-loan rule.
+   *   gapped         six qualifying months with a gap; longest run of three.
+   *   saving         on track, with a month met by two deposits, and a
+   *                  withdrawal waiting for a decision.
+   *   withdrawn      saved, withdrew, and had a duplicate deposit reversed.
+   *   pendingConsent fee paid, consent not verified, so still `pending`.
+   */
+  readonly memberships: {
+    readonly qualified: string;
+    readonly gapped: string;
+    readonly saving: string;
+    readonly withdrawn: string;
+    readonly pendingConsent: string;
+  };
+  readonly membershipNumbers: {
+    readonly qualified: string;
+    readonly pendingConsent: string;
+  };
+  readonly savings: {
+    readonly qualified: string;
+    readonly gapped: string;
+    readonly saving: string;
+    readonly withdrawn: string;
+  };
+  readonly savingsAccountNumbers: {
+    readonly qualified: string;
+    readonly withdrawn: string;
+  };
+  readonly withdrawals: {
+    readonly paid: string;
+    readonly pending: string;
+  };
+  /**
+   * What the policy in force decides, read back from the database by the
+   * seeder.
+   *
+   * The policy screen's two counts — how many of the nine open questions are
+   * still open, and how many of the five activities are open — come from
+   * generated columns. Asserting them from here means a spec checks that the
+   * *screen* agrees with the database, rather than against a number somebody
+   * typed into a test and then had to remember to change.
+   */
+  readonly policy: {
+    readonly version: string;
+    readonly undecidedRules: number;
+    readonly activitiesOpen: number;
+    readonly activitiesClosed: number;
+  };
 }
 
 export const fixtures: Fixtures = JSON.parse(

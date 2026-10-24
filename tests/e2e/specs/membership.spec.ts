@@ -1,6 +1,7 @@
 import {
   expect,
   expectNoErrorBoundary,
+  fixtures,
   stateFile,
   test,
   watchForBrowserErrors,
@@ -27,14 +28,24 @@ import {
  *      from a borrower, but hiding is not protection — so the borrower is
  *      pointed straight at the URL.
  *
- * ## The empty state is the point of this phase
+ * ## Phase 1's premise, and what replaced it
  *
- * No member has been enrolled, because enrolment is Polytos Phase 2. So the
- * register is empty, and these tests assert that it says so honestly and
- * offers no control for a workflow that does not exist. A screen that invited
- * a clerk to collect savings today would be the single worst defect this
- * phase could ship, and it is cheaper to assert its absence than to discover
- * it.
+ * These tests were written when no member could be enrolled, and they asserted
+ * that the register said so honestly and offered no control for a workflow
+ * that did not exist. That was the right assertion to make, and it is why
+ * nothing here ever invited a clerk to collect savings before the module
+ * existed.
+ *
+ * Polytos Phase 2 built enrolment and savings, so the premise is gone: the
+ * register has members in it and the primary action is there. The assertions
+ * below were rewritten to the new truth rather than deleted — a register with
+ * members still has to say which members, and an action that appears has to
+ * appear only to somebody who may use it.
+ *
+ * What is *still* asserted as absent: a control for a benefit claim, a
+ * meeting or a profit share. All three wait on rules the client has not
+ * decided, so a screen offering any of them would be the same lie this file
+ * was written to prevent.
  */
 
 interface Screen {
@@ -81,43 +92,86 @@ test.describe('the membership screens render', () => {
 });
 
 // ===========================================================================
-test.describe('the empty register is honest', () => {
+test.describe('the register is honest about what exists', () => {
   test.use({ storageState: stateFile('owner') });
 
-  test('says no member has been enrolled, and why', async ({ page }) => {
+  test('lists the members who have been enrolled', async ({ page }) => {
     await page.goto('/membership');
 
-    await expect(page.getByText('No members have been enrolled yet')).toBeVisible();
+    // The Phase 1 version of this test asserted the opposite — that the
+    // register said nobody had been enrolled — and it was right to, because
+    // nobody could be. Enrolment exists now, so the honest assertion is that
+    // the members are listed and the "nobody yet" sentence is gone.
+    await expect(page.getByText('No members have been enrolled yet')).toHaveCount(0);
 
-    // The banner that explains it, read from the policy row rather than
-    // hard-coded — so it disappears the day the policy is approved.
-    await expect(page.getByRole('alert').first()).toContainText(
-      /Enrolment is not open yet/i,
-    );
+    await expect(
+      page
+        .getByText(fixtures.membershipNumbers.qualified)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
   });
 
-  test('offers no control for a workflow that does not exist', async ({ page }) => {
+  test('no longer says enrolment is closed, because it is open', async ({ page }) => {
     await page.goto('/membership');
 
-    for (const name of [
-      /enrol member/i,
-      /register member/i,
-      /collect savings/i,
-      /withdraw savings/i,
-      /pay benefit/i,
-    ]) {
+    // The banner is read from the policy row rather than hard-coded, which is
+    // what makes it disappear the day a version that opens enrolment is in
+    // force. The harness publishes one, so it is gone — and that is the
+    // behaviour, not an absence of the test.
+    await expect(page.getByText(/Enrolment is not open yet/i)).toHaveCount(0);
+  });
+
+  test('offers enrolment to somebody who may enrol', async ({ page }) => {
+    await page.goto('/membership');
+
+    // Twice, deliberately, and both are asserted rather than one of them
+    // dismissed: the rail entry is how somebody gets there from anywhere, and
+    // the page's primary action is how somebody gets there from the register
+    // they are already looking at. A bare role locator matches both and trips
+    // strict mode, which is the locator's problem and not the page's.
+    await expect(
+      page.locator('nav').getByRole('link', { name: 'Enrol a Member', exact: true }),
+    ).toBeVisible();
+
+    await expect(
+      page.locator('main').getByRole('link', { name: /enrol a member/i }),
+    ).toBeVisible();
+  });
+
+  test('offers no control for a workflow that still does not exist', async ({ page }) => {
+    await page.goto('/membership');
+
+    // Benefit claims, meetings and the profit share all wait on rules the
+    // client has not decided. A control for any of them would be exactly the
+    // lie Phase 1 wrote this test to prevent.
+    for (const name of [/pay benefit/i, /record a claim/i, /profit share/i, /meeting/i]) {
       await expect(page.getByRole('button', { name }), String(name)).toHaveCount(0);
       await expect(page.getByRole('link', { name }), String(name)).toHaveCount(0);
     }
   });
+});
 
-  test('renders no money figure at all on an empty register', async ({ page }) => {
+// ===========================================================================
+test.describe('a Secretary is not offered enrolment', () => {
+  test.use({ storageState: stateFile('secretary') });
+
+  test('reads the register, and is turned away from the enrolment screen', async ({
+    page,
+  }) => {
     await page.goto('/membership');
+    await expectNoErrorBoundary(page);
 
-    // `Money` marks every rendered sum with `data-money`. An empty programme
-    // has no savings balance, and a `UGX 0` here would be a statement about
-    // the software rather than about the members.
-    await expect(page.locator('[data-money]')).toHaveCount(0);
+    // `membership:create` is the Manager's and the Owner's. The rail and the
+    // register both withhold the action, and the route refuses the URL —
+    // which is the one that matters, because hiding is not protection.
+    await expect(page.getByRole('link', { name: /enrol a member/i })).toHaveCount(0);
+
+    await page.goto('/membership/enrol');
+    expect(
+      page.url(),
+      'enrolment must not open to somebody who may not enrol',
+    ).not.toContain('/membership/enrol');
   });
 });
 
@@ -139,11 +193,26 @@ test.describe('the membership policy screen', () => {
   test('marks every undecided rule as not decided, and counts them', async ({ page }) => {
     await page.goto('/membership/policies');
 
-    // Nine outstanding decisions, each said in words rather than left blank.
-    await expect(page.getByText('Not decided')).toHaveCount(9);
+    // The count comes from the manifest, which the seeder read back out of the
+    // generated columns — so this asserts that the screen agrees with the
+    // database rather than with a number typed into a test.
+    //
+    // Phase 1 asserted nine, because the only version was the seeded draft
+    // with every question open. The harness now publishes a version that
+    // answers the two savings rules, so the figure is smaller and the
+    // assertion follows the data instead of being edited to match.
+    const undecided = fixtures.policy.undecidedRules;
+    expect(undecided, 'the harness policy leaves questions open').toBeGreaterThan(0);
+
+    await expect(page.getByText('Not decided')).toHaveCount(undecided);
 
     await expect(
-      page.getByText(/9 of the programme's rules have not been settled/i),
+      page.getByText(
+        new RegExp(
+          `${String(undecided)} of the programme's rules have not been settled`,
+          'i',
+        ),
+      ),
     ).toBeVisible();
   });
 
@@ -155,11 +224,26 @@ test.describe('the membership policy screen', () => {
     });
     await expect(readiness).toBeVisible();
 
-    // The seeded version is an unapproved draft that does not begin until 1
-    // November, so every one of the five is shut — and the table says so five
-    // times rather than once, which is the whole point of splitting it.
-    await expect(readiness.getByText('Closed')).toHaveCount(5);
-    await expect(readiness.getByText('Open', { exact: true })).toHaveCount(0);
+    // Phase 1 asserted five Closed and no Open, because the only version was
+    // an unapproved draft. The harness now publishes a version that opens
+    // enrolment and savings and leaves lending, benefits and profit sharing
+    // shut — which is the activity-specific gate doing exactly what it is
+    // for, and the figures come from the generated columns via the manifest.
+    await expect(readiness.getByText('Closed')).toHaveCount(
+      fixtures.policy.activitiesClosed,
+    );
+    await expect(readiness.getByText('Open', { exact: true })).toHaveCount(
+      fixtures.policy.activitiesOpen,
+    );
+
+    expect(
+      fixtures.policy.activitiesOpen,
+      'enrolment and savings are open, so the gate is not all-or-nothing',
+    ).toBeGreaterThan(0);
+    expect(
+      fixtures.policy.activitiesClosed,
+      'and lending, benefits and profit sharing are not',
+    ).toBeGreaterThan(0);
 
     // Each activity named, so a reader can tell which is which.
     for (const activity of [
