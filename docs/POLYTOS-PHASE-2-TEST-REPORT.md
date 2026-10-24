@@ -28,7 +28,7 @@ demonstration seeder's allow-list refuses every project but one.
 | Demonstration seeder | `vitest run --project seed` | **Passed** — 18 tests |
 | Upgrade path + financial regression | `node scripts/verify-membership-upgrade.mjs` | **Passed** — 28 figures identical |
 | Financial arithmetic audit | `npm run audit:money` | **Passed** — 60 files, no hazard |
-| Browser tests | `npx playwright test` | **Passed** — see §7 |
+| Browser tests | `npx playwright test` | **Passed** — 631 passed, 27 skipped, 0 failed |
 
 ### Totals, with and without this phase
 
@@ -39,7 +39,7 @@ Stated both ways so nothing is hidden behind a bigger number.
 | Unit + integration | 71 files, 2,301 tests | 73 files, 2,389 tests | 88 |
 | Database | 58 files, 1,417 tests | 61 files, 1,497 tests | 80 |
 | Demonstration seeder | — | 1 file, 18 tests | 18 |
-| Browser | 589 tests | see §7 | 48 |
+| Browser | 18 files, 589 tests | 20 files, 658 tests | 69 |
 
 **No existing test was deleted, skipped, weakened, or had its expected value
 changed to accommodate this phase** — with four exceptions, each of which is a
@@ -254,16 +254,20 @@ than rounds.
 
 ## 7. Browser tests
 
-See §7.1 for the result. Two new spec files, 48 tests, run at both viewports
-where they are reads and at the desktop viewport only where they write — the
-mobile project ignores `*.write.spec.ts`, because running every write twice
-would double the money in the seeded database and make the balances the read
-specs assert against depend on which project ran first.
+See §7.1 for the result. Two new spec files hold 25 `test()` declarations,
+which expand to 36 cases per desktop pass because several iterate over routes.
+The reads run at both viewports and the writes at the desktop viewport only —
+the mobile project ignores `*.write.spec.ts`, because running every write
+twice would double the money in the seeded database and make the balances the
+read specs assert against depend on which project ran first. Across the three
+projects that is 65 of the suite's 658 cases; the other 4 this phase adds are
+in the pre-existing `membership.spec.ts` (52 cases before, 56 now), which
+accounts for the 69 in §1.
 
-| File | Tests | What only a browser can say |
+| File | Cases | What only a browser can say |
 | --- | --- | --- |
-| `tests/e2e/specs/savings.spec.ts` | 35 | every screen renders without an error boundary; no page scrolls sideways at 390px; every amount keeps its currency on one line; a Secretary is turned away from the withdrawal queue by the *route*, not by a hidden link; a borrower reaches no staff savings screen and is offered no control to move money |
-| `tests/e2e/specs/savings.write.spec.ts` | 13 | a deposit survives both form steps; a withdrawal goes Secretary → Manager → paid, in two browser contexts; a rejection asks why and moves nothing; an enrolment takes the fee, records the acceptance and opens the savings account in one submission; the trial balance still balances afterwards |
+| `tests/e2e/specs/savings.spec.ts` | 29 x2 | every screen renders without an error boundary; no page scrolls sideways at 390px; every amount keeps its currency on one line; a Secretary is turned away from the withdrawal queue by the *route*, not by a hidden link; a borrower reaches no staff savings screen and is offered no control to move money |
+| `tests/e2e/specs/savings.write.spec.ts` | 7 desktop | a deposit survives both form steps; a withdrawal goes Secretary → Manager → paid, in two browser contexts; a rejection asks why and moves nothing; an enrolment takes the fee, records the acceptance and opens the savings account in one submission; the trial balance still balances afterwards |
 
 The write spec exists because of the Phase 9 defect in which **no payment
 could be recorded at all**: the form had two steps, step one unmounted when
@@ -276,12 +280,19 @@ buttons in order.
 
 ```
 npx playwright test     (fresh stack, one run)
+
+  27 skipped
+  631 passed (14.3m)
 ```
 
-See the final line of §10 for the figure. The suite was run against a stack
-brought up fresh for the purpose, because these write specs consume the
-seeded fixtures they act on — a second run against the same stack fails on
-exhausted fixtures, which is a property of the harness and not of the code.
+658 tests across the three projects — `setup`, `desktop` (1440x900) and
+`mobile` (390x844). **Nothing failed.** The 27 skipped are the write specs the
+mobile project ignores by configuration, for the reason given above.
+
+The suite was run against a stack brought up fresh for the purpose, because
+these write specs consume the seeded fixtures they act on — a second run
+against the same stack fails on exhausted fixtures, which is a property of the
+harness and not of the code, and is listed again in §10.
 
 ### 7.2 Three fixture changes, and why each is a strengthening
 
