@@ -2118,3 +2118,76 @@ every question holds something up, and nothing is held up by a question that
 does not exist. A database test reads every in-force version three ways (the
 generated column, the function, and `isActivityReady()` in TypeScript) and
 asserts all three agree.
+
+---
+
+## ADR-050 — Activation and consent are database preconditions, not form validation
+
+**Status.** Decided in Phase 1, **enforced in Polytos Phase 2**, which owns
+the tables both halves depend on. Recorded here so the requirement exists
+before the code that must satisfy it.
+
+### Decision, part one: `pending → active` has two preconditions
+
+`memberships_guard_transition()` must refuse the transition unless **both**
+hold, checked as `exists (...)` tests in the trigger and stated above the
+trusted-path exemption so they bind `service_role` too:
+
+1. **A registration fee that actually posted.** A row in
+   `membership_fee_receipts` whose journal entry exists and has not been
+   reversed. The test is the **journal**, not a status column on the receipt:
+   "successfully posted" means the ledger moved, and a receipt that believes
+   it posted while the entry was reversed is exactly the discrepancy a
+   financial system exists to make impossible.
+2. **A recorded acceptance of the member's own terms.** A row in
+   `membership_terms_acceptances` for this membership **and** the exact
+   `policy_version_id` the membership carries. Not any acceptance: accepting
+   version 1.0 does not activate somebody enrolled under 1.1.
+
+**Why not a Server Action.** Both are the preconditions of taking somebody's
+savings. A membership that reached `active` without them is a person the
+business is collecting money from, under terms nobody can show they agreed
+to — and every route that reaches the table must be refused, not merely the
+one route the form takes. Neither can be a CHECK constraint, because both are
+statements about rows in other tables; the trigger is the only place in the
+database that can say them.
+
+**What Phase 2 must also decide, and this ADR does not.** Whether reversing a
+registration fee *after* activation suspends the membership or merely flags
+it. What it may not do is make the activation retrospectively legitimate: the
+activation must never have been possible without the posting.
+
+### Decision, part two: a typed name is not consent
+
+`membership_terms_acceptances.signature_name` is free text. Anybody holding
+the capability can type any member's name, and the row that results is
+indistinguishable from one the member signed. Phase 1 tolerates this because
+nothing writes the table and no screen offers it. The moment Phase 2 builds
+the enrolment form and the re-acceptance screen, a typed name alone becomes a
+staff member's unilateral power to move somebody onto new terms and produce
+the paperwork saying they agreed.
+
+So Phase 2 must require **verifiable evidence that did not originate with the
+person typing**, enforced in the database:
+
+- a signature image at `signature_path`, in the private documents bucket; or
+- a witnessed record carrying both `witness_name` and `witness_phone`, where
+  the witness is **somebody other than `recorded_by`** — a staff member
+  witnessing their own entry is the same signature twice; or
+- a confirmation the member themselves sent: a portal acknowledgement under
+  their own `clients.profile_id`, or a one-time code delivered to the phone
+  number on the client record and returned.
+
+A CHECK constraint on `membership_terms_acceptances` must refuse a row
+carrying none of them, so no write path can skip it, and the rule applies
+equally to the acceptance taken at enrolment and to a later re-acceptance
+through `accept_membership_policy_version()`.
+
+`signature_name` stays — the name a person writes is what a printed form
+shows. It stops being sufficient on its own.
+
+**Consequences.** Phase 2 cannot ship enrolment as a single INSERT. Enrolling
+a member becomes one transaction that writes the membership, the fee receipt
+and its journal, and the acceptance with its evidence — which is what
+`enrol_member()` is for in the roadmap, and why it is a database function
+rather than three calls from a form.

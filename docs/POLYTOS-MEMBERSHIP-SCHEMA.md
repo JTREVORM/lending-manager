@@ -219,7 +219,7 @@ would be a statement about the software, not about the member.
 | From | To | Who | What is required |
 | --- | --- | --- | --- |
 | *(insert)* | `pending` | `membership:create` | A client. The branch and the policy version are stamped; any other opening status is refused |
-| `pending` | `active` | `membership:manage_status` | Nothing beyond the capability in Phase 1. Phase 2 adds the registration-fee receipt and the signed terms as preconditions. `activated_on` is stamped |
+| `pending` | `active` | `membership:manage_status` | Nothing beyond the capability in Phase 1 — **Phase 2 must add two database preconditions**, below. `activated_on` is stamped |
 | `pending` | `withdrawn` | `membership:manage_status` | A reason. `ended_on` stamped |
 | `pending` | `deceased` | `membership:manage_status` | `ended_on` stamped |
 | `active` | `suspended` | `membership:manage_status` | A reason |
@@ -234,6 +234,28 @@ would be a statement about the software, not about the member.
 Reactivating a withdrawn membership is **not** a transition. It is a new
 enrolment with a new number, because the savings qualification clock and the
 benefit waiting period both restart and a reused row could not express that.
+
+#### What Phase 2 must add to `pending → active`
+
+This guard checks that a transition is the right *shape*. It cannot check
+that the member paid and agreed, because neither record exists until Phase 2
+creates the tables. Both belong in this trigger, as `exists (...)` tests
+above the trusted-path exemption so they bind `service_role` too:
+
+1. **A registration fee that posted** — a `membership_fee_receipts` row whose
+   journal entry exists and has not been reversed. The test is the **journal**,
+   not a status column on the receipt: "successfully posted" means the ledger
+   moved.
+2. **An acceptance of the member's own terms** — a
+   `membership_terms_acceptances` row for this membership *and* the exact
+   `policy_version_id` it carries. Accepting version 1.0 does not activate
+   somebody enrolled under 1.1.
+
+Neither can be a CHECK constraint, because both are statements about rows in
+other tables. Neither belongs in a Server Action either: a membership that
+reached `active` without them is a person the business is taking savings from
+under terms nobody can show they agreed to, and every route to the table has
+to be refused, not only the one the form takes. See ADR-050.
 
 ### Triggers
 
@@ -412,6 +434,31 @@ draft, and still could not move one without their signature.
 Phase 1 ships no screen for it. It exists so the rule above it can be strict
 without being a trap, and so the authorization around re-acceptance is
 reviewed before Polytos Phase 2 builds the form that calls it.
+
+#### Phase 2 must require consent evidence, not a typed name
+
+`p_signature_name` is free text. Anybody holding
+`membership:manage_policies` can type any member's name, and the row that
+results is indistinguishable from one the member signed. That is tolerable
+only while nothing calls this function; the moment a screen does, it becomes
+a staff member's unilateral power to move somebody onto new terms and produce
+the paperwork saying they agreed.
+
+Phase 2 must require, **by CHECK constraint on
+`membership_terms_acceptances`** so no write path can skip it, at least one
+artefact that did not originate with the person typing:
+
+- a signature image at `signature_path`, in the private documents bucket; or
+- a witnessed record carrying both `witness_name` and `witness_phone`, where
+  the witness is **somebody other than `recorded_by`** — a staff member
+  witnessing their own entry is the same signature twice; or
+- a confirmation the member themselves sent: a portal acknowledgement under
+  their own `clients.profile_id`, or a one-time code delivered to the phone
+  number on the client record and returned.
+
+`signature_name` stays — the name a person writes is what a printed form
+shows — but it stops being sufficient on its own. The rule applies equally to
+the acceptance taken at enrolment. See ADR-050.
 
 ---
 

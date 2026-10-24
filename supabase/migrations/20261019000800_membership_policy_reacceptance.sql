@@ -38,6 +38,38 @@
 -- version, an immutable column — can be strict without being a trap, and so
 -- that the authorization around re-acceptance is reviewed before Polytos
 -- Phase 2 builds the form that calls it.
+--
+-- ## What Phase 2 must tighten before this is reachable from a screen
+--
+-- `p_signature_name` is a **typed name**, and a typed name is not consent.
+-- Anybody with `membership:manage_policies` can type any member's name, and
+-- the row that results is indistinguishable from one the member themselves
+-- signed. For Phase 1 that is tolerable because nothing calls this function
+-- and no screen offers it. The moment a screen does, a typed name alone
+-- becomes a staff member's unilateral power to move somebody onto new terms
+-- and produce the paperwork saying they agreed.
+--
+-- So Phase 2 must require **verifiable evidence of consent**, enforced in
+-- the database rather than in the form, before an acceptance row counts:
+--
+--   * at least one artefact that did not originate with the person typing —
+--     a signature image at `signature_path` in the private documents bucket,
+--     or a witnessed record carrying `witness_name` and `witness_phone`, or
+--     a confirmation the member themselves sent (a portal acknowledgement
+--     under their own `clients.profile_id`, or a one-time code delivered to
+--     the phone number on the client record and returned);
+--   * a CHECK constraint on `membership_terms_acceptances` that refuses a
+--     row carrying none of them, so the requirement cannot be skipped by any
+--     write path; and
+--   * where the evidence is a witness, the witness must be somebody other
+--     than `recorded_by` — a staff member witnessing their own entry is the
+--     same signature twice.
+--
+-- `signature_name` stays, because the name a person writes is what a printed
+-- form shows. It stops being sufficient on its own.
+--
+-- The same requirement applies to the acceptance taken at enrolment, which
+-- is the other caller Phase 2 adds. See ADR-050.
 -- ===========================================================================
 
 create or replace function public.accept_membership_policy_version(

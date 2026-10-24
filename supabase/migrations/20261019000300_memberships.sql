@@ -451,6 +451,36 @@ begin
     end if;
   end if;
 
+  -- ## Polytos Phase 2 must add two preconditions to `pending -> active`
+  --
+  -- This guard checks that the transition is *shaped* correctly. It does not
+  -- — and in Phase 1 cannot — check that the member has actually paid and
+  -- actually agreed, because neither record exists yet. Phase 2 owns both,
+  -- and both belong **here**, in this trigger, before the transition is
+  -- allowed:
+  --
+  --   1. **A posted registration fee.** Not a boolean on the membership and
+  --      not a check in the Server Action: a row in `membership_fee_receipts`
+  --      whose journal entry exists and is not reversed. "Successfully
+  --      posted" means the ledger moved, so the test is the journal, not the
+  --      receipt's own status column. A receipt reversed after activation
+  --      must be visible as such — Phase 2 decides whether that suspends the
+  --      membership or merely flags it, but the activation itself must never
+  --      have been possible without the posting.
+  --
+  --   2. **A recorded terms acceptance.** A row in
+  --      `membership_terms_acceptances` for this membership *and* the exact
+  --      `policy_version_id` the membership carries. Not any acceptance:
+  --      accepting version 1.0 does not activate somebody enrolled under 1.1.
+  --
+  -- Both are statements about rows in other tables, so neither can be a CHECK
+  -- constraint; they are `exists (...)` tests in this function, stated above
+  -- the trusted-path exemption so they bind `service_role` too. A membership
+  -- that went active without a fee and without a signature is a person the
+  -- business is taking savings from under terms nobody can show they agreed
+  -- to, and that is not a state a Server Action should be trusted to prevent.
+  --
+  -- See docs/POLYTOS-SIX-PHASE-ROADMAP.md (Phase 2) and ADR-050.
   if new.status is distinct from old.status then
     v_allowed := case old.status
       when 'pending'   then array['active', 'withdrawn', 'deceased']

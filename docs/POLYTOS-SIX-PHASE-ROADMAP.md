@@ -59,7 +59,7 @@ collection date among them — before and after. See
 | Item | Notes |
 | --- | --- |
 | `enrol_member()` | The write path Phase 1 left out. Takes a client, writes a pending membership, takes the terms acceptance and the registration-fee receipt in one transaction |
-| `transition_membership()` | The lifecycle write path, with the fee receipt and the signed terms as preconditions of activation |
+| `transition_membership()` | The lifecycle write path. `pending -> active` is refused unless both preconditions below hold |
 | `membership_fee_receipts` | A document that posts its own journal. Reference scope `MF` |
 | `savings_accounts` | One per membership. Reference scope `SA`. No balance column |
 | `savings_transactions` | Deposits, withdrawals and reversals. Append-only, each posting its own journal. Reference scope `SV` |
@@ -70,6 +70,39 @@ collection date among them — before and after. See
 | Capabilities | `savings:view`, `savings:record`, `savings:reverse`, `membership_fees:record` |
 | Screens | Enrol a member; collect savings; the savings register; a member's savings statement; the register's "Collect savings" action, which Phase 1 deliberately does not show |
 
+**Two preconditions Phase 2 must enforce in the database, not in a form.**
+`memberships_guard_transition()` already refuses a transition that is the
+wrong *shape*. Phase 2 must add the two that say the member actually paid and
+actually agreed, as `exists (...)` tests in that trigger, above the
+trusted-path exemption so they bind `service_role` too:
+
+1. **A registration fee that posted.** A `membership_fee_receipts` row whose
+   journal entry exists and has not been reversed. The test is the journal,
+   not a status column on the receipt — "successfully posted" means the
+   ledger moved.
+2. **An acceptance of the member's own terms.** A
+   `membership_terms_acceptances` row for this membership *and* the exact
+   `policy_version_id` it carries. Accepting version 1.0 does not activate
+   somebody enrolled under 1.1.
+
+A membership that reached `active` without both is a person the business is
+taking savings from under terms nobody can show they agreed to. Every route
+to the table must be refused, not only the one the form takes — which is why
+`enrol_member()` is a database function writing the membership, the receipt,
+its journal and the acceptance in one transaction, rather than three calls
+from a Server Action.
+
+**And consent must be evidence, not a typed name.**
+`membership_terms_acceptances.signature_name` is free text that any
+capability holder can type on somebody else's behalf. Phase 2 must require,
+by CHECK constraint, at least one artefact that did not originate with the
+person typing: a signature image at `signature_path`, a witnessed record
+whose witness is not `recorded_by`, or a confirmation the member themselves
+sent — a portal acknowledgement under their own `clients.profile_id`, or a
+one-time code returned from the phone number on the client record. The rule
+applies equally to the acceptance taken at enrolment and to a later
+re-acceptance through `accept_membership_policy_version()`. See ADR-050.
+
 **Why decision 4 blocks it.** The qualification calculation is the whole
 point of savings in this programme, and whether six qualifying months must be
 consecutive changes the query, the view and the answer.
@@ -79,7 +112,11 @@ knowing whether a withdrawal is permitted against a live member loan.
 Deposits could ship without it; a half-built savings module that takes money
 and cannot give it back is worse than waiting.
 
-**Proof it is done.** Savings reconcile three ways — per member against their
+**Proof it is done.** No membership reaches `active` without a posted,
+unreversed fee journal and an acceptance of its own policy version — asserted
+by attempting both omissions as a real authenticated role and as the table
+owner. No acceptance row exists carrying only a typed name. Savings reconcile
+three ways — per member against their
 own transactions, across members against the `2100` ledger balance, and per
 branch against `journal_entries.branch_id`. A reversal un-does every one of
 the three. The trial balance foots after every operation.

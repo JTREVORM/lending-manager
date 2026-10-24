@@ -810,7 +810,83 @@ would pass for the wrong reason on a policy that silently matched no row.
 
 ---
 
-## 12. Nothing was executed against production
+## 12. The production dependency advisory
+
+GitHub Actions run `40005654854` failed its **Production dependency audit**
+step. The database and browser jobs passed; nothing in the Polytos work was
+implicated.
+
+### What was vulnerable
+
+| Package | Installed | Advisory | Severity | Vulnerable range |
+| --- | --- | --- | --- | --- |
+| `next` | 16.3.8 | [GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw) — unauthenticated RCE in the Image Optimization API when SVG files are used | **critical** | `>=16.0.0 <=16.4.0` |
+| `next` | 16.3.8 | [GHSA-673q-mjm6-r5xr](https://github.com/advisories/GHSA-673q-mjm6-r5xr) — unauthenticated RCE in `use cache` functions returning typed arrays | **critical** | `>=16.0.0 <=16.4.0` |
+| `next` | 16.3.8 | [GHSA-p3m5-59mp-jv5r](https://github.com/advisories/GHSA-p3m5-59mp-jv5r) — denial of service in the App Router using Server Actions | high | `>=16.0.0 <=16.4.0` |
+| `zod` | 4.6.5 | [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) — memory exhaustion validating oversized constrained collections | high | `<4.6.6` |
+
+Both are **direct production dependencies**, at `node_modules/next` and
+`node_modules/zod`. Neither is reached through another package, so there is
+no transitive path to break.
+
+### It is not this branch's doing
+
+`git diff 5976fc3..HEAD -- package.json package-lock.json` is **empty**: the
+Polytos work added no dependency and moved no version. The versions were
+pinned exactly, were clean when they were pinned, and the advisories were
+published against them afterwards. The branch is where the failure surfaced,
+not where it came from.
+
+### The correction
+
+```
+next  16.3.8 -> 16.4.1
+zod   4.6.5  -> 4.6.6
+```
+
+Both are the **lowest** versions that clear their advisories, not the latest.
+`npm audit` proposed `next@16.4.3` and `zod@4.6.7`; the advisory ranges end
+at `16.4.0` and `4.6.6`, so 16.4.1 and 4.6.6 are the smallest steps that
+answer them, and each was verified by re-running the audit rather than
+assumed from the range.
+
+`npm audit fix --force` was **not** used. It reports the change as "outside
+the stated dependency range" only because this repository pins exact versions
+with no caret, so every upgrade is outside the range by construction; neither
+bump crosses a major. Nothing was suppressed, no advisory was ignored, and
+the audit step was not weakened — `npm audit --omit=dev --audit-level=high`
+now reports **0 vulnerabilities** against the same database CI reads.
+
+The lockfile diff is `next`, its ten platform-specific SWC binaries, and
+`zod`. Nothing else moved.
+
+### Two advisories remain, and are deliberately not fixed here
+
+`undici` and `vite` are **development-only** transitive dependencies, which
+is why `--omit=dev` reports zero. CI prints them for visibility on a second,
+non-failing `npm audit` line. Neither reaches the production bundle, and
+upgrading the toolchain to chase them is a change with its own risk and no
+security benefit to the deployed application.
+
+### Re-verified on the upgraded dependencies
+
+A minor Next upgrade is exactly the kind of change a test suite exists to
+judge, so everything was run again rather than reasoned about:
+
+| Check | Result |
+| --- | --- |
+| `npm audit --omit=dev --audit-level=high` | **0 vulnerabilities** |
+| `npm run typecheck` / `lint` / `format:check` | Passed |
+| `npm run build` | Passed, compiled in 20.0s; three membership routes dynamic; no secret in `.next/static` |
+| `npm run test:run` | **71 files, 2,294 passed**, 0 failed |
+| `npm run test:db`, applied from zero | **58 files, 1,417 passed**, 0 failed |
+| `npx playwright test` | **589 tests — 562 passed, 27 skipped, 0 failed**, on a stack torn down and reseeded |
+| `npm run audit:money` | 60 files, no hazard |
+| `node scripts/verify-membership-upgrade.mjs` | **28/28 financial figures identical** |
+
+---
+
+## 13. Nothing was executed against production
 
 - No hosted Supabase project was contacted.
 - No migration was applied to any database but the two local throwaway
