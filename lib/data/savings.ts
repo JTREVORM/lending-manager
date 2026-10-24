@@ -271,6 +271,41 @@ export async function getSavingsAccount(
   return data === null ? null : toAccountSummary(data as unknown as RegisterRow);
 }
 
+/**
+ * The savings account belonging to a client, if they have one.
+ *
+ * For the portal, where a member reads their own. One account per *membership*
+ * and one live membership per client, so this resolves to at most one row —
+ * and it resolves through the identity clause on `clients.profile_id`, so a
+ * member asking for somebody else's client id gets nothing from the database
+ * rather than nothing from a check written here.
+ *
+ * A client who rejoined has a second membership and therefore a second
+ * account, so `maybeSingle` would raise rather than pick. The newest account
+ * is the live one, which is the one a member is asking about.
+ */
+export async function getSavingsAccountForClient(
+  clientId: string,
+): Promise<SavingsAccountSummary | null> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('savings_account_register')
+    .select(REGISTER_COLUMNS)
+    .eq('client_id', clientId)
+    .order('opened_on', { ascending: false })
+    .order('account_number', { ascending: false })
+    .limit(1);
+
+  if (error !== null) {
+    logger.warn('Could not read a client’s savings account.', { code: error.code });
+    throw mapDatabaseError(error, 'savings');
+  }
+
+  const row = (data ?? [])[0];
+  return row === undefined ? null : toAccountSummary(row as unknown as RegisterRow);
+}
+
 /** The savings account belonging to a membership, if it has one. */
 export async function getSavingsAccountForMembership(
   membershipId: string,
@@ -304,6 +339,14 @@ export interface StatementLine {
   readonly description: string;
   readonly deposit: UgxAmount;
   readonly withdrawal: UgxAmount;
+  /**
+   * The row's own effect on the balance, signed.
+   *
+   * Carried through so a caller can derive the balance a period *opened* at
+   * as `runningBalance - signedAmount` on its first row — from the database's
+   * own figures rather than by summing the rows a second time.
+   */
+  readonly signedAmount: UgxAmount;
   readonly runningBalance: UgxAmount;
   readonly paymentMethod: PaymentMethod | null;
   readonly externalReference: string | null;
@@ -345,6 +388,7 @@ export async function getSavingsStatement(
     description: row.description,
     deposit: requiredAmount(row.deposit),
     withdrawal: requiredAmount(row.withdrawal),
+    signedAmount: requiredAmount(row.signed_amount),
     runningBalance: requiredAmount(row.running_balance),
     paymentMethod: (row.payment_method as PaymentMethod | null) ?? null,
     externalReference: row.external_reference,
@@ -923,4 +967,51 @@ export async function clientHasLiveLoan(clientId: string): Promise<boolean> {
   }
 
   return data === true;
+}
+
+// ---------------------------------------------------------------------------
+// The witness picker
+// ---------------------------------------------------------------------------
+
+export interface WitnessCandidate {
+  readonly profileId: string;
+  readonly fullName: string;
+}
+
+/**
+ * The members of staff who could witness an acceptance.
+ *
+ * Active profiles only, and never the person asking — because
+ * `membership_terms_acceptances_guard` refuses a witness who is the recorder,
+ * and offering a name the database will reject is worse than offering a
+ * shorter list. The guard is still the control: this list is a convenience,
+ * and a caller who posts their own id is refused there.
+ *
+ * It reads `profiles`, where the select policy already requires `users:view`
+ * — which is held by exactly the roles that hold `membership:create`. So a
+ * caller who may enrol can see the staff list, and nothing else needs to say
+ * so.
+ */
+export async function listWitnessCandidates(
+  excludeProfileId: string,
+): Promise<readonly WitnessCandidate[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('status', 'active')
+    .neq('id', excludeProfileId)
+    .order('full_name', { ascending: true })
+    .limit(200);
+
+  if (error !== null) {
+    logger.warn('Could not list witness candidates.', { code: error.code });
+    throw mapDatabaseError(error, 'user');
+  }
+
+  return (data ?? []).map((row) => ({
+    profileId: row.id,
+    fullName: row.full_name,
+  }));
 }

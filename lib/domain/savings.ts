@@ -512,6 +512,39 @@ export interface ContributionMonth {
 }
 
 /**
+ * The contribution month a business date falls in: its first day.
+ *
+ * Mirrors the `contribution_month` generated column, which is
+ * `make_date(year, month, 1)` over `value_date` in Africa/Kampala. It is a
+ * string operation rather than a `Date` one deliberately: constructing a
+ * `Date` from `'2026-06-01'` parses it as UTC midnight, and rendering it in a
+ * timezone behind UTC would show May.
+ */
+export function contributionMonthOf(businessDate: string): string {
+  return `${businessDate.slice(0, 7)}-01`;
+}
+
+/**
+ * This month's contributions, out of a history.
+ *
+ * Needed because the contribution view holds only the months a member has
+ * actually paid into. Taking the newest row and calling it "this month" is the
+ * mistake worth naming: a member whose last deposit was in March, read in
+ * June, would have March's figure presented as June's — so a counter would be
+ * told the month was already met and the member would miss it.
+ *
+ * `null` means nothing has been paid in this month, which is a contribution of
+ * zero rather than a missing record.
+ */
+export function findContributionMonth<T extends { readonly month: string }>(
+  months: readonly T[],
+  businessDate: string,
+): T | null {
+  const target = contributionMonthOf(businessDate);
+  return months.find((row) => row.month.slice(0, 10) === target) ?? null;
+}
+
+/**
  * How far through the month a member is, for a progress bar.
  *
  * Capped at 100: a member who saved UGX 80,000 against a UGX 50,000 minimum has

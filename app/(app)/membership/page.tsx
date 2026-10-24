@@ -4,6 +4,7 @@ import { MembershipRegister } from '@/components/membership/membership-register'
 import { Alert } from '@/components/ui/alert';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
+import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getActiveMembershipPolicy, listMemberships } from '@/lib/data/membership';
 import {
@@ -26,17 +27,17 @@ export const metadata = { title: 'Membership' };
  * they ask — and a borrower gets at most their own, through the identity
  * clause on `clients.profile_id` rather than through a capability.
  *
- * ## There is no "Enrol member" action, and that is the point
+ * ## The "Enrol member" action appears when enrolment can actually complete
  *
- * Enrolment is Polytos Phase 2. A primary action leading to a form that
- * cannot complete, or that could write a membership with no registration fee
- * and no signed terms behind it, would be worse than no action — it would be
- * the system telling a clerk that members can be taken on today.
+ * Phase 1 shipped this register with no primary action, because enrolment did
+ * not exist and an action leading to a form that could not complete would
+ * have been the system telling a clerk that members could be taken on.
  *
- * What the page does say, at the top, is *why*: the policy version is a
- * draft, and until it is approved and in force nobody can be enrolled. That
- * sentence is read from the policy row rather than hard-coded, so it stops
- * appearing the moment the policy is approved.
+ * Phase 2 built it, so the action is here — but only when the caller holds
+ * `membership:create` **and** the policy version in force actually opens
+ * enrolment. Where it does not, the banner says why instead, read from the
+ * policy row rather than hard-coded, so it stops appearing the moment the
+ * policy is approved.
  *
  * ## The banner is about enrolment, and says so
  *
@@ -52,7 +53,7 @@ export default async function MembershipPage({
 }: {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await guardPermission(ROUTES.membership, 'membership:view');
+  const context = await guardPermission(ROUTES.membership, 'membership:view');
   const params = await searchParams;
 
   const parsed = membershipSearchSchema.safeParse({
@@ -94,6 +95,11 @@ export default async function MembershipPage({
         icon={BadgeCheck}
         title="Membership"
         description="Members of the Polytos savings and benefits programme. Search by member name, membership number or client number."
+        primaryAction={
+          enrolmentBlocked === null && contextCan(context, 'membership:create') ? (
+            <ActionLink href={ROUTES.enrolMember}>Enrol a member</ActionLink>
+          ) : undefined
+        }
         secondaryActions={
           <ActionLink href={ROUTES.membershipPolicies} variant="secondary">
             Membership policy

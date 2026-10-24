@@ -37,12 +37,13 @@ import { MembershipStatusBadge } from './membership-status-badge';
  * sideways or crushes its columns, and neither is usable one-handed by
  * somebody standing at a counter.
  *
- * ## The empty state is honest, and it offers nothing
+ * ## The empty state points at the work
  *
- * No member has been enrolled, because enrolment is Polytos Phase 2. So the
- * empty state says that, and — unlike the client register's, which offers
- * "Register a client" — it offers no action at all. A button leading to a
- * form that cannot complete would be a worse lie than an empty table.
+ * Phase 1's version said no member had been enrolled because enrolment did
+ * not exist, and offered no action for that reason. Phase 2 built it, so the
+ * empty state names the thing to do — and the primary action lives on the
+ * page rather than in here, where it can be withheld when the policy in force
+ * does not open enrolment.
  */
 export function MembershipRegister({
   page,
@@ -99,7 +100,7 @@ export function MembershipRegister({
           description={
             filtered
               ? 'Try a shorter search, or clear the status filter.'
-              : 'Enrolment opens once the membership policy has been approved. Until then this register is empty, and no savings, fees or benefits can be recorded.'
+              : 'Enrol a member to take their registration fee, record their acceptance of the terms and open their savings account. A member is a client with a membership, so start from a client who is already registered.'
           }
         />
       ) : (
