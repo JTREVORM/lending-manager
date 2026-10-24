@@ -23,7 +23,7 @@ demonstration seeder's allow-list refuses every project but one.
 | ESLint | `npm run lint` | **Passed**, 0 errors, 0 warnings |
 | Prettier | `npm run format:check` | **Passed**, all files conform |
 | Production build | `npm run build` | **Passed**, 8 new routes emitted |
-| Unit + integration | `npm run test:run` | **Passed** — 73 files, 2,389 tests |
+| Unit + integration | `npm run test:run` | **Passed** — 73 files, 2,389 tests (see §11 for the 6 CI skipped before this phase fixed the ordering) |
 | Database suite | `vitest run --project db` | **Passed** — 61 files, 1,497 tests |
 | Demonstration seeder | `vitest run --project seed` | **Passed** — 18 tests |
 | Upgrade path + financial regression | `node scripts/verify-membership-upgrade.mjs` | **Passed** — 28 figures identical |
@@ -400,7 +400,56 @@ Stated rather than omitted.
 
 ---
 
-## 11. Verification commands, in order
+## 11. A suite that was passing locally and skipping in CI
+
+Found while verifying this phase's own CI run, and worth recording because the
+figures in §1 would otherwise have been true locally and wrong in CI.
+
+`npm run test:run` reported **73 files, 2,389 tests, 0 skipped** on this
+machine, and **72 files passed, 1 skipped; 2,383 passed, 6 skipped** on the
+GitHub runner. Nothing was flaky and nothing was conditional on the operating
+system. `tests/integration/bundle.test.ts` guards itself:
+
+```ts
+const describeBundle = existsSync(CHUNKS) ? describe : describe.skip;
+```
+
+That guard is deliberate and correct — a developer running the unit suite
+alone should not be told their tests are broken because they have no build.
+But the CI job ran `npm run test:run` **before** `npm run build`, so
+`.next/static` did not exist yet and the file skipped itself every time. It had
+been skipping in CI since it was written, and it says so only in a count
+nobody reads.
+
+What was not being asserted in CI:
+
+- that **no Supabase client runtime reaches the browser** — no
+  `GoTrueClient`, `PostgrestQueryBuilder` or `RealtimeChannel` in any chunk.
+  This is an architectural and security claim, not a size one: if any of them
+  reappears, something in a Client Component has started talking to the
+  database directly.
+- the gzipped size budgets, per chunk and in total — the bundle a borrower
+  pays for in airtime.
+
+Locally the suite passes, 6 tests in 1 file, because a build was present.
+
+**The fix** is a step in the `checks` job, after the production build, that
+runs that one file where `.next/static` exists — guarded, so the skip cannot
+come back silently:
+
+```yaml
+test -d .next/static/chunks || { echo "::error::..."; exit 1; }
+npx vitest run --project integration tests/integration/bundle.test.ts
+```
+
+The guard matters more than the re-run. Without it, a future reordering would
+restore the skip and CI would go green while asserting nothing. Nothing was
+weakened to accommodate this: the suite is unchanged, and it now runs in CI
+where it previously did not.
+
+---
+
+## 12. Verification commands, in order
 
 ```bash
 npm run typecheck
