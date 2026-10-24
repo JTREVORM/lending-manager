@@ -125,22 +125,23 @@ test.describe('the register is honest about what exists', () => {
   test('offers enrolment to somebody who may enrol', async ({ page }) => {
     await page.goto('/membership');
 
-    // Both are asserted, and they are asserted differently on purpose.
-    //
-    // The page's primary action has to be **visible at every width**, because
-    // that is how somebody standing at a counter with a phone reaches
-    // enrolment.
+    // The page's primary action, visible at every width — because that is how
+    // somebody standing at a counter with a phone reaches enrolment.
     await expect(
       page.locator('main').getByRole('link', { name: /enrol a member/i }),
     ).toBeVisible();
 
-    // The rail entry has to be **present**, but on a phone the rail is
-    // collapsed behind a menu button — so asserting it visible would be
-    // asserting that the rail does not collapse, which is a different claim
-    // and one `app-shell.spec.ts` already covers.
-    await expect(
-      page.locator('nav').getByRole('link', { name: 'Enrol a Member', exact: true }),
-    ).toBeAttached();
+    // The rail entry is **not** asserted here, and the reason is worth
+    // recording so it is not added back. Below `md` the rail is a drawer, and
+    // a drawer renders a module's links only once that module is expanded —
+    // so there is nothing in the document to find without driving the menu,
+    // and driving the menu is `navigation.spec.ts`'s job.
+    //
+    // The entry itself is pinned where it belongs:
+    // `tests/integration/membership-ui.test.tsx` asserts it exists and
+    // carries `requires: ['membership:create']`, against the navigation
+    // definition rather than against a rendering of it. That the action is
+    // gated rather than merely present is the Secretary block below.
   });
 
   test('offers no control for a workflow that still does not exist', async ({ page }) => {
