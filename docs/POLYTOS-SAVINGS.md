@@ -419,7 +419,7 @@ in order in a real browser.
 | `tests/db/savings.test.ts` | 31 | the liability direction, append-only, the lifecycle, reversal, the statement, reconciliation |
 | `tests/db/rls-savings.test.ts` | 24 | the four roles, forged ids, direct function execution, replayed keys |
 | `tests/db/demo-seed.test.ts` | 18 | the seeder's refusals, and that running it three times changes nothing |
-| `tests/unit/savings.test.ts` | 42 | the vocabulary matches the constraints; the arithmetic matches the database |
+| `tests/unit/savings.test.ts` | 47 | the vocabulary matches the constraints; the arithmetic matches the database; and the regression for the month-finding bug |
 | `tests/unit/savings-validation.test.ts` | 39 | the edge, including the fields that are deliberately absent |
 | `tests/e2e/specs/savings.spec.ts` | 35 | the screens render, at both viewports, to the right people |
 | `tests/e2e/specs/savings.write.spec.ts` | 13 | a deposit, an enrolment and a withdrawal, by pressing the buttons |

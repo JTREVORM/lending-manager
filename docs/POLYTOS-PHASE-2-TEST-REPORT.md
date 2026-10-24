@@ -23,7 +23,7 @@ demonstration seeder's allow-list refuses every project but one.
 | ESLint | `npm run lint` | **Passed**, 0 errors, 0 warnings |
 | Prettier | `npm run format:check` | **Passed**, all files conform |
 | Production build | `npm run build` | **Passed**, 8 new routes emitted |
-| Unit + integration | `npm run test:run` | **Passed** — 73 files, 2,384 tests |
+| Unit + integration | `npm run test:run` | **Passed** — 73 files, 2,389 tests |
 | Database suite | `vitest run --project db` | **Passed** — 61 files, 1,497 tests |
 | Demonstration seeder | `vitest run --project seed` | **Passed** — 18 tests |
 | Upgrade path + financial regression | `node scripts/verify-membership-upgrade.mjs` | **Passed** — 28 figures identical |
@@ -36,7 +36,7 @@ Stated both ways so nothing is hidden behind a bigger number.
 
 | Suite | Before Phase 2 | After | Added |
 | --- | --- | --- | --- |
-| Unit + integration | 71 files, 2,301 tests | 73 files, 2,384 tests | 83 |
+| Unit + integration | 71 files, 2,301 tests | 73 files, 2,389 tests | 88 |
 | Database | 58 files, 1,417 tests | 61 files, 1,497 tests | 80 |
 | Demonstration seeder | — | 1 file, 18 tests | 18 |
 | Browser | 589 tests | see §7 | 48 |
