@@ -29,7 +29,9 @@ import {
   allowsWithdrawal,
   canTransitionWithdrawal,
   consentSatisfiesActivation,
+  contributionMonthOf,
   contributionProgressPercent,
+  findContributionMonth,
   isCardVerificationCode,
   isConsentMethod,
   isLiveWithdrawal,
@@ -335,6 +337,51 @@ describe('contribution arithmetic', () => {
     expect(monthlyShortfall(toUgx(20_000), toUgx(50_000))).toBe(30_000);
     expect(monthlyShortfall(toUgx(50_000), toUgx(50_000))).toBe(0);
     expect(monthlyShortfall(toUgx(80_000), toUgx(50_000))).toBe(0);
+  });
+});
+
+describe('finding this month in a contribution history', () => {
+  // The view holds only the months a member actually paid into, newest first.
+  // Reading `months[0]` and calling it "this month" was a real bug: a member
+  // whose last deposit was in March would — read in June — have March's figure
+  // presented as June's, and a counter would be told the month was already
+  // met. These are the regression tests for that fix.
+  const HISTORY = [
+    { month: '2026-06-01', contributed: 20_000 },
+    { month: '2026-03-01', contributed: 50_000 },
+    { month: '2026-02-01', contributed: 50_000 },
+  ] as const;
+
+  it('takes the first day of the month a business date falls in', () => {
+    expect(contributionMonthOf('2026-06-17')).toBe('2026-06-01');
+    expect(contributionMonthOf('2026-01-01')).toBe('2026-01-01');
+    expect(contributionMonthOf('2026-12-31')).toBe('2026-12-01');
+  });
+
+  it('finds the month by date, not by position', () => {
+    expect(findContributionMonth(HISTORY, '2026-06-17')?.contributed).toBe(20_000);
+    expect(findContributionMonth(HISTORY, '2026-03-02')?.contributed).toBe(50_000);
+  });
+
+  it('answers null for a month with nothing paid into it', () => {
+    // Which is a contribution of zero, not a missing record — and the caller
+    // renders it as zero. The bug this replaces would have shown June's reader
+    // March's 50,000 and reported the month as met.
+    expect(findContributionMonth(HISTORY, '2026-05-20')).toBeNull();
+    expect(findContributionMonth(HISTORY, '2026-07-01')).toBeNull();
+  });
+
+  it('answers null against an empty history', () => {
+    expect(findContributionMonth([], '2026-06-17')).toBeNull();
+  });
+
+  it('matches a full date string from the database, not just a month', () => {
+    // PostgREST returns a `date` as `YYYY-MM-DD`, and the view's
+    // `contribution_month` is always the first of the month — but the
+    // comparison slices rather than assuming, so a timestamp would still
+    // match on its date part.
+    const withTime = [{ month: '2026-06-01T00:00:00+03:00', contributed: 1 }];
+    expect(findContributionMonth(withTime, '2026-06-09')?.contributed).toBe(1);
   });
 });
 
