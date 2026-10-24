@@ -332,6 +332,11 @@ describe('column type discipline', () => {
       // which is how they eventually come to disagree.
       notifications: 'occurred_at',
       notification_reads: 'read_at',
+      // Polytos Phase 1. The row *is* the record that a membership changed
+      // status, so its creation instant already has a name that says what it
+      // means. A `created_at` beside `occurred_at` would be two columns
+      // holding one value, which is how they eventually come to disagree.
+      membership_status_history: 'occurred_at',
     };
 
     /**
@@ -414,6 +419,12 @@ describe('column type discipline', () => {
       // that it was read. Nothing un-happens and nobody un-reads.
       'notifications',
       'notification_reads',
+      // Polytos Phase 1. Append-only in exactly the way `audit_log` is:
+      // UPDATE and DELETE are refused by statement-level trigger and the
+      // privilege is never granted. The lifecycle is what happened; nothing
+      // un-happens, so an `updated_at` here would be a column that can never
+      // advance.
+      'membership_status_history',
     ]);
 
     for (const table of createdTables) {
@@ -713,6 +724,20 @@ describe('types stay in step with the schema', () => {
 
       // --- Phase 7 ----------------------------------------------------------
       'audit_penalty_applied',
+
+      // --- Polytos Phase 1 --------------------------------------------------
+      // Every one of these is a trigger on a membership table: none is
+      // callable over the API, and EXECUTE is revoked from `anon` and
+      // `authenticated` on all of them.
+      'membership_policy_versions_guard',
+      'memberships_assign_number',
+      'memberships_stamp_provenance',
+      'memberships_guard_transition',
+      'memberships_record_status',
+      'membership_terms_acceptances_guard',
+      'audit_membership_change',
+      'audit_membership_policy_change',
+      'audit_membership_terms_accepted',
 
       // --- Phase 13 ---------------------------------------------------------
       // The application's guards: what a draft may change, who may act as a

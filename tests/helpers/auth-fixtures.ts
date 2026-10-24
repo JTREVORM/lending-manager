@@ -179,6 +179,23 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'loans', trigger: 'notify_loan_transition' },
     { table: 'loan_payments', trigger: 'notify_payment_reversed' },
     { table: 'clients', trigger: 'notify_client_blacklisted' },
+    // Polytos Phase 1. The membership tables, in the same documented
+    // owner-level exemption as everything above. `membership_status_history`
+    // and `membership_terms_acceptances` are append-only and hold their
+    // references with RESTRICT for exactly the reason `notifications` does,
+    // so they are cleared explicitly and before the memberships, clients and
+    // profiles they name.
+    {
+      table: 'membership_status_history',
+      trigger: 'membership_status_history_no_delete',
+    },
+    {
+      table: 'membership_terms_acceptances',
+      trigger: 'membership_terms_acceptances_no_delete',
+    },
+    { table: 'memberships', trigger: 'memberships_no_delete' },
+    { table: 'memberships', trigger: 'memberships_guard_transition' },
+    { table: 'memberships', trigger: 'audit_membership_change' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -230,6 +247,13 @@ export async function deleteTestUsers(): Promise<void> {
     await query(`delete from public.loan_identity_snapshots`);
     await query(`delete from public.loan_product_snapshots`);
     await query(`delete from public.loans`);
+
+    // Polytos Phase 1. Before the clients and profiles they reference:
+    // `memberships.client_id` is `on delete restrict`, and both append-only
+    // membership tables hold their references the same way.
+    await query(`delete from public.membership_status_history`);
+    await query(`delete from public.membership_terms_acceptances`);
+    await query(`delete from public.memberships`);
 
     // Phase 3 rows, innermost first. `client_remarks.created_by` is
     // `on delete restrict`, so remarks go before the profiles that wrote

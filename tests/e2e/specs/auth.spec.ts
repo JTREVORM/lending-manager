@@ -256,6 +256,12 @@ test.describe('a borrower is confined to the portal', () => {
     '/overdue',
     '/reports',
     '/users',
+    // Polytos Phase 1. A borrower is a client, and a client may be a member —
+    // but the register is the whole programme, and theirs is one row of it.
+    // They read that row through the policy's identity clause, never through
+    // this route.
+    '/membership',
+    '/membership/policies',
   ]) {
     test(`cannot read ${path}`, async ({ page }) => {
       await page.goto(path);
@@ -283,6 +289,7 @@ test.describe('anonymous visitors', () => {
     '/reports',
     '/users',
     '/portal',
+    '/membership',
   ]) {
     test(`${path} requires a session`, async ({ page }) => {
       await page.goto(path);

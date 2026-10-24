@@ -3,6 +3,7 @@ export * from './validate';
 export * from './profile';
 export * from './settings';
 export * from './client';
+export * from './membership';
 export * from './loan';
 export * from './finance';
 export * from './loan-product';

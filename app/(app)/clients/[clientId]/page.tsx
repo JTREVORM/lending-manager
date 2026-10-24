@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { ClientGuarantorPanel } from '@/components/guarantors/client-guarantor-panel';
+import { ClientMembershipPanel } from '@/components/membership/client-membership-panel';
 import { ClientLoanSummary } from '@/components/clients/client-loan-summary';
 import { RecentPayments } from '@/components/dashboard/recent-payments';
 import { ClientRemarks } from '@/components/clients/client-remarks';
@@ -18,6 +19,7 @@ import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getClient, getClientIdentity, listClientRemarks } from '@/lib/data/clients';
 import { listClientGuarantors } from '@/lib/data/guarantors';
+import { listClientMemberships } from '@/lib/data/membership';
 import { listRecentPayments } from '@/lib/data/dashboard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { listClientLoans } from '@/lib/data/reports';
@@ -69,8 +71,12 @@ export default async function ClientDetailPage({
 
   const canSeeLoans = contextCan(context, 'loans:view');
   const canSeePayments = contextCan(context, 'payments:view');
+  // Polytos Phase 1. Fetched only for a caller who may read membership:
+  // hiding a section in the markup after fetching it is the mistake that
+  // turns a presentation decision into a leak.
+  const canSeeMembership = contextCan(context, 'membership:view');
 
-  const [identity, remarks, guarantors, loans, payments, { branding }] =
+  const [identity, remarks, guarantors, loans, payments, memberships, { branding }] =
     await Promise.all([
       canSeeNin ? getClientIdentity(clientId) : Promise.resolve(null),
       listClientRemarks(clientId),
@@ -82,6 +88,7 @@ export default async function ClientDetailPage({
       // decision into a leak.
       canSeeLoans ? listClientLoans(clientId) : Promise.resolve([]),
       canSeePayments ? listRecentPayments(8, { clientId }) : Promise.resolve([]),
+      canSeeMembership ? listClientMemberships(clientId) : Promise.resolve([]),
       getCompanyBranding(),
     ]);
 
@@ -130,6 +137,9 @@ export default async function ClientDetailPage({
           { id: 'client-loans-heading', label: 'Loans' },
           { id: 'client-payments-heading', label: 'Payments' },
           { id: 'remarks-heading', label: 'Remarks' },
+          ...(canSeeMembership
+            ? [{ id: 'client-membership-heading', label: 'Membership' }]
+            : []),
         ]}
       />
 
@@ -227,6 +237,20 @@ export default async function ClientDetailPage({
             links={guarantors}
             canLink={contextCan(context, 'guarantors:link')}
           />
+        </section>
+      ) : null}
+
+      {/* --- Membership ---------------------------------------------------- */}
+      {canSeeMembership ? (
+        <section
+          aria-labelledby="client-membership-heading"
+          className="min-w-0 space-y-3"
+        >
+          <h2 id="client-membership-heading" className="text-text text-lg font-semibold">
+            Membership
+          </h2>
+
+          <ClientMembershipPanel memberships={memberships} />
         </section>
       ) : null}
 

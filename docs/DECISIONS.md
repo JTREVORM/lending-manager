@@ -1897,3 +1897,297 @@ query *and* a test that pins it to the table — not the other way round.
   downloaded.
 * `truncated` is part of the report type, so a caller cannot forget to handle
   it; the UI test asserts the warning appears and the totals do not.
+
+---
+
+## ADR-043 — Membership hangs off `clients`, and is not a role
+
+**Decision.** A membership is a row in `public.memberships` keyed on
+`clients.id`. It carries no name, phone number, date of birth or National
+Identification Number. Membership adds five capabilities to the existing
+matrix and no new role.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| A `members` table with its own identity columns | A second identity record for the same person is how a register comes to hold two of somebody with different phone numbers. It would also mean the NIN protection built into `client_identities` had to be built again — and the second copy would be the one that leaked. |
+| A `member` role in `public.roles` | Roles answer "what may this person do to the system". Membership answers "what does the business owe this customer". A `member` role would mean a borrower whose savings lapse loses their portal login, and it would give the business two answers to "who is this person". |
+| A `is_member` boolean on `clients` | Records nothing about when they joined, under what terms, or why they left — and a membership has a lifecycle with an auditable history, which a boolean cannot hold. |
+
+**Consequences.** A non-member remains a perfectly valid client, which is
+what the business asked for. A borrower reads their own membership through
+`clients.profile_id`, the one optional, indirect link the system already has
+between a login and a customer — so no new identity path exists to be got
+wrong. The cost is a join wherever a member's name is needed, which is what
+`public.membership_register` exists for.
+
+---
+
+## ADR-044 — The membership policy is effective-dated versions, not a settings row
+
+**Decision.** The programme's rules live in
+`public.membership_policy_versions`, one row per version, each with an
+`effective_from` date. A membership references the version it was enrolled
+under, and a version anybody is enrolled under can never have its figures
+changed — publishing a change inserts a new version.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| A singleton, like `business_settings` | A member who joined in March must keep March's terms when the business raises the savings minimum in June. A singleton makes that unanswerable: there is one row, and editing it silently rewrites what everybody was promised. |
+| A snapshot on each membership, like `loan_product_snapshots` | A loan is an agreement struck once and then run off, so a snapshot at approval is exactly right. A membership is a standing relationship with a monthly obligation, an accruing qualification and an annual distribution, all evaluated against the rules that applied *at the time*. Thirty columns copied onto every membership row would be the same facts stored once per member. |
+
+**Consequences.** This is the shape `guarantor_consent_terms` already takes,
+and for the same reason: a guarantor cannot be held to words the business
+edited afterwards. The guard freezes every figure once a membership
+references the version, and refuses a second approval. Status may still move
+— draft to active to superseded — because that is how a version is retired.
+
+---
+
+## ADR-045 — `is_financially_enabled` is generated, so an undecided policy cannot transact
+
+**Decision.** Nine of the programme's rules are undecided. Each is a
+**nullable** column whose `NULL` means *the client has not decided*, with no
+default. `is_financially_enabled` is a **stored generated column** that is
+true only when the version is active, approved, and all nine are decided.
+
+**Reasoning.** The design rests on the claim that nothing financial can run
+until the rules are settled. A boolean an administrator ticks cannot carry
+that claim — it can be ticked on an incomplete policy, and the day somebody
+does, savings are being taken under rules nobody agreed. A generated column
+cannot be true while a column is NULL, and no `UPDATE` makes it so.
+
+Giving the nine a default was rejected outright: a default here is an
+invented policy, and the one thing worse than an unanswered question is an
+answer the client never gave.
+
+**Consequences.** Version 1.0 ships as an unapproved draft with the gate
+shut, which is the honest state of the programme. `false` and `0` count as
+*decided*, which is why the check is written as `is not null` per column
+rather than as a falsy test — "the months need not be consecutive" and "there
+is no waiting period" are real answers. `isPolicyFinanciallyEnabled()` in
+`lib/domain/membership.ts` computes the same answer for the interface so it
+can explain the hold without a second round trip, and a database test asserts
+the two agree on the same row.
+
+**Superseded in part by ADR-049.** The generated-column mechanism is
+unchanged and was never in doubt. What was wrong was that there was *one* of
+them: a single switch covering five activities held the registration fee
+hostage to the year-end profit formula. `is_financially_enabled` survives as
+the overall completeness indicator; the gate a posting consults is now
+per-activity.
+
+---
+
+## ADR-046 — One live membership per client, by partial unique index
+
+**Decision.** `memberships_one_live_per_client` is unique on `client_id`
+where `status in ('pending', 'active', 'suspended')`.
+
+**Alternatives.**
+
+| Option | Why not |
+| --- | --- |
+| A check in the Server Action | Two concurrent enrolments both pass it and both commit. This is the duplicate-invoice bug in another costume. |
+| `unique (client_id)` | A client who withdrew in 2026 and rejoins in 2028 is a legitimate second row. A total unique constraint would force either deleting the history or reusing the row — and reusing it would carry the old activation date forward, silently crediting the savings qualification period and the benefit waiting period the member is supposed to start again. |
+
+**Consequences.** Rejoining mints a new membership number, which is correct:
+the two relationships are different, and the card says so. Reactivating a
+withdrawn membership is deliberately not a transition — `withdrawn → active`
+is refused by the lifecycle guard, by the domain module and by the validation
+schema.
+
+---
+
+## ADR-047 — The branch and the policy version are derived on every enrolment, not defaulted
+
+**Decision.** `memberships_stamp_provenance()` derives `branch_id` from the
+client and `policy_version_id` from the version in force on **every** insert,
+and **refuses** a supplied value that disagrees rather than overwriting it.
+The rules sit above the trusted-path exemption, so they bind `service_role`
+and the table owner. The insert policy states both independently in its
+`WITH CHECK`.
+
+**The defect.** The trigger originally filled each in *when it arrived NULL*,
+which is a default rather than a rule. A caller holding `membership:create`
+and a copy of curl supplies them, and a supplied value went through
+untouched — so a member could be enrolled into a branch they have no
+relationship with, or under a draft nobody had approved, a superseded
+version, or one that does not begin until next year. Each of those is a wrong
+answer to "what was this member promised".
+
+**Why RLS did not already stop it.** The insert policy's branch clause reads
+*"a branch-assigned profile may enrol only into their own branch"* — and
+every profile in this system is unassigned, so the clause was vacuously true.
+A policy that is true for everybody is not a boundary, and a boundary that
+holds only for a configuration nobody uses is worth saying out loud.
+
+**Why refuse rather than silently correct.** The same choice
+`memberships_assign_number` makes about a supplied membership number: silently
+correcting a value hides a caller that believes it is choosing one, and the
+next thing built on top of that caller inherits the belief.
+
+**Consequences.** A membership always sits at the client's branch, so the
+branch rule that decides who may read it cannot be sidestepped by writing a
+different value. A client whose branch changes takes their membership with
+them; the update guard permits exactly that move and no other. Enrolment is
+refused outright when no version is in force, which is the state of the
+system as shipped.
+
+---
+
+## ADR-048 — A policy version's status moves one way, and freezes on approval
+
+**Decision.** `draft → active → superseded`, and nothing else. Nothing
+returns to draft; nothing returns from superseded. Every contractual
+column — the twelve confirmed figures, the **nine undecided rules**, the
+version string, the effective date and the title — is frozen once the version
+is approved **or** once anybody is enrolled under it.
+
+**What was wrong.** The freeze covered the twelve figures and left the nine
+nullable rules writable, on the reasoning that writing into a blank changes
+nothing. That reasoning is wrong, and it is the more dangerous form of the
+same defect: a member who enrolled while "may savings be withdrawn against a
+live loan" was open did not agree to whatever answer the business later
+writes there. They agreed to a version in which it was open. Filling it in
+afterwards varies their terms retroactively and leaves no trace of having
+changed a value.
+
+Status was unconstrained, so an active version could be put back to draft —
+asserting it had never governed anybody — or a superseded one brought back
+into force, which makes the effective dates lie about which rules applied
+when.
+
+**The escape hatch, because "never" was also wrong.** A frozen version plus
+an immutable `memberships.policy_version_id` together said a member is held
+to their enrolment version forever. The business will publish version 1.1 and
+ask existing members to accept it. ADR-049's companion,
+`accept_membership_policy_version()`, is the only route: it records the
+member's acceptance and moves them in one transaction, and the transition
+guard re-checks the acceptance and the target version on its own account, so
+the function's marker is a route rather than a permission.
+
+**Consequences.** Changing an approved version means publishing the next one,
+which is how a versioned policy is meant to work and leaves the dates telling
+the truth. A draft is freely editable until the moment it is approved, which
+is where the editing belongs.
+
+---
+
+## ADR-049 — Five readiness gates, one per activity, and an effective date
+
+**Decision.** `membership_policy_versions` carries five stored generated
+columns — `is_enrolment_enabled`, `is_savings_enabled`,
+`is_member_lending_enabled`, `is_benefits_enabled`,
+`is_profit_sharing_enabled` — each naming only the decisions that activity
+waits on. `public.membership_policy_allows(version, activity)` is the gate a
+posting consults: the generated column **and** `effective_from <=
+business_date()`. `is_financially_enabled` is kept as the overall
+completeness indicator.
+
+**What was wrong.** One switch for five activities held the **UGX 5,000
+registration fee** — a figure the client's own documents confirm, waiting on
+no open question — hostage to **how December's surplus is divided**. A
+counter could not take a fee, and savings could not be collected, because
+nobody had settled the profit formula. Those are different promises, made to
+different people, at different times, and they fail independently.
+
+Separately, `active_membership_policy_id()` ignored `effective_from`
+entirely, so a version activated in October for a November start enrolled
+members in October under rules nobody was operating. It is now DEFINER and
+checks the date, because the rule the enrolment trigger enforces and the
+answer a screen reads have to be the same rule.
+
+**Why the date is not in a generated column.** `business_date()` is not
+immutable, so PostgreSQL will not accept it in a generated expression. That
+is the whole reason the function exists beside the columns rather than
+instead of them: the columns answer "are the decisions made", the function
+adds "and has it started".
+
+**Why an unknown activity raises.** Failing shut is the safe direction, but a
+typo that silently disables a module looks exactly like a policy that has not
+been decided, and the two need very different responses.
+
+**Consequences.** Polytos Phase 2 can ship enrolment and the registration fee
+without waiting on decisions 6 to 9, and savings as soon as decisions 4 and 5
+land. A unit test asserts the five rule sets partition the nine exactly —
+every question holds something up, and nothing is held up by a question that
+does not exist. A database test reads every in-force version three ways (the
+generated column, the function, and `isActivityReady()` in TypeScript) and
+asserts all three agree.
+
+---
+
+## ADR-050 — Activation and consent are database preconditions, not form validation
+
+**Status.** Decided in Phase 1, **enforced in Polytos Phase 2**, which owns
+the tables both halves depend on. Recorded here so the requirement exists
+before the code that must satisfy it.
+
+### Decision, part one: `pending → active` has two preconditions
+
+`memberships_guard_transition()` must refuse the transition unless **both**
+hold, checked as `exists (...)` tests in the trigger and stated above the
+trusted-path exemption so they bind `service_role` too:
+
+1. **A registration fee that actually posted.** A row in
+   `membership_fee_receipts` whose journal entry exists and has not been
+   reversed. The test is the **journal**, not a status column on the receipt:
+   "successfully posted" means the ledger moved, and a receipt that believes
+   it posted while the entry was reversed is exactly the discrepancy a
+   financial system exists to make impossible.
+2. **A recorded acceptance of the member's own terms.** A row in
+   `membership_terms_acceptances` for this membership **and** the exact
+   `policy_version_id` the membership carries. Not any acceptance: accepting
+   version 1.0 does not activate somebody enrolled under 1.1.
+
+**Why not a Server Action.** Both are the preconditions of taking somebody's
+savings. A membership that reached `active` without them is a person the
+business is collecting money from, under terms nobody can show they agreed
+to — and every route that reaches the table must be refused, not merely the
+one route the form takes. Neither can be a CHECK constraint, because both are
+statements about rows in other tables; the trigger is the only place in the
+database that can say them.
+
+**What Phase 2 must also decide, and this ADR does not.** Whether reversing a
+registration fee *after* activation suspends the membership or merely flags
+it. What it may not do is make the activation retrospectively legitimate: the
+activation must never have been possible without the posting.
+
+### Decision, part two: a typed name is not consent
+
+`membership_terms_acceptances.signature_name` is free text. Anybody holding
+the capability can type any member's name, and the row that results is
+indistinguishable from one the member signed. Phase 1 tolerates this because
+nothing writes the table and no screen offers it. The moment Phase 2 builds
+the enrolment form and the re-acceptance screen, a typed name alone becomes a
+staff member's unilateral power to move somebody onto new terms and produce
+the paperwork saying they agreed.
+
+So Phase 2 must require **verifiable evidence that did not originate with the
+person typing**, enforced in the database:
+
+- a signature image at `signature_path`, in the private documents bucket; or
+- a witnessed record carrying both `witness_name` and `witness_phone`, where
+  the witness is **somebody other than `recorded_by`** — a staff member
+  witnessing their own entry is the same signature twice; or
+- a confirmation the member themselves sent: a portal acknowledgement under
+  their own `clients.profile_id`, or a one-time code delivered to the phone
+  number on the client record and returned.
+
+A CHECK constraint on `membership_terms_acceptances` must refuse a row
+carrying none of them, so no write path can skip it, and the rule applies
+equally to the acceptance taken at enrolment and to a later re-acceptance
+through `accept_membership_policy_version()`.
+
+`signature_name` stays — the name a person writes is what a printed form
+shows. It stops being sufficient on its own.
+
+**Consequences.** Phase 2 cannot ship enrolment as a single INSERT. Enrolling
+a member becomes one transaction that writes the membership, the fee receipt
+and its journal, and the acceptance with its evidence — which is what
+`enrol_member()` is for in the roadmap, and why it is a database function
+rather than three calls from a form.
