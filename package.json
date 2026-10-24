@@ -2,7 +2,7 @@
   "name": "lending-manager",
   "version": "0.1.0",
   "private": true,
-  "description": "Money Lending Management System — Phase 1 foundation",
+  "description": "Money Lending Management System \u2014 Phase 1 foundation",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -18,9 +18,10 @@
     "test": "vitest",
     "test:run": "vitest run --project unit --project integration",
     "test:coverage": "vitest run --project unit --project integration --coverage",
-    "test:db": "vitest run --project db",
+    "test:db": "vitest run --project db && vitest run --project seed",
     "check:env": "tsx scripts/check-env.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",

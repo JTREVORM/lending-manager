@@ -25,18 +25,44 @@
 -- NEVER put real personal data here — no real names, phone numbers, National
 -- Identification Numbers or financial figures. This file is committed to git.
 --
--- When Phase 2 adds client registration, fixtures for local development belong
--- here, clearly fictional and clearly labelled. A sketch of what that looks
--- like:
+-- ---------------------------------------------------------------------------
+-- Demonstration data lives in a script, not here
+-- ---------------------------------------------------------------------------
 --
---   insert into public.profiles (full_name, phone, email, status)
---   values
---     ('DEMO Aisha Nakato',  '+256700000001', 'demo1@example.test', 'active'),
---     ('DEMO Joseph Okello', '+256700000002', 'demo2@example.test', 'active')
---   on conflict (phone) do nothing;
+-- Polytos Phase 2 added `scripts/seed-demo.ts` — six members, their savings
+-- histories, a withdrawal that went through its whole lifecycle, a reversal,
+-- and one application still waiting on its consent:
 --
--- Note the DEMO prefix, the reserved +25670000000x range and the .test domain,
--- all of which make the records unmistakably synthetic.
+--   POLYTOS_SEED_DEMO=yes-seed-polytos-demo-data npm run seed:demo
+--
+-- It is a script and not this file for three reasons, each of which is a thing
+-- this file cannot do:
+--
+--   * **It has to refuse.** This file is executed by `supabase db reset`
+--     against whatever database that command is pointed at. A script can read
+--     the connection string, check the project reference against an
+--     allow-list, require an enabling phrase, and refuse — which is the whole
+--     protection, and `on conflict do nothing` is not a substitute for it.
+--
+--   * **It has to post through the application's own functions.** Savings
+--     deposits, the registration fee and withdrawals each write a document and
+--     a journal entry in one transaction, with a reference number minted by a
+--     trigger and an idempotency key the function replays. Fabricating those
+--     rows with `insert` would produce money the ledger does not know about —
+--     exactly the state the schema is built to make impossible.
+--
+--   * **It has to be idempotent against money.** `on conflict do nothing`
+--     covers a unique key; it does not stop a second run posting a second
+--     deposit. The script derives a deterministic idempotency key per posting,
+--     so the posting functions return the movement that already exists.
+--
+-- `tests/db/demo-seed.test.ts` runs it three times against a real database and
+-- asserts that the second and third runs change nothing at all.
+--
+-- NEVER put real personal data in either place — no real names, phone numbers,
+-- National Identification Numbers or financial figures. Both are committed to
+-- git. The script's records carry a DEMO prefix and numbers in the reserved
+-- +2567000001xx range, which is what makes them unmistakably synthetic.
 -- ===========================================================================
 
 -- No statements. See above.
