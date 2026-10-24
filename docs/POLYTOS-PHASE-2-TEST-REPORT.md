@@ -358,10 +358,19 @@ Stated rather than omitted.
 
 - **No hosted verification.** Nothing in this report was run against the
   hosted Supabase project. The brief forbids applying migrations to it during
-  development, and the demonstration seeder's allow-list refuses every project
-  but the named one — and was not pointed at it. **A hosted release therefore
-  needs its own verification step**, which is a release decision and not this
-  phase's to take.
+  development. **A hosted release therefore needs its own verification step**,
+  which is a release decision and not this phase's to take.
+
+  Precisely which part of the seeder's allow-list is and is not exercised,
+  since the distinction matters:
+
+  | Path | Exercised? |
+  | --- | --- |
+  | A local throwaway cluster is recognised and written to | Yes — every seeder run in this report |
+  | A Supabase project **not** on the allow-list is refused | Yes — asserted, and asserted to write nothing |
+  | A host that cannot be identified is refused | Yes — asserted |
+  | A connection string that is not a URL is refused | Yes — asserted |
+  | The **named** project is recognised and written to | **No.** This container holds no credentials for it, and opening a connection to it would be contacting the hosted project — which the brief forbids and which was therefore not attempted. The parsing is the same code path the refusals exercise, differing only in whether the extracted reference is on the list. |
 - **`above_pledged` withdrawals are refused, not implemented.** The policy
   value exists and the refusal is tested; the arithmetic cannot be written
   until the savings-to-loan multiplier is decided. This is a deliberate gap,
