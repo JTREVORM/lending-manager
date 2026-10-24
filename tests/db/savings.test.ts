@@ -387,9 +387,10 @@ describeDb('contribution months', () => {
 
     expect(Number(row.contributed)).toBe(50_000);
     expect(Number(row.deposit_count)).toBe(3);
-    expect(row.meets_minimum, 'three deposits reaching 50,000 is a qualifying month').toBe(
-      true,
-    );
+    expect(
+      row.meets_minimum,
+      'three deposits reaching 50,000 is a qualifying month',
+    ).toBe(true);
     expect(Number(row.shortfall)).toBe(0);
   });
 
@@ -422,11 +423,16 @@ describeDb('contribution months', () => {
     await depositOn(savingsAccountId, 50_000, { on: dayInMonth(fx.thisMonth, 1, 6) });
 
     // Reversed today, which is a different month.
-    await query(`select public.reverse_savings_transaction($1, 'Posted to the wrong member')`, [
-      mistaken,
-    ]);
+    await query(
+      `select public.reverse_savings_transaction($1, 'Posted to the wrong member')`,
+      [mistaken],
+    );
 
-    const row = await queryOne<{ contributed: string; reversed: string; meets_minimum: boolean }>(
+    const row = await queryOne<{
+      contributed: string;
+      reversed: string;
+      meets_minimum: boolean;
+    }>(
       `select contributed, reversed, meets_minimum
          from public.member_savings_contributions
         where savings_account_id = $1 and contribution_month = $2`,
@@ -460,7 +466,9 @@ describeDb('contribution months', () => {
       `select public.request_savings_withdrawal($1, 30000, 'School fees') as id`,
       [savingsAccountId],
     );
-    await query(`select public.decide_savings_withdrawal($1, true, 'Approved')`, [request.id]);
+    await query(`select public.decide_savings_withdrawal($1, true, 'Approved')`, [
+      request.id,
+    ]);
     await query(
       `select public.post_savings_withdrawal($1, 'cash', null, gen_random_uuid())`,
       [request.id],
@@ -494,8 +502,11 @@ describeDb('qualification', () => {
       qualifying_months: number;
       qualifies: boolean;
       months_short: number;
-    }>(`select qualifying_months, qualifies, months_short
-          from public.member_savings_qualification($1)`, [savingsAccountId]);
+    }>(
+      `select qualifying_months, qualifies, months_short
+          from public.member_savings_qualification($1)`,
+      [savingsAccountId],
+    );
 
     expect(five.qualifying_months).toBe(5);
     expect(five.months_short).toBe(1);
@@ -509,8 +520,11 @@ describeDb('qualification', () => {
       months_short: number;
       balance: string;
       blocked_reason: string | null;
-    }>(`select qualifying_months, qualifies, months_short, balance, blocked_reason
-          from public.member_savings_qualification($1)`, [savingsAccountId]);
+    }>(
+      `select qualifying_months, qualifies, months_short, balance, blocked_reason
+          from public.member_savings_qualification($1)`,
+      [savingsAccountId],
+    );
 
     expect(six.qualifying_months).toBe(6);
     expect(six.months_short).toBe(0);
@@ -723,7 +737,9 @@ describeDb('the withdrawal lifecycle', () => {
       [requestId],
     );
     expect(self.ok).toBe(false);
-    expect(self.message ?? '').toMatch(/cannot be decided by the person who prepared it/i);
+    expect(self.message ?? '').toMatch(
+      /cannot be decided by the person who prepared it/i,
+    );
 
     // Somebody else may.
     const other = await asUser(
@@ -801,10 +817,9 @@ describeDb('the withdrawal lifecycle', () => {
         where savings_account_id = $1 and kind = 'deposit'`,
       [savingsAccountId],
     );
-    await query(
-      `select public.reverse_savings_transaction($1, 'Cheque bounced')`,
-      [deposit.id],
-    );
+    await query(`select public.reverse_savings_transaction($1, 'Cheque bounced')`, [
+      deposit.id,
+    ]);
 
     const refused = await expectError(
       `select public.post_savings_withdrawal($1, 'cash', null, gen_random_uuid())`,
@@ -847,9 +862,10 @@ describeDb('the withdrawal lifecycle', () => {
       `select public.request_savings_withdrawal($1, 25000, 'Changed plans') as id`,
       [savingsAccountId],
     );
-    await query(`select public.cancel_savings_withdrawal($1, 'Member withdrew the request')`, [
-      request.id,
-    ]);
+    await query(
+      `select public.cancel_savings_withdrawal($1, 'Member withdrew the request')`,
+      [request.id],
+    );
 
     const status = await queryOne<{ status: string }>(
       `select status from public.savings_withdrawal_requests where id = $1`,
@@ -962,10 +978,9 @@ describeDb('reversal', () => {
       `select public.reverse_savings_transaction($1, 'Should not have been taken')`,
       [deposit],
     );
-    expect(
-      refused?.message,
-      'a liability must not be pushed below nothing',
-    ).toContain('Reverse the withdrawals that spent it first');
+    expect(refused?.message, 'a liability must not be pushed below nothing').toContain(
+      'Reverse the withdrawals that spent it first',
+    );
   });
 
   it('requires a reason of at least four characters', async () => {
@@ -1017,9 +1032,7 @@ describeDb('the statement', () => {
     ]);
     expect(Number(lines[2]?.withdrawal)).toBe(40_000);
     expect(Number(lines[2]?.deposit)).toBe(0);
-    expect(Number(lines.at(-1)?.running_balance)).toBe(
-      await balanceOf(savingsAccountId),
-    );
+    expect(Number(lines.at(-1)?.running_balance)).toBe(await balanceOf(savingsAccountId));
   });
 
   it('opens a period at the balance that period actually opened at', async () => {
@@ -1030,11 +1043,7 @@ describeDb('the statement', () => {
 
     const period = await query<{ running_balance: string }>(
       `select running_balance from public.savings_statement($1, $2::date, $3::date)`,
-      [
-        savingsAccountId,
-        monthStart(fx.thisMonth, 1),
-        dayInMonth(fx.thisMonth, 1, 28),
-      ],
+      [savingsAccountId, monthStart(fx.thisMonth, 1), dayInMonth(fx.thisMonth, 1, 28)],
     );
 
     expect(period).toHaveLength(1);
@@ -1055,7 +1064,9 @@ describeDb('the savings position', () => {
       total_liability: string;
       deposits_count: number;
       accounts_open: number;
-    }>(`select total_liability, deposits_count, accounts_open from public.savings_summary()`);
+    }>(
+      `select total_liability, deposits_count, accounts_open from public.savings_summary()`,
+    );
 
     expect(Number(summary.total_liability)).toBe(await liabilityBalance());
     expect(summary.accounts_open).toBeGreaterThan(0);
@@ -1063,66 +1074,71 @@ describeDb('the savings position', () => {
 });
 
 // ===========================================================================
-describeDb('an account is not opened twice, and not opened at all without a decided policy', () => {
-  it('returns the same account when open_savings_account is called again', async () => {
-    const { membershipId, savingsAccountId } = await saver();
+describeDb(
+  'an account is not opened twice, and not opened at all without a decided policy',
+  () => {
+    it('returns the same account when open_savings_account is called again', async () => {
+      const { membershipId, savingsAccountId } = await saver();
 
-    const again = await queryOne<{ id: string }>(
-      `select public.open_savings_account($1) as id`,
-      [membershipId],
-    );
-    expect(again.id).toBe(savingsAccountId);
+      const again = await queryOne<{ id: string }>(
+        `select public.open_savings_account($1) as id`,
+        [membershipId],
+      );
+      expect(again.id).toBe(savingsAccountId);
 
-    const count = await queryOne<{ n: string }>(
-      `select count(*) as n from public.savings_accounts where membership_id = $1`,
-      [membershipId],
-    );
-    expect(Number(count.n)).toBe(1);
-  });
+      const count = await queryOne<{ n: string }>(
+        `select count(*) as n from public.savings_accounts where membership_id = $1`,
+        [membershipId],
+      );
+      expect(Number(count.n)).toBe(1);
+    });
 
-  it('refuses to open an account while the savings rules are undecided', async () => {
-    // The activity-specific readiness gate. `is_savings_enabled` waits on the
-    // qualification rule and the withdrawal rule and on nothing else, so a
-    // version with either of them open takes no savings — while enrolment
-    // under it carries on, which is the whole point of splitting the gates.
-    const clientId = await makeClient('Undecided Saver', '+256700399111');
-    const membership = await queryOne<{ id: string }>(
-      `insert into public.memberships (client_id, applied_on)
+    it('refuses to open an account while the savings rules are undecided', async () => {
+      // The activity-specific readiness gate. `is_savings_enabled` waits on the
+      // qualification rule and the withdrawal rule and on nothing else, so a
+      // version with either of them open takes no savings — while enrolment
+      // under it carries on, which is the whole point of splitting the gates.
+      const clientId = await makeClient('Undecided Saver', '+256700399111');
+      const membership = await queryOne<{ id: string }>(
+        `insert into public.memberships (client_id, applied_on)
        values ($1, public.business_date()) returning id`,
-      [clientId],
-    );
-
-    // Reopening a decided rule is an owner-level act, for the same reason
-    // `forcePolicyStatus` is: the contractual columns freeze once anybody is
-    // enrolled, and a fixture that needs the undecided state back is not a
-    // counter-example to that.
-    await query(
-      `alter table public.membership_policy_versions
-         disable trigger membership_policy_versions_guard`,
-    );
-    try {
-      await query(
-        `update public.membership_policy_versions
-            set savings_withdrawal_with_active_loan = null
-          where id = $1`,
-        [fx.policyId],
+        [clientId],
       );
 
-      const refused = await expectError(`select public.open_savings_account($1)`, [
-        membership.id,
-      ]);
-      expect(refused?.message ?? '').toMatch(/savings rules|not been decided|not open/i);
-    } finally {
-      await query(
-        `update public.membership_policy_versions
-            set savings_withdrawal_with_active_loan = 'allowed'
-          where id = $1`,
-        [fx.policyId],
-      );
+      // Reopening a decided rule is an owner-level act, for the same reason
+      // `forcePolicyStatus` is: the contractual columns freeze once anybody is
+      // enrolled, and a fixture that needs the undecided state back is not a
+      // counter-example to that.
       await query(
         `alter table public.membership_policy_versions
-           enable trigger membership_policy_versions_guard`,
+         disable trigger membership_policy_versions_guard`,
       );
-    }
-  });
-});
+      try {
+        await query(
+          `update public.membership_policy_versions
+            set savings_withdrawal_with_active_loan = null
+          where id = $1`,
+          [fx.policyId],
+        );
+
+        const refused = await expectError(`select public.open_savings_account($1)`, [
+          membership.id,
+        ]);
+        expect(refused?.message ?? '').toMatch(
+          /savings rules|not been decided|not open/i,
+        );
+      } finally {
+        await query(
+          `update public.membership_policy_versions
+            set savings_withdrawal_with_active_loan = 'allowed'
+          where id = $1`,
+          [fx.policyId],
+        );
+        await query(
+          `alter table public.membership_policy_versions
+           enable trigger membership_policy_versions_guard`,
+        );
+      }
+    });
+  },
+);

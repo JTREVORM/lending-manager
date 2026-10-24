@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   asUser,
-  asUserScript,
   createTestUser,
   deleteTestUsers,
   type TestUser,

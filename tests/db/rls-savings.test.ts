@@ -7,14 +7,13 @@ import {
   deleteTestUsers,
   type TestUser,
 } from '../helpers/auth-fixtures';
+import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
 import {
-  closePool,
-  hasDatabase,
-  query,
-  queryOne,
-  skipReason,
-} from '../helpers/db';
-import { depositOn, enrolMember, forcePolicyStatus, publishTestPolicy } from '../helpers/membership';
+  depositOn,
+  enrolMember,
+  forcePolicyStatus,
+  publishTestPolicy,
+} from '../helpers/membership';
 
 /**
  * Savings Row Level Security, attacked directly.
@@ -99,17 +98,25 @@ async function makeClient(name: string): Promise<string> {
 beforeAll(async () => {
   if (!hasDatabase) return;
 
-  const [owner, manager, secretary, approver, stranger, member, otherMember, suspendedMember] =
-    await Promise.all([
-      createTestUser('owner_admin'),
-      createTestUser('manager'),
-      createTestUser('secretary_treasurer'),
-      createTestUser('manager'),
-      createTestUser('client'),
-      createTestUser('client'),
-      createTestUser('client'),
-      createTestUser('client'),
-    ]);
+  const [
+    owner,
+    manager,
+    secretary,
+    approver,
+    stranger,
+    member,
+    otherMember,
+    suspendedMember,
+  ] = await Promise.all([
+    createTestUser('owner_admin'),
+    createTestUser('manager'),
+    createTestUser('secretary_treasurer'),
+    createTestUser('manager'),
+    createTestUser('client'),
+    createTestUser('client'),
+    createTestUser('client'),
+    createTestUser('client'),
+  ]);
 
   const policyId = await publishTestPolicy({
     version: '7.2',
@@ -228,10 +235,9 @@ describeDb('anon gets nothing', () => {
       'member_savings_contributions',
     ]) {
       const attempt = await asAnon(`select * from public.${relation}`);
-      expect(
-        attempt.ok ? attempt.rowCount : 0,
-        `anon read rows from ${relation}`,
-      ).toBe(0);
+      expect(attempt.ok ? attempt.rowCount : 0, `anon read rows from ${relation}`).toBe(
+        0,
+      );
     }
   });
 
@@ -275,10 +281,7 @@ describeDb('staff read what their capability allows and nothing beyond it', () =
     // through their own client record. A caller with neither reads nothing —
     // and reads nothing because the policy says so, not because a menu hid
     // the link.
-    const accounts = await asUser(
-      fx.stranger,
-      `select id from public.savings_accounts`,
-    );
+    const accounts = await asUser(fx.stranger, `select id from public.savings_accounts`);
     expect(accounts.rowCount).toBe(0);
 
     const transactions = await asUser(
@@ -333,10 +336,9 @@ describeDb('staff read what their capability allows and nothing beyond it', () =
       expect(reversed.ok).toBe(false);
       expect(reversed.message ?? '').toMatch(/savings:reverse capability/i);
     } finally {
-      await query(
-        `select public.cancel_savings_withdrawal($1, 'Test fixture cleanup')`,
-        [request.id],
-      );
+      await query(`select public.cancel_savings_withdrawal($1, 'Test fixture cleanup')`, [
+        request.id,
+      ]);
     }
   });
 
@@ -521,9 +523,10 @@ describeDb('nothing is written through a policy', () => {
       [fx.savingsAccountId, fx.membershipId, fx.clientId],
     );
 
-    expect(attempt.ok, 'a transaction with no journal behind it is money nobody posted').toBe(
-      false,
-    );
+    expect(
+      attempt.ok,
+      'a transaction with no journal behind it is money nobody posted',
+    ).toBe(false);
     expect(attempt.message ?? '').toMatch(/permission denied/i);
   });
 
@@ -641,10 +644,10 @@ describeDb('idempotency keys are not a way in', () => {
     // who cannot deposit must not learn a transaction id by guessing a key
     // either.
     const key = await queryOne<{ k: string }>(`select gen_random_uuid() as k`);
-    await query(
-      `select public.post_savings_deposit($1, 20000, 'cash', null, $2)`,
-      [fx.savingsAccountId, key.k],
-    );
+    await query(`select public.post_savings_deposit($1, 20000, 'cash', null, $2)`, [
+      fx.savingsAccountId,
+      key.k,
+    ]);
 
     const attempt = await asUser(
       fx.stranger,
@@ -694,9 +697,7 @@ describeDb('the consent bucket', () => {
       );
       expect(staff.rowCount).toBe(2);
     } finally {
-      await query(
-        `delete from storage.objects where bucket_id = 'membership-consent'`,
-      );
+      await query(`delete from storage.objects where bucket_id = 'membership-consent'`);
     }
   });
 

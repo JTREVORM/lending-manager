@@ -755,9 +755,12 @@ describeDb('membership cards', () => {
     const membershipId = await activeMembership();
 
     await query(`select public.issue_membership_card($1)`, [membershipId]);
-    await query(`select public.post_savings_deposit(
+    await query(
+      `select public.post_savings_deposit(
                    (select id from public.savings_accounts where membership_id = $1),
-                   40000, 'cash', null, gen_random_uuid())`, [membershipId]);
+                   40000, 'cash', null, gen_random_uuid())`,
+      [membershipId],
+    );
 
     await query(`select public.issue_membership_card($1, 'lost')`, [membershipId]);
 

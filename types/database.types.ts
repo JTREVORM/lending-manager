@@ -2876,6 +2876,16 @@ export type Database = {
           recorded_by: string | null;
           created_at: string;
           updated_at: string;
+          consent_method: string;
+          verification_status: string;
+          evidence_reference: string | null;
+          evidence_digest: string | null;
+          verified_at: string | null;
+          verified_by: string | null;
+          verified_by_label: string | null;
+          member_profile_id: string | null;
+          witness_profile_id: string | null;
+          challenge_id: string | null;
         };
         Insert: {
           id?: string;
@@ -2891,21 +2901,513 @@ export type Database = {
           recorded_by?: never;
           created_at?: string;
           updated_at?: string;
+          // Polytos Phase 2. The caller says *how* consent was taken and
+          // supplies whatever that method's evidence is — the signature
+          // object's path, the witnessing member of staff, the challenge the
+          // member answered. It does not say whether the evidence is any
+          // good.
+          consent_method: string;
+          member_profile_id?: string | null;
+          witness_profile_id?: string | null;
+          challenge_id?: string | null;
+          // `never`, all six. `membership_terms_acceptances_guard` derives
+          // them from evidence it can itself check: the signature object has
+          // to exist under this membership's path, the witness has to be an
+          // active member of staff who is not the recorder, the challenge has
+          // to be live and unspent. A caller that could write
+          // `verification_status` could write `'verified'` beside a typed
+          // name and activate a membership on nothing at all, which is the
+          // exact defect Phase 1 left for this phase to close.
+          verification_status?: never;
+          evidence_reference?: never;
+          evidence_digest?: never;
+          verified_at?: never;
+          verified_by?: never;
+          verified_by_label?: never;
         };
         Update: {
-          id?: string;
-          membership_id?: string;
-          policy_version_id?: string;
+          id?: never;
+          membership_id?: never;
+          policy_version_id?: never;
           policy_version?: never;
-          accepted_at?: string;
-          signature_name?: string;
-          signature_path?: string | null;
-          witness_name?: string | null;
-          witness_phone?: string | null;
-          accepted_place?: string | null;
+          accepted_at?: never;
+          signature_name?: never;
+          signature_path?: never;
+          witness_name?: never;
+          witness_phone?: never;
+          accepted_place?: never;
           recorded_by?: never;
-          created_at?: string;
-          updated_at?: string;
+          created_at?: never;
+          updated_at?: never;
+          consent_method?: never;
+          verification_status?: never;
+          evidence_reference?: never;
+          evidence_digest?: never;
+          verified_at?: never;
+          verified_by?: never;
+          verified_by_label?: never;
+          member_profile_id?: never;
+          witness_profile_id?: never;
+          challenge_id?: never;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Polytos Phase 2. Membership enrolment and the savings module.
+       *
+       * Five of these six tables have **no write surface at all**, and that is
+       * not an oversight in this file — it mirrors the grants. `authenticated`
+       * holds SELECT and nothing else on the receipts, the subledger, the
+       * withdrawal requests, the cards and the consent challenges, because every
+       * row in them is written by a SECURITY DEFINER function that wrote a
+       * journal entry in the same transaction. A receipt inserted directly would
+       * be a receipt with no money behind it; a transaction inserted directly
+       * would be money the ledger does not know about.
+       *
+       * So every column of their `Insert` and `Update` is typed `never`. A
+       * direct write becomes a type error at the call site rather than a
+       * permission error at runtime, which is the earlier and cheaper place to
+       * find out.
+       *
+       * `savings_accounts` is the exception, with a narrow UPDATE for the one
+       * supervisory act this phase ships: restricting or closing an account.
+       */
+      membership_fee_receipts: {
+        Row: {
+          id: string;
+          receipt_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          amount: number;
+          payment_method: string;
+          receiving_account_id: string;
+          external_reference: string | null;
+          idempotency_key: string;
+          status: string;
+          received_at: string;
+          business_date: string;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          client_name_at_payment: string;
+          notes: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversed_by_label: string | null;
+          reversal_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        // Written by `record_membership_fee` and `reverse_membership_fee`
+        // only. The receipt and its journal entry are one act.
+
+        Insert: {
+          id?: never;
+          receipt_number?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          policy_version_id?: never;
+          amount?: never;
+          payment_method?: never;
+          receiving_account_id?: never;
+          external_reference?: never;
+          idempotency_key?: never;
+          status?: never;
+          received_at?: never;
+          business_date?: never;
+          journal_entry_id?: never;
+          reversal_entry_id?: never;
+          recorded_by?: never;
+          recorded_by_label?: never;
+          client_name_at_payment?: never;
+          notes?: never;
+          reversed_at?: never;
+          reversed_by?: never;
+          reversed_by_label?: never;
+          reversal_reason?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Update: {
+          id?: never;
+          receipt_number?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          policy_version_id?: never;
+          amount?: never;
+          payment_method?: never;
+          receiving_account_id?: never;
+          external_reference?: never;
+          idempotency_key?: never;
+          status?: never;
+          received_at?: never;
+          business_date?: never;
+          journal_entry_id?: never;
+          reversal_entry_id?: never;
+          recorded_by?: never;
+          recorded_by_label?: never;
+          client_name_at_payment?: never;
+          notes?: never;
+          reversed_at?: never;
+          reversed_by?: never;
+          reversed_by_label?: never;
+          reversal_reason?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Relationships: [];
+      };
+      savings_accounts: {
+        Row: {
+          id: string;
+          account_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          status: string;
+          status_reason: string | null;
+          opened_on: string;
+          closed_on: string | null;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          updated_at: string;
+        };
+        // No INSERT. An account is opened by `open_savings_account`, which
+        // checks that the policy version governing it actually has the
+        // savings rules decided. A directly inserted account would be one
+        // whose readiness gate nobody consulted.
+        Insert: {
+          id?: never;
+          account_number?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          policy_version_id?: never;
+          status?: never;
+          status_reason?: never;
+          opened_on?: never;
+          closed_on?: never;
+          created_by?: never;
+          created_by_label?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Update: {
+          id?: never;
+          account_number?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          policy_version_id?: never;
+          // The two the guard lets through, for a caller holding
+          // `savings:reverse`. `closed_on` is stamped by the guard from the
+          // business clock, so it is not here.
+          status?: string;
+          status_reason?: string | null;
+          opened_on?: never;
+          closed_on?: never;
+          created_by?: never;
+          created_by_label?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Relationships: [];
+      };
+      savings_transactions: {
+        Row: {
+          id: string;
+          transaction_number: string;
+          savings_account_id: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          kind: string;
+          amount: number;
+          signed_amount: number | null;
+          payment_method: string | null;
+          cash_account_id: string | null;
+          external_reference: string | null;
+          idempotency_key: string;
+          value_date: string;
+          contribution_month: string | null;
+          occurred_at: string;
+          journal_entry_id: string | null;
+          reverses_transaction_id: string | null;
+          reversal_reason: string | null;
+          withdrawal_request_id: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          notes: string | null;
+          created_at: string;
+        };
+        // Append-only, and with no write grant of any kind: a statement
+        // trigger refuses UPDATE and DELETE behind the missing privilege. A
+        // correction is a contra row with its own contra journal, written by
+        // `reverse_savings_transaction`.
+
+        Insert: {
+          id?: never;
+          transaction_number?: never;
+          savings_account_id?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          kind?: never;
+          amount?: never;
+          signed_amount?: never;
+          payment_method?: never;
+          cash_account_id?: never;
+          external_reference?: never;
+          idempotency_key?: never;
+          value_date?: never;
+          contribution_month?: never;
+          occurred_at?: never;
+          journal_entry_id?: never;
+          reverses_transaction_id?: never;
+          reversal_reason?: never;
+          withdrawal_request_id?: never;
+          recorded_by?: never;
+          recorded_by_label?: never;
+          notes?: never;
+          created_at?: never;
+        };
+        Update: {
+          id?: never;
+          transaction_number?: never;
+          savings_account_id?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          kind?: never;
+          amount?: never;
+          signed_amount?: never;
+          payment_method?: never;
+          cash_account_id?: never;
+          external_reference?: never;
+          idempotency_key?: never;
+          value_date?: never;
+          contribution_month?: never;
+          occurred_at?: never;
+          journal_entry_id?: never;
+          reverses_transaction_id?: never;
+          reversal_reason?: never;
+          withdrawal_request_id?: never;
+          recorded_by?: never;
+          recorded_by_label?: never;
+          notes?: never;
+          created_at?: never;
+        };
+        Relationships: [];
+      };
+      savings_withdrawal_requests: {
+        Row: {
+          id: string;
+          request_number: string;
+          savings_account_id: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          amount: number;
+          reason: string;
+          status: string;
+          balance_at_request: number;
+          requested_by: string | null;
+          requested_by_label: string;
+          requested_at: string;
+          business_date: string;
+          decided_by: string | null;
+          decided_by_label: string | null;
+          decided_at: string | null;
+          decision_notes: string | null;
+          paid_transaction_id: string | null;
+          paid_at: string | null;
+          cancelled_at: string | null;
+          cancellation_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        // Requesting, deciding, paying and cancelling are four definer
+        // functions, each with its own capability and its own refusal —
+        // including the one that stops a withdrawal being decided by the
+        // person who prepared it.
+
+        Insert: {
+          id?: never;
+          request_number?: never;
+          savings_account_id?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          policy_version_id?: never;
+          amount?: never;
+          reason?: never;
+          status?: never;
+          balance_at_request?: never;
+          requested_by?: never;
+          requested_by_label?: never;
+          requested_at?: never;
+          business_date?: never;
+          decided_by?: never;
+          decided_by_label?: never;
+          decided_at?: never;
+          decision_notes?: never;
+          paid_transaction_id?: never;
+          paid_at?: never;
+          cancelled_at?: never;
+          cancellation_reason?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Update: {
+          id?: never;
+          request_number?: never;
+          savings_account_id?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          policy_version_id?: never;
+          amount?: never;
+          reason?: never;
+          status?: never;
+          balance_at_request?: never;
+          requested_by?: never;
+          requested_by_label?: never;
+          requested_at?: never;
+          business_date?: never;
+          decided_by?: never;
+          decided_by_label?: never;
+          decided_at?: never;
+          decision_notes?: never;
+          paid_transaction_id?: never;
+          paid_at?: never;
+          cancelled_at?: never;
+          cancellation_reason?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Relationships: [];
+      };
+      membership_cards: {
+        Row: {
+          id: string;
+          card_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          printed_name: string;
+          verification_code: string;
+          status: string;
+          issue_reason: string;
+          issued_on: string;
+          issued_by: string | null;
+          issued_by_label: string;
+          superseded_by: string | null;
+          superseded_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        // Issued and superseded by `issue_membership_card`, which mints the
+        // verification code. A caller that could choose the code could print
+        // a card whose code matched somebody else's.
+
+        Insert: {
+          id?: never;
+          card_number?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          printed_name?: never;
+          verification_code?: never;
+          status?: never;
+          issue_reason?: never;
+          issued_on?: never;
+          issued_by?: never;
+          issued_by_label?: never;
+          superseded_by?: never;
+          superseded_at?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Update: {
+          id?: never;
+          card_number?: never;
+          membership_id?: never;
+          client_id?: never;
+          branch_id?: never;
+          printed_name?: never;
+          verification_code?: never;
+          status?: never;
+          issue_reason?: never;
+          issued_on?: never;
+          issued_by?: never;
+          issued_by_label?: never;
+          superseded_by?: never;
+          superseded_at?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Relationships: [];
+      };
+      membership_consent_challenges: {
+        Row: {
+          id: string;
+          membership_id: string;
+          policy_version_id: string;
+          delivered_to: string;
+          code_digest: string;
+          issued_by: string | null;
+          issued_by_label: string;
+          issued_at: string;
+          expires_at: string;
+          consumed_at: string | null;
+          attempts: number;
+          created_at: string;
+          updated_at: string;
+        };
+        // Nobody reads this table and nobody writes it: there is no grant
+        // at all, and no policy. It holds the *digest* of a one-time consent
+        // code, never the code, and `issue_membership_consent_code` and the
+        // acceptance guard are its only writers. A caller who could insert a
+        // row here could consent on somebody else's behalf.
+
+        Insert: {
+          id?: never;
+          membership_id?: never;
+          policy_version_id?: never;
+          delivered_to?: never;
+          code_digest?: never;
+          issued_by?: never;
+          issued_by_label?: never;
+          issued_at?: never;
+          expires_at?: never;
+          consumed_at?: never;
+          attempts?: never;
+          created_at?: never;
+          updated_at?: never;
+        };
+        Update: {
+          id?: never;
+          membership_id?: never;
+          policy_version_id?: never;
+          delivered_to?: never;
+          code_digest?: never;
+          issued_by?: never;
+          issued_by_label?: never;
+          issued_at?: never;
+          expires_at?: never;
+          consumed_at?: never;
+          attempts?: never;
+          created_at?: never;
+          updated_at?: never;
         };
         Relationships: [];
       };
@@ -4043,6 +4545,75 @@ export type Database = {
         };
         Relationships: [];
       };
+      /**
+       * Polytos Phase 2. There is no stored savings balance anywhere in this
+       * schema, which is why these are views: the balance is
+       * `sum(signed_amount)` over the subledger, and `signed_amount` is a
+       * generated column, so no caller decides the direction of a movement.
+       * A stored balance would be a second figure that could disagree with
+       * the ledger, and the one that disagrees is always the one on screen.
+       */
+      member_savings_balances: {
+        Row: {
+          savings_account_id: string | null;
+          account_number: string | null;
+          membership_id: string | null;
+          client_id: string | null;
+          branch_id: string | null;
+          status: string | null;
+          opened_on: string | null;
+          policy_version_id: string | null;
+          balance: number | null;
+          total_deposited: number | null;
+          total_withdrawn: number | null;
+          total_deposits_reversed: number | null;
+          total_withdrawals_reversed: number | null;
+          transaction_count: number | null;
+          last_transaction_on: string | null;
+        };
+        Relationships: [];
+      };
+      member_savings_contributions: {
+        Row: {
+          savings_account_id: string | null;
+          contribution_month: string | null;
+          contributed: number | null;
+          deposited: number | null;
+          reversed: number | null;
+          deposit_count: number | null;
+          last_deposit_on: string | null;
+          monthly_savings_minimum: number | null;
+          meets_minimum: boolean | null;
+          shortfall: number | null;
+          surplus: number | null;
+        };
+        Relationships: [];
+      };
+      savings_account_register: {
+        Row: {
+          savings_account_id: string | null;
+          account_number: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          membership_status: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          full_name: string | null;
+          phone: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          account_status: string | null;
+          opened_on: string | null;
+          balance: number | null;
+          total_deposited: number | null;
+          total_withdrawn: number | null;
+          transaction_count: number | null;
+          last_transaction_on: string | null;
+          monthly_savings_minimum: number | null;
+          savings_qualifying_months: number | null;
+        };
+        Relationships: [];
+      };
     };
 
     Functions: {
@@ -4436,14 +5007,22 @@ export type Database = {
       // Polytos Phase 1. Records a member's acceptance of a newly published
       // policy version and moves them onto it, in one transaction. The only
       // route by which memberships.policy_version_id changes.
+      // Polytos Phase 2 replaced the Phase 1 signature, which took a typed
+      // signature name and a typed witness name. A typed name is not
+      // consent, and Phase 1's own header said so; this one takes the
+      // evidence instead and routes it through the same guard an enrolment
+      // acceptance goes through, so the database — not the caller — decides
+      // whether it is verified.
       accept_membership_policy_version: {
         Args: {
           p_membership_id: string;
           p_policy_version_id: string;
+          p_consent_method: string;
           p_signature_name: string;
+          p_signature_path?: string | null;
+          p_witness_profile_id?: string | null;
+          p_challenge_id?: string | null;
           p_accepted_place?: string | null;
-          p_witness_name?: string | null;
-          p_witness_phone?: string | null;
         };
         Returns: string;
       };
@@ -4533,6 +5112,14 @@ export type Database = {
         Args: { p_name: string };
         Returns: string;
       };
+      // Polytos Phase 2. The membership a `membership-consent` object belongs
+      // to, read out of its path — which is what makes "this member's own
+      // signature" expressible as a storage policy predicate. NULL when the
+      // path is not shaped like one, which denies every policy that uses it.
+      storage_path_membership_id: {
+        Args: { p_name: string };
+        Returns: string;
+      };
       storage_path_guarantor_id: {
         Args: { p_name: string };
         Returns: string;
@@ -4592,6 +5179,267 @@ export type Database = {
       };
       user_has_role: {
         Args: { p_role_key: string };
+        Returns: boolean;
+      };
+
+      // --- Polytos Phase 2: enrolment, consent and savings -------------------
+      //
+      // Every function here that moves money writes its document and its
+      // journal in one transaction, and each is idempotent on a key the
+      // server mints when the form renders. The authorisation check sits
+      // *above* the replay shortcut inside each of them: an early return
+      // hands back a document id, so a caller who may not post must not be
+      // able to reach one by replaying a key.
+      //
+      // `Returns: string` throughout means the id of the thing that was
+      // written — a membership, a receipt, a transaction, a request — never a
+      // balance. A caller that could be handed a balance by a posting
+      // function could print any figure it liked.
+
+      /**
+       * Enrol a client: membership, fee, journal, verified consent,
+       * activation, savings account and an optional first deposit, in one
+       * transaction. Rolls the lot back if the consent cannot be verified.
+       */
+      enrol_member: {
+        Args: {
+          p_client_id: string;
+          p_payment_method: string;
+          p_fee_reference: string | null;
+          p_consent_method: string;
+          p_signature_name: string;
+          p_fee_idempotency_key: string;
+          p_signature_path?: string | null;
+          p_witness_profile_id?: string | null;
+          p_challenge_id?: string | null;
+          p_initial_deposit?: number | null;
+          p_deposit_reference?: string | null;
+          p_deposit_idempotency_key?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Collect the registration fee. The amount is checked against the
+       * membership's own policy version rather than against a constant, so a
+       * member enrolled in March pays March's fee.
+       */
+      record_membership_fee: {
+        Args: {
+          p_membership_id: string;
+          p_amount: number;
+          p_payment_method: string;
+          p_external_reference: string | null;
+          p_idempotency_key: string;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Reverse a fee receipt. Does not un-activate a member. */
+      reverse_membership_fee: {
+        Args: { p_receipt_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Open the savings account for a membership. Idempotent by
+       * construction — one account per membership, so a second call returns
+       * the first — and refused while the savings rules are undecided.
+       */
+      open_savings_account: {
+        Args: { p_membership_id: string };
+        Returns: string;
+      };
+
+      /**
+       * Record a deposit: debit the branch cash account, credit
+       * 2100 Member Savings. A liability, never income.
+       */
+      post_savings_deposit: {
+        Args: {
+          p_savings_account_id: string;
+          p_amount: number;
+          p_payment_method: string;
+          p_external_reference: string | null;
+          p_idempotency_key: string;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Prepare a withdrawal for review. Decides nothing. */
+      request_savings_withdrawal: {
+        Args: { p_savings_account_id: string; p_amount: number; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Approve or reject a prepared withdrawal. Refuses a decision from the
+       * person who prepared it, which is what makes the split between
+       * `savings:request_withdrawal` and `savings:approve_withdrawal` a
+       * control rather than a label.
+       */
+      decide_savings_withdrawal: {
+        Args: { p_request_id: string; p_approve: boolean; p_notes?: string | null };
+        Returns: string;
+      };
+
+      /**
+       * Pay an approved withdrawal: debit the liability, credit cash. The
+       * balance is re-checked under the account's row lock, so two approved
+       * requests racing each other cannot both be paid.
+       */
+      post_savings_withdrawal: {
+        Args: {
+          p_request_id: string;
+          p_payment_method: string;
+          p_external_reference: string | null;
+          p_idempotency_key: string;
+        };
+        Returns: string;
+      };
+
+      cancel_savings_withdrawal: {
+        Args: { p_request_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Reverse a posted deposit or withdrawal by writing a contra row and a
+       * contra journal. Never edits the original, refuses a second reversal,
+       * and refuses to reverse a deposit that has already been spent — which
+       * would push the liability below nothing.
+       */
+      reverse_savings_transaction: {
+        Args: { p_transaction_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Whether an account has served its qualifying months, as of a date.
+       * SECURITY INVOKER: the policies on the subledger decide who may ask
+       * about whom, so a caller passing somebody else's account id gets
+       * nothing. `p_as_of` filters on `value_date`, so the answer to "did
+       * they qualify on 1 June" cannot be changed by a deposit made in July.
+       */
+      member_savings_qualification: {
+        Args: { p_savings_account_id: string; p_as_of?: string | null };
+        Returns: {
+          savings_account_id: string;
+          as_of: string;
+          monthly_minimum: number;
+          months_required: number;
+          must_be_consecutive: boolean;
+          qualifying_months: number;
+          longest_consecutive_months: number;
+          months_recorded: number;
+          months_short: number;
+          total_contributed: number;
+          total_withdrawn: number;
+          balance: number;
+          qualifies: boolean;
+          blocked_reason: string | null;
+        }[];
+      };
+
+      /**
+       * A statement with a running balance. SECURITY INVOKER, for the same
+       * reason. The window runs over the whole account and the period filter
+       * is applied afterwards, so a statement for March opens at the balance
+       * March actually opened at rather than at zero.
+       */
+      savings_statement: {
+        Args: {
+          p_savings_account_id: string;
+          p_from?: string | null;
+          p_to?: string | null;
+        };
+        Returns: {
+          transaction_id: string;
+          transaction_number: string;
+          value_date: string;
+          kind: string;
+          description: string;
+          deposit: number;
+          withdrawal: number;
+          signed_amount: number;
+          running_balance: number;
+          payment_method: string | null;
+          external_reference: string | null;
+          reverses_transaction_number: string | null;
+          reversal_reason: string | null;
+          recorded_by_label: string | null;
+        }[];
+      };
+
+      /**
+       * The savings position for a dashboard. SECURITY DEFINER, unlike the
+       * two above and for the opposite reason: its whole purpose is the
+       * figure for the business as a whole, where there is no row for a
+       * policy to filter — so it asks for `savings:view_reports` explicitly.
+       * `total_liability` is the figure that must equal the 2100 balance.
+       */
+      savings_summary: {
+        Args: { p_from?: string | null; p_to?: string | null };
+        Returns: {
+          accounts_open: number;
+          members_saving: number;
+          total_liability: number;
+          deposits_in_period: number;
+          withdrawals_in_period: number;
+          deposits_count: number;
+          withdrawals_count: number;
+          pending_withdrawal_requests: number;
+          pending_withdrawal_value: number;
+          members_meeting_minimum: number;
+        }[];
+      };
+
+      /** Issue or reissue a membership card, superseding the one it replaces. */
+      issue_membership_card: {
+        Args: { p_membership_id: string; p_reason?: string };
+        Returns: string;
+      };
+
+      /**
+       * Issue a one-time consent code to the phone number already on the
+       * member's client record — not one typed into the form, because a code
+       * sent to a number a staff member chose proves nothing about who
+       * received it. Returns the code **once**; only its digest is stored.
+       */
+      issue_membership_consent_code: {
+        Args: { p_membership_id: string; p_policy_version_id: string };
+        Returns: {
+          challenge_id: string;
+          code: string;
+          delivered_to: string;
+          expires_at: string;
+        }[];
+      };
+
+      /**
+       * Check a code without consuming it: the acceptance guard consumes it,
+       * in the same transaction as the acceptance it proves, so a code cannot
+       * be burned by a redemption that then records nothing.
+       */
+      redeem_membership_consent_code: {
+        Args: { p_challenge_id: string; p_code: string };
+        Returns: string;
+      };
+
+      /** The two ADR-050 activation preconditions, each readable on its own. */
+      membership_fee_is_posted: {
+        Args: { p_membership_id: string };
+        Returns: boolean;
+      };
+      membership_terms_are_accepted: {
+        Args: { p_membership_id: string };
+        Returns: boolean;
+      };
+      client_has_live_loan: {
+        Args: { p_client_id: string };
         Returns: boolean;
       };
     };

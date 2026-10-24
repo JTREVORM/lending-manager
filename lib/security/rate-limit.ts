@@ -66,7 +66,17 @@ export type RateLimitedAction =
   | 'uploads.document'
   | 'recovery.record'
   | 'security.collateral'
-  | 'security.decision';
+  | 'security.decision'
+  // Polytos Phase 2. Enrolment, consent and savings.
+  | 'membership.enrol'
+  | 'membership.fee'
+  | 'membership.consent'
+  | 'membership.consent_code'
+  | 'membership.card'
+  | 'savings.deposit'
+  | 'savings.withdrawal'
+  | 'savings.withdrawal_decision'
+  | 'savings.reverse';
 
 export interface RateLimitRule {
   /** Requests permitted inside one window. */
@@ -178,6 +188,81 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 3600,
     onStoreFailure: 'closed',
     message: 'Too many release decisions in the last hour. Try again shortly.',
+  },
+  // --- Polytos Phase 2 ------------------------------------------------------
+  //
+  // The same shape Phase 11 settled on: recording money is throughput and
+  // fails open, because a counter that cannot count usually means a database
+  // that cannot post either and a second confusing failure helps nobody;
+  // deciding about money is a decision rather than throughput, so it is
+  // slower and fails closed.
+  //
+  // Two have numbers chosen from the work rather than copied:
+  //
+  //   * `membership.consent_code` is 10 in 15 minutes, and tighter than the
+  //     rest, because each call sends a code to a member's phone. An
+  //     unlimited one is a way to make the business send somebody dozens of
+  //     messages, and it fails closed for the same reason a password reset
+  //     does — an outage here costs an enrolment, while an unlimited attempt
+  //     costs the member's trust.
+  //   * `membership.enrol` is 30 a minute, matching a transfer rather than a
+  //     payment: enrolment involves a conversation and a signature, so a
+  //     counter that could enrol sixty people a minute is not a counter.
+  'membership.enrol': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Enrolments are being recorded faster than expected. Try again in a moment.',
+  },
+  'membership.fee': {
+    limit: 60,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Fees are being recorded faster than expected. Try again in a moment.',
+  },
+  'membership.consent': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message:
+      'Acceptances are being recorded faster than expected. Try again in a moment.',
+  },
+  'membership.consent_code': {
+    limit: 10,
+    windowSeconds: 900,
+    onStoreFailure: 'closed',
+    message: 'Too many codes sent just now. Wait a few minutes before sending another.',
+  },
+  'membership.card': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'open',
+    message: 'Too many cards issued in the last hour. Try again shortly.',
+  },
+  'savings.deposit': {
+    limit: 60,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Deposits are being recorded faster than expected. Try again in a moment.',
+  },
+  'savings.withdrawal': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message:
+      'Withdrawals are being prepared faster than expected. Try again in a moment.',
+  },
+  'savings.withdrawal_decision': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many withdrawal decisions in the last hour. Try again shortly.',
+  },
+  'savings.reverse': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many reversals in the last hour. Try again shortly.',
   },
   'loans.approve': {
     limit: 20,
