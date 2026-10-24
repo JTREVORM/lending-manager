@@ -629,8 +629,9 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
     try {
       const accepted = await queryOne<{ id: string }>(
         `select public.accept_membership_policy_version(
-                  $1, $2, 'Hardening Member', 'Kampala') as id`,
-        [fx.membershipId, target],
+                  $1, $2, 'witnessed_in_branch', 'Hardening Member',
+                  null, $3, null, 'Kampala') as id`,
+        [fx.membershipId, target, fx.manager.profileId],
       );
       expect(accepted.id).toBeTruthy();
 
@@ -698,8 +699,9 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
     try {
       const error = await expectError(
         `select public.accept_membership_policy_version(
-                  $1, $2, 'Hardening Member', null)`,
-        [fx.membershipId, earlier],
+                  $1, $2, 'witnessed_in_branch', 'Hardening Member',
+                  null, $3, null, null)`,
+        [fx.membershipId, earlier, fx.manager.profileId],
       );
 
       expect(error?.message ?? '').toMatch(/took effect before/i);
@@ -711,8 +713,9 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
 
   it('refuses a re-acceptance onto a version that is not in force', async () => {
     const error = await expectError(
-      `select public.accept_membership_policy_version($1, $2, 'Hardening Member', null)`,
-      [fx.membershipId, fx.draftVersionId],
+      `select public.accept_membership_policy_version(
+              $1, $2, 'witnessed_in_branch', 'Hardening Member', null, $3, null, null)`,
+      [fx.membershipId, fx.draftVersionId, fx.manager.profileId],
     );
 
     expect(error?.message ?? '').toMatch(/in force/i);
@@ -721,8 +724,9 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
   it('refuses a re-acceptance from a caller without membership:manage_policies', async () => {
     const result = await asUser(
       fx.manager,
-      `select public.accept_membership_policy_version($1, $2, 'Hardening Member', null)`,
-      [fx.membershipId, fx.inForceVersionId],
+      `select public.accept_membership_policy_version(
+              $1, $2, 'witnessed_in_branch', 'Hardening Member', null, $3, null, null)`,
+      [fx.membershipId, fx.inForceVersionId, fx.owner.profileId],
     );
 
     expect(result.ok).toBe(false);

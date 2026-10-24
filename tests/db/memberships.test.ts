@@ -16,6 +16,7 @@ import {
   queryOne,
   skipReason,
 } from '../helpers/db';
+import { satisfyActivationPreconditions } from '../helpers/membership';
 import {
   LIVE_MEMBERSHIP_STATUSES,
   MEMBERSHIP_STATUSES,
@@ -351,6 +352,16 @@ describeDb('one live membership per client', () => {
 
 // ===========================================================================
 describeDb('the lifecycle', () => {
+  /**
+   * A pending membership that *can* be activated.
+   *
+   * Polytos Phase 2 made `pending -> active` conditional on a posted
+   * registration fee and a verified acceptance (ADR-050) — the preconditions
+   * this file's own Phase 1 comments said would arrive. The helper satisfies
+   * them the way the counter does, through `record_membership_fee` and an
+   * acceptance the guard verifies, so every assertion below is about the
+   * lifecycle and not about enrolment.
+   */
   async function enrol(phone: string): Promise<string> {
     const clientId = await makeClient(`Lifecycle ${phone}`, phone);
     const row = await queryOne<{ id: string }>(
@@ -358,6 +369,7 @@ describeDb('the lifecycle', () => {
        values ($1, current_date) returning id`,
       [clientId],
     );
+    await satisfyActivationPreconditions(row.id, fx.manager.profileId);
     return row.id;
   }
 
@@ -709,6 +721,8 @@ describeDb('the audit trail follows every membership change', () => {
       [clientId],
     );
 
+    await satisfyActivationPreconditions(membership.id, fx.manager.profileId);
+
     await query(`update public.memberships set status = 'active' where id = $1`, [
       membership.id,
     ]);
@@ -757,22 +771,26 @@ describeDb('what a session may actually write', () => {
     );
     expect(enrolled.ok).toBe(true);
 
-    // And a Manager may move it, inside one transaction so the write is
-    // visible to the statement that follows.
-    const moved = await asUserScript(fx.manager, [
-      {
-        sql: `insert into public.memberships (client_id, applied_on)
-              values ($1, current_date)`,
-        params: [await makeClient('Moved Member', '+256700107002')],
-      },
-      {
-        sql: `update public.memberships set status = 'active'
-               where client_id = $1 returning status`,
-        params: [clientId],
-      },
-    ]);
+    // And a Manager may move it. The membership the Manager just enrolled is
+    // the one that moves, and its Phase 2 preconditions are met first — the
+    // assertion is about the Manager's authority, not about enrolment.
+    const movedClientId = await makeClient('Moved Member', '+256700107002');
+    const movedMembership = await queryOne<{ id: string }>(
+      `insert into public.memberships (client_id, applied_on)
+       values ($1, current_date) returning id`,
+      [movedClientId],
+    );
+    await satisfyActivationPreconditions(movedMembership.id, fx.owner.profileId);
 
-    expect(moved.ok).toBe(true);
+    const moved = await asUser(
+      fx.manager,
+      `update public.memberships set status = 'active'
+        where id = $1 returning status`,
+      [movedMembership.id],
+    );
+
+    expect(moved.ok, moved.message).toBe(true);
+    expect(moved.rowCount).toBe(1);
   });
 
   it('refuses a status change to a holder of membership:update alone', async () => {
@@ -786,6 +804,9 @@ describeDb('what a session may actually write', () => {
        values ($1, current_date) returning id`,
       [clientId],
     );
+    // The Phase 2 preconditions are met, so the refusal below is about the
+    // capability and not about an unpaid fee.
+    await satisfyActivationPreconditions(membership.id, fx.owner.profileId);
 
     await inRollbackTransaction(async (client) => {
       await client.query(

@@ -97,6 +97,17 @@ describeDb('tables', () => {
     // policy, the membership itself, its lifecycle history and the terms a
     // member signed. No savings, fee or benefit table, because nothing posts
     // them yet; they arrive with the workflows that do.
+    // Polytos Phase 2: the workflows Phase 1 deliberately left out. The
+    // card a member carries, the one-time codes that make consent
+    // checkable, the registration fee and its receipt, the savings account
+    // and its subledger, and the withdrawal a supervisor decides.
+    //
+    // There is still no benefit, meeting or distribution table: those are
+    // Phases 4 and 5, and the rule holds — a table arrives with the
+    // workflow that posts to it.
+    'membership_cards',
+    'membership_consent_challenges',
+    'membership_fee_receipts',
     'membership_policy_versions',
     'membership_status_history',
     'membership_terms_acceptances',
@@ -123,6 +134,9 @@ describeDb('tables', () => {
     'repayment_frequencies',
     'role_permissions',
     'roles',
+    'savings_accounts',
+    'savings_transactions',
+    'savings_withdrawal_requests',
     'user_roles',
   ];
 
@@ -439,13 +453,45 @@ describeDb('foreign keys', () => {
       // cascade would be refused by the append-only trigger instead of by
       // the key — the same confusing failure the Phase 15 note below
       // describes. `changed_by_label` is what makes RESTRICT affordable.
+      // Polytos Phase 2. The same division Phase 1 drew: `r` on everything a
+      // financial document depends on — the membership, the client, the
+      // branch, the policy version, the ledger account the money moved
+      // through and the journal entry it wrote — and `n` only on the
+      // attribution columns of tables that accept an UPDATE.
+      'membership_cards.branch_id -> branches (r)',
+      'membership_cards.client_id -> clients (r)',
+      'membership_cards.issued_by -> profiles (n)',
+      'membership_cards.membership_id -> memberships (r)',
+      'membership_cards.superseded_by -> membership_cards (r)',
+      'membership_consent_challenges.issued_by -> profiles (n)',
+      'membership_consent_challenges.membership_id -> memberships (r)',
+      'membership_consent_challenges.policy_version_id -> membership_policy_versions (r)',
+      'membership_fee_receipts.branch_id -> branches (r)',
+      'membership_fee_receipts.client_id -> clients (r)',
+      'membership_fee_receipts.journal_entry_id -> journal_entries (r)',
+      'membership_fee_receipts.membership_id -> memberships (r)',
+      'membership_fee_receipts.policy_version_id -> membership_policy_versions (r)',
+      'membership_fee_receipts.receiving_account_id -> ledger_accounts (r)',
+      'membership_fee_receipts.recorded_by -> profiles (n)',
+      'membership_fee_receipts.reversal_entry_id -> journal_entries (r)',
+      'membership_fee_receipts.reversed_by -> profiles (n)',
       'membership_policy_versions.approved_by -> profiles (n)',
       'membership_policy_versions.created_by -> profiles (n)',
       'membership_status_history.changed_by -> profiles (r)',
       'membership_status_history.membership_id -> memberships (r)',
+      // The acceptance keeps `n` on its four attribution columns — the
+      // recorder, the verifier, the member and the witness — because the
+      // *evidence* survives a deleted profile: `evidence_reference` holds the
+      // witness's name and `evidence_digest` is what stops the evidence being
+      // reused. Making a staff profile undeletable once they had witnessed
+      // one signature would be a different policy than the one intended.
+      'membership_terms_acceptances.challenge_id -> membership_consent_challenges (r)',
+      'membership_terms_acceptances.member_profile_id -> profiles (n)',
       'membership_terms_acceptances.membership_id -> memberships (r)',
       'membership_terms_acceptances.policy_version_id -> membership_policy_versions (r)',
       'membership_terms_acceptances.recorded_by -> profiles (n)',
+      'membership_terms_acceptances.verified_by -> profiles (n)',
+      'membership_terms_acceptances.witness_profile_id -> profiles (n)',
       'memberships.branch_id -> branches (r)',
       'memberships.client_id -> clients (r)',
       'memberships.created_by -> profiles (n)',
@@ -492,6 +538,35 @@ describeDb('foreign keys', () => {
       // capabilities.
       'role_permissions.permission_key -> permissions (r)',
       'role_permissions.role_key -> roles (r)',
+      'savings_accounts.branch_id -> branches (r)',
+      'savings_accounts.client_id -> clients (r)',
+      'savings_accounts.created_by -> profiles (n)',
+      'savings_accounts.membership_id -> memberships (r)',
+      'savings_accounts.policy_version_id -> membership_policy_versions (r)',
+      // `savings_transactions.recorded_by` is `r`, and that one is not merely
+      // conventional: this table refuses every UPDATE, and an ON DELETE SET
+      // NULL *is* an UPDATE, so a nulling reference would make deleting a
+      // staff profile fail with a confusing error about an append-only table
+      // rather than a clear one about the reference. The Phase 1 lesson from
+      // `membership_status_history`, repeated because the same mistake was
+      // available again; `recorded_by_label` is what makes RESTRICT work.
+      'savings_transactions.branch_id -> branches (r)',
+      'savings_transactions.cash_account_id -> ledger_accounts (r)',
+      'savings_transactions.client_id -> clients (r)',
+      'savings_transactions.journal_entry_id -> journal_entries (r)',
+      'savings_transactions.membership_id -> memberships (r)',
+      'savings_transactions.recorded_by -> profiles (r)',
+      'savings_transactions.reverses_transaction_id -> savings_transactions (r)',
+      'savings_transactions.savings_account_id -> savings_accounts (r)',
+      'savings_transactions.withdrawal_request_id -> savings_withdrawal_requests (r)',
+      'savings_withdrawal_requests.branch_id -> branches (r)',
+      'savings_withdrawal_requests.client_id -> clients (r)',
+      'savings_withdrawal_requests.decided_by -> profiles (n)',
+      'savings_withdrawal_requests.membership_id -> memberships (r)',
+      'savings_withdrawal_requests.paid_transaction_id -> savings_transactions (r)',
+      'savings_withdrawal_requests.policy_version_id -> membership_policy_versions (r)',
+      'savings_withdrawal_requests.requested_by -> profiles (n)',
+      'savings_withdrawal_requests.savings_account_id -> savings_accounts (r)',
       'user_roles.granted_by -> profiles (r)',
       'user_roles.profile_id -> profiles (r)',
       'user_roles.role_key -> roles (r)',

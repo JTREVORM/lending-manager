@@ -239,6 +239,21 @@ describeDb('row level security', () => {
       //
       // DELETE appears on none of them, as it appears on nothing in this
       // system but `user_roles`.
+      'member_savings_balances:SELECT',
+      'member_savings_contributions:SELECT',
+      // Polytos Phase 2. Every one of these is SELECT and nothing more, with
+      // one exception: `savings_accounts` takes UPDATE so a supervisor can
+      // restrict an account. The subledger, the receipts, the withdrawal
+      // requests and the cards are written by SECURITY DEFINER functions
+      // that post a journal in the same transaction — a row inserted
+      // directly would be money the ledger does not know about, so no
+      // session may insert one.
+      //
+      // The first draft of 20261020001100 granted SELECT without revoking
+      // first, and `CREATE TABLE` had already handed `authenticated`
+      // everything including DELETE and TRUNCATE. This assertion found it.
+      'membership_cards:SELECT',
+      'membership_fee_receipts:SELECT',
       'membership_policy_versions:INSERT',
       'membership_policy_versions:SELECT',
       'membership_policy_versions:UPDATE',
@@ -275,6 +290,11 @@ describeDb('row level security', () => {
       'repayment_frequencies:UPDATE',
       'role_permissions:SELECT',
       'roles:SELECT',
+      'savings_account_register:SELECT',
+      'savings_accounts:SELECT',
+      'savings_accounts:UPDATE',
+      'savings_transactions:SELECT',
+      'savings_withdrawal_requests:SELECT',
       'transfer_register:SELECT',
       'trial_balance:SELECT',
       'user_roles:DELETE',
@@ -409,6 +429,13 @@ describeDb('row level security', () => {
       'loans:UPDATE',
       // Polytos Phase 1. A policy for every operation `authenticated` was
       // granted, and no operation granted without one.
+      // Polytos Phase 2. One policy per granted operation and no more: five
+      // SELECTs and the single UPDATE on `savings_accounts`. There is no
+      // INSERT policy anywhere in this phase, because nothing a session does
+      // writes these tables directly — the posting functions do, and each
+      // writes a journal in the same transaction.
+      'membership_cards:SELECT',
+      'membership_fee_receipts:SELECT',
       'membership_policy_versions:INSERT',
       'membership_policy_versions:SELECT',
       'membership_policy_versions:UPDATE',
@@ -435,6 +462,10 @@ describeDb('row level security', () => {
       'repayment_frequencies:UPDATE',
       'role_permissions:SELECT',
       'roles:SELECT',
+      'savings_accounts:SELECT',
+      'savings_accounts:UPDATE',
+      'savings_transactions:SELECT',
+      'savings_withdrawal_requests:SELECT',
       'user_roles:DELETE',
       'user_roles:INSERT',
       'user_roles:SELECT',
@@ -778,6 +809,11 @@ describeDb('views', () => {
         // Polytos Phase 1. A membership with its member's name and the policy
         // version governing it, as one read rather than a membership query
         // followed by a client lookup per row.
+        // Polytos Phase 2. A savings balance is a sum over the subledger and
+        // never a stored column, so it is a view — and the register and the
+        // contribution months are built on it rather than re-deriving it.
+        'member_savings_balances',
+        'member_savings_contributions',
         'membership_register',
         // Phase 15. The caller's notifications, each with whether that caller
         // has read it, and the one-row count the bell shows.
@@ -789,6 +825,7 @@ describeDb('views', () => {
         // active book and sliced by branch and by product.
         'portfolio_at_risk',
         'reconciliation_register',
+        'savings_account_register',
         'transfer_register',
         'trial_balance',
       ]);
@@ -835,12 +872,15 @@ describeDb('views', () => {
     // application profile, a loan's guarantor register and the frozen
     // guarantor evidence — and six from Phase 14: aging, the PAR aggregate,
     // the security register, the recovery register and its per-loan rollup,
-    // and the guarantor exposure register.
+    // and the guarantor exposure register, one from Polytos Phase 1 — the
+    // membership register — and three from Polytos Phase 2: the savings
+    // balance, the savings register built on it and the contribution months.
     // Counted here because the names are already enumerated above; what this
     // assertion is for is the *privilege*, and the count catches a view that
     // arrived with more than SELECT — which is exactly what the Phase 10
-    // views did in their first draft, until this assertion said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(34);
+    // views did in their first draft, and what the Polytos Phase 2 tables did
+    // in theirs, until these assertions said so.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(37);
   });
 });
 
@@ -897,13 +937,25 @@ describeDb('privileged functions', () => {
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',
       // Polytos Phase 1. The three membership audit triggers.
+      // Polytos Phase 2. The audit triggers, the number minters, the guards
+      // and the posting functions. Every posting function is DEFINER
+      // because it writes a journal, and no session may write one; every
+      // guard is DEFINER because it reads `user_has_permission` and
+      // `current_profile_id`. EXECUTE is revoked from anon and
+      // authenticated on all of them but the ones listed in the next
+      // assertion.
+      'audit_membership_card_change',
       'audit_membership_change',
+      'audit_membership_fee_change',
       'audit_membership_policy_change',
       'audit_membership_terms_accepted',
       'audit_payment_allocated',
       'audit_payment_change',
       'audit_penalty_applied',
       'audit_profile_change',
+      'audit_savings_account_change',
+      'audit_savings_transaction',
+      'audit_savings_withdrawal_change',
       'audit_settings_change',
       'audit_user_role_change',
       'backfill_ledger_history',
@@ -918,8 +970,10 @@ describeDb('privileged functions', () => {
       // session may write, and the two trigger functions enforce the
       // product's own bounds and supply a default. None is granted to
       // `authenticated`.
+      'cancel_savings_withdrawal',
       'capture_loan_product_snapshot',
       'client_guarantors_guard_detach',
+      'client_has_live_loan',
       'client_remarks_stamp_author',
       'clients_assign_client_number',
       'clients_guard_privileged_columns',
@@ -933,12 +987,16 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      'decide_savings_withdrawal',
       'disburse_loan',
+      'enrol_member',
       'ensure_penalty_applied',
       'generate_loan_schedule',
       'guarantor_consent_terms_guard',
       'guarantors_guard_privileged_columns',
       'guarantors_stamp_provenance',
+      'issue_membership_card',
+      'issue_membership_consent_code',
       'journal_assert_balanced',
       'journal_entries_assert_balanced',
       'journal_entries_guard_update',
@@ -996,9 +1054,26 @@ describeDb('privileged functions', () => {
       //   what the enrolment rule is written against, so they must give the
       //   same answer to every caller. Each returns an opaque id or a
       //   boolean; the rows behind them stay governed by the select policy.
+      //
+      // Two Polytos Phase 2 functions are deliberately **absent** from this
+      // list: `savings_statement` and `member_savings_qualification` are
+      // SECURITY INVOKER, because each reads a member's savings and the
+      // policies on `savings_transactions` are what decide who may. They
+      // were definer in the first draft, and `rls-savings.test.ts` caught
+      // what that meant: any signed-in caller could read any member's full
+      // statement by passing an account id. `savings_summary` stays definer
+      // beside them because it reports the business as a whole, where there
+      // is no row for a policy to filter, so it asks for
+      // `savings:view_reports` in so many words.
+      'membership_cards_assign_number',
+      'membership_cards_guard',
+      'membership_fee_is_posted',
+      'membership_fee_receipts_assign_number',
+      'membership_fee_receipts_guard',
       'membership_policy_allows',
       'membership_policy_versions_guard',
       'membership_terms_acceptances_guard',
+      'membership_terms_are_accepted',
       'memberships_assign_number',
       'memberships_guard_transition',
       'memberships_record_status',
@@ -1014,12 +1089,15 @@ describeDb('privileged functions', () => {
       'notify_promise_recorded',
       'notify_reconciliation_variance',
       'notify_transfer_pending',
+      'open_savings_account',
       'post_disbursement_journal',
       'post_expense_journal',
       'post_journal',
       'post_payment',
       'post_repayment_journal',
       'post_reversal_journal',
+      'post_savings_deposit',
+      'post_savings_withdrawal',
       'post_transfer_journal',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
@@ -1031,10 +1109,12 @@ describeDb('privileged functions', () => {
       'raise_notification',
       'record_audit_event',
       'record_expense',
+      'record_membership_fee',
       'record_other_income',
       'record_security_event',
       'record_sign_in',
       'record_transfer',
+      'redeem_membership_consent_code',
       'reject_expense',
       'reject_loan',
       'reject_reconciliation',
@@ -1043,14 +1123,24 @@ describeDb('privileged functions', () => {
       // the loan keeps the number of guarantors its product requires.
       'release_loan_guarantor',
       'repayment_frequencies_guard_identity',
+      'request_savings_withdrawal',
       'reverse_expense',
+      'reverse_membership_fee',
       'reverse_other_income',
       'reverse_payment',
+      'reverse_savings_transaction',
       'reverse_transfer',
       // Phase 18. The Settings screen's read-only view of reference
       // numbering. SECURITY DEFINER so it can read `reference_sequences`,
       // which stays default-deny to every session; it re-checks
       // `settings:view` inside, because the grant alone decides nothing.
+      'savings_accounts_assign_number',
+      'savings_accounts_guard',
+      'savings_accounts_stamp_provenance',
+      'savings_summary',
+      'savings_transactions_assign_number',
+      'savings_withdrawal_requests_assign_number',
+      'savings_withdrawal_requests_guard',
       'settings_reference_sequences',
       'submit_reconciliation',
       'user_can_see_branch',
@@ -1169,6 +1259,13 @@ describeDb('privileged functions', () => {
       // granted to `anon`, because an anonymous caller who could consume a
       // bucket could exhaust a chosen account's sign-in budget and lock that
       // person out. The pre-authentication path goes through the server.
+      // Polytos Phase 2. The membership and savings workflow functions.
+      // Each names a record rather than a person, and each checks its own
+      // capability on the session before it writes anything — which is why
+      // they are reachable from a session at all. Their refusals are
+      // asserted in tests/db/savings.test.ts and rls-savings.test.ts.
+      'cancel_savings_withdrawal',
+      'client_has_live_loan',
       'consume_rate_limit',
       'current_profile_id',
       // Phase 18. The whole session in one round trip: the caller's active
@@ -1190,17 +1287,21 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      'decide_savings_withdrawal',
       'disburse_loan',
       // Phase 13. The existing clients who could back an application, each
       // with the reasons they may not. SECURITY INVOKER, so a caller sees
       // exactly the clients their own policies admit. Advice only: the
       // trigger and the approval validator are the enforcement.
+      'enrol_member',
       'guarantor_candidates',
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
       // what Row Level Security allows it to.
       // Phase 11. One account's balance, for the finance screens. A read
       // of a figure the ledger already publishes through
       // `ledger_account_balances`, so the grant adds no reach.
+      'issue_membership_card',
+      'issue_membership_consent_code',
       'ledger_account_balance',
       'loan_outstanding',
       // Phase 7, all three SECURITY INVOKER for the same reason. The as-of
@@ -1220,7 +1321,11 @@ describeDb('privileged functions', () => {
       // reason `active_membership_policy_id` is — a gate that answers
       // differently depending on who asks is not a gate. It discloses one
       // boolean about a version the caller has already named.
+      'member_savings_qualification',
+      'membership_fee_is_posted',
       'membership_policy_allows',
+      'membership_terms_are_accepted',
+      'open_savings_account',
       'payment_business_date',
       // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.
       'payment_method_cash_kind',
@@ -1235,24 +1340,33 @@ describeDb('privileged functions', () => {
       // decides nothing. The *_journal helpers are deliberately absent —
       // they post without writing a document, and nothing but their own
       // callers should reach them.
+      'post_savings_deposit',
+      'post_savings_withdrawal',
       'record_expense',
+      'record_membership_fee',
       'record_other_income',
       'record_security_event',
       'record_sign_in',
       'record_transfer',
+      'redeem_membership_consent_code',
       'reject_expense',
       'reject_loan',
       'reject_reconciliation',
       'reject_transfer',
       'release_loan_guarantor',
+      'request_savings_withdrawal',
       'reverse_expense',
+      'reverse_membership_fee',
       'reverse_other_income',
       'reverse_payment',
+      'reverse_savings_transaction',
       'reverse_transfer',
       // Phase 18. Granted to `authenticated` so the Settings screen reads the
       // reference counters as the signed-in Owner. It re-checks
       // `settings:view` inside and reads a table no session may touch
       // directly, so the grant hands a caller nothing the page does not.
+      'savings_statement',
+      'savings_summary',
       'settings_reference_sequences',
       'storage_path_client_id',
       'storage_path_guarantor_id',
@@ -1260,6 +1374,7 @@ describeDb('privileged functions', () => {
       // Phase 13. Reads the path of a loan-documents object, for the three
       // storage policies that gate the bucket.
       'storage_path_loan_id',
+      'storage_path_membership_id',
       'submit_reconciliation',
       'user_can_see_branch',
       'user_has_at_least_role',
@@ -1303,7 +1418,7 @@ describeDb('privileged functions', () => {
 });
 
 describeDb('storage buckets', () => {
-  it('creates the four buckets, all private', async () => {
+  it('creates the five buckets, all private', async () => {
     const rows = await query<{
       id: string;
       public: boolean;
@@ -1319,6 +1434,11 @@ describeDb('storage buckets', () => {
       // Phase 13. The evidence filed with a loan application. Private, like
       // the other three, and for the same reason.
       'loan-documents',
+      // Polytos Phase 2. Signature documents, which are the strongest form of
+      // consent evidence the counter can take. Private like every other
+      // bucket here, and read only by staff holding membership:view or by the
+      // member whose own path it is.
+      'membership-consent',
     ]);
 
     // A public bucket holding a National ID photograph is a data breach
