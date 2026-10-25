@@ -451,12 +451,18 @@ describe('membership on the client record', () => {
 
 // ===========================================================================
 describe('membership navigation', () => {
-  it('is a module of its own, between Clients and Loan Management', () => {
+  it('is a module of its own, directly after Clients and before Savings', () => {
+    // A membership is a fact about a client, so it reads next to Clients; a
+    // savings account belongs to a membership, so Savings reads next to this.
+    // Polytos Phase 2 inserted Savings between Membership and Loan
+    // Management, which is why this no longer asserts that Membership abuts
+    // `loans`.
     const ids = NAV_MODULES.map((module) => module.id);
 
     expect(ids).toContain('membership');
     expect(ids.indexOf('membership')).toBe(ids.indexOf('clients') + 1);
-    expect(ids.indexOf('membership')).toBe(ids.indexOf('loans') - 1);
+    expect(ids.indexOf('savings')).toBe(ids.indexOf('membership') + 1);
+    expect(ids.indexOf('savings')).toBe(ids.indexOf('loans') - 1);
   });
 
   it('requires the same capability the route guard requires', () => {
@@ -482,14 +488,58 @@ describe('membership navigation', () => {
     expect(borrower).not.toContain('membership');
   });
 
-  it('offers no entry for a workflow that does not exist yet', () => {
+  it('offers no entry for a workflow that still does not exist', () => {
+    // Phase 1 refused every one of these words, because none of the
+    // workflows existed and a rail entry opening onto a form that could not
+    // complete would have been the system telling a clerk that savings could
+    // be taken.
+    //
+    // Polytos Phase 2 built enrolment and savings, so `enrol` and `savings`
+    // have left this list and the entries that carry them are asserted below
+    // instead. Benefit claims, meetings and the profit share are still
+    // absent, and the rules behind all three are among the questions the
+    // client has not answered — so a rail entry for any of them would be the
+    // same lie Phase 1 refused to tell.
     const block = NAV_MODULES.find((candidate) => candidate.id === 'membership');
 
     for (const item of block?.items ?? []) {
-      expect(item.label, item.href).not.toMatch(
-        /enrol|register member|collect|savings|withdraw|benefit|meeting|profit/i,
-      );
+      expect(item.label, item.href).not.toMatch(/benefit|meeting|profit/i);
     }
+  });
+
+  it('offers enrolment, and only to somebody who may enrol', () => {
+    const block = NAV_MODULES.find((candidate) => candidate.id === 'membership');
+    const enrol = block?.items.find((item) => item.href === ROUTES.enrolMember);
+
+    expect(enrol, 'enrolment is built, so the rail offers it').toBeDefined();
+
+    // `permission` is what the route prefix map says, so a visible link and a
+    // protected route cannot disagree; `requires` is what the page itself
+    // demands. Together they mean a Secretary — who holds `membership:view`
+    // and not `membership:create` — is never offered a form they cannot
+    // submit.
+    expect(enrol?.permission).toBe('membership:view');
+    expect(enrol?.requires).toEqual(['membership:create']);
+  });
+
+  it('keeps savings in a module of its own, with the queue behind the approval capability', () => {
+    const block = NAV_MODULES.find((candidate) => candidate.id === 'savings');
+
+    expect(block, 'savings is its own module').toBeDefined();
+
+    const register = block?.items.find((item) => item.href === ROUTES.savings);
+    expect(register?.permission).toBe('savings:view');
+
+    // The withdrawal queue is a Manager's list of decisions. Guarded by the
+    // approval capability rather than by `savings:view`, which every staff
+    // role holds — and the route table lists the longer path first so it does
+    // not inherit the shorter one's requirement.
+    const queue = block?.items.find((item) => item.href === ROUTES.savingsWithdrawals);
+    expect(queue?.permission).toBe('savings:approve_withdrawal');
+    expect(permissionForPath(ROUTES.savingsWithdrawals)).toBe(
+      'savings:approve_withdrawal',
+    );
+    expect(permissionForPath(ROUTES.savings)).toBe('savings:view');
   });
 
   it('guards the membership routes on membership:view and nothing looser', () => {

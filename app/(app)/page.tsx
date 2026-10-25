@@ -13,6 +13,7 @@ import { PortfolioCards } from '@/components/dashboard/portfolio-cards';
 import { RecentPayments } from '@/components/dashboard/recent-payments';
 import { RecoveryWorkloadCards } from '@/components/dashboard/recovery-workload';
 import { RiskHeadline } from '@/components/dashboard/risk-headline';
+import { SavingsCards } from '@/components/dashboard/savings-cards';
 import { TodayCards } from '@/components/dashboard/today-cards';
 import { UpcomingCollections } from '@/components/dashboard/upcoming-collections';
 import { allWithLimit } from '@/lib/async/with-limit';
@@ -21,6 +22,7 @@ import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getPortfolioAtRisk } from '@/lib/data/security';
+import { getSavingsSummary } from '@/lib/data/savings';
 import {
   getCollectionSummary,
   getPendingApprovals,
@@ -132,6 +134,11 @@ export default async function DashboardPage() {
   const mayApproveAnything =
     mayApproveTransfers || mayApproveExpenses || mayApproveCounts;
 
+  // Polytos Phase 2. `savings:view_reports` rather than `savings:view`: a
+  // Secretary takes deposits all day and does not read the business-wide
+  // position, and `savings_summary` refuses them anyway.
+  const seeSavingsReports = contextCan(context, 'savings:view_reports');
+
   const today = businessToday(new Date(), branding.timezone);
 
   const [
@@ -144,6 +151,7 @@ export default async function DashboardPage() {
     risk,
     recoveryWorkload,
     pendingApprovals,
+    savingsSummary,
   ] = await allWithLimit(
     [
       // ---- Critical: the figures the page is read for. -------------------
@@ -188,6 +196,11 @@ export default async function DashboardPage() {
               reconciliations: mayApproveCounts,
             })
           : Promise.resolve(null),
+
+      // Polytos Phase 2. Last in the list, which is where the ceiling puts
+      // the least urgent read: the savings position is a figure somebody
+      // glances at, not the one the page is opened for.
+      () => (seeSavingsReports ? getSavingsSummary() : Promise.resolve(null)),
     ],
     DASHBOARD_READ_LIMIT,
   );
@@ -221,6 +234,8 @@ export default async function DashboardPage() {
   if (seeRecovery && recoveryWorkload === null) unreadable.push('the recovery workload');
   if (mayApproveAnything && pendingApprovals === null)
     unreadable.push('approvals awaiting a decision');
+  if (seeSavingsReports && savingsSummary === null)
+    unreadable.push('the savings position');
 
   // The hero's greeting and attention line, built from figures already read
   // above — no extra query, and no invented metric.
@@ -363,6 +378,8 @@ export default async function DashboardPage() {
         first said nothing about any of it.
       */}
       {risk === null ? null : <RiskHeadline slice={risk.portfolio} />}
+
+      {savingsSummary === null ? null : <SavingsCards summary={savingsSummary} />}
 
       {recoveryWorkload === null ? null : (
         <RecoveryWorkloadCards workload={recoveryWorkload} />

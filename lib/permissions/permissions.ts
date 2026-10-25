@@ -204,6 +204,38 @@ export const PERMISSIONS = [
    */
   'membership:manage_policies',
 
+  // --- Member savings ------------------------------------------------------
+  //
+  // Taking money in and letting money out are not the same act, and the
+  // people who may do them are not the same people. A deposit needs no second
+  // opinion: the money is arriving. A withdrawal is money leaving on
+  // somebody's judgement, so it is three capabilities rather than one, and
+  // `decide_savings_withdrawal` additionally refuses a decision from the
+  // person who prepared the request. Without that refusal the split would
+  // exist only on this page — a Manager holds both.
+  /** See the savings register, a member's account, their statement and contributions. */
+  'savings:view',
+  /** Record a savings deposit and issue its receipt. */
+  'savings:deposit',
+  /** Prepare a savings withdrawal request for review. */
+  'savings:request_withdrawal',
+  /** Approve or reject a prepared withdrawal. Never the person who prepared it. */
+  'savings:approve_withdrawal',
+  /** Pay an approved withdrawal and post it to the ledger. */
+  'savings:post_withdrawal',
+  /**
+   * Reverse a posted savings transaction, with a reason.
+   *
+   * The Owner's alone. A reversal rewrites what the books say happened, and
+   * the person who took the money is the last person who should be able to
+   * decide it never arrived — the judgement `payments:reverse` already
+   * encodes. It also carries restricting a savings account, which is the same
+   * class of supervisory act over the same records.
+   */
+  'savings:reverse',
+  /** See savings totals across members: the liability, period movements, compliance. */
+  'savings:view_reports',
+
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
   // `permissions` table constrains. Where the Phase 3 specification suggested
@@ -486,6 +518,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // not enrol one, for the same reason it does not register a client.
     'membership:view',
 
+    // Polytos Phase 2. The counter takes money and prepares requests. It
+    // decides nothing: a withdrawal it prepares is decided by somebody else,
+    // which the posting function enforces rather than assuming.
+    'savings:view',
+    'savings:deposit',
+    'savings:request_withdrawal',
+
     // The business's own description of this role is that they record loan
     // details and amounts. So: everything up to asking for a decision, and
     // nothing that makes one.
@@ -589,6 +628,16 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'membership:create',
     'membership:update',
     'membership:manage_status',
+
+    // Polytos Phase 2. Supervises savings: may decide a withdrawal and may
+    // pay one. Not `savings:reverse` — rewriting what the books say happened
+    // is the Owner's, for the same reason `payments:reverse` is.
+    'savings:view',
+    'savings:deposit',
+    'savings:request_withdrawal',
+    'savings:approve_withdrawal',
+    'savings:post_withdrawal',
+    'savings:view_reports',
 
     // Reviews and approves, and may return a draft for correction.
     //
@@ -697,6 +746,14 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'membership:update',
     'membership:manage_status',
     'membership:manage_policies',
+
+    'savings:view',
+    'savings:deposit',
+    'savings:request_withdrawal',
+    'savings:approve_withdrawal',
+    'savings:post_withdrawal',
+    'savings:reverse',
+    'savings:view_reports',
 
     'loans:view',
     'loans:create',

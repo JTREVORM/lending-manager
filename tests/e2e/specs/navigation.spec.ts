@@ -22,6 +22,13 @@ test.use({ storageState: stateFile('owner') });
 /** The modules an Owner sees, in rail order. */
 const MODULES = [
   'Clients',
+  // Polytos Phase 1 and Phase 2. Both were missing from this list, so the
+  // membership rail block had never been looked at by a browser test and the
+  // savings one would not have been either. The list is a subset check — it
+  // asserts each named module is there, not that there are no others — so a
+  // module left out of it is simply unexamined.
+  'Membership',
+  'Member Savings',
   'Loan Management',
   'Collections',
   'Debt & Security',

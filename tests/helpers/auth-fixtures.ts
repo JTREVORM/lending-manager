@@ -196,6 +196,42 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'memberships', trigger: 'memberships_no_delete' },
     { table: 'memberships', trigger: 'memberships_guard_transition' },
     { table: 'memberships', trigger: 'audit_membership_change' },
+    // Polytos Phase 2. The savings subledger refuses UPDATE as well as
+    // DELETE, and the documents around it refuse DELETE, so both triggers
+    // come off for the teardown under the same owner-level exemption. Every
+    // one of these tables holds its references with RESTRICT — a cascade
+    // into an append-only table is an UPDATE it would refuse — so they are
+    // cleared explicitly, innermost first.
+    { table: 'savings_transactions', trigger: 'savings_transactions_no_update' },
+    { table: 'savings_transactions', trigger: 'savings_transactions_no_delete' },
+    {
+      table: 'savings_withdrawal_requests',
+      trigger: 'savings_withdrawal_requests_no_delete',
+    },
+    {
+      table: 'savings_withdrawal_requests',
+      trigger: 'savings_withdrawal_requests_guard',
+    },
+    {
+      table: 'savings_withdrawal_requests',
+      trigger: 'audit_savings_withdrawal_change',
+    },
+    { table: 'savings_accounts', trigger: 'savings_accounts_no_delete' },
+    { table: 'savings_accounts', trigger: 'savings_accounts_guard' },
+    { table: 'savings_accounts', trigger: 'audit_savings_account_change' },
+    {
+      table: 'membership_fee_receipts',
+      trigger: 'membership_fee_receipts_no_delete',
+    },
+    { table: 'membership_fee_receipts', trigger: 'membership_fee_receipts_guard' },
+    { table: 'membership_fee_receipts', trigger: 'audit_membership_fee_change' },
+    { table: 'membership_cards', trigger: 'membership_cards_no_delete' },
+    { table: 'membership_cards', trigger: 'membership_cards_guard' },
+    { table: 'membership_cards', trigger: 'audit_membership_card_change' },
+    {
+      table: 'membership_consent_challenges',
+      trigger: 'membership_consent_challenges_no_delete',
+    },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -219,6 +255,26 @@ export async function deleteTestUsers(): Promise<void> {
     // at.
     await query(`delete from public.notification_reads`);
     await query(`delete from public.notifications`);
+
+    // Polytos Phase 2, before the journals they wrote: every savings
+    // document references its journal entry with RESTRICT, so the subledger
+    // and the receipts have to go first. The membership tables they point at
+    // are cleared further down, with the Phase 1 block.
+    // A paid withdrawal and the transaction that paid it reference each other,
+    // both with RESTRICT, so neither table can go first. Unlinking the request
+    // side is the way through — the same move the journal's reversal pointer
+    // needs below, and possible only on the request, because the subledger
+    // refuses UPDATE as well as DELETE.
+    await query(
+      `update public.savings_withdrawal_requests
+          set status = 'approved', paid_transaction_id = null, paid_at = null
+        where status = 'paid'`,
+    );
+    await query(`delete from public.savings_transactions`);
+    await query(`delete from public.savings_withdrawal_requests`);
+    await query(`delete from public.savings_accounts`);
+    await query(`delete from public.membership_fee_receipts`);
+    await query(`delete from public.membership_cards`);
 
     // The reversal pointer self-references with `on delete restrict`, so an
     // entry and its contra cannot both go in one statement. Unstamping first
@@ -253,6 +309,9 @@ export async function deleteTestUsers(): Promise<void> {
     // membership tables hold their references the same way.
     await query(`delete from public.membership_status_history`);
     await query(`delete from public.membership_terms_acceptances`);
+    // Polytos Phase 2. A verified acceptance names the challenge that proved
+    // it, so the challenge outlives the acceptance and goes after it.
+    await query(`delete from public.membership_consent_challenges`);
     await query(`delete from public.memberships`);
 
     // Phase 3 rows, innermost first. `client_remarks.created_by` is

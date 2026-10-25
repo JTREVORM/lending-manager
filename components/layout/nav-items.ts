@@ -6,6 +6,7 @@ import {
   Landmark,
   LayoutDashboard,
   Network,
+  PiggyBank,
   Receipt,
   Settings,
   ShieldAlert,
@@ -107,6 +108,7 @@ export interface NavModule {
 export const NAV_MODULE_IDS = [
   'clients',
   'membership',
+  'savings',
   'loans',
   'collections',
   'debt',
@@ -235,14 +237,20 @@ export const NAV_MODULES: readonly NavModule[] = [
     // membership is a fact about a client and that is where a reader looks
     // for it.
     //
-    // Seven entries: the register, its four status views, the read-only
-    // configuration, and the audit trail filtered to membership. There is
-    // deliberately **no** "Enrol
-    // member", "Collect savings", "Withdraw" or "Pay benefit" here. Those
-    // workflows arrive in Polytos Phases 2 and 4, and a rail entry that
-    // opened onto a form which could not complete would be worse than no
-    // entry — it would be the system telling a clerk that savings can be
-    // taken today.
+    // Eight entries: enrolment, the register, its four status views, the
+    // read-only configuration, and the audit trail filtered to membership.
+    //
+    // Phase 1 had no "Enrol member" entry, because a rail entry opening onto
+    // a form that could not complete would have been the system telling a
+    // clerk that members could be taken on. Polytos Phase 2 built enrolment,
+    // so the entry is here — behind `membership:create`, so a Secretary who
+    // may read the register is not offered a form they cannot submit.
+    //
+    // Savings have a module of their own rather than entries here: the work
+    // is a register a counter lives in all day, and burying it two levels
+    // down inside Membership would make the most-used screen in the phase
+    // the hardest to reach. Benefit claims and the profit share are still
+    // absent, and the rules behind both are undecided.
     id: 'membership',
     label: 'Membership',
     icon: BadgeCheck,
@@ -252,6 +260,17 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Membership Register',
         permission: 'membership:view',
         phase: 21,
+      },
+      {
+        // `permission` stays what the route prefix map says — the path is
+        // under `/membership`, so `membership:view` — and `requires` carries
+        // what the page itself demands. The rail then offers no entry that
+        // would refuse the person who clicks it.
+        href: ROUTES.enrolMember,
+        label: 'Enrol a Member',
+        permission: 'membership:view',
+        requires: ['membership:create'],
+        phase: 22,
       },
       {
         href: `${ROUTES.membership}?status=active`,
@@ -291,6 +310,59 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Membership History',
         permission: 'audit:view',
         phase: 21,
+      },
+    ],
+  },
+  {
+    // Polytos Phase 2. Savings, immediately after Membership, because a
+    // savings account belongs to a membership and that is where a reader
+    // looks for it next.
+    //
+    // Five entries. The register is first because it is the screen a
+    // Secretary spends the day in; the three status views mirror the shape
+    // every other module uses; and the withdrawal queue is last and behind
+    // `savings:approve_withdrawal`, because it is a different person's work —
+    // a Manager's list of decisions, not a view of the register.
+    //
+    // There is no "Record a deposit" entry. A deposit is always to a
+    // *particular* member's account, so the entry would open a chooser that
+    // the register already is, one tap earlier.
+    id: 'savings',
+    label: 'Member Savings',
+    icon: PiggyBank,
+    items: [
+      {
+        href: ROUTES.savings,
+        label: 'Savings Register',
+        permission: 'savings:view',
+        phase: 22,
+      },
+      {
+        href: `${ROUTES.savings}?status=active`,
+        label: 'Active Accounts',
+        permission: 'savings:view',
+        phase: 22,
+      },
+      {
+        href: `${ROUTES.savings}?status=dormant`,
+        label: 'Dormant Accounts',
+        permission: 'savings:view',
+        phase: 22,
+      },
+      {
+        href: ROUTES.savingsWithdrawals,
+        label: 'Withdrawal Requests',
+        permission: 'savings:approve_withdrawal',
+        phase: 22,
+      },
+      {
+        // Who took a deposit, who approved a withdrawal, who reversed what.
+        // The same shape the Clients and Membership modules give their own
+        // history entries.
+        href: `${ROUTES.audit}?entity=savings`,
+        label: 'Savings History',
+        permission: 'audit:view',
+        phase: 22,
       },
     ],
   },

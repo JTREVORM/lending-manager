@@ -51,8 +51,29 @@ collection date among them — before and after. See
 
 ## Phase 2 — Membership registration and savings management
 
-**Blocked on client decisions 4 and 5.** See
-`docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md`.
+**Built. The module is complete and the code is reviewed-but-unreleased.** See
+`docs/POLYTOS-SAVINGS.md` for the module, and ADR-051 to ADR-058 in
+`docs/DECISIONS.md` for the eight decisions it settled.
+
+**Still waiting on client decisions 4 and 5 to *operate*.** The distinction is
+the point of the activity-specific gate (ADR-049): the software is built and
+tested, and `is_savings_enabled` — a generated column waiting on exactly those
+two answers — is what decides whether a deposit can be taken. So:
+
+- **Enrolment and the registration fee work now.** They wait on none of the
+  nine questions.
+- **Savings open the moment questions 4 and 5 are answered**, by publishing a
+  policy version carrying the answers. No migration, no deploy, no code
+  change.
+- **Both arms of question 4 are implemented** and neither is a default. While
+  it is open, nobody is shown as qualified and the screen says why.
+- **Two of the three readings of question 5 are implemented.** The third,
+  `above_pledged`, is refused with a message naming what has to be settled,
+  because the excess over what secures a loan needs question 3 as well.
+
+What Phase 2 deliberately did **not** build, because the rules are undecided:
+benefit claims, the profit share, member loans, a membership status screen, an
+account closure workflow. See §13 of `docs/POLYTOS-SAVINGS.md`.
 
 **Delivers.**
 
@@ -282,6 +303,18 @@ Phase 1 ──┤              Phase 2 (savings) ──┐
                                           Phase 6 (certification)
 ```
 
-Phase 1 is complete and unblocks nothing further on its own: **Phase 2
-cannot begin until the client answers questions 4 and 5.** That is the single
-most useful thing to take from this roadmap.
+Phases 1 and 2 are both built. The single most useful thing to take from this
+roadmap is now the shape of what remains:
+
+- **Savings cannot be *taken* until the client answers questions 4 and 5.**
+  The module is written, tested and reviewed; answering those two and
+  publishing a policy version carrying the answers is all that opens it.
+- **Phase 3 (member lending) additionally needs questions 1, 2 and 3** — the
+  interest basis, the interest method, and the savings-to-loan multiplier. It
+  will approve against `member_savings_qualification`, which Phase 2 built
+  with an "as of" date for exactly that purpose.
+- **Phase 4 (benefits) needs questions 7, 8 and 9**, plus the further
+  questions about what evidences an admission and who verifies it.
+- **Phase 5 (profit sharing) needs question 6**, and depends on the savings
+  liability being a liability — which ADR-051 is about, and which is why
+  getting it right in Phase 2 mattered more than any screen in it.

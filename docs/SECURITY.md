@@ -558,6 +558,68 @@ product unusable; Phase 9 was verified by running it.
 | The dashboard's time to first byte is about 1.2 s | The slowest thing in the application, and it is the portfolio and collection summary queries. Recorded as a baseline rather than optimised: the reporting figures are not something to change without evidence, and the figure was measured against a local database with no connection pooling. |
 | No automated check that the Content-Security-Policy's nonce is attached to every script Next emits | The browser enforcement test proves the policy is enforced, and the no-violation sweep proves the application runs under it. A script Next emitted without a nonce would show up as a console violation in that sweep, which is asserted to be empty - so this is covered indirectly rather than directly. |
 
+## Polytos Phase 2 verification
+
+The savings module's authorisation was attacked from the outside — as `anon`,
+as each of the four roles, as a member, and as a suspended member — in
+`tests/db/rls-savings.test.ts` (24 tests) and
+`tests/db/membership-enrolment.test.ts` (25 tests). Every statement runs as a
+real database role with a real JWT subject, exactly as a request arriving at
+PostgREST would, so the application is bypassed by construction.
+
+| Attack | Result |
+| --- | --- |
+| `anon` reads any savings table, view or function | Nothing. Asserted relation by relation. |
+| A caller with no savings capability reads the register | Nothing, and the posting functions refuse them by name. |
+| A member reads another member's savings | Nothing — by predicate, and by naming the other account's id. |
+| A member reads another member through a definer statement function | Nothing. **This was a real hole; see below.** |
+| A member deposits to their own account | Refused. The money has to arrive at a counter first. |
+| A suspended member reads their own savings | Nothing, from the next request. |
+| A direct INSERT into the subledger, as the table owner | Refused. No grant, and a statement trigger behind that. |
+| A forged consent challenge insert | Refused. No grant at all on that table, to anybody. |
+| A forged `verification_status = 'verified'` | Refused. The guard derives it and overwrites whatever arrives. |
+| A self-witnessed acceptance | Refused. |
+| A suspended witness | Refused. |
+| Another member's signature presented as evidence | Refused twice: the path names a different membership, and the digest is unique. |
+| A replayed idempotency key from a caller who may not post | Refused. **This was a real hole; see below.** |
+| Activation without a posted fee, as `service_role` | Refused. The check is above the trusted-path exemption. |
+| Activation without *verified* consent, as `service_role` | Refused, same reason. |
+| A reversed journal entry behind a posted receipt | Refused. The precondition reads the journal, not the receipt's status. |
+
+### Two holes found and fixed in Phase 2
+
+| Hole | Severity | What it was | Fix |
+| --- | --- | --- | --- |
+| **Any signed-in caller could read any member's full savings history** | High | `savings_statement`, `member_savings_qualification` and `savings_summary` were SECURITY DEFINER with no authorisation check. A definer function is not filtered by the policies on the tables it reads, so passing an account id was enough — for a member, or for a staff member holding no savings capability at all. | The two that report *a member* are now SECURITY INVOKER, so the policies decide and the rule is stated once. `savings_summary` stays definer because it reports the business, and checks `savings:view_reports` itself. `tests/db/security.test.ts` names both invoker functions in its SECURITY DEFINER inventory as deliberate absences, so a regression fails the build. See ADR-057. |
+| **A caller who may not post could obtain another caller's transaction id** | Medium | `post_savings_deposit`, `post_savings_withdrawal` and `record_membership_fee` replayed the idempotency key — and returned the existing movement — *before* resolving the actor or checking the capability. The early return is a read. | The actor and the capability check now sit above the advisory lock and the lookup in all three. See ADR-056. |
+
+Both were found by tests written from the attacker's side. Neither is visible
+from a unit test, from a type, or from reading the function and asking whether
+it looks right.
+
+### One privilege defect caught by the grant inventory
+
+The first draft of `20261020001100_savings_rls.sql` revoked only from `anon`
+before granting, which left `authenticated` holding DELETE, INSERT, UPDATE,
+TRUNCATE and REFERENCES on all four new tables — because `CREATE TABLE` in
+this database inherits Supabase's default privileges. It was caught by the
+exhaustive grant assertion in `tests/db/security.test.ts` rather than by
+review, which is the argument for asserting a privilege list exhaustively
+rather than spot-checking it.
+
+`membership_cards` is created in a later migration than the RLS one, so it
+strips its own privileges in its own file — a detail worth knowing before
+adding a table to this phase.
+
+### Known gaps after Polytos Phase 2
+
+| Gap | Why it is acceptable for now |
+| --- | --- |
+| No hosted verification | Nothing in Phase 2 was run against the hosted Supabase project: the brief forbids applying migrations to it during development. A hosted release needs its own verification step, and that is a release decision. |
+| The consent bucket's objects are not virus-scanned | The same gap the client-documents bucket has. Uploads are private, typed and size-limited, and nothing executes them; SVG is excluded everywhere because it is executable XML. |
+| A one-time consent code is six digits | The entropy that matters is not in the code: a single live challenge per membership and version, a ten-minute window, one use, and five attempts. All four are enforced in the database. A longer code read over a phone is mistyped more often, which is a real cost against no gain. |
+| The demonstration seeder can write to one hosted project, by design | It must be able to, or there is no way to demonstrate the system. The allow-list names exactly one project reference, the enabling phrase has to be typed, and `tests/db/demo-seed.test.ts` asserts that every refusal writes nothing. The connection named `Primary` is refused because it is not on the list — and its reference is recorded nowhere in this repository. |
+
 ## Reporting
 
 Security issues in this system should go to the Owner/Administrator directly,

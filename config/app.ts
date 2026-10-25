@@ -120,6 +120,23 @@ export const ROUTES = {
   membership: '/membership',
   membershipPolicies: '/membership/policies',
 
+  /**
+   * Polytos Phase 2. Enrolment and savings.
+   *
+   * Enrolment sits under `/membership` because it is how a client becomes a
+   * member — the act belongs to the programme, not to the savings book.
+   *
+   * Savings get their own section rather than a tab on the membership record,
+   * because the work is a register: a counter spends its day moving between
+   * accounts taking deposits, and a path that required picking a member first
+   * would make the common case the slow one. The withdrawal queue is a screen
+   * of its own for the same reason — it is a Manager's list of decisions, not
+   * a detail of any one member.
+   */
+  enrolMember: '/membership/enrol',
+  savings: '/savings',
+  savingsWithdrawals: '/savings/withdrawals',
+
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',
   transfers: '/finance/transfers',

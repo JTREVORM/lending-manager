@@ -70,14 +70,43 @@ account.
 1030-<branch>   Airtel Money
 1040-<branch>   Cash at Bank
 1200            Loans Receivable
+2000            Liabilities                  (heading; not postable)
+2100            Member Savings               (liability, credit side)
 3000            Owner Capital
 4100            Interest Income
 4200            Penalty Income
+4340            Membership Registration Fees (income)
 ```
 
 A unique partial index allows one Cash at Hand, one MTN float and one Airtel
 float per branch; `bank` is excluded from that rule, because a branch may hold
 several bank accounts.
+
+### 2100 Member Savings is a liability, and that is the whole point
+
+A member's deposit increases what the business **owes**. It is not revenue,
+the business does not own it, and it will be asked for back. So `2100` has
+`account_type = 'liability'` and a credit normal side, and a savings deposit
+never touches an income account.
+
+The reason this is written down rather than left to the obvious is that
+crediting an income account instead is wrong in a way that is **invisible on
+every screen**: the member's balance is right, their statement reads
+correctly, the register is right. What it does is overstate the year's surplus
+by the entire savings book — and Phase 5 distributes that surplus, so the
+business would pay a profit share out of its members' own deposits.
+
+Three things enforce it: the account type, a test that reads the journal lines
+of a deposit and asserts no line touches an income account, and a
+reconciliation assertion in every savings suite that `sum(signed_amount)` over
+`savings_transactions` equals the `2100` balance. See ADR-051.
+
+### 4340 is income, and is deliberately not 4320
+
+The registration fee **is** income — it buys membership and is not returned.
+It is numbered `4340` rather than `4320` because `4320` is the client
+registration fee, which is a different fee for a different thing, and two
+fees sharing a code is how a report comes to overstate one of them.
 
 ## What the schema guarantees
 

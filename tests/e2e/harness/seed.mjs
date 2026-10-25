@@ -983,6 +983,378 @@ console.log('remarks seeded');
 }
 
 // ---------------------------------------------------------------------------
+// Polytos Phase 2: membership and savings
+//
+// Four members, their savings histories, a withdrawal through its whole
+// lifecycle, and one application still waiting on its consent. The shapes
+// mirror `scripts/seed-demo.ts` — which is the seeder the business will run —
+// but this one is written for the browser suite: it seeds exactly what the
+// savings specs assert against and nothing more.
+//
+// Everything goes through the real functions: `enrol_member`,
+// `post_savings_deposit`, `request_savings_withdrawal`,
+// `decide_savings_withdrawal`, `post_savings_withdrawal` and
+// `reverse_savings_transaction`. A seeder that wrote the rows directly would
+// produce a database the application cannot produce, and the browser suite
+// would be testing screens against data they will never meet.
+//
+// Only one thing is bypassed, and it is a clock: `app.business_now` is set per
+// deposit so the savings history has months in it rather than everything
+// landing this morning. The override is honoured only for a direct owner
+// session, which no application path has.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Skipped where the Polytos schema is not there
+//
+// This file has two callers. The browser harness runs it against a database
+// with every migration applied, which is where the block below belongs. But
+// `scripts/verify-membership-upgrade.mjs` runs it against the schema as it
+// stood **before** Polytos — deliberately, because the whole point of that
+// script is to build a representative book on the released schema and then
+// prove the Polytos migrations move none of it.
+//
+// So the block is conditional on the tables existing rather than on a flag.
+// A flag would be a second thing to keep in step; asking the catalogue is
+// the same question the database would answer anyway.
+// ---------------------------------------------------------------------------
+const polytosPresent = await one(
+  `select pg_catalog.to_regclass('public.savings_accounts') is not null as present`,
+);
+
+const polytos = polytosPresent.present
+  ? await seedMembershipAndSavings()
+  : (console.log('membership and savings skipped: the Polytos schema is not present'),
+    null);
+
+async function seedMembershipAndSavings() {
+  // A policy version in force, with the savings rules decided — which is what
+  // `is_savings_enabled` waits on, and therefore what makes the savings module
+  // open at all. The migration seeds version 1.0 as an unapproved draft, so the
+  // harness publishes its own rather than editing the seed's.
+  const policyVersion = await one(
+    `insert into public.membership_policy_versions
+     (version, title, effective_from, status, approved_at, approved_by_label,
+      approval_reference,
+      registration_fee, monthly_savings_minimum, savings_qualifying_months,
+      member_loan_interest_rate_bps, member_loan_max_term_months,
+      member_loan_weekly_cadence_max_months, non_member_loan_max_term_months,
+      medical_benefit_rate_bps, medical_benefit_min_admission_days,
+      family_condolence_benefit, member_bereavement_benefit,
+      qualifying_months_consecutive, savings_withdrawal_with_active_loan,
+      notes)
+   values
+     ('2.0', 'Polytos membership terms (harness)',
+      (public.business_date() - 400), 'active',
+      now(), 'Harness', 'HARNESS-2026-01',
+      5000, 50000, 6,
+      500, 5, 2, 3,
+      500, 1, 100000, 200000,
+      false, 'allowed',
+      'Published by the browser-test harness. Illustrative figures.')
+   returning id, version`,
+  );
+
+  /** The first day of the month `back` months before today. */
+  const monthDay = (back, day) => {
+    const now = new Date();
+    const shifted = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, day),
+    );
+    return shifted.toISOString().slice(0, 10);
+  };
+
+  /**
+   * Enrol a member and post a dated savings history.
+   *
+   * The witness is the Manager and the enrolling session is the owner's, so the
+   * acceptance guard's "a witness cannot be the person recording it" rule is
+   * satisfied honestly rather than worked around.
+   */
+  async function enrolWithSavings(client, deposits) {
+    const enrolled = await one(
+      `select public.enrol_member(
+              $1, 'cash', null, 'witnessed_in_branch', $2, gen_random_uuid(),
+              null, $3::uuid, null, null, null, null, 'Harness enrolment') as id`,
+      [client.id, client.fullName, manager.profileId],
+    );
+
+    const account = await one(
+      `select id, account_number from public.savings_accounts where membership_id = $1`,
+      [enrolled.id],
+    );
+
+    for (const [monthsBack, amounts] of deposits) {
+      for (const amount of amounts) {
+        await asOwnerAtClock(
+          `${monthDay(monthsBack, monthsBack === 0 ? new Date().getUTCDate() : 12)} 10:00:00+03`,
+          `select public.post_savings_deposit($1, $2, 'cash', null, gen_random_uuid(),
+                                            'Harness deposit')`,
+          [account.id, amount],
+        );
+      }
+    }
+
+    const membership = await one(
+      `select membership_number, status from public.memberships where id = $1`,
+      [enrolled.id],
+    );
+
+    return {
+      membershipId: enrolled.id,
+      membershipNumber: membership.membership_number,
+      savingsAccountId: account.id,
+      accountNumber: account.account_number,
+    };
+  }
+
+  // The member who has served the whole qualifying period: six unbroken months
+  // at the minimum. The one a Phase 3 member loan will be approved against.
+  //
+  // Deliberately `clients[3]` — the borrower who already has a portal login and
+  // a loan in arrears. Two things follow from that, both wanted: the portal's
+  // savings panel has a real history to render, and the withdrawal screen meets
+  // a member who also holds a live loan, which is what exercises
+  // `client_has_live_loan` and the policy's rule about it.
+  const memberQualified = await enrolWithSavings(clients[3], [
+    [6, [50_000]],
+    [5, [50_000]],
+    [4, [50_000]],
+    [3, [50_000]],
+    [2, [50_000]],
+    [1, [50_000]],
+  ]);
+
+  // Six qualifying months with a gap in the middle — six months, longest
+  // unbroken run of three. The whole difference the undecided consecutive rule
+  // makes, in one member.
+  const memberGapped = await enrolWithSavings(clients[1], [
+    [7, [50_000]],
+    [6, [50_000]],
+    [5, [50_000]],
+    [3, [50_000]],
+    [2, [50_000]],
+    [1, [50_000]],
+  ]);
+
+  // On track, and this month met by two deposits rather than one — which is how
+  // a member who cannot find UGX 50,000 at once still makes the month.
+  const memberSaving = await enrolWithSavings(clients[2], [
+    [2, [50_000]],
+    [1, [30_000, 20_000]],
+    [0, [25_000, 25_000]],
+  ]);
+
+  // Saved, then withdrew. Carries the withdrawal that went all the way through,
+  // and a duplicate deposit that was reversed.
+  const memberWithdrawn = await enrolWithSavings(clients[4], [
+    [3, [60_000]],
+    [2, [60_000]],
+    [1, [60_000]],
+  ]);
+
+  // The withdrawal. Prepared as the Secretary and decided as the Manager,
+  // through real `authenticated` sessions — so `decide_savings_withdrawal`'s
+  // refusal of a decision from the requester is a control this data went
+  // through rather than one it skipped.
+  const withdrawalRequestId = await (async () => {
+    await db.query('begin');
+    await db.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+      secretary.authId,
+    ]);
+    await db.query('set local role authenticated');
+    const prepared = (
+      await db.query(
+        `select public.request_savings_withdrawal(
+                $1, 40000, 'School fees for the second term') as id`,
+        [memberWithdrawn.savingsAccountId],
+      )
+    ).rows[0];
+    await db.query('reset role');
+    await db.query('commit');
+
+    await db.query('begin');
+    await db.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+      manager.authId,
+    ]);
+    await db.query('set local role authenticated');
+    await db.query(
+      `select public.decide_savings_withdrawal($1, true, 'Checked the balance and the loan position')`,
+      [prepared.id],
+    );
+    await db.query(
+      `select public.post_savings_withdrawal($1, 'cash', null, gen_random_uuid())`,
+      [prepared.id],
+    );
+    await db.query('reset role');
+    await db.query('commit');
+
+    return prepared.id;
+  })();
+
+  // A deposit recorded twice and reversed, so the statement screens have a
+  // correction to render. A reversal is a contra row, never an edit, so the
+  // original stays in the statement beside it.
+  {
+    const duplicate = await one(
+      `select public.post_savings_deposit($1, 15000, 'cash', null, gen_random_uuid(),
+                                        'Recorded twice at the counter') as id`,
+      [memberWithdrawn.savingsAccountId],
+    );
+    await q(
+      `select public.reverse_savings_transaction(
+              $1, 'The same deposit was recorded twice at the counter')`,
+      [duplicate.id],
+    );
+  }
+
+  // A withdrawal waiting for a decision, so the queue is not empty when a
+  // Manager opens it. Prepared as the Secretary, who may prepare one and may
+  // not decide it.
+  const pendingWithdrawalId = await (async () => {
+    await db.query('begin');
+    await db.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+      secretary.authId,
+    ]);
+    await db.query('set local role authenticated');
+    const prepared = (
+      await db.query(
+        `select public.request_savings_withdrawal(
+                $1, 75000, 'Stock for the shop before the school term') as id`,
+        [memberSaving.savingsAccountId],
+      )
+    ).rows[0];
+    await db.query('reset role');
+    await db.query('commit');
+    return prepared.id;
+  })();
+
+  // An application whose fee is paid and whose consent is not verified, so it
+  // stays `pending`. The ADR-050 activation preconditions seen from the
+  // outside, and the state the membership record's own panel explains.
+  const memberPending = await (async () => {
+    const membership = await one(
+      `insert into public.memberships (client_id, applied_on, policy_version_id, notes)
+     values ($1, (public.business_date() - 9), $2,
+             'Application taken at the branch. The terms have not been accepted yet.')
+     returning id, membership_number`,
+      [clients[6].id, policyVersion.id],
+    );
+
+    await q(
+      `select public.record_membership_fee($1, 5000, 'cash', null, gen_random_uuid(),
+                                         'Registration fee, paid at the counter')`,
+      [membership.id],
+    );
+
+    return {
+      membershipId: membership.id,
+      membershipNumber: membership.membership_number,
+    };
+  })();
+
+  // A membership card for the qualified member, so the card panel has one to
+  // render and a verification code to show.
+  await q(`select public.issue_membership_card($1, 'first_issue')`, [
+    memberQualified.membershipId,
+  ]);
+
+  // What the policy in force actually decides, read back from the database
+  // rather than counted by hand.
+  //
+  // The policy screen renders the version in force, and two of its assertions
+  // are counts: how many of the nine open questions are still open, and how many
+  // of the five activities the version opens. Hard-coding those in the spec
+  // would mean editing the spec every time this harness changed a figure — and
+  // the edit that got forgotten would be a spec asserting the wrong number
+  // against a screen that was right.
+  //
+  // So the figures come from the generated readiness columns and from counting
+  // the nulls among the nine. The spec then asserts that the *screen* agrees
+  // with the database, which is the claim worth making.
+  const policyFacts = await one(
+    `select
+     (select count(*)
+        from (values
+          (v.interest_basis), (v.interest_method),
+          (v.savings_to_loan_multiplier_bps::text),
+          (v.qualifying_months_consecutive::text),
+          (v.savings_withdrawal_with_active_loan),
+          (v.profit_distribution_basis),
+          (v.medical_benefit_annual_cap::text),
+          (v.medical_benefit_claims_per_year::text),
+          (v.benefit_waiting_period_days::text)
+        ) as nine(answer)
+       where nine.answer is null)::int as undecided,
+     (v.is_enrolment_enabled::int + v.is_savings_enabled::int
+      + v.is_member_lending_enabled::int + v.is_benefits_enabled::int
+      + v.is_profit_sharing_enabled::int) as activities_open
+   from public.membership_policy_versions v
+   where v.id = $1`,
+    [policyVersion.id],
+  );
+
+  console.log(
+    `policy ${policyVersion.version}: ${String(policyFacts.undecided)} rules undecided, ` +
+      `${String(policyFacts.activities_open)} of 5 activities open`,
+  );
+
+  {
+    const liability = await one(
+      `select
+       (select coalesce(sum(signed_amount), 0)::bigint
+          from public.savings_transactions)::text as subledger,
+       (select balance::text from public.ledger_account_balances where code = '2100')
+         as ledger`,
+    );
+
+    if (liability.subledger !== liability.ledger) {
+      throw new Error(
+        `savings subledger ${liability.subledger} does not match ledger 2100 ${liability.ledger}`,
+      );
+    }
+
+    console.log(
+      `5 memberships seeded; savings liability ${liability.subledger} both sides`,
+    );
+  }
+
+  return {
+    memberships: {
+      qualified: memberQualified.membershipId,
+      gapped: memberGapped.membershipId,
+      saving: memberSaving.membershipId,
+      withdrawn: memberWithdrawn.membershipId,
+      pendingConsent: memberPending.membershipId,
+    },
+    membershipNumbers: {
+      qualified: memberQualified.membershipNumber,
+      pendingConsent: memberPending.membershipNumber,
+    },
+    savings: {
+      qualified: memberQualified.savingsAccountId,
+      gapped: memberGapped.savingsAccountId,
+      saving: memberSaving.savingsAccountId,
+      withdrawn: memberWithdrawn.savingsAccountId,
+    },
+    savingsAccountNumbers: {
+      qualified: memberQualified.accountNumber,
+      withdrawn: memberWithdrawn.accountNumber,
+    },
+    withdrawals: {
+      paid: withdrawalRequestId,
+      pending: pendingWithdrawalId,
+    },
+    policy: {
+      version: policyVersion.version,
+      undecidedRules: Number(policyFacts.undecided),
+      activitiesOpen: Number(policyFacts.activities_open),
+      activitiesClosed: 5 - Number(policyFacts.activities_open),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The fixture manifest
 //
 // Written as JSON beside the harness so a spec refers to a loan by what it
@@ -1012,6 +1384,15 @@ console.log('remarks seeded');
       draft: loans.draft.loanId,
       approvedNotDisbursed: loans.approvedNotDisbursed.loanId,
     },
+    // Polytos Phase 2. Named by what each member *is*, so a savings spec
+    // refers to "the member who has served the qualifying period" rather than
+    // to a uuid pasted into a test.
+    //
+    // Spread, and absent entirely where the Polytos schema was not there to
+    // seed — which is the upgrade verifier's case. A manifest carrying nulls
+    // would let a spec read one and fail somewhere confusing; a manifest
+    // missing the keys makes the spec's own type the thing that complains.
+    ...(polytos ?? {}),
   };
 
   writeFileSync(

@@ -178,11 +178,19 @@ per page, a working skip link and visible focus rings.
 | `unit` | node | — | Money, rates, dates, phones, references, roles, permissions, validation, errors, logging, env. |
 | `integration` | jsdom | — | Component accessibility, navigation, static migration analysis. |
 | `db` | node | `DATABASE_URL` | Schema, constraints, triggers, RLS, grants, concurrency. |
+| `seed` | node | `DATABASE_URL` | The demonstration seeder, run for real, three times. |
 
 `npm run test:run` runs unit + integration and needs no database, so it is the
-CI gate. `npm run test:db` runs the database suite and skips with an
-explanation when `DATABASE_URL` is unset — a distinction the Phase 1 report
-states explicitly, because "did not run" is not "passed".
+CI gate. `npm run test:db` runs the database suite and then the seeder's, and
+each skips with an explanation when `DATABASE_URL` is unset — a distinction
+the phase reports state explicitly, because "did not run" is not "passed".
+
+`seed` is a project rather than a file in `db` because the data it writes is
+**global**: it publishes a membership policy version, and only one version may
+be in force, so every membership suite that published its own would collide
+with it. A project gets its own `globalSetup`, which rebuilds the database —
+so the seeder meets the empty database it is specified against and leaves
+nothing behind for anything else. Added in Polytos Phase 2.
 
 ## What Phase 1 does not include
 
@@ -326,3 +334,45 @@ to import the data access layer; and `lib/reports/{csv,filters}.ts` carry no
 `server-only` marker, because the formula-disarming and the filter whitelisting
 are security controls and a control that cannot be unit-tested is a control
 nobody can be sure of.
+
+
+## Polytos Phase 2 — enrolment, consent and savings
+
+The savings module added one layering rule and settled one question that had
+been answered by habit.
+
+**The rule.** A reporting function that returns **one member's** data is
+`SECURITY INVOKER`, so the policies on the tables it reads *are* the
+authorisation, stated once. A function that returns **the business's** figures
+is `SECURITY DEFINER` and checks a reporting capability itself, because there
+is no row for a policy to filter. A function that **writes** is definer and
+checks the capability for the write.
+
+This was learnt the expensive way: three reporting functions were written
+definer by habit — the other definer functions in this schema are definer
+because they write — and a definer function is not filtered by the policies on
+the tables it reads, so any signed-in caller could read any member's full
+savings history. See ADR-057 and §2 of
+`docs/POLYTOS-PHASE-2-TEST-REPORT.md`.
+
+**The question.** Where does a capability check go, relative to an idempotency
+replay? Above it. The replay's early return hands back a document id, which is
+a read, so a caller who may not post must not reach one by presenting a key.
+See ADR-056.
+
+Two structural choices are worth knowing before touching this module:
+
+- **There is no stored savings balance.** The balance is `sum(signed_amount)`
+  over an append-only subledger, and `signed_amount` is a generated column —
+  so the direction of a movement is not a field anybody sets, and there is no
+  second figure to disagree with the first. A balance check is therefore only
+  meaningful inside a posting function under the account's row lock, which is
+  where both of them are. See ADR-052.
+- **A posting function mints its row id first**, posts the journal naming it as
+  `source_id`, then inserts the row carrying `journal_entry_id`. Not
+  insert-then-update: the subledger refuses UPDATE, and suspending the trigger
+  to allow one takes an `ACCESS EXCLUSIVE` lock that would serialise every
+  deposit in the business. `journal_entries.source_id` carries no foreign key
+  precisely so this ordering is available.
+
+The module's own reference is `docs/POLYTOS-SAVINGS.md`.

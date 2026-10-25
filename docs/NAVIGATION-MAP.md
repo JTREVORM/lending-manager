@@ -65,6 +65,7 @@ about a client and that is where a reader looks for it.
 | Entry | Destination | Reuses | Capability |
 | --- | --- | --- | --- |
 | Membership Register | `/membership` | — | `membership:view` |
+| Enrol a Member | `/membership/enrol` | — | `membership:view` + requires `membership:create` |
 | Active Members | `/membership?status=active` | membership register filter | `membership:view` |
 | Pending Applications | `/membership?status=pending` | membership register filter | `membership:view` |
 | Suspended Members | `/membership?status=suspended` | membership register filter | `membership:view` |
@@ -75,17 +76,61 @@ about a client and that is where a reader looks for it.
 Statuses are `MEMBERSHIP_STATUSES` (`lib/domain/membership.ts`), parsed by
 `membershipSearchSchema`.
 
-There is deliberately **no** "Enrol member", "Collect savings", "Withdraw" or
-"Pay benefit" entry. Those workflows arrive in Polytos Phases 2 and 4, and a
-rail entry opening onto a form that cannot complete would be worse than no
-entry — it would be the system telling a clerk that savings can be taken
-today. `tests/integration/membership-ui.test.tsx` asserts that no entry in
-this module carries such a label.
+**"Enrol a Member" carries two capabilities, and the pair is the point.**
+`permission` is what the route prefix map says — the path is under
+`/membership`, so `membership:view` — and `requires` is what the page itself
+demands. The rail then offers no entry that would refuse the person who clicks
+it, while a visible link and a protected route cannot disagree about the
+prefix. See `NavItem.requires` in `components/layout/nav-items.ts`.
+
+Phase 1 had **no** enrolment entry, because enrolment did not exist and a rail
+entry opening onto a form that could not complete would have been the system
+telling a clerk that members could be taken on. Polytos Phase 2 built it, so
+the entry is there.
+
+There is still deliberately **no** "Pay benefit", "Record a claim", "Profit
+share" or "Meeting" entry. All of those wait on rules the client has not
+decided, so an entry for any of them would be the same lie.
+`tests/integration/membership-ui.test.tsx` asserts that no entry in this
+module carries such a label, and pins the enrolment entry's `requires`.
 
 `/membership/policies` sits under the `membership:view` prefix rather than
 behind `membership:manage_policies`: reading the registration fee and the
 savings minimum is ordinary counter work, and publishing a version is a write
 the page does not offer and the database policy refuses.
+
+## Member Savings
+
+Polytos Phase 2. Immediately after Membership, because a savings account
+belongs to a membership and that is where a reader looks for it next.
+
+| Entry | Destination | Reuses | Capability |
+| --- | --- | --- | --- |
+| Savings Register | `/savings` | — | `savings:view` |
+| Active Accounts | `/savings?status=active` | savings register filter | `savings:view` |
+| Dormant Accounts | `/savings?status=dormant` | savings register filter | `savings:view` |
+| Withdrawal Requests | `/savings/withdrawals` | — | `savings:approve_withdrawal` |
+| Savings History | `/audit?entity=savings` | audit trail entity filter | `audit:view` |
+
+Statuses are `SAVINGS_ACCOUNT_STATUSES` (`lib/domain/savings.ts`), parsed by
+`savingsSearchSchema`.
+
+**A module of its own rather than entries under Membership.** The savings
+register is the screen a Secretary spends the day in, and burying the
+most-used screen in the phase two levels down inside another module would make
+the common case the slow one.
+
+**`/savings/withdrawals` is listed before `/savings` in the route requirement
+table** (`lib/auth/routing.ts`), and the order is load-bearing. Matched the
+other way round, the longer path would inherit the shorter one's requirement —
+and the queue of decisions would open to a Secretary who holds `savings:view`,
+may prepare a withdrawal, and may not decide one.
+`tests/integration/membership-ui.test.tsx` asserts both prefixes resolve to the
+capability they should.
+
+There is deliberately **no** "Record a deposit" entry. A deposit is always to a
+*particular* member's account, so the entry would open a chooser that the
+register already is, one tap earlier.
 
 ## Loan Management
 

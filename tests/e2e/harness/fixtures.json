@@ -7,16 +7,47 @@
   },
   "borrower": "+256772110008",
   "clients": {
-    "arrears": "d520bb7b-3441-417c-888d-47209d813dcc",
-    "current": "e8e6dd05-23fe-4b10-9cd9-604a60d028b5"
+    "arrears": "f3e62bbb-9cb9-49ad-8a10-b5b39b83e972",
+    "current": "93737596-55be-411f-84ff-fc950827414d"
   },
   "loans": {
-    "current": "8645dbe1-d624-42cb-800b-8f5846ce2556",
-    "arrears": "3750fa12-4d57-4cab-a3ff-72f0e0321b61",
-    "charged": "02568837-6491-4ee5-a35a-b11c8b928244",
-    "grace": "ca3ae1e0-93b7-4147-a3b4-03e676ba74a6",
-    "pending": "1bdef9ac-d30c-471c-a01a-32e9705fbf74",
-    "draft": "bf8a29ca-b504-4894-bdf4-74cd5d0ed45a",
-    "approvedNotDisbursed": "db427819-3218-462f-b171-cf4fd1aada56"
+    "current": "65674f28-a194-40a3-8ac2-14448619f0b8",
+    "arrears": "28bb16d6-9e95-404b-8a3e-2b1b61999199",
+    "charged": "d2493c21-704b-4113-88e4-9b9a69e16f5b",
+    "grace": "59dedfa1-73bb-4798-8ef7-73ef09da9430",
+    "pending": "06bc8e05-7648-4517-93cf-3f59eb425895",
+    "draft": "2bd4a346-dd42-464e-899b-b3a55b67756c",
+    "approvedNotDisbursed": "dedc6aaa-6939-44e7-94a4-a1817e98e187"
+  },
+  "memberships": {
+    "qualified": "3c6e7940-c44b-4371-815d-ff0a7b73ee7a",
+    "gapped": "dc9fa5ec-896f-411c-b7c0-f677754054c6",
+    "saving": "58003ccd-cbf9-4c50-849e-3e56d043b58f",
+    "withdrawn": "55f01e58-036a-4808-963b-1d96cfdfb0d3",
+    "pendingConsent": "b047dbbe-7bc2-4609-b834-80028b1333e5"
+  },
+  "membershipNumbers": {
+    "qualified": "MB260001",
+    "pendingConsent": "MB260005"
+  },
+  "savings": {
+    "qualified": "c1f51077-2571-46eb-a621-e19575157e3f",
+    "gapped": "3aef467d-2444-4be8-8ab7-7928579762cc",
+    "saving": "cfe5fa7a-f47b-4f7d-b3c8-52e853a3f250",
+    "withdrawn": "260b526d-ffb0-4a1b-9516-3b10206eaefa"
+  },
+  "savingsAccountNumbers": {
+    "qualified": "SA260001",
+    "withdrawn": "SA260004"
+  },
+  "withdrawals": {
+    "paid": "22d316b3-a066-43a4-9447-9d47ef277248",
+    "pending": "ce91bff7-8977-496a-b2b2-28e1bf6913cc"
+  },
+  "policy": {
+    "version": "2.0",
+    "undecidedRules": 7,
+    "activitiesOpen": 2,
+    "activitiesClosed": 3
   }
 }

@@ -599,6 +599,12 @@ describeDb('payment row level security', () => {
         // every other view here: it joins `memberships` to `clients`, and
         // running as its owner would hand every member's record to anybody
         // who could select from it.
+        // Polytos Phase 2. The savings balance, the register built on it and
+        // the contribution months. Invoker on all three, so a member reading
+        // any of them sees their own account and no other — the policy on
+        // `savings_accounts` is what decides, not the view.
+        'member_savings_balances',
+        'member_savings_contributions',
         'membership_register',
         // Phase 15. `security_invoker` on both, which is what makes the
         // notification policy — and therefore the per-reader audience — apply
@@ -611,6 +617,7 @@ describeDb('payment row level security', () => {
         // sliced by branch and by product.
         'portfolio_at_risk',
         'reconciliation_register',
+        'savings_account_register',
         'transfer_register',
         'trial_balance',
       ]);

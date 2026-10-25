@@ -70,6 +70,19 @@ const ROUTE_PERMISSIONS: readonly {
   // minimum is ordinary counter work, and publishing a version is a write
   // the page does not offer and the policy refuses.
   { prefix: ROUTES.membership, permission: 'membership:view' },
+  // Polytos Phase 2. `/savings` is its own prefix with its own capability
+  // rather than a branch of `/membership`, because the two answer different
+  // questions: `membership:view` says who may read the register of members,
+  // and `savings:view` says who may read what those members are holding.
+  //
+  // The longer prefix comes first. `/savings/withdrawals` would otherwise
+  // match `/savings` and be guarded by `savings:view`, which every staff role
+  // holds — so the withdrawal queue would open to a Secretary who may prepare
+  // a withdrawal but may not decide one. `savings:approve_withdrawal` is the
+  // floor for the queue; the decision itself is checked again by the action
+  // and refused again by the posting function.
+  { prefix: ROUTES.savingsWithdrawals, permission: 'savings:approve_withdrawal' },
+  { prefix: ROUTES.savings, permission: 'savings:view' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },
   { prefix: ROUTES.loans, permission: 'loans:view' },
   // Its own capability as of Phase 6, rather than `dashboard:view`. The same

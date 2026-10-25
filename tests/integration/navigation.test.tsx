@@ -172,6 +172,11 @@ describe('navigation items', () => {
       [ROUTES.clients]: ['status'],
       // Polytos Phase 1. The membership register's four status views.
       [ROUTES.membership]: ['status'],
+      // Polytos Phase 2. The savings register's account views. The withdrawal
+      // queue pins nothing: it defaults to `pending` in its own schema, so a
+      // rail entry carrying `?status=pending` would be an entry that can never
+      // be the open page.
+      [ROUTES.savings]: ['status'],
       // Phase 13's workflow register: ten stages, one query.
       [ROUTES.loans]: ['stage'],
       [ROUTES.payments]: ['status'],

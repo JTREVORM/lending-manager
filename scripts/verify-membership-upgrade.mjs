@@ -14,8 +14,8 @@
  *
  * ## What it proves
  *
- *   1. Every migration up to, but not including, the Polytos Phase 1 set
- *      applies to an empty database.
+ *   1. Every migration up to, but not including, the Polytos set applies to
+ *      an empty database.
  *   2. The end-to-end seed then builds a real book on it — clients, loans,
  *      schedules, payments, penalties and journals, all written through the
  *      real functions.
@@ -23,12 +23,18 @@
  *      penalties, schedules, payments, allocations, outstanding balances,
  *      journal entry and line counts, every ledger account balance, and the
  *      trial balance.
- *   4. The Polytos Phase 1 migrations are applied **on top**, with the data
- *      in place.
+ *   4. The Polytos migrations — Phase 1's membership foundation *and* Phase
+ *      2's enrolment, consent and savings module — are applied **on top**,
+ *      with the data in place.
  *   5. The same baseline is taken again and compared, value by value.
  *
- * Any difference is a failure. A membership foundation that moves a shilling
- * of somebody's loan has not been built correctly, whatever else it does.
+ * Any difference is a failure. A membership and savings module that moves a
+ * shilling of somebody's loan has not been built correctly, whatever else it
+ * does.
+ *
+ * Phase 2 widened this from one prefix to a list, which also makes it a
+ * stronger check: the two phases are applied in one pass, in order, exactly as
+ * a real upgrade from the released schema would apply them.
  *
  *   node scripts/verify-membership-upgrade.mjs
  *
@@ -45,8 +51,19 @@ const { Client } = require('pg');
 const PROJECT_ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
 
-/** The prefix that marks the migrations this phase adds. */
-const PHASE_PREFIX = '20261019';
+/**
+ * The prefixes that mark the Polytos migrations.
+ *
+ * A list rather than one prefix, because the released schema is the one
+ * *before* Polytos — so an upgrade applies both phases, and verifying only one
+ * of them would leave the other's effect on the existing book unmeasured. The
+ * order matters and is the sort order of the filenames, which is also the
+ * order PostgreSQL needs: Phase 2 references tables Phase 1 creates.
+ */
+const PHASE_PREFIXES = ['20261019', '20261020'];
+
+const isPhaseMigration = (name) =>
+  PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
 
 const PORT = process.env.UPGRADE_PG_PORT ?? '5433';
 const USER = process.env.UPGRADE_PG_USER ?? 'lending';
@@ -189,11 +206,11 @@ const all = readdirSync(MIGRATIONS)
   .filter((name) => name.endsWith('.sql'))
   .sort();
 
-const before = all.filter((name) => !name.startsWith(PHASE_PREFIX));
-const phase = all.filter((name) => name.startsWith(PHASE_PREFIX));
+const before = all.filter((name) => !isPhaseMigration(name));
+const phase = all.filter(isPhaseMigration);
 
 if (phase.length === 0) {
-  console.error('error: no Polytos Phase 1 migrations found.');
+  console.error('error: no Polytos migrations found.');
   process.exit(1);
 }
 
@@ -305,21 +322,58 @@ const created = await client.query(
     where table_schema = 'public'
       and table_name in ('memberships', 'membership_policy_versions',
                          'membership_status_history',
-                         'membership_terms_acceptances')`,
+                         'membership_terms_acceptances',
+                         'membership_fee_receipts', 'membership_cards',
+                         'membership_consent_challenges',
+                         'savings_accounts', 'savings_transactions',
+                         'savings_withdrawal_requests')`,
 );
 
-if (created.rows[0].n !== 4) {
+const EXPECTED_TABLES = 10;
+
+if (created.rows[0].n !== EXPECTED_TABLES) {
   console.error(
-    `error: expected four membership tables after the upgrade, found ${String(created.rows[0].n)}.`,
+    `error: expected ${String(EXPECTED_TABLES)} membership and savings tables after ` +
+      `the upgrade, found ${String(created.rows[0].n)}.`,
   );
   process.exit(1);
 }
 
-const memberships = await client.query(
-  `select count(*)::int as n from public.memberships`,
+// Every one of them empty. An upgrade that invented a membership, a savings
+// account or a deposit would be an upgrade that invented a member — and
+// crucially, one that invented a savings deposit would have moved money,
+// which is the thing this whole script exists to rule out.
+for (const table of [
+  'memberships',
+  'membership_terms_acceptances',
+  'membership_fee_receipts',
+  'membership_cards',
+  'membership_consent_challenges',
+  'savings_accounts',
+  'savings_transactions',
+  'savings_withdrawal_requests',
+]) {
+  const rows = await client.query(`select count(*)::int as n from public.${table}`);
+  if (rows.rows[0].n !== 0) {
+    console.error(
+      `error: the upgrade wrote ${String(rows.rows[0].n)} row(s) to ${table}, which it must not.`,
+    );
+    process.exit(1);
+  }
+}
+
+// And the savings liability account exists, at zero. Phase 2 adds `2100`;
+// an upgrade that left it with a balance would mean the migration itself had
+// posted something.
+const liability = await client.query(
+  `select coalesce(
+            (select balance from public.ledger_account_balances where code = '2100'),
+            -1)::int as balance`,
 );
-if (memberships.rows[0].n !== 0) {
-  console.error('error: the upgrade created membership rows, which it must not.');
+if (liability.rows[0].balance !== 0) {
+  console.error(
+    `error: 2100 Member Savings is ${String(liability.rows[0].balance)} after the upgrade; expected 0.`,
+  );
   process.exit(1);
 }
 
@@ -327,11 +381,108 @@ await client.end();
 
 // ---------------------------------------------------------------------------
 // The comparison
+//
+// Most figures are compared as whole snapshots: byte-identical, or a defect.
+//
+// The two that list the chart of accounts need a different comparison, and
+// the reason is worth stating because the obvious one is wrong. A migration
+// that adds an account — Polytos Phase 2 adds `2000`, `2100` and `4340` —
+// lengthens the list without moving a shilling. Comparing the lists as
+// strings reports that as a changed financial figure, which is false, and
+// would report it on every future chart addition for the rest of the
+// system's life.
+//
+// So those two assert what they actually mean:
+//
+//   * every account that existed before has **exactly** the same figures
+//     after — no balance, debit or credit may move;
+//   * any account that **appeared** is at zero on every figure, because a
+//     migration that created an account with a balance in it would have
+//     posted something;
+//   * no account **disappeared**.
+//
+// That is strictly stronger than string equality on the thing that matters,
+// and it stops being noisy about the thing that does not.
 // ---------------------------------------------------------------------------
 
 let failures = 0;
 
+/** The chart-keyed snapshots, compared per account rather than as a list. */
+const CHART_KEYED = new Set(['account_balances', 'trial_balance']);
+
+/**
+ * Compare two chart-keyed snapshots.
+ *
+ * Returns a list of problems, empty when the upgrade moved nothing.
+ */
+function compareChart(name, beforeRows, afterRows) {
+  const problems = [];
+
+  const key = (row) => row.code;
+  const figures = (row) =>
+    JSON.stringify(
+      Object.fromEntries(Object.entries(row).filter(([column]) => column !== 'code')),
+    );
+
+  const beforeByCode = new Map(beforeRows.map((row) => [key(row), row]));
+  const afterByCode = new Map(afterRows.map((row) => [key(row), row]));
+
+  for (const [code, row] of beforeByCode) {
+    const next = afterByCode.get(code);
+
+    if (next === undefined) {
+      problems.push(`${code} disappeared from ${name}`);
+      continue;
+    }
+
+    if (figures(row) !== figures(next)) {
+      problems.push(`${code} moved in ${name}: ${figures(row)} -> ${figures(next)}`);
+    }
+  }
+
+  const zero = (row) =>
+    Object.entries(row)
+      .filter(([column]) => column !== 'code')
+      .every(([, value]) => Number(value) === 0);
+
+  for (const [code, row] of afterByCode) {
+    if (beforeByCode.has(code)) continue;
+
+    if (!zero(row)) {
+      problems.push(
+        `${code} was added to ${name} carrying ${figures(row)}; a new account must be at zero`,
+      );
+    }
+  }
+
+  return problems;
+}
+
 for (const name of Object.keys(BASELINE)) {
+  if (CHART_KEYED.has(name)) {
+    const problems = compareChart(
+      name,
+      beforeSnapshot[name] ?? [],
+      afterSnapshot[name] ?? [],
+    );
+
+    if (problems.length === 0) {
+      const added =
+        (afterSnapshot[name] ?? []).length - (beforeSnapshot[name] ?? []).length;
+      log(
+        added === 0
+          ? `unchanged: ${name}`
+          : `unchanged: ${name} (${String(added)} new account(s), all at zero)`,
+      );
+      continue;
+    }
+
+    failures += 1;
+    console.error(`\nCHANGED: ${name}`);
+    for (const problem of problems) console.error(`  ${problem}`);
+    continue;
+  }
+
   const a = JSON.stringify(beforeSnapshot[name]);
   const b = JSON.stringify(afterSnapshot[name]);
 
@@ -356,5 +507,101 @@ if (failures > 0) {
 console.log(
   `\nUpgrade verified: ${String(before.length)} existing migrations, a seeded book, ` +
     `then ${String(phase.length)} new migrations. Every one of ${String(Object.keys(BASELINE).length)} ` +
-    `financial figures is identical, and the four membership tables exist and are empty.`,
+    `financial figures is identical, the ten membership and savings tables exist ` +
+    `and are empty, and 2100 Member Savings is zero.`,
+);
+
+// ---------------------------------------------------------------------------
+// Release gate: integration into an EXISTING seeded loan book, not six new
+// synthetic people. Runs only against the throwaway upgrade database.
+// ---------------------------------------------------------------------------
+log('verifying seeded borrower-to-membership integration on the loan book');
+const bridgeDb = new Client({ connectionString: URL_ });
+await bridgeDb.connect();
+const loanBefore = await capture(bridgeDb);
+const clientsBefore = await bridgeDb.query(
+  'select count(*)::int as n from public.clients',
+);
+const seedEnv = {
+  ...process.env,
+  DATABASE_URL: URL_,
+  POLYTOS_SEED_DEMO: 'yes-seed-polytos-demo-data',
+  POLYTOS_DEMO_BORROWER_REUSE: 'yes-reuse-existing-demo-borrowers',
+};
+function runBorrowerSeed() {
+  execFileSync('npx', ['tsx', 'scripts/seed-demo.ts'], {
+    cwd: PROJECT_ROOT,
+    env: seedEnv,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 180_000,
+  });
+}
+runBorrowerSeed();
+const linked = await bridgeDb.query(
+  'select count(distinct m.client_id)::int as n from public.memberships m ' +
+    "where m.notes like 'DEMONSTRATION SCENARIO %' " +
+    'and exists (select 1 from public.loans l where l.client_id=m.client_id)',
+);
+if (linked.rows[0].n !== 6)
+  throw new Error('Expected six memberships linked to EXISTING loan borrowers.');
+const remaining = await bridgeDb.query(
+  'select count(distinct c.id)::int as n from public.clients c ' +
+    'join public.loans l on l.client_id=c.id ' +
+    'where not exists(select 1 from public.memberships m where m.client_id=c.id ' +
+    "and m.status in ('pending','active','suspended'))",
+);
+if (remaining.rows[0].n < 1)
+  throw new Error('No original non-member loan borrowers remain.');
+const clientsAfter = await bridgeDb.query(
+  'select count(*)::int as n from public.clients',
+);
+if (clientsAfter.rows[0].n !== clientsBefore.rows[0].n)
+  throw new Error('Borrower reuse created or deleted a client.');
+const loanAfter = await capture(bridgeDb);
+const untouchedKeys = [
+  'loan_principal',
+  'loan_interest',
+  'loan_expected',
+  'loan_count',
+  'loan_statuses',
+  'loan_rates',
+  'period_rows',
+  'period_totals',
+  'installment_rows',
+  'installment_total',
+  'installment_schedule',
+  'period_breakdown',
+  'payment_rows',
+  'payment_total',
+  'allocation_rows',
+  'allocation_totals',
+  'penalty_rows',
+  'penalty_total',
+  'outstanding',
+  'delinquency',
+];
+for (const key of untouchedKeys) {
+  if (JSON.stringify(loanBefore[key]) !== JSON.stringify(loanAfter[key]))
+    throw new Error('Demo integration altered pre-existing loan figure ' + key);
+}
+for (let attempt = 2; attempt <= 3; attempt++) {
+  runBorrowerSeed();
+  const afterRetry = await capture(bridgeDb);
+  for (const key of Object.keys(loanAfter)) {
+    if (JSON.stringify(loanAfter[key]) !== JSON.stringify(afterRetry[key]))
+      throw new Error(
+        'Demo integration is not idempotent: ' + key + ' after run ' + attempt,
+      );
+  }
+}
+const ledger = await bridgeDb.query(
+  'select (select coalesce(sum(signed_amount),0)::bigint from public.savings_transactions)::text as subledger,' +
+    " (select balance::text from public.ledger_account_balances where code='2100') as gl_balance",
+);
+if (ledger.rows[0].subledger !== ledger.rows[0].gl_balance)
+  throw new Error('Demo member savings subledger is not equal to liability GL.');
+await bridgeDb.end();
+log(
+  'verified: six existing borrowers enrolled, non-members retained, ' +
+    'loan book untouched, full financial fixed point on runs 2 and 3, liability reconciled',
 );

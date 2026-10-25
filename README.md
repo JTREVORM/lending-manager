@@ -114,7 +114,7 @@ posture and what is deferred to Phase 2.
 | `npm run format` / `format:check` | Prettier. |
 | `npm run test` | Vitest, watch mode. |
 | `npm run test:run` | Unit + integration. No database needed. **The CI gate.** |
-| `npm run test:db` | Database suite. Needs `DATABASE_URL`. |
+| `npm run test:db` | Database suite, then the demonstration seeder's own project. Needs `DATABASE_URL`. |
 | `npm run test:coverage` | Coverage report. |
 | `npm run verify` | typecheck → lint → format:check → test:run → build. |
 | `npm run check:env` | Validate environment configuration; exits non-zero on failure. |
@@ -122,6 +122,8 @@ posture and what is deferred to Phase 2.
 | `npm run db:types` | Regenerate `types/database.types.ts`. |
 | `npm run db:local:setup` / `:migrate` / `:teardown` | Throwaway local cluster. |
 | `npm run audit:money` | Scan for floating-point arithmetic on money. |
+| `npm run seed:demo` | Polytos demonstration data: six members, their savings, a withdrawal and a reversal. **Refuses unless `POLYTOS_SEED_DEMO` is the exact enabling phrase and the database is on its allow-list.** Idempotent — running it twice posts nothing. |
+| `node scripts/verify-membership-upgrade.mjs` | The upgrade path: applies the pre-Polytos migrations, seeds a real book, applies the Polytos migrations on top, and proves every financial figure is identical. |
 | `npm run e2e:up` / `e2e:down` / `e2e:env` | The end-to-end stack: PostgreSQL, the real PostgREST, an auth shim, a seeded database and the production build. |
 | `npm run test:e2e` | Browser tests against that stack. Needs it up. |
 
@@ -180,7 +182,7 @@ docs/          Architecture, database, decisions, security
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layering, stack, configuration, clients, UI, testing. |
 | [docs/DATABASE.md](docs/DATABASE.md) | Schema, relationships, constraints, RLS, functions, migrations. |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are the way they are (ADR-001 … ADR-012). |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are the way they are (ADR-001 … ADR-058). |
 | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) | Sign-in, sessions, roles, permissions, user management, RLS. |
 | [docs/SECURITY.md](docs/SECURITY.md) | Posture, review results, known gaps. |
 | [docs/DELIVERY.md](docs/DELIVERY.md) | The installable application, the service worker and what it may cache, CSP and headers, rate limits, UI conventions, what a page costs, health and version, deployment, Phase 10 handover. |
@@ -203,7 +205,20 @@ docs/          Architecture, database, decisions, security
 | [docs/UPGRADE-PHASE-7-REPORT.md](docs/UPGRADE-PHASE-7-REPORT.md) | Upgrade Phase 7: the Reports Center — one declaration per report, a PDF writer owned rather than installed, the four Debt & Security reports, and the guarantor-cover defect the parity method caught. |
 | [docs/UPGRADE-PHASE-8-REPORT.md](docs/UPGRADE-PHASE-8-REPORT.md) | Upgrade Phase 8: the dashboard reads the modules built after it — portfolio at risk, promises and follow-ups, and what is waiting for a decision — and the two mislabelled counts that reconciling against the base tables caught. |
 
-Three decisions worth knowing before writing any code here:
+### Polytos — the membership and savings programme
+
+| | |
+| --- | --- |
+| [docs/POLYTOS-MEMBERSHIP-REQUIREMENTS.md](docs/POLYTOS-MEMBERSHIP-REQUIREMENTS.md) | What the client's documents say, and what they leave unsaid. |
+| [docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md](docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md) | What is settled, the **nine questions that are not**, which activity each one holds up, and what Phase 2 did with the two that gate savings. **Read this before planning any later phase.** |
+| [docs/POLYTOS-SIX-PHASE-ROADMAP.md](docs/POLYTOS-SIX-PHASE-ROADMAP.md) | The six phases, what each delivers, and what each is blocked on. |
+| [docs/POLYTOS-EXPANSION-ARCHITECTURE.md](docs/POLYTOS-EXPANSION-ARCHITECTURE.md) | How the programme attaches to the existing lending system without forking it. |
+| [docs/POLYTOS-MEMBERSHIP-SCHEMA.md](docs/POLYTOS-MEMBERSHIP-SCHEMA.md) | Phase 1: the membership foundation — tables, the effective-dated policy, the five readiness gates, RLS. |
+| [docs/POLYTOS-PHASE-1-TEST-REPORT.md](docs/POLYTOS-PHASE-1-TEST-REPORT.md) | Phase 1's verification, figure by figure. |
+| [docs/POLYTOS-SAVINGS.md](docs/POLYTOS-SAVINGS.md) | Phase 2: enrolment, verifiable consent, the savings subledger, contributions and qualification, the withdrawal lifecycle, RLS, and what the phase deliberately does not do. |
+| [docs/POLYTOS-PHASE-2-TEST-REPORT.md](docs/POLYTOS-PHASE-2-TEST-REPORT.md) | Phase 2's verification, including the two defects only an authorisation test could find. |
+
+Five decisions worth knowing before writing any code here:
 
 - **Money is whole shillings in `bigint`**, never a float. Rates are integer
   basis points: 15% is `1500`. See ADR-002 and ADR-003.
@@ -215,6 +230,10 @@ Three decisions worth knowing before writing any code here:
   renders; the database decides what is allowed. Every policy routes through
   `current_profile_id()`, which is why disabling an account takes effect
   immediately. See ADR-015.
+- **Member savings are a liability, never income.** A deposit increases what
+  the business owes. Crediting an income account instead is invisible on every
+  screen and overstates the year's surplus by the whole savings book. See
+  ADR-051.
 
 ## What each phase built
 

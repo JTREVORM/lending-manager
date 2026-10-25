@@ -51,6 +51,16 @@ export const REFERENCE_SCOPES = [
   'reconciliation',
   // Polytos Phase 1. Membership numbers, e.g. MB260001.
   'membership',
+  // Polytos Phase 2. Each document the membership and savings workflows
+  // produce. The member-facing ones take four digits like the membership
+  // number they sit beside on a receipt; the subledger and the internal
+  // withdrawal request take five, like the finance documents, because there
+  // will be far more of them.
+  'membership_fee',
+  'savings_account',
+  'savings_transaction',
+  'savings_withdrawal',
+  'membership_card',
 ] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
 
@@ -72,6 +82,11 @@ export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = 
   other_income: 'Other income',
   reconciliation: 'Daily counts',
   membership: 'Memberships',
+  membership_fee: 'Registration fee receipts',
+  savings_account: 'Savings accounts',
+  savings_transaction: 'Savings transactions',
+  savings_withdrawal: 'Withdrawal requests',
+  membership_card: 'Membership cards',
 };
 
 export interface ReferenceFormat {
@@ -103,6 +118,15 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   // membership number is quoted on a card and in a meeting register, and
   // widening it later would put two shapes into circulation.
   membership: { scope: 'membership', prefix: 'MB', padding: 4 },
+  membership_fee: { scope: 'membership_fee', prefix: 'MF', padding: 4 },
+  savings_account: { scope: 'savings_account', prefix: 'SA', padding: 4 },
+  savings_transaction: {
+    scope: 'savings_transaction',
+    prefix: 'SV',
+    padding: 5,
+  },
+  savings_withdrawal: { scope: 'savings_withdrawal', prefix: 'WD', padding: 5 },
+  membership_card: { scope: 'membership_card', prefix: 'MC', padding: 4 },
 } as const;
 
 export class ReferenceError extends Error {

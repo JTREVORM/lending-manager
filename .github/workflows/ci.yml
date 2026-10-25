@@ -98,6 +98,26 @@ jobs:
           fi
           echo "Client bundle is free of secret patterns."
 
+      - name: Browser bundle assertions (needs the build)
+        # `tests/integration/bundle.test.ts` skips itself when `.next/static`
+        # is absent, so a developer running the suite alone is not told their
+        # tests are broken. The consequence in CI was that its six assertions
+        # never ran at all: the unit/integration step above executes before the
+        # production build, so the directory did not yet exist and the file
+        # reported itself skipped. That silently dropped the claim that no
+        # Supabase client runtime reaches the browser, and the gzipped size
+        # budgets with it.
+        #
+        # Re-run it here, where `.next/static` exists. The guard is the point:
+        # without it a future reordering would put the skip back and CI would
+        # stay green while asserting nothing.
+        run: |
+          test -d .next/static/chunks || {
+            echo "::error::.next/static/chunks is missing, so the bundle suite would skip rather than assert."
+            exit 1
+          }
+          npx vitest run --project integration tests/integration/bundle.test.ts
+
   # --------------------------------------------------------------------------
   # Database suite: real PostgreSQL, every migration applied from zero, then
   # the schema/RLS/constraint/concurrency tests.
@@ -121,10 +141,28 @@ jobs:
       - name: Build a local throwaway cluster and apply every migration
         run: npm run db:local:setup
 
-      - name: Database tests
+      # `test:db` runs three vitest projects in sequence: the database suite,
+      # the demonstration seeder's, then the borrower-reuse one. The seeder's
+      # is separate because the policy version it publishes is global state
+      # that would collide with every membership suite. Borrower reuse is
+      # separate again because it needs a database the synthetic seeder has
+      # never touched — once those six fee and deposit keys are spent on
+      # synthetic clients, reuse correctly refuses to remap them. See the
+      # header of vitest.config.mts. Each project's own globalSetup rebuilds
+      # the cluster the previous step created, so this one step covers all
+      # three.
+      - name: Database tests, the demonstration seeder, then borrower reuse
         run: npm run test:db
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test
+          # `POLYTOS_SEED_DEMO` is deliberately **not** set here. The seeder
+          # refuses without it, and tests/db/demo-seed.test.ts supplies the
+          # phrase per child process — which is also how it can assert the
+          # refusals. Putting it in this job's environment would hand it to
+          # every other step for no gain.
+
+      - name: Upgrade and existing-borrower demo integration
+        run: node scripts/verify-membership-upgrade.mjs
 
   # --------------------------------------------------------------------------
   # Browser suite: the production build driven by Playwright against the

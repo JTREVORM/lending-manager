@@ -4,12 +4,19 @@ import { Card } from '@/components/ui/card';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
 import { PortalPaymentHistory } from '@/components/payments/portal-payment-history';
 import { PortalLoanCard } from '@/components/portal/portal-loan-card';
+import { PortalSavingsPanel } from '@/components/savings/portal-savings-panel';
 import { listClientDelinquency } from '@/lib/data/delinquency';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
 import { getOwnClientRecord } from '@/lib/data/clients';
 import { getPortalBranding } from '@/lib/data/company';
 import { listClientPayments } from '@/lib/data/payments';
+import {
+  getSavingsAccountForClient,
+  getSavingsQualification,
+  getSavingsStatement,
+  listContributionMonths,
+} from '@/lib/data/savings';
 import { listClientLoans } from '@/lib/data/reports';
 import { signedDocumentUrl } from '@/lib/storage/documents';
 import { formatRecordedDate } from '@/lib/domain/client';
@@ -93,12 +100,29 @@ export default async function PortalPage() {
   // name, locale, timezone and logo, with the registration and tax numbers
   // left out. The portal shell above already reads it, so with the
   // request-scoped memoisation on that function this costs nothing here.
-  const [payments, branding, positions, loans] = await Promise.all([
+  const [payments, branding, positions, loans, savingsAccount] = await Promise.all([
     client === null ? Promise.resolve([]) : listClientPayments(client.id),
     getPortalBranding(),
     client === null ? Promise.resolve([]) : listClientDelinquency(client.id),
     client === null ? Promise.resolve([]) : listClientLoans(client.id),
+    // Polytos Phase 2. Through the identity clause on `clients.profile_id`,
+    // so a member reads their own and nothing else — the panel contains no
+    // check about members, because the policy already is one.
+    client === null ? Promise.resolve(null) : getSavingsAccountForClient(client.id),
   ]);
+
+  // The second round of savings reads, which need the account id from the
+  // first. Sequential by necessity rather than by choice, and skipped
+  // entirely for a client with no savings account — which is every borrower
+  // who is not also a member.
+  const [savingsQualification, savingsMonths, savingsRecent] =
+    savingsAccount === null
+      ? [null, [], []]
+      : await Promise.all([
+          getSavingsQualification(savingsAccount.id),
+          listContributionMonths(savingsAccount.id),
+          getSavingsStatement({ savingsAccountId: savingsAccount.id }),
+        ]);
 
   // Matched by loan id, so a position and a contract on the same card are
   // always the same loan. One pass, not a find() per row.
@@ -171,6 +195,22 @@ export default async function PortalPage() {
           </div>
         </Card>
       ) : null}
+
+      {/* Savings above the loans, deliberately. A member's savings are theirs
+          and are the thing they came to check; a loan is a debt and reads
+          better second. A borrower who is not a member has no savings
+          account, so this is absent for them rather than empty. */}
+      {savingsAccount === null ? null : (
+        <PortalSavingsPanel
+          account={savingsAccount}
+          qualification={savingsQualification}
+          months={savingsMonths}
+          /* The ten most recent movements, newest first. The statement
+             function returns the account in date order, so the tail is the
+             recent end of it. */
+          recent={[...savingsRecent].reverse().slice(0, 10)}
+        />
+      )}
 
       {client !== null && current.length > 0 ? (
         <section aria-labelledby="my-loans-heading" className="min-w-0 space-y-4">

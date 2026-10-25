@@ -2191,3 +2191,376 @@ a member becomes one transaction that writes the membership, the fee receipt
 and its journal, and the acceptance with its evidence — which is what
 `enrol_member()` is for in the roadmap, and why it is a database function
 rather than three calls from a form.
+
+---
+
+## ADR-051 — Member savings are a liability, never income
+
+**Status.** Accepted, Polytos Phase 2.
+
+**Context.** A member pays UGX 50,000 into their savings. Something has to
+happen in the ledger, and there are two plausible-looking choices:
+
+```
+  Debit  Cash at Hand       50,000
+  Credit 4xxx Savings Income 50,000     -- wrong
+```
+
+```
+  Debit  Cash at Hand            50,000
+  Credit 2100 Member Savings      50,000 -- right
+```
+
+The first is wrong in a way that is **invisible on every screen**. The
+member's balance is there, their statement reads correctly, the savings
+register is right, the deposit receipt is right. Nothing a counter or a member
+would ever look at reveals it.
+
+What it does is overstate the year's surplus by the entire savings book. And
+Phase 5 distributes that surplus: the business would pay a profit share out of
+its members' own deposits, discover it when the deposits could not be
+returned, and have no way to tell which members' money had already been given
+away.
+
+**Decision.** `2100 Member Savings` is a **liability** account with a credit
+normal side. A deposit credits it; a withdrawal debits it. A savings deposit
+never touches an income account, and `post_savings_deposit` posts exactly two
+legs, neither of which is income.
+
+The reasoning is not an accounting preference — it is what the money *is*. A
+deposit increases what the business owes. It is not a sale, it is not revenue,
+and the business holds it on behalf of somebody who will ask for it back.
+
+Three things enforce it beyond the function:
+
+- `ledger_accounts` gives `2100` `account_type = 'liability'`, so the trial
+  balance and the balance sheet classify it without anybody deciding again;
+- the first test in `tests/db/savings.test.ts` reads the **journal lines** of a
+  deposit rather than the resulting balance, and asserts that no line touches
+  an account of type `income`;
+- every savings test, and the demonstration seeder, ends by asserting that
+  `sum(signed_amount)` over `savings_transactions` equals the `2100` balance.
+
+**Consequences.** The savings dashboard panel is labelled "Owed to members"
+rather than "savings held", and the e2e suite asserts that the phrase "savings
+held" appears nowhere. A figure beside a cash balance, labelled as though the
+business owned it, is how the wrong reading gets made by somebody who never
+sees the ledger.
+
+The registration fee **is** income — `4340 Membership Registration Fees` — and
+that is the distinction worth keeping straight: the fee buys membership and is
+not returned; a deposit is the member's money and is.
+
+---
+
+## ADR-052 — There is no stored savings balance
+
+**Status.** Accepted, Polytos Phase 2.
+
+**Context.** Every savings system wants a `balance` column on the account. It
+is one read instead of an aggregate, it is obvious, and it is what somebody
+will add the first time a register feels slow.
+
+**Decision.** `savings_accounts` carries no balance. The balance is
+`sum(signed_amount)` over `savings_transactions`, exposed by
+`member_savings_balances`, and `signed_amount` is a **generated stored column**
+derived from `kind` — so the direction of a movement is not a field anybody
+sets.
+
+**Why.** A stored balance is a second figure that can disagree with the first,
+and the one that disagrees is always the one on screen. Keeping the two in step
+means every posting path updating both, every reversal updating both, and every
+future path remembering to — and the failure is silent: the member's statement
+adds up and their balance does not match it, or the other way round, and
+nobody can say which is right.
+
+With no stored balance there is nothing to reconcile. The statement, the
+register, the dashboard and the ledger are four renderings of one set of rows.
+
+The performance argument is answered by an index on `(savings_account_id,
+value_date)` and by the fact that a member has tens of transactions, not
+millions. If that ever stops being true, the answer is a materialised rollup
+with the subledger still authoritative — not a mutable column.
+
+**Consequences.** A withdrawal's balance check happens inside the posting
+function, under `select ... for update` on the account row, because that is
+the only place a balance read is worth anything: any check made outside the
+lock is stale by the time the money moves. `post_savings_withdrawal` re-checks
+even after approval, which is why a deposit reversed between the decision and
+the counter stops the payment rather than taking the account negative.
+
+---
+
+## ADR-053 — A reversal is a row, not a status
+
+**Status.** Accepted, Polytos Phase 2. Extends ADR-016 to savings.
+
+**Context.** A deposit is recorded twice at the counter. One of them has to
+stop counting.
+
+**Decision.** A contra transaction is appended — `deposit_reversal` or
+`withdrawal_reversal` — carrying the same amount, pointing at the original
+through `reverses_transaction_id`, and carrying its own contra journal entry.
+The original row is never touched. `savings_transactions` refuses UPDATE and
+DELETE by statement-level trigger, and `authenticated` holds no privilege for
+either, so the claim is enforced twice.
+
+**Why not a status.** Marking the original `reversed` means the record of what
+happened changes after the fact. A statement printed last week would no longer
+agree with one printed today, and a member who kept their copy would be holding
+a document the system denies. With a contra row both are true: the deposit
+happened, and it was corrected, and the statement shows both with the reason
+on the correction.
+
+**Consequences.**
+
+- The reversal's idempotency key is **derived** from the transaction it
+  reverses (`savings_reversal_key`), not supplied. A retried reversal replays;
+  a caller cannot make two.
+- A reversal cannot be reversed. Transaction kinds are checked, and a third
+  entry saying nothing new is refused.
+- Reversing a deposit that has already been withdrawn is refused: the
+  liability would go negative, and the business would be recorded as owing a
+  member less than nothing. The message says to reverse the withdrawals that
+  spent it first.
+- `member_savings_contributions` attributes a reversal to the month of the
+  deposit it corrects, not the month it was made in. A deposit posted in March
+  in error and reversed in July stops counting for March; it does not make
+  July negative. Qualification is about what was saved in a month, and a
+  correction says the saving did not happen then.
+
+---
+
+## ADR-054 — One savings account per membership, not per client
+
+**Status.** Accepted, Polytos Phase 2.
+
+**Context.** `savings_accounts` could key on `client_id` or on
+`membership_id`. A client has at most one live membership (ADR-046), so for
+anybody currently a member the two are the same.
+
+They differ for somebody who **left and came back**. ADR-043 already settled
+that a rejoining client is enrolled afresh with a new membership number,
+because the savings qualification period and the benefit waiting period both
+start again.
+
+**Decision.** `savings_accounts.membership_id` is unique. A rejoining client
+gets a second membership and therefore a second savings account.
+
+**Why.** Keying on the client would hand a rejoining member the qualification
+they did not serve. Their old contribution history would still be in the
+account, `member_savings_qualification` would count it, and they would be
+eligible for a member loan on the strength of months during which they were
+not a member. That is the business's money lent against a qualification nobody
+earned.
+
+**Consequences.** The old account holds the old balance, which is still owed
+to the member — leaving the programme does not forfeit savings, and nothing in
+this phase moves money between the two accounts. If the business decides a
+returning member's old savings should transfer, that is a transfer between two
+accounts with a journal behind it, which is a decision and a screen, not a
+default.
+
+`getSavingsAccountForClient`, which the portal uses, therefore orders by
+`opened_on` and takes one row rather than using `maybeSingle` — a rejoined
+member has two accounts and the newest is the live one.
+
+---
+
+## ADR-055 — Consent is verified by the database from evidence it can check
+
+**Status.** Accepted, Polytos Phase 2. Implements the requirement ADR-050 left
+open.
+
+**Context.** Phase 1 recorded an acceptance as a typed `signature_name` and a
+typed `witness_name`. Its own migration header said what that was worth:
+anybody with the form can type anybody's name, so the record is
+indistinguishable from one the member signed.
+
+ADR-050 made a posted fee and an accepted acceptance into database
+preconditions for activation. That closes nothing on its own if "accepted" can
+be asserted by whoever is filling in the form.
+
+**Decision.** `membership_terms_acceptances` carries `consent_method` and
+`verification_status`. The caller supplies the **method and its evidence**; the
+database decides the **verdict**. `membership_terms_acceptances_guard` sets
+`verification_status` itself, starting from `unverified` and requiring each
+branch to earn `verified`:
+
+| Method | What the database checks |
+| --- | --- |
+| `member_portal` | the session is the member's own, through `clients.profile_id` |
+| `one_time_code` | a live, unspent challenge for *this* membership and *this* policy version, consumed in the same transaction |
+| `signature_document` | the object exists in `storage.objects`, under this membership's own path |
+| `witnessed_in_branch` | the witness is an active profile, and is not the recorder |
+| `legacy_typed_name` | refused for a new acceptance; exists only to label Phase 1's rows honestly |
+
+`verification_status`, `evidence_reference`, `evidence_digest`, `verified_at`,
+`verified_by` and `verified_by_label` are all typed `never` on Insert and
+Update in `types/database.types.ts`, so a direct write is a type error before
+it is a permission error. `evidence_digest` is unique, so the same evidence
+cannot be replayed for a second acceptance.
+
+**Why a digest and not the evidence.** A one-time code is stored only as
+`sha256`, and `consent_evidence_digest` is revoked from `authenticated` as well
+as `anon` — a caller who could compute digests at will could search for the
+code that matches a stored one, which is the whole thing storing a digest
+prevents. The code is returned to its issuer **once** and exists nowhere
+afterwards.
+
+**Consequences.**
+
+- Phase 1's existing rows are backfilled to `legacy_typed_name` /
+  `unverified`, not quietly upgraded. The memberships holding one cannot be
+  activated until real consent is taken, and the membership record says which
+  of the two preconditions is outstanding.
+- `accept_membership_policy_version` was **replaced**, not extended: the old
+  six-argument signature is dropped, because leaving it would leave a second,
+  weaker door into the same room.
+- The enrolment screen offers only `witnessed_in_branch`, and that is a
+  consequence of the evidence rather than a simplification. A code is bound to
+  a membership and a signature is stored under one — and the membership is
+  what the enrolment form creates. The other three are offered on the
+  membership record, where the membership exists.
+
+---
+
+## ADR-056 — Authorisation sits above the idempotency replay
+
+**Status.** Accepted, Polytos Phase 2. Corrects an ordering defect found by
+`tests/db/rls-savings.test.ts`.
+
+**Context.** Every money-moving function here is idempotent on a key
+(ADR-030): it takes an advisory lock on the key, looks for an existing
+movement, and returns it if one is there. The first draft of
+`post_savings_deposit`, `post_savings_withdrawal` and
+`record_membership_fee` all did that lookup **before** checking the caller's
+capability — which reads naturally, because the replay is a shortcut and a
+shortcut belongs at the top.
+
+It is a disclosure. The early return hands back a transaction or receipt id,
+which is a read of somebody else's movement. A caller holding no savings
+capability could replay a key and be handed the id of the deposit it belongs
+to.
+
+**Decision.** In every function that replays on a key, the actor is resolved
+and the capability checked **before** the advisory lock and the lookup. The
+rule: establish who is asking, then decide whether this is a retry of their
+own request.
+
+**Consequences.** A caller who may not post gets the capability refusal
+whether or not the key already exists, which is also the better message. The
+replay still works for everybody who may post, which is the only case it was
+ever for.
+
+The test that found it is worth naming: it replays a key as a caller holding
+no `savings:deposit`, and asserts the refusal. It is one of the two defects in
+this phase that only an authorisation test written from the attacker's side
+could find — the other being ADR-057.
+
+---
+
+## ADR-057 — A reporting function is SECURITY INVOKER unless it reports the business
+
+**Status.** Accepted, Polytos Phase 2. Corrects a disclosure found by
+`tests/db/rls-savings.test.ts`.
+
+**Context.** `savings_statement`, `member_savings_qualification` and
+`savings_summary` were all written SECURITY DEFINER, by habit: the other
+definer functions in this schema are definer because they write something no
+session may write.
+
+These three write nothing. And a definer function is **not filtered by the
+policies on the tables it reads** — so any signed-in caller could read any
+member's full savings statement, and their whole contribution history, by
+passing an account id. A member could read another member's savings; so could
+a loan officer with no savings capability at all.
+
+**Decision.** The two that report **a member** are SECURITY INVOKER:
+`savings_statement` and `member_savings_qualification`. The policies on
+`savings_accounts` and `savings_transactions` already answer "may this caller
+see this member?" — staff holding `savings:view` within their branch, and the
+member whose savings they are — so running as the invoker *is* the
+authorisation, stated once.
+
+A second predicate written inside the function would be the same rule stated
+twice, and the copy that drifts is the one that leaks.
+
+`savings_summary` stays SECURITY DEFINER, for the opposite reason: its whole
+purpose is the figure for the business as a whole, where there is no row for a
+policy to filter. Under the invoker's policies a member would receive their own
+balance labelled `total_liability` — not a leak, but a lie. So it runs as the
+owner and asks for `savings:view_reports` explicitly, which is the one check
+in this phase that has to be written out.
+
+**Consequences.** The general rule for this schema, stated so the next
+reporting function does not have to rediscover it:
+
+> A function that reports **one member's** data is SECURITY INVOKER and lets
+> the policies decide. A function that reports **the business** is SECURITY
+> DEFINER and checks a reporting capability itself. A function that **writes**
+> is SECURITY DEFINER and checks the capability for the write.
+
+`tests/db/security.test.ts` asserts the SECURITY DEFINER list exhaustively, and
+the two invoker functions are named in it as deliberate absences with the
+reason — so a later change that makes either definer again fails the build
+rather than quietly reopening the hole.
+
+An account the caller may not see and an account that does not exist give the
+same answer: `member_savings_qualification` raises 'No such savings account'
+for both. A caller who may not read a row has no business learning that it is
+there.
+
+---
+
+## ADR-058 — Demonstration data is a script that can refuse, not a seed file
+
+**Status.** Accepted, Polytos Phase 2.
+
+**Context.** `supabase/seed.sql` is the obvious place for demonstration data,
+and Phase 1's copy of it sketched exactly that. Phase 2 needs six members with
+savings histories, and the obvious implementation is `insert` statements with
+`on conflict do nothing`.
+
+**Decision.** Demonstration data lives in `scripts/seed-demo.ts`, and
+`supabase/seed.sql` stays empty.
+
+**Why.** Three things the seed file cannot do, each of which is the whole
+point:
+
+1. **It has to refuse.** `supabase/seed.sql` is executed by `supabase db
+   reset` against whatever database that command is pointed at. A script reads
+   the connection string, checks the project reference against an
+   **allow-list**, requires `POLYTOS_SEED_DEMO` to be an exact phrase, and
+   refuses otherwise. An allow-list rather than a deny-list: a deny-list has to
+   anticipate every database that must not be touched, and the one it forgot
+   would be the one that mattered.
+
+2. **It has to post through the application's own functions.** A deposit, a
+   fee and a withdrawal each write a document and a journal entry in one
+   transaction, with a reference number minted by a trigger. Fabricating those
+   rows with `insert` would produce money the ledger does not know about —
+   exactly the state the schema exists to make impossible — and would
+   demonstrate a system that cannot be reached by using the product.
+
+3. **It has to be idempotent against money.** `on conflict do nothing` covers
+   a unique key; it does not stop a second run posting a second deposit. The
+   script derives a deterministic idempotency key per posting, so the posting
+   functions return the movement that already exists. A seeder that doubled
+   its deposits would be a seeder that doubled a member's savings, and the
+   person who noticed would be the member.
+
+**Consequences.** `tests/db/demo-seed.test.ts` runs the script three times
+against a real database and asserts the second and third change nothing —
+twice could pass by accident on a guard that happens to catch the state the
+first run leaves; three times means the state is a fixed point. It also
+asserts that each refusal writes nothing at all, and that no loan is touched.
+
+It runs in a vitest project of its own, because the policy version it
+publishes is global state: only one version may be in force, so every
+membership suite that publishes its own would collide with it. A project gets
+its own `globalSetup`, which rebuilds the database — so the seeder meets the
+empty database it is specified against and leaves nothing behind.
+
+The script never runs as part of a migration. Migrations run on deploy; this
+runs when somebody types the command and the phrase.

@@ -120,12 +120,17 @@ beforeAll(async () => {
   const otherMemberId = await enrol(otherClientId);
   await enrol(suspendedClientId);
 
+  // Polytos Phase 2: an acceptance carries evidence the guard can check. A
+  // witnessing member of staff is the method available to a fixture, and the
+  // witness must be somebody other than whoever records it.
   const acceptance = await queryOne<{ id: string }>(
     `insert into public.membership_terms_acceptances
-       (membership_id, policy_version_id, policy_version, accepted_at, signature_name)
-     values ($1, $2, '0.0', pg_catalog.now(), 'Member Borrower')
+       (membership_id, policy_version_id, accepted_at, signature_name,
+        consent_method, witness_profile_id)
+     values ($1, $2, pg_catalog.now(), 'Member Borrower',
+             'witnessed_in_branch', $3)
      returning id`,
-    [memberId, policy.id],
+    [memberId, policy.id, manager.profileId],
   );
 
   // Suspending the account is what makes `current_profile_id()` resolve to

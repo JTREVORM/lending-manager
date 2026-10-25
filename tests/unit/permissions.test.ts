@@ -252,6 +252,32 @@ describe('authorization matrix', () => {
     'membership:manage_status': ['manager', 'owner_admin'],
     'membership:manage_policies': ['owner_admin'],
 
+    // --- Polytos Phase 2: savings -------------------------------------------
+    // The split that matters is between taking money in and giving it back.
+    // A Secretary runs the counter: they may see the register, record a
+    // deposit and prepare a withdrawal. Deciding one and paying it are the
+    // Manager's, and `decide_savings_withdrawal` additionally refuses a
+    // decision from whoever prepared it — so a Manager who prepares a
+    // withdrawal still cannot approve it, and the split is a control rather
+    // than a label on a permissions page.
+    //
+    // Reversing is the Owner's alone, like `payments:reverse` and for the
+    // same reason: the person who records money must not be the person who
+    // can withdraw the record.
+    //
+    // A member holds none of these. They read their own account, their own
+    // statement and their own fee receipt through the identity clause in the
+    // RLS policy, exactly as a borrower reads their own client record. And
+    // they may not deposit to their own account: the money has to arrive at
+    // a counter before a record of it should exist.
+    'savings:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'savings:deposit': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'savings:request_withdrawal': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'savings:approve_withdrawal': ['manager', 'owner_admin'],
+    'savings:post_withdrawal': ['manager', 'owner_admin'],
+    'savings:view_reports': ['manager', 'owner_admin'],
+    'savings:reverse': ['owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

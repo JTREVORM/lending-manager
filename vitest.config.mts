@@ -17,8 +17,19 @@ import { defineConfig } from 'vitest/config';
  *                triggers, RLS, grants, concurrency. Requires DATABASE_URL;
  *                see `npm run db:local:setup`.
  *
+ *   seed         The demonstration seeder, run for real, twice. Its own
+ *                project rather than a file in `db`, because the property it
+ *                proves is about a *clean* database and because the data it
+ *                writes is global: it publishes a policy version, and only
+ *                one version may be in force, so every membership suite that
+ *                publishes its own would collide with it. A project gets its
+ *                own `globalSetup`, which rebuilds the database first — so
+ *                the seeder meets the empty database it is specified
+ *                against, and leaves nothing behind for anything else.
+ *
  * `npm run test:run` runs unit + integration, so it needs no database and is
- * the gate for CI. `npm run test:db` runs the database suite.
+ * the gate for CI. `npm run test:db` runs the database suite, then the
+ * seeder's.
  */
 export default defineConfig({
   plugins: [react()],
@@ -58,6 +69,42 @@ export default defineConfig({
           // concurrency tests depend on controlling who else is writing.
           fileParallelism: false,
           testTimeout: 30_000,
+          // Each seeder suite has a project of its own; see their headers.
+          exclude: ['tests/db/demo-seed.test.ts', 'tests/db/demo-borrower-reuse.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'seed',
+          environment: 'node',
+          include: ['tests/db/demo-seed.test.ts'],
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          // The seeder runs three times inside this suite, each a child
+          // process applying a dated deposit history, so the budget is wider
+          // than the database suite's.
+          testTimeout: 180_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'seed-reuse',
+          environment: 'node',
+          include: ['tests/db/demo-borrower-reuse.test.ts'],
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          // Borrower reuse needs a database the synthetic seeder has never
+          // touched: once the six scenario fee and deposit keys are spent on
+          // synthetic clients, reuse correctly refuses to remap them. Hence a
+          // separate project with its own rebuild rather than another file in
+          // the `seed` one.
+          //
+          // It also builds a loan book first — two borrowers driven all the
+          // way to disbursement — and then runs the seeder four times, so the
+          // budget is wider again.
+          testTimeout: 300_000,
         },
       },
     ],

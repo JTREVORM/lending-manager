@@ -425,6 +425,14 @@ describe('column type discipline', () => {
       // un-happens, so an `updated_at` here would be a column that can never
       // advance.
       'membership_status_history',
+      // Polytos Phase 2. The savings subledger, append-only for the same
+      // reason and more strictly: UPDATE is refused by statement-level
+      // trigger *and* no privilege is granted for it to anybody. A deposit
+      // happened for an amount on a date; a correction is a contra row with
+      // its own contra journal, not an edit. An `updated_at` here would
+      // imply a movement can be amended, which is the one thing the table
+      // exists to make impossible.
+      'savings_transactions',
     ]);
 
     for (const table of createdTables) {
@@ -820,6 +828,42 @@ describe('types stay in step with the schema', () => {
       'notify_reconciliation_variance',
       'notify_low_float',
       'notify_client_blacklisted',
+
+      // --- Polytos Phase 2 ----------------------------------------------------
+      // The reference stampers, the column guards and the audit triggers for
+      // enrolment and savings. None is callable over the API, and each is
+      // revoked from `anon` and `authenticated` — asserted in
+      // `tests/db/security.test.ts`, so these entries cannot hide a function
+      // that later becomes reachable.
+      'membership_fee_receipts_assign_number',
+      'membership_fee_receipts_guard',
+      'savings_accounts_assign_number',
+      'savings_accounts_guard',
+      'savings_accounts_stamp_provenance',
+      'savings_transactions_assign_number',
+      'savings_withdrawal_requests_assign_number',
+      'savings_withdrawal_requests_guard',
+      'membership_cards_assign_number',
+      'membership_cards_guard',
+      'audit_membership_fee_change',
+      'audit_savings_account_change',
+      'audit_savings_transaction',
+      'audit_savings_withdrawal_change',
+      'audit_membership_card_change',
+      // Not triggers, and exempt for the stronger reason: both are revoked
+      // from `authenticated` as well.
+      //
+      //   * `consent_evidence_digest` computes the digest stamped on a
+      //     consent record and on a one-time code. A caller who could
+      //     compute digests at will could search for the code that matches a
+      //     stored one, which is the whole thing storing a digest prevents.
+      //   * `savings_reversal_key` derives a reversal's idempotency key from
+      //     the transaction it reverses, so a retried reversal replays rather
+      //     than posting twice. Deriving it rather than taking it as a
+      //     parameter is what stops a caller making two; a client type for it
+      //     would advertise exactly the call that must not be available.
+      'consent_evidence_digest',
+      'savings_reversal_key',
     ]);
 
     for (const functionName of functionNames) {

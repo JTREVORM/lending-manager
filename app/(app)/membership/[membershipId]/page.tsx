@@ -2,7 +2,9 @@ import { BadgeCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { MembershipCardPanel } from '@/components/membership/membership-card-panel';
 import { MembershipHistory } from '@/components/membership/membership-history';
+import { MembershipMoneyPanel } from '@/components/membership/membership-money-panel';
 import { MembershipPolicyPanel } from '@/components/membership/membership-policy-panel';
 import { MembershipStatusBadge } from '@/components/membership/membership-status-badge';
 import { Alert } from '@/components/ui/alert';
@@ -18,6 +20,12 @@ import {
   getMembershipPolicy,
   listMembershipHistory,
 } from '@/lib/data/membership';
+import {
+  getMembershipFeeReceipt,
+  getSavingsAccountForMembership,
+  listMembershipCards,
+  listMembershipConsent,
+} from '@/lib/data/savings';
 import {
   MEMBERSHIP_ACTIVITY_LABELS,
   MEMBERSHIP_STATUS_DESCRIPTIONS,
@@ -46,16 +54,19 @@ export const metadata = { title: 'Membership' };
  * a record exists to somebody who may not see it, which is the thing the
  * policy is preventing.
  *
- * ## Read-only, on purpose
+ * ## What this page can now do, and what it still cannot
  *
- * There is no "Collect savings", no "Withdraw", no "Pay benefit" and no
- * status control. Every one of those is a financial or lifecycle write that
- * belongs to Polytos Phase 2 or 4, and the brief is explicit that this phase
- * must not show actions that appear operational before their workflow
- * exists. What the page does show is **what the lifecycle permits next**,
- * as a sentence rather than as buttons — a reader planning the work can see
- * where this membership can go without being offered a control that would
- * fail.
+ * Polytos Phase 2 added the fee, the consent evidence, the savings account
+ * and the card, so each is shown and the card can be issued from here.
+ *
+ * What is still absent is a status control: suspending or withdrawing a
+ * membership is a lifecycle write whose screen belongs to a later phase, so
+ * the page states **what the lifecycle permits next** as a sentence rather
+ * than as buttons. A reader planning the work can see where this membership
+ * can go without being offered a control that would fail.
+ *
+ * Benefit claims and the year-end profit share are likewise absent, and the
+ * rules behind both are among the questions the client has not answered.
  */
 export default async function MembershipDetailPage({
   params,
@@ -72,9 +83,16 @@ export default async function MembershipDetailPage({
 
   if (membership === null) notFound();
 
-  const [history, policy] = await Promise.all([
+  const [history, policy, receipt, consent, savingsAccount, cards] = await Promise.all([
     listMembershipHistory(membership.id),
     getMembershipPolicy(membership.policyVersionId),
+    // Each of these comes back empty or null for a caller the policies refuse,
+    // so an absence on this page is a database decision rather than a
+    // conditional written here.
+    getMembershipFeeReceipt(membership.id),
+    listMembershipConsent(membership.id),
+    getSavingsAccountForMembership(membership.id),
+    listMembershipCards(membership.id),
   ]);
 
   const canSeeClient = contextCan(context, 'clients:view');
@@ -122,6 +140,7 @@ export default async function MembershipDetailPage({
         label="Membership sections"
         tabs={[
           { id: 'membership-profile-heading', label: 'Membership' },
+          { id: 'membership-money-heading', label: 'Fee and savings' },
           { id: 'membership-lifecycle-heading', label: 'Lifecycle' },
           { id: 'membership-terms-heading', label: 'Terms' },
         ]}
@@ -197,22 +216,34 @@ export default async function MembershipDetailPage({
         </Card>
       </section>
 
-      {/* --- Savings, fees and benefits: deliberately absent ------------- */}
+      {/* --- The fee, the acceptance and the savings --------------------- */}
       <section aria-labelledby="membership-money-heading" className="min-w-0 space-y-3">
         <h2 id="membership-money-heading" className="text-text text-lg font-semibold">
-          Savings, fees and benefits
+          Fee, acceptance and savings
         </h2>
 
+        <MembershipMoneyPanel
+          receipt={receipt}
+          consent={consent}
+          savingsAccount={savingsAccount}
+          policyVersion={membership.policyVersion}
+          membershipStatus={membership.status}
+          registrationFee={policy?.registrationFee ?? 0}
+        />
+
+        <MembershipCardPanel
+          membershipId={membership.id}
+          membershipStatus={membership.status}
+          cards={cards}
+          canIssue={contextCan(context, 'membership:update')}
+        />
+
         <Card>
-          <p className="text-text text-sm">
-            Nothing is recorded here yet. Savings accounts, the registration fee receipt,
-            benefit claims and the year-end profit share are built in later phases of the
-            Polytos programme, and this system records no membership money until they are.
-          </p>
-          <p className="text-text-muted mt-2 text-[13px]">
-            No figure on this page is a balance. A member&rsquo;s savings are not held
-            anywhere in the current schema, so a zero here would be a statement about the
-            software rather than about the member.
+          <p className="text-text-muted text-[13px]">
+            Benefit claims and the year-end profit share are not recorded here. The
+            medical benefit&rsquo;s annual cap, how many claims a year it allows, any
+            waiting period and the profit distribution formula are all still to be
+            decided, and this system records nothing against a rule nobody has approved.
           </p>
         </Card>
       </section>
