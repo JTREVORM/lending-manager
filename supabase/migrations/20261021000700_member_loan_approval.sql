@@ -122,6 +122,14 @@ create table public.member_loan_eligibility_snapshots (
   active_loan_count integer not null,
   outstanding_principal bigint not null,
   pledged_savings_before bigint not null,
+  -- What the member had asked for and a supervisor had approved but nobody had
+  -- paid when this loan was decided. Still in the balance, and not available
+  -- to secure anything. Recorded so the ceiling can be re-derived by a reader
+  -- rather than believed: it is
+  -- `(eligible_savings - pledged_savings_before - pending_withdrawals_before)
+  --  x multiplier_bps`, rounded half-up and capped by the business maximum.
+  pending_withdrawals_before bigint not null default 0,
+  available_savings bigint not null,
 
   captured_at timestamptz not null default pg_catalog.now(),
   captured_by uuid references public.profiles(id) on delete set null,
@@ -133,7 +141,18 @@ create table public.member_loan_eligibility_snapshots (
            and consecutive_qualifying_months >= 0
            and consecutive_qualifying_months <= qualifying_months),
   constraint member_loan_snapshots_savings_non_negative
-    check (eligible_savings >= 0 and pledged_savings_before >= 0),
+    check (eligible_savings >= 0
+           and pledged_savings_before >= 0
+           and pending_withdrawals_before >= 0
+           and available_savings >= 0),
+  -- The arithmetic, as a constraint. A snapshot whose available figure does
+  -- not follow from its own inputs is not evidence.
+  constraint member_loan_snapshots_available_follows
+    check (
+      available_savings
+        = greatest(eligible_savings - pledged_savings_before
+                     - pending_withdrawals_before, 0)
+    ),
   constraint member_loan_snapshots_multiplier_positive check (multiplier_bps > 0),
   constraint member_loan_snapshots_ceiling_positive check (max_eligible_loan > 0),
   constraint member_loan_snapshots_amount_positive check (amount_requested > 0),
@@ -816,6 +835,7 @@ begin
       max_term_months, required_cadence,
       amount_requested, term_requested, repayment_frequency,
       active_loan_count, outstanding_principal, pledged_savings_before,
+      pending_withdrawals_before, available_savings,
       captured_by, captured_by_label
     )
     values (
@@ -830,6 +850,7 @@ begin
       v_member.max_term_months, v_member.required_cadence,
       v_loan.principal_amount, v_loan.loan_term_months, v_loan.repayment_frequency,
       v_member.active_loan_count, v_member.outstanding_principal, v_pledged,
+      coalesce(v_member.pending_withdrawals, 0), v_member.available_savings,
       v_actor, public.audit_actor_label()
     );
 

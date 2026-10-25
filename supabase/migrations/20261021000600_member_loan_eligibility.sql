@@ -343,6 +343,8 @@ returns table (
   active_loan_limit integer,
   outstanding_principal bigint,
   pledged_savings bigint,
+  pending_withdrawals bigint,
+  available_savings bigint,
   amount_requested bigint,
   term_requested smallint,
   is_eligible boolean,
@@ -425,7 +427,7 @@ begin
   -- --- The membership's own standing -------------------------------------
   if v_membership.status = 'pending' then
     v_reasons := v_reasons
-      || 'This membership has not been activated: the registration fee and a verified acceptance of the member''s own terms are both required first.';
+      || 'This membership has not been activated: the registration fee and a verified acceptance of the member''s own terms are both required first.'::text;
   elsif v_membership.status = 'suspended' then
     v_reasons := v_reasons
       || ('This membership is suspended'
@@ -453,7 +455,7 @@ begin
 
   if not found then
     v_reasons := v_reasons
-      || 'This member has no savings account, so there is no qualifying history and nothing securing a loan.';
+      || 'This member has no savings account, so there is no qualifying history and nothing securing a loan.'::text;
   else
     savings_account_id := v_account.id;
     savings_account_number := v_account.account_number;
@@ -478,16 +480,64 @@ begin
 
     if not v_qual.qualifies then
       v_reasons := v_reasons
-        || coalesce(v_qual.blocked_reason, 'The savings qualifying period has not been served.');
+        || coalesce(v_qual.blocked_reason, 'The savings qualifying period has not been served.')::text;
     end if;
   end if;
+
+  -- --- What of the savings is actually free -------------------------------
+  --
+  -- Three figures, and the distinction between them is the whole reason two
+  -- concurrency tests exist:
+  --
+  --   `eligible_savings`     what the member holds. Evidence.
+  --   `pledged_savings`      what already secures a live member loan.
+  --   `pending_withdrawals`  what the member has asked for and a supervisor
+  --                          has approved but nobody has paid yet. Still in
+  --                          the balance, and not available to secure
+  --                          anything, because it is on its way out.
+  --
+  -- The ceiling is computed from what is left, not from the balance. Without
+  -- that, two loans approved in succession would each see the whole balance
+  -- and between them consume twice the capacity the member has — which is
+  -- exactly what `tests/db/member-loan-concurrency.test.ts` found when the
+  -- ceiling was computed from the balance alone, with only the
+  -- belt-and-braces invariant inside `approve_loan` catching it.
+  if v_account.id is not null then
+    pledged_savings := public.savings_pledged_amount(v_account.id, as_of);
+
+    -- `v_account.id` rather than the `savings_account_id` OUT parameter:
+    -- the table has a column of that name too, so an unqualified reference
+    -- would be ambiguous.
+    select coalesce(pg_catalog.sum(r.amount), 0)::bigint
+      into pending_withdrawals
+    from public.savings_withdrawal_requests r
+    where r.savings_account_id = v_account.id
+      and r.status in ('pending', 'approved')
+      and r.business_date <= as_of;
+  else
+    pledged_savings := 0;
+    pending_withdrawals := 0;
+  end if;
+
+  available_savings := greatest(
+    coalesce(eligible_savings, 0) - pledged_savings - pending_withdrawals, 0
+  );
 
   -- --- The ceiling, where there is one ------------------------------------
   -- NULL, not a guess, while the multiplier is undecided. The reason is
   -- already in `v_reasons` by way of the lending gate; stating a number here
   -- would be inventing the member's credit limit.
   if multiplier_bps is not null and eligible_savings is not null then
-    max_eligible_loan := (eligible_savings * multiplier_bps + 5000) / 10000;
+    -- Rounded **down**, and that is not an oversight. A pledge is
+    -- `principal / multiplier` rounded up, so that rounding can only ever
+    -- over-pledge; if the ceiling rounded half-up as well, then at a
+    -- multiplier below 1x a loan taken at exactly the ceiling would pledge one
+    -- shilling more than the member holds, and the invariant inside
+    -- `approve_loan` would refuse a legitimate approval. Rounding a maximum
+    -- down is also right on its own terms: a ceiling rounded up grants a
+    -- shilling nobody authorised. See `memberLoanCeiling` in
+    -- lib/domain/member-loan.ts, where a property test found it.
+    max_eligible_loan := (available_savings * multiplier_bps) / 10000;
 
     -- The business's own bounds still apply. The multiplier decides how much a
     -- member's savings support; it does not exempt them from what the business
@@ -525,25 +575,25 @@ begin
           || ' at a time. An existing ordinary loan is not converted or repriced by membership; it has to run its course.');
   end if;
 
-  -- --- Savings already pledged -------------------------------------------
-  -- Zero until a multiplier exists, because nothing can be pledged against a
-  -- limit nobody has set. See 20261021000800.
-  if savings_account_id is not null then
-    pledged_savings := public.savings_pledged_amount(savings_account_id, as_of);
-  end if;
-
   -- --- Eligibility, before the request ------------------------------------
   is_eligible := pg_catalog.cardinality(v_reasons) = 0;
 
   -- --- The request itself -------------------------------------------------
   if p_amount is not null then
     if p_amount <= 0 then
-      v_reasons := v_reasons || 'A loan amount must be a positive number of shillings.';
+      v_reasons := v_reasons || 'A loan amount must be a positive number of shillings.'::text;
     else
       if max_eligible_loan is not null and p_amount > max_eligible_loan then
         v_reasons := v_reasons
           || ('The requested ' || p_amount || ' exceeds the '
-              || max_eligible_loan || ' this member''s savings support.');
+              || max_eligible_loan || ' this member''s savings support.'
+              || case
+                   when pledged_savings > 0 or pending_withdrawals > 0
+                   then ' Of a balance of ' || coalesce(eligible_savings, 0)
+                        || ', ' || pledged_savings || ' secures a live member loan and '
+                        || pending_withdrawals || ' is awaiting payment as a withdrawal.'
+                   else ''
+                 end);
       end if;
 
       if p_amount < v_settings.min_loan_amount then
@@ -555,7 +605,7 @@ begin
 
   if p_term_months is not null then
     if p_term_months < 1 then
-      v_reasons := v_reasons || 'A loan term must be at least one month.';
+      v_reasons := v_reasons || 'A loan term must be at least one month.'::text;
     elsif p_term_months > v_policy.member_loan_max_term_months then
       v_reasons := v_reasons
         || ('A member loan runs for at most '
@@ -637,11 +687,11 @@ begin
   end if;
 
   if v.status = 'draft' then
-    v_missing := v_missing || 'the version is still a draft';
+    v_missing := v_missing || 'the version is still a draft'::text;
   end if;
 
   if v.approved_at is null then
-    v_missing := v_missing || 'nobody has approved it';
+    v_missing := v_missing || 'nobody has approved it'::text;
   end if;
 
   if v.effective_from > public.business_date() then
@@ -650,27 +700,27 @@ begin
 
   if v.interest_basis is null then
     v_missing := v_missing
-      || 'whether the 5% is charged per month or once over the loan is undecided';
+      || 'whether the 5% is charged per month or once over the loan is undecided'::text;
   end if;
 
   if v.interest_method is null then
     v_missing := v_missing
-      || 'whether member interest is flat or on a reducing balance is undecided';
+      || 'whether member interest is flat or on a reducing balance is undecided'::text;
   end if;
 
   if v.savings_to_loan_multiplier_bps is null then
     v_missing := v_missing
-      || 'the multiple of savings a member may borrow is undecided';
+      || 'the multiple of savings a member may borrow is undecided'::text;
   end if;
 
   if v.qualifying_months_consecutive is null then
     v_missing := v_missing
-      || 'whether the qualifying months must be consecutive is undecided';
+      || 'whether the qualifying months must be consecutive is undecided'::text;
   end if;
 
   if v.savings_withdrawal_with_active_loan is null then
     v_missing := v_missing
-      || 'whether savings may be withdrawn against a live member loan is undecided';
+      || 'whether savings may be withdrawn against a live member loan is undecided'::text;
   end if;
 
   if pg_catalog.cardinality(v_missing) = 0 then

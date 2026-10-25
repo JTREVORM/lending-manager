@@ -70,6 +70,8 @@ export type Database = {
           active_loan_count: number;
           outstanding_principal: number;
           pledged_savings_before: number;
+          pending_withdrawals_before: number;
+          available_savings: number;
           captured_at: string;
           captured_by: string | null;
           captured_by_label: string;
@@ -102,6 +104,8 @@ export type Database = {
           active_loan_count: number;
           outstanding_principal: number;
           pledged_savings_before: number;
+          pending_withdrawals_before?: number;
+          available_savings: number;
           captured_at?: string;
           captured_by?: string | null;
           captured_by_label?: string;
@@ -134,6 +138,8 @@ export type Database = {
           active_loan_count?: number;
           outstanding_principal?: number;
           pledged_savings_before?: number;
+          pending_withdrawals_before?: number;
+          available_savings?: number;
           captured_at?: string;
           captured_by?: string | null;
           captured_by_label?: string;
@@ -3674,6 +3680,8 @@ export type Database = {
           qualifying_months: number | null;
           max_eligible_loan: number | null;
           pledged_savings: number | null;
+          pending_withdrawals: number | null;
+          available_savings: number | null;
           active_loan_count: number | null;
           member_loan_count: number | null;
           outstanding_principal: number | null;
@@ -4929,6 +4937,8 @@ export type Database = {
           active_loan_limit: number | null;
           outstanding_principal: number | null;
           pledged_savings: number | null;
+          pending_withdrawals: number | null;
+          available_savings: number | null;
           amount_requested: number | null;
           term_requested: number | null;
           is_eligible: boolean;

@@ -171,6 +171,17 @@ qualifying as (
   where c.contribution_month <= pg_catalog.date_trunc('month', public.business_date())::date
   group by c.savings_account_id
 ),
+pending_out as (
+  -- What the member has asked for and a supervisor has approved but nobody
+  -- has paid yet. Still in the balance, and not available to secure a loan,
+  -- because it is on its way out.
+  select
+    r.savings_account_id,
+    pg_catalog.sum(r.amount)::bigint as pending
+  from public.savings_withdrawal_requests r
+  where r.status in ('pending', 'approved')
+  group by r.savings_account_id
+),
 obligations as (
   select
     l.client_id,
@@ -215,13 +226,27 @@ select
   case
     when v.savings_to_loan_multiplier_bps is null then null
     else least(
-      (coalesce(s.balance, 0) * v.savings_to_loan_multiplier_bps + 5000) / 10000,
+      (greatest(
+         coalesce(s.balance, 0)
+           - coalesce(public.savings_pledged_amount(
+               s.savings_account_id, public.business_date()), 0)
+           - coalesce(w.pending, 0),
+         0
+       ) * v.savings_to_loan_multiplier_bps) / 10000,
       bs.max_loan_amount
     )
   end::bigint                                 as max_eligible_loan,
   coalesce(
     public.savings_pledged_amount(s.savings_account_id, public.business_date()), 0
   )::bigint                                   as pledged_savings,
+  coalesce(w.pending, 0)::bigint              as pending_withdrawals,
+  greatest(
+    coalesce(s.balance, 0)
+      - coalesce(public.savings_pledged_amount(
+          s.savings_account_id, public.business_date()), 0)
+      - coalesce(w.pending, 0),
+    0
+  )::bigint                                   as available_savings,
   coalesce(o.active_loan_count, 0)            as active_loan_count,
   coalesce(o.member_loan_count, 0)            as member_loan_count,
   coalesce(o.outstanding_principal, 0)::bigint as outstanding_principal,
@@ -242,6 +267,7 @@ join public.clients cl on cl.id = m.client_id
 join public.membership_policy_versions v on v.id = m.policy_version_id
 cross join public.business_settings bs
 left join savings s on s.membership_id = m.id
+left join pending_out w on w.savings_account_id = s.savings_account_id
 left join qualifying q on q.savings_account_id = s.savings_account_id
 left join obligations o on o.client_id = m.client_id
 where m.status in ('pending', 'active', 'suspended')
@@ -357,6 +383,8 @@ returns table (
   active_loan_limit integer,
   outstanding_principal bigint,
   pledged_savings bigint,
+  pending_withdrawals bigint,
+  available_savings bigint,
   amount_requested bigint,
   term_requested smallint,
   is_eligible boolean,

@@ -109,6 +109,19 @@ export async function publishTestPolicy(options: {
   readonly registrationFee?: number;
   readonly monthlyMinimum?: number;
   /**
+   * Polytos Phase 3, the three decisions member lending waits on.
+   *
+   * All three default to **undecided**, deliberately. A fixture that silently
+   * opened member lending would make every test that depends on it being shut
+   * pass for the wrong reason, and there are more of those than there are
+   * tests of lending itself. A test that wants a priced member loan says so,
+   * in the test, and the TEST ONLY label on the version it publishes says the
+   * figures are the fixture's rather than the client's.
+   */
+  readonly interestBasis?: 'per_month' | 'per_loan' | null;
+  readonly interestMethod?: 'flat' | 'reducing_balance_monthly' | null;
+  readonly savingsToLoanMultiplierBps?: number | null;
+  /**
    * Defaults to `active`. Pass `superseded` for a historical version a test
    * needs to point at: `membership_policy_versions_one_active` allows exactly
    * one version in force, so a fixture that wants a second version has to say
@@ -125,23 +138,112 @@ export async function publishTestPolicy(options: {
         member_loan_weekly_cadence_max_months, non_member_loan_max_term_months,
         medical_benefit_rate_bps, medical_benefit_min_admission_days,
         family_condolence_benefit, member_bereavement_benefit,
-        qualifying_months_consecutive, savings_withdrawal_with_active_loan)
+        qualifying_months_consecutive, savings_withdrawal_with_active_loan,
+        interest_basis, interest_method, savings_to_loan_multiplier_bps)
      values ($1, $2, (public.business_date() - $3::int), $8,
              pg_catalog.now(), 'test fixture',
-             $4, $5, 6, 500, 5, 2, 3, 500, 1, 100000, 200000, $6, $7)
+             $4, $5, 6, 500, 5, 2, 3, 500, 1, 100000, 200000, $6, $7,
+             $9, $10, $11::int)
      returning id`,
     [
       options.version,
-      `Test policy ${options.version}`,
+      `TEST ONLY policy ${options.version}`,
       options.effectiveDaysAgo,
       options.registrationFee ?? 5000,
       options.monthlyMinimum ?? 50000,
       options.qualifyingMonthsConsecutive ?? false,
       options.withdrawalRule ?? 'allowed',
       options.status ?? 'active',
+      options.interestBasis ?? null,
+      options.interestMethod ?? null,
+      options.savingsToLoanMultiplierBps ?? null,
     ],
   );
   return row.id;
+}
+
+/**
+ * Open the `monthly` cadence for a test, with an anchor it chooses.
+ *
+ * The seeded row is inactive with `month_anchor` NULL, because what a monthly
+ * collection does in a month that has no such day is a business decision
+ * nobody has made. A test that needs calendar-monthly scheduling decides it
+ * **in the test**, which is the point: the convention a test proves is the
+ * fixture's, not a default the system adopted on the client's behalf.
+ *
+ * The anchor is write-once by trigger, so this can set it and never change it.
+ * `resetMonthlyCadence` exists for the tests that need the other convention,
+ * and uses the documented owner-level exemption the same way
+ * `forcePolicyStatus` does.
+ */
+export async function openMonthlyCadence(
+  anchor: 'clamp_to_month_end' | 'roll_forward_to_next_month',
+): Promise<void> {
+  await resetMonthlyCadence();
+
+  await query(
+    `update public.repayment_frequencies
+        set month_anchor = $1, is_active = true
+      where key = 'monthly'`,
+    [anchor],
+  );
+}
+
+/** Put the `monthly` cadence back to undecided and closed. */
+export async function resetMonthlyCadence(): Promise<void> {
+  await query(
+    `alter table public.repayment_frequencies
+       disable trigger repayment_frequencies_guard_identity`,
+  );
+  try {
+    await query(
+      `update public.repayment_frequencies
+          set month_anchor = null, is_active = false
+        where key = 'monthly'`,
+    );
+  } finally {
+    await query(
+      `alter table public.repayment_frequencies
+         enable trigger repayment_frequencies_guard_identity`,
+    );
+  }
+}
+
+/**
+ * Make the member loan product sellable, for a test.
+ *
+ * The migration seeds `ML` inactive, because its price is three decisions the
+ * client has not made. A test that drives a member loan activates it and says
+ * which cadences it offers — `monthly` only once `openMonthlyCadence` has run,
+ * because `loan_products_within_business_rules` refuses a product naming an
+ * inactive cadence.
+ */
+export async function openMemberLoanProduct(options?: {
+  readonly cadences?: readonly string[];
+}): Promise<string> {
+  const cadences = options?.cadences ?? ['weekly'];
+
+  const row = await queryOne<{ id: string }>(
+    `update public.loan_products
+        set status = 'active',
+            allowed_repayment_frequencies = $1::text[],
+            default_repayment_frequency = $2
+      where product_code = 'ML'
+      returning id`,
+    [cadences, cadences[0]],
+  );
+  return row.id;
+}
+
+/** Put the member loan product back to the state the migration seeds. */
+export async function closeMemberLoanProduct(): Promise<void> {
+  await query(
+    `update public.loan_products
+        set status = 'inactive',
+            allowed_repayment_frequencies = array['weekly'],
+            default_repayment_frequency = 'weekly'
+      where product_code = 'ML'`,
+  );
 }
 
 /**

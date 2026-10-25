@@ -314,10 +314,29 @@ export function calculateMemberLoan(
  * figure here would be an invented credit limit, and an interface showing one
  * would have staff quoting it to members.
  *
- * The base is the **balance**, not lifetime deposits. A member who saved
- * UGX 600,000 and withdrew UGX 500,000 has UGX 100,000 securing a loan.
- * `public.member_loan_eligibility_of` reads the same figure out of
- * `member_savings_qualification(..., asOf).balance` for the same reason.
+ * The base is the savings **available** — the balance less what already
+ * secures a live member loan and less anything awaiting payment as a
+ * withdrawal. A member who saved UGX 600,000 and withdrew UGX 500,000 has
+ * UGX 100,000 securing a loan.
+ * `public.member_loan_eligibility_of` computes the same figure the same way.
+ *
+ * ## Why this rounds **down** and not half-up
+ *
+ * Because a ceiling and a pledge have to agree, and rounding them the same way
+ * makes them disagree. A pledge is `principal / multiplier` rounded **up**, so
+ * that rounding can only over-pledge — under-pledging by a shilling would let
+ * two loans between them consume more capacity than the member has. If the
+ * ceiling rounded half-up as well, then at a multiplier below 1x a loan taken
+ * at exactly the ceiling would pledge one shilling more than the member holds,
+ * and `approve_loan`'s own invariant would refuse a legitimate approval.
+ *
+ * Worked: savings of 333,333 at 5,000 bp (0.5x). Half-up gives a ceiling of
+ * 166,667, whose pledge is 333,334 — one shilling more than is there.
+ * Flooring gives 166,666, whose pledge is 333,332. Found by the property test
+ * below, which is why it is a property test.
+ *
+ * Rounding a maximum down is also the right direction on its own terms: a
+ * ceiling rounded up grants a shilling nobody authorised.
  */
 export function memberLoanCeiling(
   eligibleSavings: UgxAmount,
@@ -332,7 +351,7 @@ export function memberLoanCeiling(
     );
   }
 
-  return applyRateBps(eligibleSavings, multiplierBps, 'half-up');
+  return applyRateBps(eligibleSavings, multiplierBps, 'down');
 }
 
 /**
