@@ -23,9 +23,10 @@
  *      penalties, schedules, payments, allocations, outstanding balances,
  *      journal entry and line counts, every ledger account balance, and the
  *      trial balance.
- *   4. The Polytos migrations — Phase 1's membership foundation *and* Phase
- *      2's enrolment, consent and savings module — are applied **on top**,
- *      with the data in place.
+ *   4. The Polytos migrations — Phase 1's membership foundation, Phase 2's
+ *      enrolment, consent and savings module, and Phase 3's member loans,
+ *      savings eligibility and calendar-month cadence — are applied **on
+ *      top**, with the data in place.
  *   5. The same baseline is taken again and compared, value by value.
  *
  * Any difference is a failure. A membership and savings module that moves a
@@ -33,8 +34,10 @@
  * does.
  *
  * Phase 2 widened this from one prefix to a list, which also makes it a
- * stronger check: the two phases are applied in one pass, in order, exactly as
- * a real upgrade from the released schema would apply them.
+ * stronger check: every phase is applied in one pass, in order, exactly as a
+ * real upgrade from the released schema would apply them. Phase 3 is the first
+ * phase to alter a function the existing book already depends on, so it is the
+ * first for which that comparison could actually fail.
  *
  *   node scripts/verify-membership-upgrade.mjs
  *
@@ -55,12 +58,20 @@ const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
  * The prefixes that mark the Polytos migrations.
  *
  * A list rather than one prefix, because the released schema is the one
- * *before* Polytos — so an upgrade applies both phases, and verifying only one
- * of them would leave the other's effect on the existing book unmeasured. The
+ * *before* Polytos — so an upgrade applies every phase, and verifying only one
+ * of them would leave the others' effect on the existing book unmeasured. The
  * order matters and is the sort order of the filenames, which is also the
- * order PostgreSQL needs: Phase 2 references tables Phase 1 creates.
+ * order PostgreSQL needs: Phase 2 references tables Phase 1 creates, and
+ * Phase 3 references tables Phase 2 creates.
+ *
+ * Phase 3 is the one this check matters most for. It is the only phase that
+ * **rewrites a function that computes collection dates** —
+ * `generate_loan_schedule` gains a second cadence arm — so it is the only one
+ * that could move a date on a loan already written. `installment_schedule`
+ * below compares every collection date and every scheduled figure, loan by
+ * loan, in order.
  */
-const PHASE_PREFIXES = ['20261019', '20261020'];
+const PHASE_PREFIXES = ['20261019', '20261020', '20261021'];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
@@ -187,7 +198,24 @@ const BASELINE = {
                   from public.loan_delinquency order by loan_number`,
 
   client_count: `select count(*)::text as v from public.clients`,
-  audit_count: `select count(*)::text as v from public.audit_log`,
+
+  /**
+   * The audit trail, row by row rather than counted.
+   *
+   * It was `count(*)` until Phase 3, which seeds a loan product and so writes
+   * the first audit row a migration has ever written — `product.created`, by
+   * the trigger that has always watched that table. A count cannot tell that
+   * row apart from a migration inventing a payment, so the count was the wrong
+   * assertion rather than the wrong answer.
+   *
+   * Compared by `compareAudit` below: every existing row must still be there,
+   * unchanged, and an added row is allowed only when it is about configuration
+   * the migration itself created. A new row about a loan, a payment, a client
+   * or anybody's savings is a failure.
+   */
+  audit_trail: `select id::text as id, action, entity_type,
+                       coalesce(entity_id, '') as entity_id, actor_label
+                  from public.audit_log order by id`,
 };
 
 async function capture(client) {
@@ -326,10 +354,12 @@ const created = await client.query(
                          'membership_fee_receipts', 'membership_cards',
                          'membership_consent_challenges',
                          'savings_accounts', 'savings_transactions',
-                         'savings_withdrawal_requests')`,
+                         'savings_withdrawal_requests',
+                         'member_loan_eligibility_snapshots',
+                         'member_loan_savings_pledges')`,
 );
 
-const EXPECTED_TABLES = 10;
+const EXPECTED_TABLES = 12;
 
 if (created.rows[0].n !== EXPECTED_TABLES) {
   console.error(
@@ -352,6 +382,11 @@ for (const table of [
   'savings_accounts',
   'savings_transactions',
   'savings_withdrawal_requests',
+  // Polytos Phase 3. An upgrade that invented a member loan would have
+  // invented a pledge against somebody's savings and a snapshot claiming the
+  // business assessed them, which is why both are checked empty.
+  'member_loan_eligibility_snapshots',
+  'member_loan_savings_pledges',
 ]) {
   const rows = await client.query(`select count(*)::int as n from public.${table}`);
   if (rows.rows[0].n !== 0) {
@@ -411,6 +446,64 @@ let failures = 0;
 const CHART_KEYED = new Set(['account_balances', 'trial_balance']);
 
 /**
+ * The entity types a migration may legitimately write an audit row about.
+ *
+ * Configuration the migration creates itself, and nothing else. A loan, a
+ * payment, a client, a membership, a savings account or a journal entry is
+ * somebody's money; a product or a cadence is a setting, and the audit trail
+ * recording that a migration added one is the trail working correctly.
+ */
+const CONFIGURATION_ENTITIES = new Set([
+  'loan_product',
+  'repayment_frequency',
+  'business_settings',
+  'role_permission',
+]);
+
+/**
+ * Compare the audit trail.
+ *
+ * Keyed on `id`, which is `generated always as identity` and append-only, so
+ * an existing row that moved or vanished is a defect however it happened.
+ */
+function compareAudit(beforeRows, afterRows) {
+  const problems = [];
+  const describe = (row) => JSON.stringify(row);
+
+  const afterById = new Map(afterRows.map((row) => [row.id, row]));
+
+  for (const row of beforeRows) {
+    const next = afterById.get(row.id);
+
+    if (next === undefined) {
+      problems.push(`audit row ${row.id} disappeared: ${describe(row)}`);
+      continue;
+    }
+
+    if (describe(row) !== describe(next)) {
+      problems.push(
+        `audit row ${row.id} was rewritten: ${describe(row)} -> ${describe(next)}`,
+      );
+    }
+  }
+
+  const beforeIds = new Set(beforeRows.map((row) => row.id));
+
+  for (const row of afterRows) {
+    if (beforeIds.has(row.id)) continue;
+
+    if (!CONFIGURATION_ENTITIES.has(row.entity_type)) {
+      problems.push(
+        `the upgrade wrote an audit row about a ${row.entity_type}: ${describe(row)}; ` +
+          'a migration may record configuration it creates and nothing else',
+      );
+    }
+  }
+
+  return problems;
+}
+
+/**
  * Compare two chart-keyed snapshots.
  *
  * Returns a list of problems, empty when the upgrade moved nothing.
@@ -459,6 +552,26 @@ function compareChart(name, beforeRows, afterRows) {
 }
 
 for (const name of Object.keys(BASELINE)) {
+  if (name === 'audit_trail') {
+    const problems = compareAudit(beforeSnapshot[name] ?? [], afterSnapshot[name] ?? []);
+
+    if (problems.length === 0) {
+      const added =
+        (afterSnapshot[name] ?? []).length - (beforeSnapshot[name] ?? []).length;
+      log(
+        added === 0
+          ? `unchanged: ${name}`
+          : `unchanged: ${name} (${String(added)} new row(s), all configuration)`,
+      );
+      continue;
+    }
+
+    failures += 1;
+    console.error(`\nCHANGED: ${name}`);
+    for (const problem of problems) console.error(`  ${problem}`);
+    continue;
+  }
+
   if (CHART_KEYED.has(name)) {
     const problems = compareChart(
       name,
@@ -507,8 +620,8 @@ if (failures > 0) {
 console.log(
   `\nUpgrade verified: ${String(before.length)} existing migrations, a seeded book, ` +
     `then ${String(phase.length)} new migrations. Every one of ${String(Object.keys(BASELINE).length)} ` +
-    `financial figures is identical, the ten membership and savings tables exist ` +
-    `and are empty, and 2100 Member Savings is zero.`,
+    `financial figures is identical, the twelve membership, savings and member ` +
+    `loan tables exist and are empty, and 2100 Member Savings is zero.`,
 );
 
 // ---------------------------------------------------------------------------
