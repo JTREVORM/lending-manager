@@ -359,8 +359,12 @@ describeDb('settings constraints', () => {
   });
 
   it('rejects a repayment frequency that does not exist', async () => {
+    // `fortnightly`, not `weekly`: Polytos Phase 3 seeded `weekly` as a real
+    // cadence, so it stopped being a negative case the moment the member loan
+    // product needed it. Using a genuinely absent key keeps the assertion
+    // about the foreign key rather than about which cadences happen to exist.
     const error = await expectError(
-      `update public.business_settings set default_repayment_frequency = 'weekly' where id = 1`,
+      `update public.business_settings set default_repayment_frequency = 'fortnightly' where id = 1`,
     );
 
     expect(error?.code).toBe('23503');

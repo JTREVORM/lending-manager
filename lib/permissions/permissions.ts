@@ -236,6 +236,35 @@ export const PERMISSIONS = [
   /** See savings totals across members: the liability, period movements, compliance. */
   'savings:view_reports',
 
+  // --- Member loans --------------------------------------------------------
+  //
+  // Polytos Phase 3. A member loan *is* a loan: it is approved by
+  // `loans:approve`, disbursed by `loans:disburse`, collected by
+  // `payments:create` and reversed by `payments:reverse`, because it is a row
+  // in `public.loans` and a second authority over the same act would be two
+  // answers to "who may lend the business's money".
+  //
+  // So Phase 3 adds only what is genuinely new. An eligibility assessment is
+  // not a view of savings and not a view of a membership: it is a **lending
+  // offer**, a figure saying how much the business will put in this person's
+  // hands, derived from a multiplier the Owner sets. Reading it needs saying.
+  //
+  // Opening a member-loan application is not `loans:create` either. That
+  // opens an application against a product the business sells to anybody;
+  // this one asserts the borrower is a member under a named policy version
+  // with a savings record that supports the amount — a claim the database
+  // re-checks at approval.
+  //
+  // Deliberately absent: a `member_loans:approve`. The eligibility rules are
+  // enforced inside `validate_loan_for_approval`, so an approver holding
+  // `loans:approve` still cannot approve an unqualified member, and a
+  // separate approval capability would let the business grant member-loan
+  // approval to somebody it does not trust with lending.
+  /** See whether a member qualifies, the savings evidence, and their ceiling. */
+  'member_loans:view_eligibility',
+  /** Open a member-loan application against a member's savings record. */
+  'member_loans:create',
+
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
   // `permissions` table constrains. Where the Phase 3 specification suggested
@@ -525,6 +554,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'savings:deposit',
     'savings:request_withdrawal',
 
+    // Polytos Phase 3. The counter is the person a member asks "do I qualify
+    // yet?" while paying in, and answering that is the whole point of a
+    // qualification clock. Not `member_loans:create`, for the same reason
+    // enrolment is withheld: it commits the business to lend against member
+    // savings.
+    'member_loans:view_eligibility',
+
     // The business's own description of this role is that they record loan
     // details and amounts. So: everything up to asking for a decision, and
     // nothing that makes one.
@@ -638,6 +674,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'savings:approve_withdrawal',
     'savings:post_withdrawal',
     'savings:view_reports',
+
+    // Polytos Phase 3. Runs member lending as they run lending. Approval is
+    // still `loans:approve`, below.
+    'member_loans:view_eligibility',
+    'member_loans:create',
 
     // Reviews and approves, and may return a draft for correction.
     //
@@ -754,6 +795,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'savings:post_withdrawal',
     'savings:reverse',
     'savings:view_reports',
+
+    'member_loans:view_eligibility',
+    'member_loans:create',
 
     'loans:view',
     'loans:create',

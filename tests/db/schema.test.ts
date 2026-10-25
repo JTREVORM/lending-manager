@@ -105,6 +105,12 @@ describeDb('tables', () => {
     // There is still no benefit, meeting or distribution table: those are
     // Phases 4 and 5, and the rule holds — a table arrives with the
     // workflow that posts to it.
+    // Polytos Phase 3: the evidence a member loan was approved on, and how
+    // much of the member's savings capacity it consumed. Both are written
+    // only by `approve_loan`, both append-only, and neither posts a journal:
+    // a pledge is a restriction on a liability, not a movement of one.
+    'member_loan_eligibility_snapshots',
+    'member_loan_savings_pledges',
     'membership_cards',
     'membership_consent_challenges',
     'membership_fee_receipts',
@@ -438,6 +444,11 @@ describeDb('foreign keys', () => {
       'loans.created_by -> profiles (n)',
       'loans.disbursed_by -> profiles (n)',
       'loans.loan_product_id -> loan_products (r)',
+      // Polytos Phase 3. RESTRICT, because a membership withdrawn or a
+      // membership row removed must not be able to detach a loan from the
+      // relationship it was lent against — which is the record of why its
+      // terms are what they are.
+      'loans.membership_id -> memberships (r)',
       'loans.repayment_frequency -> repayment_frequencies (r)',
       'loans.submitted_by -> profiles (n)',
       // Polytos Phase 1. RESTRICT on everything a membership's identity or
@@ -458,6 +469,23 @@ describeDb('foreign keys', () => {
       // branch, the policy version, the ledger account the money moved
       // through and the journal entry it wrote — and `n` only on the
       // attribution columns of tables that accept an UPDATE.
+      // Polytos Phase 3. `r` on every fact a member loan's evidence depends
+      // on, and `n` only on the attribution columns — the same discipline the
+      // Phase 2 documents follow, and for the same reason: the record of what
+      // the business lent against must not be able to vanish because somebody
+      // removed a row somewhere else.
+      'member_loan_eligibility_snapshots.captured_by -> profiles (n)',
+      'member_loan_eligibility_snapshots.client_id -> clients (r)',
+      'member_loan_eligibility_snapshots.loan_id -> loans (r)',
+      'member_loan_eligibility_snapshots.membership_id -> memberships (r)',
+      'member_loan_eligibility_snapshots.policy_version_id -> membership_policy_versions (r)',
+      'member_loan_eligibility_snapshots.savings_account_id -> savings_accounts (r)',
+      'member_loan_savings_pledges.client_id -> clients (r)',
+      'member_loan_savings_pledges.loan_id -> loans (r)',
+      'member_loan_savings_pledges.membership_id -> memberships (r)',
+      'member_loan_savings_pledges.pledged_by -> profiles (n)',
+      'member_loan_savings_pledges.policy_version_id -> membership_policy_versions (r)',
+      'member_loan_savings_pledges.savings_account_id -> savings_accounts (r)',
       'membership_cards.branch_id -> branches (r)',
       'membership_cards.client_id -> clients (r)',
       'membership_cards.issued_by -> profiles (n)',
@@ -758,9 +786,15 @@ describeDb('seeded reference data matches the application constants', () => {
     }
   });
 
-  it('seeds the three repayment cadences', async () => {
-    const rows = await query<{ key: string; interval_days: number; is_active: boolean }>(
-      `select key, interval_days, is_active
+  it('seeds the repayment cadences the application constants name', async () => {
+    const rows = await query<{
+      key: string;
+      interval_days: number | null;
+      cadence_kind: string;
+      month_anchor: string | null;
+      is_active: boolean;
+    }>(
+      `select key, interval_days, cadence_kind, month_anchor, is_active
          from public.repayment_frequencies
         order by sort_order`,
     );
@@ -771,7 +805,32 @@ describeDb('seeded reference data matches the application constants', () => {
     expect(rows.map((row) => row.interval_days)).toEqual(
       REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.intervalDays),
     );
-    expect(rows.every((row) => row.is_active)).toBe(true);
+    // Polytos Phase 3. A calendar cadence carries no interval and a fixed-day
+    // one carries no anchor, which is the pairing the two CHECK constraints
+    // state — asserted here against the seeded rows as well, because the
+    // constraint permits a shape the seed could still get wrong.
+    expect(rows.map((row) => row.cadence_kind)).toEqual(
+      REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.cadenceKind),
+    );
+    expect(rows.map((row) => row.is_active)).toEqual(
+      REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.isActive),
+    );
+
+    // The monthly anchor is undecided, and seeded so. A value here would be a
+    // collection convention this system chose on the client's behalf.
+    expect(rows.filter((row) => row.cadence_kind === 'calendar_month')).not.toHaveLength(
+      0,
+    );
+
+    for (const row of rows) {
+      if (row.cadence_kind === 'calendar_month') {
+        expect(row.interval_days).toBeNull();
+        expect(row.month_anchor).toBeNull();
+      } else {
+        expect(row.interval_days).not.toBeNull();
+        expect(row.month_anchor).toBeNull();
+      }
+    }
   });
 
   it('seeds reference formats matching the application defaults', async () => {

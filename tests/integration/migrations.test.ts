@@ -337,6 +337,14 @@ describe('column type discipline', () => {
       // means. A `created_at` beside `occurred_at` would be two columns
       // holding one value, which is how they eventually come to disagree.
       membership_status_history: 'occurred_at',
+      // Polytos Phase 3, for the same reason as the Phase 4 and Phase 12
+      // snapshots: the row records the moment the business fixed what it
+      // relied on. A `created_at` beside `captured_at` would be two columns
+      // holding one value.
+      member_loan_eligibility_snapshots: 'captured_at',
+      // Polytos Phase 3. The row *is* the record that savings were pledged,
+      // so its creation instant already has a name that says what it means.
+      member_loan_savings_pledges: 'pledged_at',
     };
 
     /**
@@ -433,6 +441,18 @@ describe('column type discipline', () => {
       // imply a movement can be amended, which is the one thing the table
       // exists to make impossible.
       'savings_transactions',
+      // Polytos Phase 3. The evidence a member loan was approved on,
+      // append-only in exactly the way the Phase 4 and Phase 12 snapshots
+      // are: UPDATE and DELETE are both refused by trigger. A later deposit,
+      // withdrawal or policy change must not be able to rewrite what the
+      // business relied on, so a column implying the row can be edited would
+      // be a lie.
+      'member_loan_eligibility_snapshots',
+      // Polytos Phase 3. Every figure on a pledge is immutable by trigger and
+      // the release is write-once, with its own `released_at` — a more precise
+      // timestamp than a generic `updated_at`, which would imply the pledged
+      // amount itself can be amended.
+      'member_loan_savings_pledges',
     ]);
 
     for (const table of createdTables) {
@@ -864,6 +884,24 @@ describe('types stay in step with the schema', () => {
       //     would advertise exactly the call that must not be available.
       'consent_evidence_digest',
       'savings_reversal_key',
+
+      // --- Polytos Phase 3 ---------------------------------------------------
+      'loans_guard_member_terms',
+      'member_loan_pledges_guard',
+      'member_loan_release_pledge',
+      // Not a trigger, and exempt for the stronger reason: revoked from
+      // `authenticated` as well.
+      //
+      //   * `member_loan_eligibility_of` is the authoritative member-loan
+      //     assessment, reachable only from another privileged function. A
+      //     client type for it would advertise exactly the call that must not
+      //     be available — `assess_member_loan_eligibility` is the one a
+      //     screen may reach, and it is declared.
+      //   * `lock_savings_capacity` takes the advisory lock that serialises a
+      //     member loan approval against a savings withdrawal. A caller able
+      //     to take it at will could hold a member's savings capacity shut.
+      'member_loan_eligibility_of',
+      'lock_savings_capacity',
     ]);
 
     for (const functionName of functionNames) {

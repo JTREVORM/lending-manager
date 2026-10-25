@@ -544,6 +544,7 @@ export default async function LoanDetailPage({
             totalScheduledAmount={schedule.totalScheduledAmount}
             frequencyLabel={schedule.header.frequencyLabel}
             intervalDays={schedule.header.intervalDays}
+            monthAnchor={schedule.header.monthAnchor}
             disbursementDate={schedule.header.disbursementDate}
             reconciles={schedule.reconciles}
           />

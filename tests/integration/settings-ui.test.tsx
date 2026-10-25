@@ -80,9 +80,19 @@ const PRODUCT: LoanProduct = {
 };
 
 const CADENCES = [
-  { key: 'daily', label: 'Daily', intervalDays: 1 },
-  { key: 'every_2_days', label: 'Every 2 days', intervalDays: 2 },
-  { key: 'every_3_days', label: 'Every 3 days', intervalDays: 3 },
+  { key: 'daily', label: 'Daily', intervalDays: 1, cadenceKind: 'fixed_days' as const },
+  {
+    key: 'every_2_days',
+    label: 'Every 2 days',
+    intervalDays: 2,
+    cadenceKind: 'fixed_days' as const,
+  },
+  {
+    key: 'every_3_days',
+    label: 'Every 3 days',
+    intervalDays: 3,
+    cadenceKind: 'fixed_days' as const,
+  },
 ];
 
 const BRANCHES = [{ id: 'b1', branchCode: 'BR2601', name: 'Head Office' }];

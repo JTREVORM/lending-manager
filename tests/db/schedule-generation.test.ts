@@ -774,7 +774,9 @@ describeDb('repayment schedule generation', () => {
       });
 
       await expect(disburseLoan(loanId, scenario)).rejects.toThrow(
-        /would receive no collection at an interval of 40 days/i,
+        // Polytos Phase 3. The message names the cadence rather than its
+        // interval, because a calendar cadence has no interval to name.
+        /would receive no collection at the "every_40_days_probe" cadence/i,
       );
     });
   });

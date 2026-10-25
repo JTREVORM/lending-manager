@@ -68,7 +68,7 @@ async function productId(code: string): Promise<string> {
 
 // ===========================================================================
 describeDb('the seeded catalogue', () => {
-  it('offers the four products the business sells, plus the migrated one', async () => {
+  it('offers the four products the business sells, the member product, and the migrated one', async () => {
     const rows = await query<{
       product_code: string;
       status: string;
@@ -83,8 +83,18 @@ describeDb('the seeded catalogue', () => {
       'SL',
       'BL',
       'IL',
+      // Polytos Phase 3. Member lending, priced by the borrower's own
+      // membership policy version rather than by its own rate band.
+      'ML',
       'IL-LEGACY',
     ]);
+
+    // Inactive, and that is the honest state rather than a caution: its price
+    // is three decisions the client has not made — whether the 5% is monthly
+    // or once, whether it is flat or reducing, and what multiple of savings
+    // may be borrowed. A product offered in a picker that approval would then
+    // refuse is a control that fails late.
+    expect(rows.find((row) => row.product_code === 'ML')?.status).toBe('inactive');
 
     // The migrated product exists so that a loan agreed before products
     // existed can name what it actually was. It is inactive, so it cannot be
@@ -362,7 +372,9 @@ describeDb('who may change a product', () => {
       );
 
       expect(result.ok, role).toBe(true);
-      expect(result.rows[0]?.count, role).toBe(5);
+      // Six from Polytos Phase 3: the four the business sells, the migrated
+      // one, and the member product.
+      expect(result.rows[0]?.count, role).toBe(6);
     }
   });
 

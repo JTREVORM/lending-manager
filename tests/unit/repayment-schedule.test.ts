@@ -973,6 +973,9 @@ describe('refusals', () => {
       'invalid_disbursement_date',
       'period_has_no_installments',
       'too_many_installments',
+      // Polytos Phase 3, both for the calendar-monthly cadence.
+      'month_anchor_undecided',
+      'dates_not_increasing',
       'period_inconsistent',
       'reconciliation_failed',
     ]);
@@ -1140,7 +1143,7 @@ describe('assertScheduleInvariants', () => {
     const tampered = { ...sound, firstDueDate: d('2026-10-20') };
 
     expect(() => assertScheduleInvariants(tampered, periods)).toThrow(
-      /one interval after disbursement/,
+      /one step after disbursement/,
     );
   });
 

@@ -87,13 +87,64 @@ export const BUSINESS_DEFAULTS = {
 } as const;
 
 /**
- * Repayment cadences the business supports today. `intervalDays` is the gap
- * between consecutive installments.
+ * Repayment cadences the business supports today.
+ *
+ * `intervalDays` is the gap between consecutive installments, and is **null**
+ * for a `calendar_month` cadence: a month is 28, 29, 30 or 31 days, so it is
+ * not a gap in days at all. See `cadenceKind`, and
+ * `docs/POLYTOS-MEMBER-LOANS.md` for why that distinction needed a second
+ * cadence kind rather than a larger number.
+ *
+ * `isActive` says whether a cadence may be chosen for a new loan.
+ * `monthly` is seeded **inactive**, because what a monthly collection does in
+ * a month that has no such day is a business decision nobody has made — and a
+ * cadence offered in a picker that approval would then refuse is a control
+ * that fails late instead of early.
  */
 export const REPAYMENT_FREQUENCY_DEFAULTS = [
-  { key: 'daily', label: 'Daily', intervalDays: 1, sortOrder: 1 },
-  { key: 'every_2_days', label: 'Every 2 days', intervalDays: 2, sortOrder: 2 },
-  { key: 'every_3_days', label: 'Every 3 days', intervalDays: 3, sortOrder: 3 },
+  {
+    key: 'daily',
+    label: 'Daily',
+    intervalDays: 1,
+    cadenceKind: 'fixed_days',
+    isActive: true,
+    sortOrder: 1,
+  },
+  {
+    key: 'every_2_days',
+    label: 'Every 2 days',
+    intervalDays: 2,
+    cadenceKind: 'fixed_days',
+    isActive: true,
+    sortOrder: 2,
+  },
+  {
+    key: 'every_3_days',
+    label: 'Every 3 days',
+    intervalDays: 3,
+    cadenceKind: 'fixed_days',
+    isActive: true,
+    sortOrder: 3,
+  },
+  // Polytos Phase 3. Seven days is a week, every week, so this needed nothing
+  // the fixed-day engine did not already have.
+  {
+    key: 'weekly',
+    label: 'Weekly',
+    intervalDays: 7,
+    cadenceKind: 'fixed_days',
+    isActive: true,
+    sortOrder: 4,
+  },
+  // Polytos Phase 3. Inactive until the monthly collection anchor is decided.
+  {
+    key: 'monthly',
+    label: 'Monthly (calendar)',
+    intervalDays: null,
+    cadenceKind: 'calendar_month',
+    isActive: false,
+    sortOrder: 5,
+  },
 ] as const;
 
 export type RepaymentFrequencyKey = (typeof REPAYMENT_FREQUENCY_DEFAULTS)[number]['key'];

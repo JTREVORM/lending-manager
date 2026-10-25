@@ -41,6 +41,156 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      member_loan_eligibility_snapshots: {
+        Row: {
+          loan_id: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          savings_account_id: string;
+          savings_account_number: string;
+          assessed_on: string;
+          months_required: number;
+          must_be_consecutive: boolean;
+          qualifying_months: number;
+          consecutive_qualifying_months: number;
+          eligible_savings: number;
+          multiplier_bps: number;
+          max_eligible_loan: number;
+          interest_rate_bps: number;
+          interest_basis: string;
+          interest_method: string;
+          max_term_months: number;
+          required_cadence: string;
+          amount_requested: number;
+          term_requested: number;
+          repayment_frequency: string;
+          active_loan_count: number;
+          outstanding_principal: number;
+          pledged_savings_before: number;
+          captured_at: string;
+          captured_by: string | null;
+          captured_by_label: string;
+        };
+        Insert: {
+          loan_id: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          savings_account_id: string;
+          savings_account_number: string;
+          assessed_on: string;
+          months_required: number;
+          must_be_consecutive: boolean;
+          qualifying_months: number;
+          consecutive_qualifying_months: number;
+          eligible_savings: number;
+          multiplier_bps: number;
+          max_eligible_loan: number;
+          interest_rate_bps: number;
+          interest_basis: string;
+          interest_method: string;
+          max_term_months: number;
+          required_cadence: string;
+          amount_requested: number;
+          term_requested: number;
+          repayment_frequency: string;
+          active_loan_count: number;
+          outstanding_principal: number;
+          pledged_savings_before: number;
+          captured_at?: string;
+          captured_by?: string | null;
+          captured_by_label?: string;
+        };
+        Update: {
+          loan_id?: string;
+          membership_id?: string;
+          membership_number?: string;
+          client_id?: string;
+          policy_version_id?: string;
+          policy_version?: string;
+          savings_account_id?: string;
+          savings_account_number?: string;
+          assessed_on?: string;
+          months_required?: number;
+          must_be_consecutive?: boolean;
+          qualifying_months?: number;
+          consecutive_qualifying_months?: number;
+          eligible_savings?: number;
+          multiplier_bps?: number;
+          max_eligible_loan?: number;
+          interest_rate_bps?: number;
+          interest_basis?: string;
+          interest_method?: string;
+          max_term_months?: number;
+          required_cadence?: string;
+          amount_requested?: number;
+          term_requested?: number;
+          repayment_frequency?: string;
+          active_loan_count?: number;
+          outstanding_principal?: number;
+          pledged_savings_before?: number;
+          captured_at?: string;
+          captured_by?: string | null;
+          captured_by_label?: string;
+        };
+        Relationships: [];
+      };
+      member_loan_savings_pledges: {
+        Row: {
+          loan_id: string;
+          savings_account_id: string;
+          membership_id: string;
+          client_id: string;
+          policy_version_id: string;
+          pledged_amount: number;
+          loan_principal: number;
+          multiplier_bps: number;
+          eligible_savings_at_pledge: number;
+          pledged_at: string;
+          pledged_by: string | null;
+          pledged_by_label: string;
+          released_at: string | null;
+          released_reason: string | null;
+        };
+        Insert: {
+          loan_id: string;
+          savings_account_id: string;
+          membership_id: string;
+          client_id: string;
+          policy_version_id: string;
+          pledged_amount: number;
+          loan_principal: number;
+          multiplier_bps: number;
+          eligible_savings_at_pledge: number;
+          pledged_at?: string;
+          pledged_by?: string | null;
+          pledged_by_label?: string;
+          released_at?: string | null;
+          released_reason?: string | null;
+        };
+        Update: {
+          loan_id?: string;
+          savings_account_id?: string;
+          membership_id?: string;
+          client_id?: string;
+          policy_version_id?: string;
+          pledged_amount?: number;
+          loan_principal?: number;
+          multiplier_bps?: number;
+          eligible_savings_at_pledge?: number;
+          pledged_at?: string;
+          pledged_by?: string | null;
+          pledged_by_label?: string;
+          released_at?: string | null;
+          released_reason?: string | null;
+        };
+        Relationships: [];
+      };
       account_transfers: {
         Row: {
           id: string;
@@ -1964,7 +2114,15 @@ export type Database = {
           loan_id: string;
           repayment_frequency: string;
           frequency_label: string;
-          interval_days: number;
+          /**
+           * Polytos Phase 3. Null for a `calendar_month` schedule, where the
+           * step is a month rather than a number of days.
+           */
+          interval_days: number | null;
+          /** `fixed_days` for every schedule generated before Polytos Phase 3. */
+          cadence_kind: string;
+          /** Null for a fixed-day schedule. */
+          month_anchor: string | null;
           disbursement_date: string;
           business_timezone: string;
           generator_version: number;
@@ -1975,7 +2133,9 @@ export type Database = {
           loan_id: string;
           repayment_frequency: string;
           frequency_label: string;
-          interval_days: number;
+          interval_days?: number | null;
+          cadence_kind?: string;
+          month_anchor?: string | null;
           disbursement_date: string;
           business_timezone: string;
           generator_version?: number;
@@ -1986,7 +2146,9 @@ export type Database = {
           loan_id?: string;
           repayment_frequency?: string;
           frequency_label?: string;
-          interval_days?: number;
+          interval_days?: number | null;
+          cadence_kind?: string;
+          month_anchor?: string | null;
           disbursement_date?: string;
           business_timezone?: string;
           generator_version?: number;
@@ -2312,7 +2474,19 @@ export type Database = {
         Row: {
           key: string;
           label: string;
-          interval_days: number;
+          /**
+           * Polytos Phase 3. Null for a `calendar_month` cadence: a month is
+           * 28, 29, 30 or 31 days, so it is not a number of days at all.
+           */
+          interval_days: number | null;
+          /** `fixed_days` or `calendar_month`. Immutable once set. */
+          cadence_kind: string;
+          /**
+           * For a calendar cadence, what a collection does in a month that has
+           * no such day. Null means the business has not decided, and no
+           * monthly schedule can be generated until it does.
+           */
+          month_anchor: string | null;
           is_active: boolean;
           sort_order: number;
           created_at: string;
@@ -2321,7 +2495,9 @@ export type Database = {
         Insert: {
           key: string;
           label: string;
-          interval_days: number;
+          interval_days?: number | null;
+          cadence_kind?: string;
+          month_anchor?: string | null;
           is_active?: boolean;
           sort_order: number;
           created_at?: string;
@@ -2330,7 +2506,12 @@ export type Database = {
         Update: {
           key?: string;
           label?: string;
-          interval_days?: number;
+          /** Immutable by trigger; a change is refused. */
+          interval_days?: never;
+          /** Immutable by trigger; a change is refused. */
+          cadence_kind?: never;
+          /** Write-once by trigger: settable while null, frozen thereafter. */
+          month_anchor?: string | null;
           is_active?: boolean;
           sort_order?: number;
           created_at?: string;
@@ -3421,6 +3602,86 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      member_loan_register: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          client_id: string | null;
+          full_name: string | null;
+          client_number: string | null;
+          branch_id: string | null;
+          status: string | null;
+          principal_amount: number | null;
+          interest_rate_bps: number | null;
+          interest_basis: string | null;
+          interest_method: string | null;
+          loan_term_months: number | null;
+          repayment_frequency: string | null;
+          total_interest: number | null;
+          total_expected_repayment: number | null;
+          approved_at: string | null;
+          disbursed_at: string | null;
+          created_at: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          membership_status: string | null;
+          policy_version: string | null;
+          savings_account_id: string | null;
+          savings_account_number: string | null;
+          eligible_savings: number | null;
+          multiplier_bps: number | null;
+          max_eligible_loan: number | null;
+          qualifying_months: number | null;
+          months_required: number | null;
+          pledged_amount: number | null;
+          pledge_released_at: string | null;
+          principal_remaining: number | null;
+          interest_remaining: number | null;
+          penalty_remaining: number | null;
+          total_outstanding: number | null;
+          total_paid: number | null;
+          arrears_amount: number | null;
+          days_past_due: number | null;
+          delinquency_state: string | null;
+        };
+        Relationships: [];
+      };
+      member_loan_eligibility: {
+        Row: {
+          membership_id: string | null;
+          membership_number: string | null;
+          client_id: string | null;
+          branch_id: string | null;
+          membership_status: string | null;
+          full_name: string | null;
+          client_number: string | null;
+          policy_version_id: string | null;
+          policy_version: string | null;
+          months_required: number | null;
+          must_be_consecutive: boolean | null;
+          multiplier_bps: number | null;
+          interest_rate_bps: number | null;
+          interest_basis: string | null;
+          interest_method: string | null;
+          max_term_months: number | null;
+          weekly_cadence_max_months: number | null;
+          policy_lending_ready: boolean | null;
+          policy_lending_open: boolean | null;
+          savings_account_id: string | null;
+          savings_account_number: string | null;
+          savings_account_status: string | null;
+          eligible_savings: number | null;
+          qualifying_months: number | null;
+          max_eligible_loan: number | null;
+          pledged_savings: number | null;
+          active_loan_count: number | null;
+          member_loan_count: number | null;
+          outstanding_principal: number | null;
+          active_loan_limit: number | null;
+          savings_months_met: boolean | null;
+        };
+        Relationships: [];
+      };
       transfer_register: {
         Row: {
           id: string | null;
@@ -4617,6 +4878,140 @@ export type Database = {
     };
 
     Functions: {
+      // --- Polytos Phase 3: member loans -------------------------------------
+      // The eligibility engine, the configurable interest engine and the
+      // savings-pledge reads. `member_loan_eligibility_of` and
+      // `lock_savings_capacity` are deliberately absent: both are revoked from
+      // every application role and reachable only from another privileged
+      // function, so a type for either would advertise a call that must not be
+      // available.
+
+      /**
+       * Polytos Phase 3. The member-loan eligibility assessment a screen
+       * reads: checks `member_loans:view_eligibility` and the branch rule,
+       * then delegates to the authoritative assessment. An invisible client
+       * and a nonexistent one give the same answer.
+       *
+       * The ceiling comes back null where the savings-to-loan multiplier is
+       * undecided, and `blocking_reasons` names the decision. Never a default:
+       * a figure there would be an invented credit limit.
+       */
+      assess_member_loan_eligibility: {
+        Args: {
+          p_client_id: string;
+          p_amount?: number | null;
+          p_term_months?: number | null;
+          p_repayment_frequency?: string | null;
+          p_as_of?: string | null;
+        };
+        Returns: {
+          client_id: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          membership_status: string | null;
+          policy_version_id: string | null;
+          policy_version: string | null;
+          as_of: string;
+          savings_account_id: string | null;
+          savings_account_number: string | null;
+          savings_account_status: string | null;
+          months_required: number | null;
+          must_be_consecutive: boolean | null;
+          qualifying_months: number | null;
+          consecutive_qualifying_months: number | null;
+          savings_qualifies: boolean | null;
+          eligible_savings: number | null;
+          multiplier_bps: number | null;
+          max_eligible_loan: number | null;
+          max_term_months: number | null;
+          required_cadence: string | null;
+          active_loan_count: number | null;
+          active_loan_limit: number | null;
+          outstanding_principal: number | null;
+          pledged_savings: number | null;
+          amount_requested: number | null;
+          term_requested: number | null;
+          is_eligible: boolean;
+          may_proceed: boolean;
+          blocking_reasons: string[];
+        }[];
+      };
+
+      /**
+       * Polytos Phase 3. The authoritative member loan breakdown for a
+       * configured interest basis and method. `per_month` +
+       * `reducing_balance_monthly` delegates to `calculate_loan_breakdown`, so
+       * there is one reducing-balance implementation; `per_loan` +
+       * `reducing_balance_monthly` is refused as undefined.
+       */
+      member_loan_interest: {
+        Args: {
+          p_principal: number;
+          p_interest_rate_bps: number;
+          p_term_months: number;
+          p_interest_basis: string;
+          p_interest_method: string;
+        };
+        Returns: {
+          period_number: number;
+          opening_principal: number;
+          principal_portion: number;
+          interest: number;
+          total_obligation: number;
+          closing_principal: number;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 3. Which collection cadence a member loan of this term
+       * must use under a policy version: weekly up to the version's weekly
+       * boundary, calendar-monthly beyond it.
+       */
+      member_loan_cadence_for_term: {
+        Args: { p_version_id: string; p_term_months: number };
+        Returns: string | null;
+      };
+
+      /**
+       * Polytos Phase 3. Why member lending is not open under a policy
+       * version, naming each decision that is missing rather than only
+       * refusing.
+       */
+      member_lending_blocked_reason: {
+        Args: { p_version_id: string };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 3. The calendar-monthly collection date n months after
+       * an anchor date, resolved by the agreed convention for a month that has
+       * no such day. Raises when the convention has not been decided.
+       */
+      monthly_collection_date: {
+        Args: { p_anchor_date: string; p_months: number; p_month_anchor: string };
+        Returns: string | null;
+      };
+
+      /**
+       * Polytos Phase 3. How much of a savings account's balance secures live
+       * member loans, as of a date. Zero while the savings-to-loan multiplier
+       * is undecided, because then no member loan can be approved.
+       */
+      savings_pledged_amount: {
+        Args: { p_savings_account_id: string; p_as_of?: string | null };
+        Returns: number;
+      };
+
+      /**
+       * Polytos Phase 3. How much of a savings account a member may withdraw
+       * today under their own policy version's live-loan rule. Null where the
+       * rule cannot be applied — the policy says only the excess over the
+       * pledge, and no multiplier defines the pledge.
+       */
+      savings_withdrawable_amount: {
+        Args: { p_savings_account_id: string; p_as_of?: string | null };
+        Returns: number | null;
+      };
       // --- Phase 11: money movement ------------------------------------------
       // Each of these writes its document and its journal in one transaction.
       // None of them takes a debit, a credit or an approval decision as an

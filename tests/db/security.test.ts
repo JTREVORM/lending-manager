@@ -222,6 +222,14 @@ describeDb('row level security', () => {
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      // Polytos Phase 3. SELECT and nothing else, on the two tables and the
+      // two views. Both tables are written by `approve_loan` and the release
+      // trigger, both SECURITY DEFINER, so the privilege a session would need
+      // to forge a snapshot or a pledge simply does not exist.
+      'member_loan_eligibility:SELECT',
+      'member_loan_eligibility_snapshots:SELECT',
+      'member_loan_register:SELECT',
+      'member_loan_savings_pledges:SELECT',
       // Polytos Phase 1. The membership foundation.
       //
       // `membership_policy_versions` takes INSERT and UPDATE because
@@ -427,6 +435,10 @@ describeDb('row level security', () => {
       'loans:INSERT',
       'loans:SELECT',
       'loans:UPDATE',
+      // Polytos Phase 3. One SELECT policy each, and no write policy
+      // anywhere: nothing a session does writes either table.
+      'member_loan_eligibility_snapshots:SELECT',
+      'member_loan_savings_pledges:SELECT',
       // Polytos Phase 1. A policy for every operation `authenticated` was
       // granted, and no operation granted without one.
       // Polytos Phase 2. One policy per granted operation and no more: five
@@ -812,6 +824,12 @@ describeDb('views', () => {
         // Polytos Phase 2. A savings balance is a sum over the subledger and
         // never a stored column, so it is a view — and the register and the
         // contribution months are built on it rather than re-deriving it.
+        // Polytos Phase 3. One row per live membership with the ceiling their
+        // savings support, and member loans with their frozen eligibility
+        // evidence beside them — each the one read a dashboard or a panel
+        // makes, rather than a function call per member.
+        'member_loan_eligibility',
+        'member_loan_register',
         'member_savings_balances',
         'member_savings_contributions',
         'membership_register',
@@ -880,7 +898,9 @@ describeDb('views', () => {
     // arrived with more than SELECT — which is exactly what the Phase 10
     // views did in their first draft, and what the Polytos Phase 2 tables did
     // in theirs, until these assertions said so.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(37);
+    // Two more from Polytos Phase 3: the member-loan eligibility register
+    // and the member-loan register.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(39);
   });
 });
 
@@ -919,6 +939,13 @@ describeDb('privileged functions', () => {
       'assert_cash_available',
       'assert_owner_admin_remains',
       'assert_postable_account',
+      // Polytos Phase 3. The member-loan eligibility assessment a screen
+      // reads. DEFINER because it checks `member_loans:view_eligibility` on
+      // the session itself and then reads tables a caller may not join
+      // across; it restates the branch rule the policy on `memberships`
+      // states, because the policies do not run for a definer function and
+      // that is the whole privilege-escalation risk one carries.
+      'assess_member_loan_eligibility',
       'audit_actor_label',
       'audit_client_change',
       'audit_client_guarantor_change',
@@ -1028,13 +1055,51 @@ describeDb('privileged functions', () => {
       'loan_recovery_actions_stamp_author',
       'loans_assign_loan_number',
       'loans_enforce_active_limit',
+      // Polytos Phase 3. Makes `membership_id` and `interest_basis` on a loan
+      // write-once at approval, for every caller including service_role. A
+      // second trigger rather than an edit to `loans_guard_transition`, so the
+      // Phase 4 state machine and the Phase 3 member terms can be reviewed and
+      // reverted separately.
+      'loans_guard_member_terms',
       'loans_guard_transition',
       'loans_stamp_branch',
       'loans_stamp_product',
       // Phase 15. The one writer of the stream, and the ten triggers that
       // call it. Every one is a trigger function or definer-only: none is
       // granted to `authenticated`, which the next assertion checks.
+      // Polytos Phase 3. The advisory lock that serialises a member loan
+      // approval against a savings withdrawal. DEFINER and revoked from every
+      // application role: a caller able to take it at will could hold a
+      // member's savings capacity shut. One function rather than the key
+      // written out at two call sites, because an advisory lock written twice
+      // drifts onto two keys and then fails silently by never blocking.
+      'lock_savings_capacity',
       'mark_notifications_read',
+      // Polytos Phase 3. The member-loan machinery.
+      //
+      // `member_loan_eligibility_of` is the authoritative assessment, DEFINER
+      // and unreachable from a session — the arrangement
+      // `generate_loan_schedule` has, and for the same reason: its only
+      // legitimate callers are other privileged functions that have already
+      // decided who may act. `assess_member_loan_eligibility`, above, is the
+      // one a screen reaches, and it checks the capability.
+      //
+      // `member_lending_blocked_reason` is DEFINER and granted, because it is
+      // what a configuration screen names the missing decision from and must
+      // answer the same way for every caller. It discloses which of the
+      // client's own policy questions are open, about a version the caller
+      // has already named.
+      //
+      // The two guards are triggers, like every other guard here.
+      //
+      // `member_loan_interest` and `member_loan_cadence_for_term` are
+      // deliberately **absent**: both are pure functions of their arguments,
+      // so neither needs to run as the owner — which is the same reason
+      // `calculate_loan_breakdown` is not here.
+      'member_lending_blocked_reason',
+      'member_loan_eligibility_of',
+      'member_loan_pledges_guard',
+      'member_loan_release_pledge',
       // Polytos Phase 1. The membership guards and the number minter.
       // SECURITY DEFINER for the reason every guard here is: they read
       // `user_has_permission` and `current_profile_id`, and they write
@@ -1137,8 +1202,13 @@ describeDb('privileged functions', () => {
       'savings_accounts_assign_number',
       'savings_accounts_guard',
       'savings_accounts_stamp_provenance',
+      // Polytos Phase 3. Each answers one figure about an account the caller
+      // has already named, and both are what the policy's live-loan rule is
+      // written against — so they must give the same answer to every caller.
+      'savings_pledged_amount',
       'savings_summary',
       'savings_transactions_assign_number',
+      'savings_withdrawable_amount',
       'savings_withdrawal_requests_assign_number',
       'savings_withdrawal_requests_guard',
       'settings_reference_sequences',
@@ -1241,6 +1311,12 @@ describeDb('privileged functions', () => {
       'approve_loan',
       'approve_reconciliation',
       'approve_transfer',
+      // Polytos Phase 3. Granted because a screen reads it, and safe to grant
+      // for the reason this list is about: it checks
+      // `member_loans:view_eligibility` on the session and restates the
+      // branch rule before it reads anything, and an invisible client and a
+      // nonexistent one give it the same answer.
+      'assess_member_loan_eligibility',
       // Phase 7. The business clock and the timezone it is read in. Granted
       // because every screen needs to know what "today" means to the
       // business, and because a date is not sensitive. Neither accepts a
@@ -1321,10 +1397,29 @@ describeDb('privileged functions', () => {
       // reason `active_membership_policy_id` is — a gate that answers
       // differently depending on who asks is not a gate. It discloses one
       // boolean about a version the caller has already named.
+      // Polytos Phase 3. Three reads and the price of a member loan.
+      //
+      // `member_lending_blocked_reason` names which of the client's own
+      // undecided policy questions is holding member lending up, about a
+      // version the caller has already named. It is what the configuration
+      // screen and the eligibility panel say instead of only refusing.
+      //
+      // `member_loan_interest` and `member_loan_cadence_for_term` are granted
+      // for the reason `calculate_loan_breakdown` is: each is a pure function
+      // of its arguments that discloses nothing, and the application preview
+      // calls it so that staff see the authoritative figures rather than the
+      // browser's.
+      'member_lending_blocked_reason',
+      'member_loan_cadence_for_term',
+      'member_loan_interest',
       'member_savings_qualification',
       'membership_fee_is_posted',
       'membership_policy_allows',
       'membership_terms_are_accepted',
+      // Polytos Phase 3. The calendar-monthly collection date rule, granted
+      // for the same reason: pure, immutable, and the one place the rule is
+      // stated, so the preview and the generator cannot disagree about it.
+      'monthly_collection_date',
       'open_savings_account',
       'payment_business_date',
       // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.
@@ -1365,8 +1460,13 @@ describeDb('privileged functions', () => {
       // reference counters as the signed-in Owner. It re-checks
       // `settings:view` inside and reads a table no session may touch
       // directly, so the grant hands a caller nothing the page does not.
+      // Polytos Phase 3. Each answers one figure about an account the caller
+      // has already named, and both are what the policy's live-loan rule is
+      // written against — so they must give the same answer to every caller.
+      'savings_pledged_amount',
       'savings_statement',
       'savings_summary',
+      'savings_withdrawable_amount',
       'settings_reference_sequences',
       'storage_path_client_id',
       'storage_path_guarantor_id',

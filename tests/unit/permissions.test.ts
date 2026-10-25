@@ -276,6 +276,12 @@ describe('authorization matrix', () => {
     'savings:approve_withdrawal': ['manager', 'owner_admin'],
     'savings:post_withdrawal': ['manager', 'owner_admin'],
     'savings:view_reports': ['manager', 'owner_admin'],
+
+    // Polytos Phase 3. The counter answers "do I qualify yet?"; opening a
+    // member-loan application is withheld from it, as enrolment is, because
+    // it commits the business to lend against member savings.
+    'member_loans:view_eligibility': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'member_loans:create': ['manager', 'owner_admin'],
     'savings:reverse': ['owner_admin'],
 
     // --- Phase 3: clients ---------------------------------------------------
