@@ -510,3 +510,98 @@ console.log(
     `financial figures is identical, the ten membership and savings tables exist ` +
     `and are empty, and 2100 Member Savings is zero.`,
 );
+
+// ---------------------------------------------------------------------------
+// Release gate: integration into an EXISTING seeded loan book, not six new
+// synthetic people. Runs only against the throwaway upgrade database.
+// ---------------------------------------------------------------------------
+log('verifying seeded borrower-to-membership integration on the loan book');
+const bridgeDb = new Client({ connectionString: URL_ });
+await bridgeDb.connect();
+const loanBefore = await capture(bridgeDb);
+const clientsBefore = await bridgeDb.query(
+  'select count(*)::int as n from public.clients',
+);
+const seedEnv = {
+  ...process.env,
+  DATABASE_URL: URL_,
+  POLYTOS_SEED_DEMO: 'yes-seed-polytos-demo-data',
+  POLYTOS_DEMO_BORROWER_REUSE: 'yes-reuse-existing-demo-borrowers',
+};
+function runBorrowerSeed() {
+  execFileSync('npx', ['tsx', 'scripts/seed-demo.ts'], {
+    cwd: PROJECT_ROOT,
+    env: seedEnv,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 180_000,
+  });
+}
+runBorrowerSeed();
+const linked = await bridgeDb.query(
+  'select count(distinct m.client_id)::int as n from public.memberships m ' +
+    "where m.notes like 'DEMONSTRATION SCENARIO %' " +
+    'and exists (select 1 from public.loans l where l.client_id=m.client_id)',
+);
+if (linked.rows[0].n !== 6)
+  throw new Error('Expected six memberships linked to EXISTING loan borrowers.');
+const remaining = await bridgeDb.query(
+  'select count(distinct c.id)::int as n from public.clients c ' +
+    'join public.loans l on l.client_id=c.id ' +
+    'where not exists(select 1 from public.memberships m where m.client_id=c.id ' +
+    "and m.status in ('pending','active','suspended'))",
+);
+if (remaining.rows[0].n < 1)
+  throw new Error('No original non-member loan borrowers remain.');
+const clientsAfter = await bridgeDb.query(
+  'select count(*)::int as n from public.clients',
+);
+if (clientsAfter.rows[0].n !== clientsBefore.rows[0].n)
+  throw new Error('Borrower reuse created or deleted a client.');
+const loanAfter = await capture(bridgeDb);
+const untouchedKeys = [
+  'loan_principal',
+  'loan_interest',
+  'loan_expected',
+  'loan_count',
+  'loan_statuses',
+  'loan_rates',
+  'period_rows',
+  'period_totals',
+  'installment_rows',
+  'installment_total',
+  'installment_schedule',
+  'period_breakdown',
+  'payment_rows',
+  'payment_total',
+  'allocation_rows',
+  'allocation_totals',
+  'penalty_rows',
+  'penalty_total',
+  'outstanding',
+  'delinquency',
+];
+for (const key of untouchedKeys) {
+  if (JSON.stringify(loanBefore[key]) !== JSON.stringify(loanAfter[key]))
+    throw new Error('Demo integration altered pre-existing loan figure ' + key);
+}
+for (let attempt = 2; attempt <= 3; attempt++) {
+  runBorrowerSeed();
+  const afterRetry = await capture(bridgeDb);
+  for (const key of Object.keys(loanAfter)) {
+    if (JSON.stringify(loanAfter[key]) !== JSON.stringify(afterRetry[key]))
+      throw new Error(
+        'Demo integration is not idempotent: ' + key + ' after run ' + attempt,
+      );
+  }
+}
+const ledger = await bridgeDb.query(
+  'select (select coalesce(sum(signed_amount),0)::bigint from public.savings_transactions)::text as subledger,' +
+    " (select balance::text from public.ledger_account_balances where code='2100') as gl_balance",
+);
+if (ledger.rows[0].subledger !== ledger.rows[0].gl_balance)
+  throw new Error('Demo member savings subledger is not equal to liability GL.');
+await bridgeDb.end();
+log(
+  'verified: six existing borrowers enrolled, non-members retained, ' +
+    'loan book untouched, full financial fixed point on runs 2 and 3, liability reconciled',
+);

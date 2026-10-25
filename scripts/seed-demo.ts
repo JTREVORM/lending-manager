@@ -59,6 +59,11 @@ import process from 'node:process';
 
 import { config as loadDotenv } from 'dotenv';
 import pg from 'pg';
+import {
+  chooseExistingDemoBorrowers,
+  verifyBorrowerBridge,
+  type DemoBorrower,
+} from './demo-existing-borrowers';
 
 // Mirror Next.js's precedence, so a developer's `.env.local` is what decides
 // which database this talks to — the same file the application reads.
@@ -400,15 +405,28 @@ async function main(): Promise<void> {
   };
 
   try {
+    // Preflight every assignment before any policy, member or money write.
+    const borrowers = await chooseExistingDemoBorrowers(
+      client,
+      MEMBERS,
+      process.env.POLYTOS_DEMO_BORROWER_REUSE,
+    );
     const policyId = await ensurePolicy(client);
     const witness = await ensureWitness(client, target);
     const approver = await ensureApprover(client, target);
 
     for (const member of MEMBERS) {
-      await seedMember(client, member, { policyId, witness, approver, tally });
+      await seedMember(client, member, {
+        policyId,
+        witness,
+        approver,
+        tally,
+        existingBorrower: borrowers.get(member.letter),
+      });
     }
 
     await reconcile(client);
+    await verifyBorrowerBridge(client, MEMBERS, borrowers);
   } finally {
     await client.end();
   }
@@ -627,19 +645,25 @@ async function seedMember(
     readonly witness: StaffProfile;
     readonly approver: StaffProfile;
     readonly tally: Tally;
+    readonly existingBorrower?: DemoBorrower;
   },
 ): Promise<void> {
   const { tally } = context;
+  const displayName = context.existingBorrower?.full_name ?? member.fullName;
 
   // --- The client record -------------------------------------------------
-  const found = await client.query<{ id: string }>(
-    `select id from public.clients where phone = $1`,
-    [member.phone],
-  );
+  const found = context.existingBorrower
+    ? null
+    : await client.query<{ id: string }>(
+        `select id from public.clients where phone = $1`,
+        [member.phone],
+      );
 
   let clientId: string;
 
-  if (found.rows.length > 0) {
+  if (context.existingBorrower) {
+    clientId = context.existingBorrower.id;
+  } else if (found && found.rows.length > 0) {
     clientId = found.rows[0]!.id;
   } else {
     const created = await client.query<{ id: string }>(
@@ -654,6 +678,18 @@ async function seedMember(
     clientId = created.rows[0]!.id;
     tally.clientsCreated += 1;
   }
+
+  // Store the demo tag ONLY on the membership; never rewrite borrower identity.
+  //
+  // The prefix up to and including the letter is load-bearing: a later run
+  // recovers the scenario-to-borrower mapping by reading it back out of these
+  // notes, so `chooseExistingDemoBorrowers` slices the letter from a fixed
+  // offset. Anything added below has to come after it.
+  const scenarioNote =
+    'DEMONSTRATION SCENARIO ' +
+    member.letter +
+    ' — ' +
+    (context.existingBorrower ? 'existing loan borrower' : 'synthetic demo client');
 
   // --- The membership ----------------------------------------------------
   const liveMembership = await client.query<{ id: string; status: string }>(
@@ -676,12 +712,13 @@ async function seedMember(
       `select public.enrol_member(
                 $1, 'cash', null, 'witnessed_in_branch', $2, $3::uuid,
                 null, $4::uuid, null, null, null, null,
-                'DEMONSTRATION enrolment') as id`,
+                $5) as id`,
       [
         clientId,
-        member.fullName,
+        displayName,
         demoKey(`fee:${member.letter}`),
         context.witness.profileId,
+        scenarioNote,
       ],
     );
     membershipId = enrolled.rows[0]!.id;
@@ -694,10 +731,18 @@ async function seedMember(
     // exists to explain.
     const created = await client.query<{ id: string }>(
       `insert into public.memberships (client_id, applied_on, policy_version_id, notes)
-       values ($1, (public.business_date() - 10), $2,
-               'DEMONSTRATION application. The fee is paid and no verified acceptance has been taken, so it cannot be activated.')
+       values ($1, (public.business_date() - 10), $2, $3)
        returning id`,
-      [clientId, context.policyId],
+      [
+        clientId,
+        context.policyId,
+        // The scenario marker has to lead, because the mapping is recovered
+        // from a fixed offset. The explanation this screen exists to show is
+        // kept after it rather than dropped for the marker's sake.
+        scenarioNote +
+          '. DEMONSTRATION application. The fee is paid and no verified acceptance ' +
+          'has been taken, so it cannot be activated.',
+      ],
     );
     membershipId = created.rows[0]!.id;
 
@@ -715,9 +760,7 @@ async function seedMember(
   }
 
   if (member.deposits.length === 0) {
-    console.log(
-      `  member ${member.letter}        ${member.fullName} — application pending`,
-    );
+    console.log(`  member ${member.letter}        ${displayName} — application pending`);
     return;
   }
 
@@ -729,7 +772,7 @@ async function seedMember(
 
   if (account.rows.length === 0) {
     console.log(
-      `  member ${member.letter}        ${member.fullName} — no savings account; skipping deposits`,
+      `  member ${member.letter}        ${displayName} — no savings account; skipping deposits`,
     );
     return;
   }
@@ -807,7 +850,7 @@ async function seedMember(
   );
 
   console.log(
-    `  member ${member.letter}        ${member.fullName} — ` +
+    `  member ${member.letter}        ${displayName} — ` +
       `${String(posted)} new deposit${posted === 1 ? '' : 's'}, ` +
       `balance UGX ${Number(balance.rows[0]?.balance ?? 0).toLocaleString('en-UG')}`,
   );
