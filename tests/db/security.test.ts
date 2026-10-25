@@ -971,6 +971,14 @@ describeDb('privileged functions', () => {
       // `current_profile_id`. EXECUTE is revoked from anon and
       // authenticated on all of them but the ones listed in the next
       // assertion.
+      // Polytos Phase 3. Two statement-level audit triggers: one records that
+      // an eligibility assessment was frozen onto a loan, the other that
+      // savings capacity was pledged to it and returned when it closed.
+      // Neither carries a name, a phone number or a savings balance — the
+      // trail is read by `audit:view`, which is broader than
+      // `loans:view_sensitive`.
+      'audit_member_loan_assessed',
+      'audit_member_loan_pledge',
       'audit_membership_card_change',
       'audit_membership_change',
       'audit_membership_fee_change',
@@ -1100,6 +1108,11 @@ describeDb('privileged functions', () => {
       'member_loan_eligibility_of',
       'member_loan_pledges_guard',
       'member_loan_release_pledge',
+      // Polytos Phase 3. The dashboard in one round trip. DEFINER and granted,
+      // because it reports business-wide aggregates: there is no *row* for a
+      // policy to filter, so it asks for `loans:view` in so many words — the
+      // same arrangement `savings_summary` has, and for the same reason.
+      'member_loan_summary',
       // Polytos Phase 1. The membership guards and the number minter.
       // SECURITY DEFINER for the reason every guard here is: they read
       // `user_has_permission` and `current_profile_id`, and they write
@@ -1412,6 +1425,10 @@ describeDb('privileged functions', () => {
       'member_lending_blocked_reason',
       'member_loan_cadence_for_term',
       'member_loan_interest',
+      // Polytos Phase 3. Granted because the dashboard reads it, and safe to
+      // grant for the reason this list is about: it re-checks `loans:view` on
+      // the session before it reads anything.
+      'member_loan_summary',
       'member_savings_qualification',
       'membership_fee_is_posted',
       'membership_policy_allows',

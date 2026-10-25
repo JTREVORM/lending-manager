@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 545 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 550 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -148,6 +148,29 @@ describeBundle('the browser bundle', () => {
     // 545 leaves about the same headroom over the measured 542 as 520 left
     // over 517. The next phase to cross it still has to make its own case.
     //
+    // ## 545 → 550, for Polytos Phase 3 member lending
+    //
+    // That phase is this one, and the case is the smallest of the three:
+    //
+    //   - **No new dependency.** Nothing was added to `package.json`, and the
+    //     120 KB largest-chunk assertion above — the one that actually catches
+    //     a library creeping in — is untouched. The largest chunk in fact
+    //     *fell*, from 90 KB to 72 KB, because the re-split below moved weight
+    //     out of it.
+    //   - **Five kilobytes, spread over twelve chunks.** 70 chunks became 82
+    //     and the measured total went 542 → 547, so the growth is well under
+    //     half a kilobyte per chunk. Three new client components arrived — the
+    //     eligibility register, the member loan register and the application
+    //     form — and each is built from the shared `DataTable`, `Money` and
+    //     `Register*` primitives rather than from markup of its own, which is
+    //     why a whole module's screens cost this little.
+    //   - **What a page costs did not move.** That is the figure that is
+    //     somebody's airtime, and it is asserted in a real browser by
+    //     `tests/e2e/specs/performance.spec.ts` against unchanged ceilings.
+    //
+    // 550 leaves about the same headroom over the measured 547 as 545 left
+    // over 542. The next phase to cross it still has to make its own case.
+    //
     // It is not what a page costs. No page loads all seventy: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -155,7 +178,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(545);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(550);
   });
 
   it('emits no source map for the browser', () => {

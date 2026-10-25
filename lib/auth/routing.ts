@@ -83,6 +83,15 @@ const ROUTE_PERMISSIONS: readonly {
   // and refused again by the posting function.
   { prefix: ROUTES.savingsWithdrawals, permission: 'savings:approve_withdrawal' },
   { prefix: ROUTES.savings, permission: 'savings:view' },
+  // Polytos Phase 3. The longer prefix first, as above: `/member-loans/new`
+  // would otherwise match `/member-loans` and be guarded by
+  // `member_loans:view_eligibility`, which the Secretary/Treasurer holds — so
+  // the application form would open to somebody who may answer "do you
+  // qualify?" but may not commit the business to lending. `member_loans:create`
+  // is the floor for the form; the action checks it again and the insert
+  // policy refuses again.
+  { prefix: ROUTES.newMemberLoan, permission: 'member_loans:create' },
+  { prefix: ROUTES.memberLoans, permission: 'member_loans:view_eligibility' },
   { prefix: ROUTES.guarantors, permission: 'guarantors:view' },
   { prefix: ROUTES.loans, permission: 'loans:view' },
   // Its own capability as of Phase 6, rather than `dashboard:view`. The same

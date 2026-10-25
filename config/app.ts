@@ -137,6 +137,29 @@ export const ROUTES = {
   savings: '/savings',
   savingsWithdrawals: '/savings/withdrawals',
 
+  /**
+   * Polytos Phase 3. Member lending.
+   *
+   * Its own section rather than a filter on `/loans`, and the reason is the
+   * same one that gave savings a section: the work is different. `/loans` is
+   * the whole book, read by a loan officer; this is the membership
+   * programme's lending position, read beside the savings it is secured
+   * against, and it carries a register of *members* — who qualifies, and what
+   * their savings support — which has no place in a list of loans.
+   *
+   * A member loan itself is **not** here. It is a row in `loans`, so it opens
+   * at `/loans/{id}` like every other loan, with a member panel on it. A
+   * second detail screen would be a second set of controls over one
+   * agreement.
+   *
+   * `member_loans:view_eligibility` by prefix, not `loans:view`: what this
+   * section discloses is a lending offer — how much the business will put in
+   * a named person's hands — which is commercially sensitive in a way the
+   * loan book is not.
+   */
+  memberLoans: '/member-loans',
+  newMemberLoan: '/member-loans/new',
+
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',
   transfers: '/finance/transfers',

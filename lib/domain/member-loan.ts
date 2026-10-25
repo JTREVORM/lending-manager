@@ -434,6 +434,10 @@ export interface MemberLoanEligibility {
   readonly activeLoanLimit: number | null;
   readonly outstandingPrincipal: UgxAmount | null;
   readonly pledgedSavings: UgxAmount | null;
+  /** Asked for and approved, but not yet paid. Still in the balance. */
+  readonly pendingWithdrawals: UgxAmount | null;
+  /** The balance less what is pledged and less what is awaiting payment. */
+  readonly availableSavings: UgxAmount | null;
   readonly amountRequested: UgxAmount | null;
   readonly termRequested: number | null;
   readonly isEligible: boolean;

@@ -4948,6 +4948,37 @@ export type Database = {
       };
 
       /**
+       * Polytos Phase 3. The Member Loans dashboard in one round trip. Asks
+       * for `loans:view` inside: what it reports is a loan book, and a total
+       * across every member has no row for a policy to filter.
+       */
+      member_loan_summary: {
+        Args: Record<string, never>;
+        Returns: {
+          applications_draft: number;
+          applications_pending: number;
+          loans_approved: number;
+          loans_active: number;
+          loans_cleared: number;
+          principal_disbursed: number;
+          principal_outstanding: number;
+          interest_outstanding: number;
+          total_outstanding: number;
+          total_collected: number;
+          due_today: number;
+          overdue_loans: number;
+          arrears_amount: number;
+          live_memberships: number;
+          members_qualified: number;
+          members_not_yet_qualified: number;
+          members_with_member_loan: number;
+          savings_pledged: number;
+          lending_open: boolean;
+          blocked_reason: string | null;
+        }[];
+      };
+
+      /**
        * Polytos Phase 3. The authoritative member loan breakdown for a
        * configured interest basis and method. `per_month` +
        * `reducing_balance_monthly` delegates to `calculate_loan_breakdown`, so

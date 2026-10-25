@@ -238,6 +238,13 @@ export const MEMBER_INTEREST_BASIS_LABELS: Readonly<Record<MemberInterestBasis, 
   } as const;
 
 /** How interest is computed on a member loan. */
+export function isMemberInterestBasis(value: unknown): value is MemberInterestBasis {
+  return (
+    typeof value === 'string' &&
+    (MEMBER_INTEREST_BASES as readonly string[]).includes(value)
+  );
+}
+
 export const MEMBER_INTEREST_METHODS = ['flat', 'reducing_balance_monthly'] as const;
 export type MemberInterestMethod = (typeof MEMBER_INTEREST_METHODS)[number];
 
@@ -249,6 +256,13 @@ export const MEMBER_INTEREST_METHOD_LABELS: Readonly<
 } as const;
 
 /** Whether a member may withdraw savings while holding an active member loan. */
+export function isMemberInterestMethod(value: unknown): value is MemberInterestMethod {
+  return (
+    typeof value === 'string' &&
+    (MEMBER_INTEREST_METHODS as readonly string[]).includes(value)
+  );
+}
+
 export const SAVINGS_WITHDRAWAL_RULES = ['allowed', 'blocked', 'above_pledged'] as const;
 export type SavingsWithdrawalRule = (typeof SAVINGS_WITHDRAWAL_RULES)[number];
 

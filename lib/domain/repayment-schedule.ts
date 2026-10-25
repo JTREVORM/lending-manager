@@ -565,13 +565,12 @@ export function generateRepaymentSchedule(
     // One global rhythm from the disbursement date, stopping strictly before
     // the final contractual boundary.
     //
-    // `intervalDays` is non-null in this branch by the resolution above; the
-    // local binding is what tells the compiler so without a non-null
-    // assertion.
-    const step_days = intervalDays ?? 1;
+    // Non-null in this branch by the resolution above; the local binding is
+    // what tells the compiler so without a non-null assertion.
+    const cadenceIntervalDays = intervalDays ?? 1;
 
     const totalDays = daysBetween(disbursementDate, finalBoundary);
-    const upperBound = Math.floor(totalDays / step_days);
+    const upperBound = Math.floor(totalDays / cadenceIntervalDays);
 
     if (upperBound > MAX_SUPPORTED_INSTALLMENTS) {
       throw new ScheduleGenerationError(
@@ -582,7 +581,7 @@ export function generateRepaymentSchedule(
 
     const cadence: BusinessDate[] = [];
     for (let step = 1; step <= upperBound; step += 1) {
-      const dueDate = addBusinessDays(disbursementDate, step * step_days);
+      const dueDate = addBusinessDays(disbursementDate, step * cadenceIntervalDays);
 
       // `upperBound` is a floor, so the last candidate can land exactly on the
       // boundary when the term divides evenly by the interval. Excluded,

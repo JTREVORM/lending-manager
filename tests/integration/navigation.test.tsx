@@ -177,6 +177,11 @@ describe('navigation items', () => {
       // rail entry carrying `?status=pending` would be an entry that can never
       // be the open page.
       [ROUTES.savings]: ['status'],
+      // Polytos Phase 3. Two views and a qualification filter. `tab` is what
+      // picks between "who can borrow" and "who has borrowed": they are two
+      // questions answered from different tables, and sidebar entries rather
+      // than a strip of tabs above the register — the Phase 21 decision.
+      [ROUTES.memberLoans]: ['tab', 'qualified'],
       // Phase 13's workflow register: ten stages, one query.
       [ROUTES.loans]: ['stage'],
       [ROUTES.payments]: ['status'],

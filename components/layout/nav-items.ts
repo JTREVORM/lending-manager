@@ -6,6 +6,7 @@ import {
   Landmark,
   LayoutDashboard,
   Network,
+  HandCoins,
   PiggyBank,
   Receipt,
   Settings,
@@ -109,6 +110,11 @@ export const NAV_MODULE_IDS = [
   'clients',
   'membership',
   'savings',
+  // Polytos Phase 3. After Savings, because a member loan is secured against
+  // a savings balance and that is where a reader looks for it next, and before
+  // Loans, because it is the membership programme's lending rather than the
+  // whole book.
+  'member_loans',
   'loans',
   'collections',
   'debt',
@@ -363,6 +369,55 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Savings History',
         permission: 'audit:view',
         phase: 22,
+      },
+    ],
+  },
+  {
+    // Polytos Phase 3. Member lending.
+    //
+    // Four entries, and the first two are the two questions this section is
+    // opened with: who can borrow, and who has borrowed. They are sidebar
+    // entries rather than a strip of tabs above the register, which is the
+    // Phase 21 decision restated — a strip would be a second copy of this
+    // navigation, and the only one of the two that could fall out of step.
+    //
+    // There is no "Member Loan" detail entry. A member loan is a row in
+    // `loans`, so it opens in the loan register like every other loan with a
+    // membership panel on it; a second detail route would be a second set of
+    // controls over one agreement.
+    //
+    // `member_loans:view_eligibility` on the reads, because an assessment is a
+    // lending offer rather than a view of savings. `member_loans:create` on
+    // the application, because opening one commits the business to lending
+    // against member savings — which is why the Secretary/Treasurer sees the
+    // first three entries and not the fourth.
+    id: 'member_loans',
+    label: 'Member Lending',
+    icon: HandCoins,
+    items: [
+      {
+        href: `${ROUTES.memberLoans}?tab=members`,
+        label: 'Who Can Borrow',
+        permission: 'member_loans:view_eligibility',
+        phase: 23,
+      },
+      {
+        href: `${ROUTES.memberLoans}?tab=loans`,
+        label: 'Member Loans',
+        permission: 'member_loans:view_eligibility',
+        phase: 23,
+      },
+      {
+        href: `${ROUTES.memberLoans}?tab=members&qualified=qualified`,
+        label: 'Qualified Members',
+        permission: 'member_loans:view_eligibility',
+        phase: 23,
+      },
+      {
+        href: ROUTES.newMemberLoan,
+        label: 'New Application',
+        permission: 'member_loans:create',
+        phase: 23,
       },
     ],
   },

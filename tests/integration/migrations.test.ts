@@ -886,6 +886,8 @@ describe('types stay in step with the schema', () => {
       'savings_reversal_key',
 
       // --- Polytos Phase 3 ---------------------------------------------------
+      'audit_member_loan_assessed',
+      'audit_member_loan_pledge',
       'loans_guard_member_terms',
       'member_loan_pledges_guard',
       'member_loan_release_pledge',

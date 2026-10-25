@@ -76,7 +76,9 @@ export type RateLimitedAction =
   | 'savings.deposit'
   | 'savings.withdrawal'
   | 'savings.withdrawal_decision'
-  | 'savings.reverse';
+  | 'savings.reverse'
+  // Polytos Phase 3. Opening a member-loan application.
+  | 'member_loan.create';
 
 export interface RateLimitRule {
   /** Requests permitted inside one window. */
@@ -251,6 +253,19 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     onStoreFailure: 'open',
     message:
       'Withdrawals are being prepared faster than expected. Try again in a moment.',
+  },
+  // Polytos Phase 3. An hour's window rather than a minute's, because opening
+  // a member-loan application is deliberate work with a member in front of
+  // you — nobody opens twenty an hour, and a per-minute limit would be a
+  // brake on nothing. Fails **open**, like the deposit limiter: the protection
+  // against a double tap is the loan's own state, so a store that is down must
+  // not stop a counter working.
+  'member_loan.create': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'open',
+    message:
+      'Too many member loan applications opened in the last hour. Try again shortly.',
   },
   'savings.withdrawal_decision': {
     limit: 20,

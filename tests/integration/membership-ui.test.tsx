@@ -457,12 +457,21 @@ describe('membership navigation', () => {
     // Polytos Phase 2 inserted Savings between Membership and Loan
     // Management, which is why this no longer asserts that Membership abuts
     // `loans`.
+    //
+    // Polytos Phase 3 inserted Member Lending between Savings and Loan
+    // Management, for the same reason in the next link of the same chain: a
+    // member loan is secured against a savings balance, so it reads next to
+    // Savings — and it is the programme's lending rather than the whole book,
+    // so it reads before Loan Management. The chain is asserted link by link
+    // rather than by position, so a module added anywhere else does not
+    // break it.
     const ids = NAV_MODULES.map((module) => module.id);
 
     expect(ids).toContain('membership');
     expect(ids.indexOf('membership')).toBe(ids.indexOf('clients') + 1);
     expect(ids.indexOf('savings')).toBe(ids.indexOf('membership') + 1);
-    expect(ids.indexOf('savings')).toBe(ids.indexOf('loans') - 1);
+    expect(ids.indexOf('member_loans')).toBe(ids.indexOf('savings') + 1);
+    expect(ids.indexOf('member_loans')).toBe(ids.indexOf('loans') - 1);
   });
 
   it('requires the same capability the route guard requires', () => {
