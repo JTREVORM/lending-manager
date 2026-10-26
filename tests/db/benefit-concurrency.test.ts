@@ -248,7 +248,10 @@ describeDb('two assessments racing for one annual cap', () => {
 
     const results = await Promise.all([
       asUserCommitted(fx.manager, [
-        { sql: `select public.assess_benefit_claim($1, null) as amount`, params: [first] },
+        {
+          sql: `select public.assess_benefit_claim($1, null) as amount`,
+          params: [first],
+        },
       ]),
       asUserCommitted(fx.secondAssessor, [
         {
@@ -266,9 +269,9 @@ describeDb('two assessments racing for one annual cap', () => {
       [member.membershipId],
     );
     expect(snapshots).toHaveLength(2);
-    expect(
-      snapshots.reduce((total, row) => total + Number(row.assessed_amount), 0),
-    ).toBe(800_000);
+    expect(snapshots.reduce((total, row) => total + Number(row.assessed_amount), 0)).toBe(
+      800_000,
+    );
   });
 
   it('refuses two payments racing on one claim', async () => {
@@ -282,7 +285,10 @@ describeDb('two assessments racing for one annual cap', () => {
     );
 
     await asUserCommitted(fx.manager, [
-      { sql: `select public.assess_benefit_claim($1, null) as amount`, params: [claimId] },
+      {
+        sql: `select public.assess_benefit_claim($1, null) as amount`,
+        params: [claimId],
+      },
     ]);
     await asUserCommitted(fx.owner, [
       {

@@ -738,22 +738,26 @@ create table public.benefit_assessment_snapshots (
   -- period and the cap arithmetic; the others carry none of it.
   constraint benefit_snapshot_medical_shape
     check (
+      -- Written with each `*_amount` test following something else on its
+      -- line, deliberately. An identifier matching `\w*amount\w*` at the
+      -- start of a line is how `tests/integration/migrations.test.ts` finds an
+      -- amount *column* declaration, and a constraint that opened with one
+      -- would be read as a column of type `is`. The Phase 3 policy migration
+      -- carries the same note about `*_bps`.
       case claim_type
-        when 'medical' then
-          bill_amount is not null
+        when 'medical' then bill_amount is not null
           and benefit_rate_bps is not null
           and admission_nights is not null
           and year_basis is not null
           and period_from is not null
           and period_to is not null
           and prior_claims_in_period is not null
-          and prior_amount_in_period is not null
-        else
-          bill_amount is null
+          and (prior_amount_in_period is not null)
+        else (bill_amount is null)
           and admission_nights is null
           and admission_inclusive_days is null
           and admission_elapsed_days is null
-          and fixed_benefit_amount is not null
+          and (fixed_benefit_amount is not null)
       end
     ),
   -- The rule the business applied, as a constraint. A medical snapshot whose

@@ -102,7 +102,11 @@ async function driveToAssessed(
   claimId: string,
   member: BenefitMember,
   claimType: string,
-): Promise<{ readonly ok: boolean; readonly message?: string; readonly amount?: number }> {
+): Promise<{
+  readonly ok: boolean;
+  readonly message?: string;
+  readonly amount?: number;
+}> {
   const submitted = await asUserCommitted(fx.secretary, [
     { sql: `select public.submit_benefit_claim($1) as id`, params: [claimId] },
   ]);
@@ -486,7 +490,10 @@ describeDb('evidence', () => {
     ]);
 
     const assessed = await asUserCommitted(fx.manager, [
-      { sql: `select public.assess_benefit_claim($1, null) as amount`, params: [claimId] },
+      {
+        sql: `select public.assess_benefit_claim($1, null) as amount`,
+        params: [claimId],
+      },
     ]);
 
     expect(assessed.ok).toBe(false);
@@ -502,11 +509,7 @@ describeDb('evidence', () => {
     ]);
 
     const { putEvidenceObject } = await import('../helpers/benefits');
-    const path = await putEvidenceObject(
-      member.membershipId,
-      'medical_invoice',
-      claimId,
-    );
+    const path = await putEvidenceObject(member.membershipId, 'medical_invoice', claimId);
 
     const attached = await asUserCommitted(fx.manager, [
       {
@@ -778,10 +781,9 @@ describeDb('the state machine', () => {
 
     // Even as the table owner, who RLS does not apply to.
     await expect(
-      query(
-        `update public.benefit_claims set assessed_amount = 999999 where id = $1`,
-        [claimId],
-      ),
+      query(`update public.benefit_claims set assessed_amount = 999999 where id = $1`, [
+        claimId,
+      ]),
     ).rejects.toThrow(/on the record/);
   });
 
@@ -939,10 +941,7 @@ describeDb('the bereavement safeguards', () => {
       },
     ]);
 
-    const claimId = await openBereavement(
-      member,
-      (created.rows[0] as { id: string }).id,
-    );
+    const claimId = await openBereavement(member, (created.rows[0] as { id: string }).id);
     const result = await driveToAssessed(claimId, member, 'member_bereavement');
 
     expect(result.ok).toBe(false);
@@ -1054,9 +1053,7 @@ describeDb('the bereavement safeguards', () => {
       `select id from public.loan_products order by created_at limit 1`,
     );
 
-    await query(
-      `alter table public.loans disable trigger loans_guard_transition`,
-    );
+    await query(`alter table public.loans disable trigger loans_guard_transition`);
     try {
       await query(
         `insert into public.loans

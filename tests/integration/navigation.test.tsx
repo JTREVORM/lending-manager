@@ -188,6 +188,14 @@ describe('navigation items', () => {
       // Phase 14's five views of Debt & Security.
       [ROUTES.recovery]: ['view'],
       [ROUTES.audit]: ['entity'],
+      // Polytos Phase 4. The claims register's type and status filters, and
+      // the meetings list's. `status=open` on the register and
+      // `status=upcoming` on the list are both filters the *page* offers and
+      // the database does not — each is a set of states no single column
+      // holds — so both are read by the page's own schema.
+      [ROUTES.benefitClaims]: ['status', 'type'],
+      [ROUTES.meetings]: ['status', 'type'],
+      [ROUTES.beneficiaries]: ['verification'],
       // Phase 16's four report groups.
       [ROUTES.reports]: ['group'],
       [`${ROUTES.reports}/collections`]: ['period'],

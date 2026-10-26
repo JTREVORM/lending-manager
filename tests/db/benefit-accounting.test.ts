@@ -65,7 +65,10 @@ let fx: Fixtures;
 const ADMISSION = { in: '2025-03-10 09:00+03', out: '2025-03-14 11:00+03' } as const;
 
 /** A claim driven all the way to `approved`, ready to pay. */
-async function approvedMedicalClaim(bill: number, provider: string): Promise<{
+async function approvedMedicalClaim(
+  bill: number,
+  provider: string,
+): Promise<{
   readonly claimId: string;
   readonly member: BenefitMember;
   readonly amount: number;
@@ -165,7 +168,10 @@ async function approvedBereavementClaim(payeeName: string): Promise<{
   if (!assessed.ok) throw new Error(`could not assess: ${assessed.message}`);
 
   const approved = await asUserCommitted(fx.approver, [
-    { sql: `select public.approve_benefit_claim($1, null, null) as amount`, params: [claimId] },
+    {
+      sql: `select public.approve_benefit_claim($1, null, null) as amount`,
+      params: [claimId],
+    },
   ]);
   if (!approved.ok) throw new Error(`could not approve: ${approved.message}`);
 
@@ -289,7 +295,10 @@ describeDb('the posting', () => {
       const condolenceClaim = (opened.rows[0] as { id: string }).id;
 
       await asUserCommitted(fx.secretary, [
-        { sql: `select public.submit_benefit_claim($1) as id`, params: [condolenceClaim] },
+        {
+          sql: `select public.submit_benefit_claim($1) as id`,
+          params: [condolenceClaim],
+        },
       ]);
       for (const kind of await requiredKindsFor('family_condolence')) {
         await attachVerifiedDocument(
@@ -376,9 +385,8 @@ describeDb('the posting', () => {
   });
 
   it('takes the recipient from the authorisation, not the live record', async () => {
-    const { claimId, member, beneficiaryId } = await approvedBereavementClaim(
-      'The Approved Payee',
-    );
+    const { claimId, member, beneficiaryId } =
+      await approvedBereavementClaim('The Approved Payee');
 
     // A beneficiary change is refused while a bereavement claim is live — that
     // is tested in `beneficiaries.test.ts`. This test proves the second belt:
@@ -474,9 +482,8 @@ describeDb('paying once', () => {
   it('returns the first payment on a replayed key', async () => {
     const { claimId } = await approvedMedicalClaim(400_000, 'Replay Hospital');
 
-    const key = (
-      await queryOne<{ key: string }>(`select gen_random_uuid()::text as key`)
-    ).key;
+    const key = (await queryOne<{ key: string }>(`select gen_random_uuid()::text as key`))
+      .key;
 
     const first = await asUserCommitted(fx.manager, [
       {
@@ -574,9 +581,8 @@ describeDb('paying once', () => {
     // capability could replay somebody else's key and read back a payment
     // they are not entitled to.
     const { claimId } = await approvedMedicalClaim(400_000, 'Replay Probe Hospital');
-    const key = (
-      await queryOne<{ key: string }>(`select gen_random_uuid()::text as key`)
-    ).key;
+    const key = (await queryOne<{ key: string }>(`select gen_random_uuid()::text as key`))
+      .key;
 
     await asUserCommitted(fx.manager, [
       {
@@ -752,7 +758,11 @@ describeDb('reversal', () => {
 
     // 5% of 90,000,000 is 4,500,000, inside the 5,000,000 cap. A second
     // identical claim would take the year to 9,000,000 and be refused.
-    const first = await open('Cap Hospital A', '2025-02-03 08:00+03', '2025-02-08 09:00+03');
+    const first = await open(
+      'Cap Hospital A',
+      '2025-02-03 08:00+03',
+      '2025-02-08 09:00+03',
+    );
     await asUserCommitted(fx.manager, [
       { sql: `select public.assess_benefit_claim($1, null) as amount`, params: [first] },
     ]);

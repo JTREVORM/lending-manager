@@ -148,9 +148,20 @@ create table public.beneficiary_relationships (
   -- which.
   condolence_eligible boolean,
 
+  created_at timestamptz not null default pg_catalog.now(),
+  -- Mutable: the migration upserts the label and the sort order, and
+  -- `condolence_eligible` is the column the client's answer will land in. A
+  -- vocabulary row is edited rather than superseded, because nothing
+  -- references the words — the key is what a beneficiary record points at.
+  updated_at timestamptz not null default pg_catalog.now(),
+
   constraint beneficiary_relationship_key_shape check (key ~ '^[a-z][a-z0-9_]*$'),
   constraint beneficiary_relationship_label_not_blank check (btrim(label) <> '')
 );
+
+create trigger beneficiary_relationships_set_updated_at
+  before update on public.beneficiary_relationships
+  for each row execute function public.set_updated_at();
 
 comment on table public.beneficiary_relationships is
   'Polytos Phase 4. The relationships a beneficiary or a deceased family member may stand in to a member. condolence_eligible is NULL on every row because the client has not defined an eligible family member; a condolence claim cannot be assessed while the relationship it names is undecided.';

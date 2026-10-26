@@ -197,11 +197,19 @@ comment on column public.membership_meetings.minutes_finalised_at is
 create unique index membership_meetings_one_monthly_per_branch
   on public.membership_meetings (
     branch_id,
-    -- Cast to `timestamp` before truncating: date_trunc over `timestamptz`
-    -- is STABLE rather than IMMUTABLE, because it depends on the session
-    -- timezone, and an index expression may not be. `meeting_date` is
-    -- already a date in Africa/Kampala, so the cast loses nothing.
-    (pg_catalog.date_trunc('month', meeting_date::timestamp))
+    -- The year and the month, as two expressions, rather than truncating.
+    --
+    -- `date_trunc` has no overload for a `date`, so it would need a cast to a
+    -- zoneless instant — and this project forbids that type outright, because
+    -- "whatever zone the reader assumes" is how a repayment gets filed against
+    -- the wrong day. The `timestamptz` overload is STABLE rather than
+    -- IMMUTABLE and so cannot appear in an index expression at all.
+    --
+    -- `date_part` over a `date` is immutable and says the same thing. Two
+    -- columns in the index rather than one truncated value; the uniqueness is
+    -- identical.
+    pg_catalog.date_part('year', meeting_date),
+    pg_catalog.date_part('month', meeting_date)
   )
   where meeting_type = 'monthly_general' and status <> 'cancelled';
 

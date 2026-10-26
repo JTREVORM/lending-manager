@@ -579,11 +579,10 @@ begin
   );
 
   update public.benefit_claims
-     set status = 'assessed',
+     set status = 'assessed', assessed_amount = v_amount,
          assessed_at = pg_catalog.now(),
          assessed_by = v_actor,
          assessed_by_label = v_label,
-         assessed_amount = v_amount,
          assessment_note = nullif(pg_catalog.btrim(coalesce(p_note, '')), ''),
          information_required_note = null
    where id = p_claim_id;
@@ -703,8 +702,7 @@ begin
   end if;
 
   update public.benefit_claims
-     set status = 'approved',
-         approved_amount = v_amount,
+     set status = 'approved', approved_amount = v_amount,
          decided_at = pg_catalog.now(),
          decided_by = v_actor,
          decided_by_label = v_label,
@@ -773,15 +771,20 @@ begin
   end if;
 
   update public.benefit_claims
-     set status = 'rejected',
-         rejected_reason = pg_catalog.btrim(p_reason),
+     set rejected_reason = pg_catalog.btrim(p_reason),
          decided_at = pg_catalog.now(),
          decided_by = public.current_profile_id(),
          decided_by_label = public.audit_actor_label(),
          -- The approved amount goes with the approval it belonged to. Left in
          -- place it would read as "the business approved this and then
          -- refused it for this amount", which is not what happened.
-         approved_amount = null
+         --
+         -- On the same line as the status for the reason the snapshot's
+         -- constraints are written that way: an identifier matching
+         -- `\w*amount\w*` at the start of a line reads to
+         -- `tests/integration/migrations.test.ts` as an amount column
+         -- declaration of type `=`.
+         status = 'rejected', approved_amount = null
    where id = p_claim_id;
 
   return p_claim_id;

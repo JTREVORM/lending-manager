@@ -146,7 +146,10 @@ describeDb('the policy gate, with every benefit rule undecided', () => {
     }
 
     const assessed = await asUserCommitted(fx.manager, [
-      { sql: `select public.assess_benefit_claim($1, null) as amount`, params: [claimId] },
+      {
+        sql: `select public.assess_benefit_claim($1, null) as amount`,
+        params: [claimId],
+      },
     ]);
 
     expect(assessed.ok).toBe(false);
@@ -185,9 +188,7 @@ describeDb('the policy gate, with every benefit rule undecided', () => {
       { sql: `select public.submit_benefit_claim($1) as id`, params: [claimId] },
     ]);
 
-    await query(
-      `alter table public.benefit_claims disable trigger benefit_claims_guard`,
-    );
+    await query(`alter table public.benefit_claims disable trigger benefit_claims_guard`);
     try {
       await query(
         `update public.benefit_claims

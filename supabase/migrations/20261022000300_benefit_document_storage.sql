@@ -132,6 +132,13 @@ create table public.benefit_document_kinds (
   -- the two cannot disagree.
   is_required_for_assessment boolean not null default false,
 
+  created_at timestamptz not null default pg_catalog.now(),
+  -- Mutable for the reason `beneficiary_relationships` is: the migration
+  -- upserts the label, the ordering and whether a kind is required, and a
+  -- vocabulary row is edited rather than superseded because nothing
+  -- references the words — the key is what a document row points at.
+  updated_at timestamptz not null default pg_catalog.now(),
+
   constraint benefit_document_kind_key_shape check (key ~ '^[a-z][a-z0-9_]*$'),
   constraint benefit_document_kind_label_not_blank check (btrim(label) <> ''),
   constraint benefit_document_kind_claim_type_valid
@@ -140,6 +147,10 @@ create table public.benefit_document_kinds (
       or claim_type in ('medical', 'family_condolence', 'member_bereavement')
     )
 );
+
+create trigger benefit_document_kinds_set_updated_at
+  before update on public.benefit_document_kinds
+  for each row execute function public.set_updated_at();
 
 comment on table public.benefit_document_kinds is
   'Polytos Phase 4. What a benefit evidence document may be said to be, and whether a claim of its type cannot be assessed without one. A kind says what a document claims to be; benefit_claim_documents.verification_status says whether anybody checked.';

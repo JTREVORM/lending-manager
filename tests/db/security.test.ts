@@ -78,7 +78,7 @@ describeDb('row level security', () => {
       'account_transfers:SELECT',
       'audit_log:SELECT',
       // Phase 10. The branch network and the ledger: SELECT only. Nothing writes to a journal through a session; every posting is made by a definer function.
-            // Polytos Phase 4. SELECT only almost everywhere: a beneficiary is
+      // Polytos Phase 4. SELECT only almost everywhere: a beneficiary is
       // registered by `register_member_beneficiary`, a claim is moved by the
       // lifecycle functions, a payment is posted by `post_benefit_payment`
       // and a register is marked by `mark_meeting_attendance` — every one a
@@ -386,7 +386,7 @@ describeDb('row level security', () => {
       // Phase 10. Read policies only: no session role writes a journal,
       // a ledger account or a branch — every one of those is a definer
       // function's job.
-            // Polytos Phase 4. Read policies throughout, for the reason the Phase 2
+      // Polytos Phase 4. Read policies throughout, for the reason the Phase 2
       // and Phase 3 tables have none that write: every benefit and meeting
       // write is a definer function's. The two exceptions are the ones the
       // grant list above explains.
@@ -856,12 +856,12 @@ describeDb('views', () => {
         // Phase 10. The three ledger views.
         // Phase 11. Five more: one register per money-movement document, and
         // the general ledger every financial drill-down reads.
-            // Polytos Phase 4. Five registers and the portal's read. Every one is
-    // `security_invoker`, so the policies beneath decide what a caller sees —
-    // and `benefit_claim_portal_view` carries the member's disclosure policy
-    // as its column list, so a portal screen cannot render an assessor's note
-    // by accident and a future `select *` cannot reintroduce one.
-      'benefit_claim_portal_view',
+        // Polytos Phase 4. Five registers and the portal's read. Every one is
+        // `security_invoker`, so the policies beneath decide what a caller sees —
+        // and `benefit_claim_portal_view` carries the member's disclosure policy
+        // as its column list, so a portal screen cannot render an assessor's note
+        // by accident and a future `select *` cannot reintroduce one.
+        'benefit_claim_portal_view',
         'benefit_claim_register',
         'benefit_payment_register',
         'branch_cash_position',
@@ -1026,7 +1026,7 @@ describeDb('privileged functions', () => {
       // rule; it returns an id, and the row behind it stays behind the
       // select policy.
       'active_membership_policy_id',
-            // Polytos Phase 4. Every write path in the benefit and meeting modules
+      // Polytos Phase 4. Every write path in the benefit and meeting modules
       // is a definer function, because every one of them enforces something a
       // session must not be able to skip: the capability, the separation of
       // duties, the policy gate, the evidence check, the journal. The
@@ -1483,7 +1483,7 @@ describeDb('privileged functions', () => {
       // same rule. It returns an id and nothing else; the row behind it is
       // still governed by `membership_policy_versions_select`.
       'active_membership_policy_id',
-            // Polytos Phase 4. The lifecycle functions a screen calls, the two
+      // Polytos Phase 4. The lifecycle functions a screen calls, the two
       // reporting functions the dashboards read, and the pure helpers a
       // caller may evaluate — `benefit_amount_for_claim`,
       // `benefit_policy_year_bounds` and `benefit_claim_transition_allowed`

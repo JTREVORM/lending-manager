@@ -386,11 +386,7 @@ describeDb('forged references', () => {
 
     // A real object, under the wrong membership. The existence check alone
     // would pass it; the path check is what refuses it.
-    const path = await putEvidenceObject(
-      theirs.membershipId,
-      'medical_invoice',
-      claimId,
-    );
+    const path = await putEvidenceObject(theirs.membershipId, 'medical_invoice', claimId);
 
     const attached = await asUserCommitted(fx.secretary, [
       {
@@ -433,9 +429,7 @@ describeDb('forged references', () => {
       fx.secretary,
       `insert into storage.objects (bucket_id, name, metadata)
        values ('benefit-documents', $1, jsonb_build_object('size', 100))`,
-      [
-        `benefits/${member.membershipId}/assessment_attachment/beneficiary/forged.pdf`,
-      ],
+      [`benefits/${member.membershipId}/assessment_attachment/beneficiary/forged.pdf`],
     );
 
     expect(attempt.ok).toBe(false);

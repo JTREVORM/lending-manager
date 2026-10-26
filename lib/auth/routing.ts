@@ -116,6 +116,32 @@ const ROUTE_PERMISSIONS: readonly {
   // capability of the thing it is about — but the route gets a capability of
   // its own rather than borrowing `dashboard:view`, which is the defect
   // Phases 3, 6 and 8 each found once.
+  // Polytos Phase 4. Longer prefixes first, as above.
+  //
+  // `/benefits/approvals` is guarded by `benefits:approve` and
+  // `/benefits/payments` by `benefits:pay`, rather than by the section's own
+  // `benefits:view` — because each is a different person's queue, and a
+  // Manager who may read the register must not be offered a screen they
+  // cannot act on. The same reasoning that put `savings:approve_withdrawal`
+  // on the withdrawal queue.
+  //
+  // `/benefits/reports` takes `benefits:view` and not `reports:view_financial`:
+  // the screen's own figures come from `benefit_summary`, and the one General
+  // Ledger figure on it is fetched by a function that checks the financial
+  // capability itself and returns nothing without it. Guarding the whole
+  // route on the stricter capability would hide the claim counts from the
+  // people who work the claims.
+  { prefix: ROUTES.benefitApprovals, permission: 'benefits:approve' },
+  { prefix: ROUTES.benefitPayments, permission: 'benefits:pay' },
+  { prefix: ROUTES.benefitReports, permission: 'benefits:view' },
+  { prefix: ROUTES.benefitClaims, permission: 'benefits:view' },
+  { prefix: ROUTES.benefits, permission: 'benefits:view' },
+  // `beneficiaries:view` rather than `benefits:view`: the register says which
+  // members have a next of kin on file, which is a membership fact, and the
+  // counter holds it while holding no benefit capability beyond opening a
+  // claim.
+  { prefix: ROUTES.beneficiaries, permission: 'beneficiaries:view' },
+  { prefix: ROUTES.meetings, permission: 'meetings:view' },
   { prefix: ROUTES.notifications, permission: 'notifications:view' },
   // Phase 8. `reports:view_operational` is the floor for the reporting
   // surface, not `dashboard:view`: §98 is explicit that a dashboard

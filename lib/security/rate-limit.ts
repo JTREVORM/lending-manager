@@ -78,7 +78,17 @@ export type RateLimitedAction =
   | 'savings.withdrawal_decision'
   | 'savings.reverse'
   // Polytos Phase 3. Opening a member-loan application.
-  | 'member_loan.create';
+  | 'member_loan.create'
+  // Polytos Phase 4. Benefits, beneficiaries and meetings.
+  | 'benefit.claim'
+  | 'benefit.assess'
+  | 'benefit.decision'
+  | 'benefit.pay'
+  | 'benefit.reverse'
+  | 'beneficiary.manage'
+  | 'beneficiary.verify'
+  | 'meeting.manage'
+  | 'meeting.attendance';
 
 export interface RateLimitRule {
   /** Requests permitted inside one window. */
@@ -272,6 +282,79 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 3600,
     onStoreFailure: 'closed',
     message: 'Too many withdrawal decisions in the last hour. Try again shortly.',
+  },
+
+  // --- Polytos Phase 4 ------------------------------------------------------
+  //
+  // The window is the hour on everything here except marking a register,
+  // because each of these is deliberate work with a person in front of you.
+  // Nobody opens twenty benefit claims an hour, and a per-minute limit would
+  // be a brake on nothing.
+  //
+  // The `onStoreFailure` split is the one that matters. Opening a claim,
+  // assessing one, registering a beneficiary and marking a register all fail
+  // **open**: the protection against a double submission is the claim's own
+  // state and the register's own unique constraint, so a counter must not be
+  // stopped by a store that is down. Deciding a claim, paying one, reversing
+  // a payment and verifying a beneficiary fail **closed**, for the reason
+  // `savings.withdrawal_decision` and `savings.reverse` do: each is an
+  // irreversible act on the business's money or on who gets paid, and an
+  // unlimited attempt at one is worse than an outage.
+  'benefit.claim': {
+    limit: 40,
+    windowSeconds: 3600,
+    onStoreFailure: 'open',
+    message: 'Too many benefit claims opened in the last hour. Try again shortly.',
+  },
+  'benefit.assess': {
+    limit: 40,
+    windowSeconds: 3600,
+    onStoreFailure: 'open',
+    message: 'Too many claims assessed in the last hour. Try again shortly.',
+  },
+  'benefit.decision': {
+    limit: 30,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many benefit decisions in the last hour. Try again shortly.',
+  },
+  'benefit.pay': {
+    limit: 30,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many benefit payments in the last hour. Try again shortly.',
+  },
+  'benefit.reverse': {
+    limit: 10,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many benefit payment reversals in the last hour. Try again shortly.',
+  },
+  'beneficiary.manage': {
+    limit: 40,
+    windowSeconds: 3600,
+    onStoreFailure: 'open',
+    message: 'Too many beneficiary records in the last hour. Try again shortly.',
+  },
+  'beneficiary.verify': {
+    limit: 40,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many beneficiary verifications in the last hour. Try again shortly.',
+  },
+  'meeting.manage': {
+    limit: 30,
+    windowSeconds: 3600,
+    onStoreFailure: 'open',
+    message: 'Too many meeting changes in the last hour. Try again shortly.',
+  },
+  // A register is marked one member at a time, by somebody standing at a
+  // door with sixty people arriving. Per minute, and generous.
+  'meeting.attendance': {
+    limit: 120,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Attendance is being marked faster than expected. Try again in a moment.',
   },
   'savings.reverse': {
     limit: 20,

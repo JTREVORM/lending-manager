@@ -77,7 +77,10 @@ beforeAll(async () => {
   // that independence untested.
   const policyId = await publishTestPolicy({
     version: '40.0',
-    effectiveDaysAgo: 400,
+    // Its own effective day. `membership_policy_versions_effective_from_unique`
+    // means two suites cannot both publish for the same date, and the suites
+    // run sequentially against one database.
+    effectiveDaysAgo: 860,
     qualifyingMonthsConsecutive: false,
     withdrawalRule: 'allowed',
   });
@@ -557,9 +560,10 @@ describeDb('changing a beneficiary', () => {
     ).rejects.toThrow();
 
     await expect(
-      query(`delete from public.member_beneficiary_identities where beneficiary_id = $1`, [
-        id,
-      ]),
+      query(
+        `delete from public.member_beneficiary_identities where beneficiary_id = $1`,
+        [id],
+      ),
     ).rejects.toThrow();
   });
 

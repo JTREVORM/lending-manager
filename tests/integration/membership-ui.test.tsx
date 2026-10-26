@@ -471,7 +471,18 @@ describe('membership navigation', () => {
     expect(ids.indexOf('membership')).toBe(ids.indexOf('clients') + 1);
     expect(ids.indexOf('savings')).toBe(ids.indexOf('membership') + 1);
     expect(ids.indexOf('member_loans')).toBe(ids.indexOf('savings') + 1);
-    expect(ids.indexOf('member_loans')).toBe(ids.indexOf('loans') - 1);
+    // Polytos Phase 4 put Benefits and Meetings between Member Lending and
+    // Loans, so the membership programme's five modules are contiguous and in
+    // the order a member meets them: they join, they save, they borrow, they
+    // claim, they come to the meeting. Loans — the whole book, read by a loan
+    // officer — begins after them.
+    //
+    // Asserted as the whole chain rather than as "member_loans is before
+    // loans", so inserting a sixth module in the middle is a decision
+    // somebody has to make here rather than something a diff absorbs.
+    expect(ids.indexOf('benefits')).toBe(ids.indexOf('member_loans') + 1);
+    expect(ids.indexOf('meetings')).toBe(ids.indexOf('benefits') + 1);
+    expect(ids.indexOf('loans')).toBe(ids.indexOf('meetings') + 1);
   });
 
   it('requires the same capability the route guard requires', () => {

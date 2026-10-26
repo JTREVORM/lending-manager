@@ -41,6 +41,903 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      // --- Polytos Phase 4: benefits, beneficiaries and meetings ------------
+      //
+      // `member_beneficiary_identities` is a table of its own because Row
+      // Level Security is row-level: a single beneficiary table could only
+      // grant or deny the whole row, so the clerk who must see *that* a
+      // member has a verified next of kin would thereby see who she is. The
+      // same split `client_identities` makes for a National Identification
+      // Number.
+      //
+      // Every `Insert` and `Update` shape below is here because the generator
+      // emits them, not because anything uses them: 20261022001200 grants no
+      // INSERT on any of these tables and a narrow UPDATE on two, so every
+      // write goes through a SECURITY DEFINER function. A caller that tried
+      // one would be refused by the grant before the type ever mattered.
+
+      beneficiary_relationships: {
+        Row: {
+          key: string;
+          label: string;
+          sort_order: number;
+          condolence_eligible: boolean | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          sort_order: number;
+          condolence_eligible?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          label?: string;
+          sort_order?: number;
+          condolence_eligible?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      benefit_document_kinds: {
+        Row: {
+          key: string;
+          label: string;
+          claim_type: string | null;
+          sort_order: number;
+          is_required_for_assessment: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          claim_type?: string | null;
+          sort_order: number;
+          is_required_for_assessment?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          label?: string;
+          claim_type?: string | null;
+          sort_order?: number;
+          is_required_for_assessment?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      member_beneficiaries: {
+        Row: {
+          id: string;
+          beneficiary_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          relationship: string;
+          identity_digest: string;
+          is_primary: boolean;
+          status: string;
+          ended_on: string | null;
+          ended_reason: string | null;
+          supersedes_id: string | null;
+          verification_status: string;
+          verification_evidence_kind: string | null;
+          verification_evidence_path: string | null;
+          verification_note: string | null;
+          verified_at: string | null;
+          verified_by: string | null;
+          verified_by_label: string | null;
+          rejected_at: string | null;
+          rejected_reason: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          recorded_on: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          beneficiary_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          relationship: string;
+          identity_digest: string;
+          is_primary?: boolean;
+          status?: string;
+          ended_on?: string | null;
+          ended_reason?: string | null;
+          supersedes_id?: string | null;
+          verification_status?: string;
+          verification_evidence_kind?: string | null;
+          verification_evidence_path?: string | null;
+          verification_note?: string | null;
+          verified_at?: string | null;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          rejected_at?: string | null;
+          rejected_reason?: string | null;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          recorded_on: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          beneficiary_number?: string;
+          membership_id?: string;
+          client_id?: string;
+          branch_id?: string;
+          relationship?: string;
+          identity_digest?: string;
+          is_primary?: boolean;
+          status?: string;
+          ended_on?: string | null;
+          ended_reason?: string | null;
+          supersedes_id?: string | null;
+          verification_status?: string;
+          verification_evidence_kind?: string | null;
+          verification_evidence_path?: string | null;
+          verification_note?: string | null;
+          verified_at?: string | null;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          rejected_at?: string | null;
+          rejected_reason?: string | null;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          recorded_on?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      member_beneficiary_identities: {
+        Row: {
+          beneficiary_id: string;
+          full_name: string;
+          phone: string;
+          alternative_phone: string | null;
+          village_area: string | null;
+          district: string | null;
+          identity_reference: string | null;
+          identity_document_kind: string | null;
+          created_at: string;
+        };
+        Insert: {
+          beneficiary_id: string;
+          full_name: string;
+          phone: string;
+          alternative_phone?: string | null;
+          village_area?: string | null;
+          district?: string | null;
+          identity_reference?: string | null;
+          identity_document_kind?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          beneficiary_id?: string;
+          full_name?: string;
+          phone?: string;
+          alternative_phone?: string | null;
+          village_area?: string | null;
+          district?: string | null;
+          identity_reference?: string | null;
+          identity_document_kind?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      benefit_claims: {
+        Row: {
+          id: string;
+          claim_number: string;
+          claim_type: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          status: string;
+          event_date: string;
+          provider_name: string | null;
+          admission_at: string | null;
+          discharge_at: string | null;
+          bill_amount: number | null;
+          admission_nights: number | null;
+          admission_inclusive_days: number | null;
+          admission_elapsed_days: number | null;
+          deceased_name: string | null;
+          deceased_relationship: string | null;
+          beneficiary_id: string | null;
+          claimed_amount: number | null;
+          assessed_amount: number | null;
+          approved_amount: number | null;
+          submitted_at: string | null;
+          submitted_by: string | null;
+          submitted_by_label: string | null;
+          verified_at: string | null;
+          verified_by: string | null;
+          verified_by_label: string | null;
+          information_required_note: string | null;
+          assessed_at: string | null;
+          assessed_by: string | null;
+          assessed_by_label: string | null;
+          assessment_note: string | null;
+          decided_at: string | null;
+          decided_by: string | null;
+          decided_by_label: string | null;
+          decision_note: string | null;
+          rejected_reason: string | null;
+          cancelled_reason: string | null;
+          payment_id: string | null;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          claim_number: string;
+          claim_type: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          status?: string;
+          event_date: string;
+          provider_name?: string | null;
+          admission_at?: string | null;
+          discharge_at?: string | null;
+          bill_amount?: number | null;
+          admission_nights?: number | null;
+          admission_inclusive_days?: number | null;
+          admission_elapsed_days?: number | null;
+          deceased_name?: string | null;
+          deceased_relationship?: string | null;
+          beneficiary_id?: string | null;
+          claimed_amount?: number | null;
+          assessed_amount?: number | null;
+          approved_amount?: number | null;
+          submitted_at?: string | null;
+          submitted_by?: string | null;
+          submitted_by_label?: string | null;
+          verified_at?: string | null;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          information_required_note?: string | null;
+          assessed_at?: string | null;
+          assessed_by?: string | null;
+          assessed_by_label?: string | null;
+          assessment_note?: string | null;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decided_by_label?: string | null;
+          decision_note?: string | null;
+          rejected_reason?: string | null;
+          cancelled_reason?: string | null;
+          payment_id?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          claim_number?: string;
+          claim_type?: string;
+          membership_id?: string;
+          client_id?: string;
+          branch_id?: string;
+          policy_version_id?: string;
+          policy_version?: string;
+          status?: string;
+          event_date?: string;
+          provider_name?: string | null;
+          admission_at?: string | null;
+          discharge_at?: string | null;
+          bill_amount?: number | null;
+          admission_nights?: number | null;
+          admission_inclusive_days?: number | null;
+          admission_elapsed_days?: number | null;
+          deceased_name?: string | null;
+          deceased_relationship?: string | null;
+          beneficiary_id?: string | null;
+          claimed_amount?: number | null;
+          assessed_amount?: number | null;
+          approved_amount?: number | null;
+          submitted_at?: string | null;
+          submitted_by?: string | null;
+          submitted_by_label?: string | null;
+          verified_at?: string | null;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          information_required_note?: string | null;
+          assessed_at?: string | null;
+          assessed_by?: string | null;
+          assessed_by_label?: string | null;
+          assessment_note?: string | null;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decided_by_label?: string | null;
+          decision_note?: string | null;
+          rejected_reason?: string | null;
+          cancelled_reason?: string | null;
+          payment_id?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      benefit_claim_documents: {
+        Row: {
+          id: string;
+          claim_id: string | null;
+          beneficiary_id: string | null;
+          membership_id: string;
+          client_id: string;
+          kind: string;
+          object_path: string;
+          content_type: string;
+          byte_size: number;
+          label: string | null;
+          uploaded_at: string;
+          uploaded_by: string | null;
+          uploaded_by_label: string;
+          verification_status: string;
+          verified_at: string | null;
+          verified_by: string | null;
+          verified_by_label: string | null;
+          verification_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          claim_id?: string | null;
+          beneficiary_id?: string | null;
+          membership_id: string;
+          client_id: string;
+          kind: string;
+          object_path: string;
+          content_type: string;
+          byte_size: number;
+          label?: string | null;
+          uploaded_at?: string;
+          uploaded_by?: string | null;
+          uploaded_by_label?: string;
+          verification_status?: string;
+          verified_at?: string | null;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          verification_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          claim_id?: string | null;
+          beneficiary_id?: string | null;
+          membership_id?: string;
+          client_id?: string;
+          kind?: string;
+          object_path?: string;
+          content_type?: string;
+          byte_size?: number;
+          label?: string | null;
+          uploaded_at?: string;
+          uploaded_by?: string | null;
+          uploaded_by_label?: string;
+          verification_status?: string;
+          verified_at?: string | null;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          verification_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      benefit_assessment_snapshots: {
+        Row: {
+          claim_id: string;
+          claim_number: string;
+          claim_type: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          assessed_on: string;
+          event_date: string;
+          benefit_rate_bps: number | null;
+          min_admission_days: number | null;
+          fixed_benefit_amount: number | null;
+          waiting_period_days: number;
+          waiting_period_served: boolean;
+          bill_amount: number | null;
+          admission_nights: number | null;
+          admission_inclusive_days: number | null;
+          admission_elapsed_days: number | null;
+          year_basis: string | null;
+          period_from: string | null;
+          period_to: string | null;
+          annual_cap: number | null;
+          claims_per_year: number | null;
+          prior_claims_in_period: number | null;
+          prior_amount_in_period: number | null;
+          remaining_cap_before: number | null;
+          deceased_relationship: string | null;
+          relationship_eligible: boolean | null;
+          beneficiary_id: string | null;
+          beneficiary_number: string | null;
+          beneficiary_name: string | null;
+          beneficiary_relationship: string | null;
+          beneficiary_phone: string | null;
+          beneficiary_verified_at: string | null;
+          beneficiary_verified_by_label: string | null;
+          outstanding_member_loan_principal: number;
+          active_member_loan_count: number;
+          pledged_savings: number;
+          savings_balance: number;
+          verified_document_count: number;
+          verified_document_kinds: string[];
+          assessed_amount: number;
+          assessment_note: string | null;
+          assessed_by: string | null;
+          assessed_by_label: string;
+          captured_at: string;
+        };
+        Insert: {
+          claim_id: string;
+          claim_number: string;
+          claim_type: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          assessed_on: string;
+          event_date: string;
+          benefit_rate_bps?: number | null;
+          min_admission_days?: number | null;
+          fixed_benefit_amount?: number | null;
+          waiting_period_days: number;
+          waiting_period_served: boolean;
+          bill_amount?: number | null;
+          admission_nights?: number | null;
+          admission_inclusive_days?: number | null;
+          admission_elapsed_days?: number | null;
+          year_basis?: string | null;
+          period_from?: string | null;
+          period_to?: string | null;
+          annual_cap?: number | null;
+          claims_per_year?: number | null;
+          prior_claims_in_period?: number | null;
+          prior_amount_in_period?: number | null;
+          remaining_cap_before?: number | null;
+          deceased_relationship?: string | null;
+          relationship_eligible?: boolean | null;
+          beneficiary_id?: string | null;
+          beneficiary_number?: string | null;
+          beneficiary_name?: string | null;
+          beneficiary_relationship?: string | null;
+          beneficiary_phone?: string | null;
+          beneficiary_verified_at?: string | null;
+          beneficiary_verified_by_label?: string | null;
+          outstanding_member_loan_principal?: number;
+          active_member_loan_count?: number;
+          pledged_savings?: number;
+          savings_balance?: number;
+          verified_document_count: number;
+          verified_document_kinds: string[];
+          assessed_amount: number;
+          assessment_note?: string | null;
+          assessed_by?: string | null;
+          assessed_by_label: string;
+          captured_at?: string;
+        };
+        Update: {
+          claim_id?: string;
+          claim_number?: string;
+          claim_type?: string;
+          membership_id?: string;
+          membership_number?: string;
+          client_id?: string;
+          policy_version_id?: string;
+          policy_version?: string;
+          assessed_on?: string;
+          event_date?: string;
+          benefit_rate_bps?: number | null;
+          min_admission_days?: number | null;
+          fixed_benefit_amount?: number | null;
+          waiting_period_days?: number;
+          waiting_period_served?: boolean;
+          bill_amount?: number | null;
+          admission_nights?: number | null;
+          admission_inclusive_days?: number | null;
+          admission_elapsed_days?: number | null;
+          year_basis?: string | null;
+          period_from?: string | null;
+          period_to?: string | null;
+          annual_cap?: number | null;
+          claims_per_year?: number | null;
+          prior_claims_in_period?: number | null;
+          prior_amount_in_period?: number | null;
+          remaining_cap_before?: number | null;
+          deceased_relationship?: string | null;
+          relationship_eligible?: boolean | null;
+          beneficiary_id?: string | null;
+          beneficiary_number?: string | null;
+          beneficiary_name?: string | null;
+          beneficiary_relationship?: string | null;
+          beneficiary_phone?: string | null;
+          beneficiary_verified_at?: string | null;
+          beneficiary_verified_by_label?: string | null;
+          outstanding_member_loan_principal?: number;
+          active_member_loan_count?: number;
+          pledged_savings?: number;
+          savings_balance?: number;
+          verified_document_count?: number;
+          verified_document_kinds?: string[];
+          assessed_amount?: number;
+          assessment_note?: string | null;
+          assessed_by?: string | null;
+          assessed_by_label?: string;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+      benefit_payments: {
+        Row: {
+          id: string;
+          payment_number: string;
+          claim_id: string;
+          claim_number: string;
+          claim_type: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          amount: number;
+          recipient_kind: string;
+          recipient_name: string;
+          recipient_phone: string;
+          recipient_beneficiary_id: string | null;
+          recipient_beneficiary_number: string | null;
+          payment_method: string;
+          cash_account_id: string;
+          expense_account_id: string;
+          external_reference: string | null;
+          idempotency_key: string;
+          value_date: string;
+          journal_entry_id: string;
+          paid_at: string;
+          paid_by: string | null;
+          paid_by_label: string;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversed_by_label: string | null;
+          reversal_reason: string | null;
+          reversal_journal_entry_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          payment_number: string;
+          claim_id: string;
+          claim_number: string;
+          claim_type: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          amount: number;
+          recipient_kind: string;
+          recipient_name: string;
+          recipient_phone: string;
+          recipient_beneficiary_id?: string | null;
+          recipient_beneficiary_number?: string | null;
+          payment_method: string;
+          cash_account_id: string;
+          expense_account_id: string;
+          external_reference?: string | null;
+          idempotency_key: string;
+          value_date: string;
+          journal_entry_id: string;
+          paid_at?: string;
+          paid_by?: string | null;
+          paid_by_label?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversal_reason?: string | null;
+          reversal_journal_entry_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          payment_number?: string;
+          claim_id?: string;
+          claim_number?: string;
+          claim_type?: string;
+          membership_id?: string;
+          client_id?: string;
+          branch_id?: string;
+          amount?: number;
+          recipient_kind?: string;
+          recipient_name?: string;
+          recipient_phone?: string;
+          recipient_beneficiary_id?: string | null;
+          recipient_beneficiary_number?: string | null;
+          payment_method?: string;
+          cash_account_id?: string;
+          expense_account_id?: string;
+          external_reference?: string | null;
+          idempotency_key?: string;
+          value_date?: string;
+          journal_entry_id?: string;
+          paid_at?: string;
+          paid_by?: string | null;
+          paid_by_label?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversal_reason?: string | null;
+          reversal_journal_entry_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      membership_meetings: {
+        Row: {
+          id: string;
+          meeting_number: string;
+          branch_id: string;
+          meeting_type: string;
+          title: string;
+          venue: string;
+          scheduled_at: string;
+          meeting_date: string | null;
+          status: string;
+          agenda: string | null;
+          minutes: string | null;
+          minutes_finalised_at: string | null;
+          minutes_finalised_by: string | null;
+          minutes_finalised_by_label: string | null;
+          minutes_amended_at: string | null;
+          minutes_amendment_note: string | null;
+          rescheduled_from: string | null;
+          reschedule_reason: string | null;
+          cancelled_at: string | null;
+          cancellation_reason: string | null;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          meeting_number: string;
+          branch_id: string;
+          meeting_type?: string;
+          title: string;
+          venue: string;
+          scheduled_at: string;
+          meeting_date?: string | null;
+          status?: string;
+          agenda?: string | null;
+          minutes?: string | null;
+          minutes_finalised_at?: string | null;
+          minutes_finalised_by?: string | null;
+          minutes_finalised_by_label?: string | null;
+          minutes_amended_at?: string | null;
+          minutes_amendment_note?: string | null;
+          rescheduled_from?: string | null;
+          reschedule_reason?: string | null;
+          cancelled_at?: string | null;
+          cancellation_reason?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          meeting_number?: string;
+          branch_id?: string;
+          meeting_type?: string;
+          title?: string;
+          venue?: string;
+          scheduled_at?: string;
+          meeting_date?: string | null;
+          status?: string;
+          agenda?: string | null;
+          minutes?: string | null;
+          minutes_finalised_at?: string | null;
+          minutes_finalised_by?: string | null;
+          minutes_finalised_by_label?: string | null;
+          minutes_amended_at?: string | null;
+          minutes_amendment_note?: string | null;
+          rescheduled_from?: string | null;
+          reschedule_reason?: string | null;
+          cancelled_at?: string | null;
+          cancellation_reason?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      meeting_attendance: {
+        Row: {
+          id: string;
+          meeting_id: string;
+          membership_id: string;
+          client_id: string;
+          attendance: string;
+          absence_reason: string | null;
+          note: string | null;
+          marked_at: string;
+          marked_by: string | null;
+          marked_by_label: string;
+          corrected_at: string | null;
+          correction_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          meeting_id: string;
+          membership_id: string;
+          client_id: string;
+          attendance: string;
+          absence_reason?: string | null;
+          note?: string | null;
+          marked_at?: string;
+          marked_by?: string | null;
+          marked_by_label?: string;
+          corrected_at?: string | null;
+          correction_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          meeting_id?: string;
+          membership_id?: string;
+          client_id?: string;
+          attendance?: string;
+          absence_reason?: string | null;
+          note?: string | null;
+          marked_at?: string;
+          marked_by?: string | null;
+          marked_by_label?: string;
+          corrected_at?: string | null;
+          correction_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      meeting_attendance_corrections: {
+        Row: {
+          id: string;
+          attendance_id: string;
+          meeting_id: string;
+          membership_id: string;
+          previous_attendance: string;
+          previous_absence_reason: string | null;
+          previous_note: string | null;
+          previous_marked_by_label: string;
+          new_attendance: string;
+          new_absence_reason: string | null;
+          reason: string;
+          corrected_at: string;
+          corrected_by: string | null;
+          corrected_by_label: string;
+        };
+        Insert: {
+          id?: string;
+          attendance_id: string;
+          meeting_id: string;
+          membership_id: string;
+          previous_attendance: string;
+          previous_absence_reason?: string | null;
+          previous_note?: string | null;
+          previous_marked_by_label: string;
+          new_attendance: string;
+          new_absence_reason?: string | null;
+          reason: string;
+          corrected_at?: string;
+          corrected_by?: string | null;
+          corrected_by_label?: string;
+        };
+        Update: {
+          id?: string;
+          attendance_id?: string;
+          meeting_id?: string;
+          membership_id?: string;
+          previous_attendance?: string;
+          previous_absence_reason?: string | null;
+          previous_note?: string | null;
+          previous_marked_by_label?: string;
+          new_attendance?: string;
+          new_absence_reason?: string | null;
+          reason?: string;
+          corrected_at?: string;
+          corrected_by?: string | null;
+          corrected_by_label?: string;
+        };
+        Relationships: [];
+      };
+      meeting_action_items: {
+        Row: {
+          id: string;
+          meeting_id: string;
+          description: string;
+          assigned_to: string | null;
+          assigned_to_label: string | null;
+          due_on: string | null;
+          status: string;
+          completed_at: string | null;
+          completed_by: string | null;
+          completed_by_label: string | null;
+          completion_note: string | null;
+          created_by: string | null;
+          created_by_label: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          meeting_id: string;
+          description: string;
+          assigned_to?: string | null;
+          assigned_to_label?: string | null;
+          due_on?: string | null;
+          status?: string;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          completed_by_label?: string | null;
+          completion_note?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          meeting_id?: string;
+          description?: string;
+          assigned_to?: string | null;
+          assigned_to_label?: string | null;
+          due_on?: string | null;
+          status?: string;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          completed_by_label?: string | null;
+          completion_note?: string | null;
+          created_by?: string | null;
+          created_by_label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       member_loan_eligibility_snapshots: {
         Row: {
           loan_id: string;
@@ -3608,6 +4505,211 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      // --- Polytos Phase 4 -------------------------------------------------
+      //
+      // `benefit_claim_portal_view` is the one whose **column list is the
+      // disclosure policy**: `assessment_note` is absent, so a portal screen
+      // cannot render an assessor's reasoning about a member's documents by
+      // accident, and a future `select *` cannot reintroduce it.
+
+      benefit_claim_register: {
+        Row: {
+          id: string | null;
+          claim_number: string | null;
+          claim_type: string | null;
+          status: string | null;
+          event_date: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          membership_status: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          member_name: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          policy_version: string | null;
+          claimed_amount: number | null;
+          assessed_amount: number | null;
+          approved_amount: number | null;
+          provider_name: string | null;
+          bill_amount: number | null;
+          admission_nights: number | null;
+          admission_inclusive_days: number | null;
+          admission_elapsed_days: number | null;
+          deceased_name: string | null;
+          deceased_relationship: string | null;
+          deceased_relationship_label: string | null;
+          beneficiary_id: string | null;
+          beneficiary_number: string | null;
+          beneficiary_verification_status: string | null;
+          submitted_at: string | null;
+          submitted_by_label: string | null;
+          assessed_at: string | null;
+          assessed_by_label: string | null;
+          decided_at: string | null;
+          decided_by_label: string | null;
+          rejected_reason: string | null;
+          cancelled_reason: string | null;
+          information_required_note: string | null;
+          payment_id: string | null;
+          payment_number: string | null;
+          paid_on: string | null;
+          payment_reversed_at: string | null;
+          document_count: number | null;
+          verified_document_count: number | null;
+          required_document_count: number | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [];
+      };
+      benefit_claim_portal_view: {
+        Row: {
+          id: string | null;
+          claim_number: string | null;
+          claim_type: string | null;
+          status: string | null;
+          event_date: string | null;
+          client_id: string | null;
+          claimed_amount: number | null;
+          assessed_amount: number | null;
+          approved_amount: number | null;
+          provider_name: string | null;
+          bill_amount: number | null;
+          deceased_name: string | null;
+          information_required_note: string | null;
+          rejected_reason: string | null;
+          submitted_at: string | null;
+          decided_at: string | null;
+          payment_number: string | null;
+          paid_on: string | null;
+          paid_amount: number | null;
+          payment_method: string | null;
+        };
+        Relationships: [];
+      };
+      member_beneficiary_register: {
+        Row: {
+          id: string | null;
+          beneficiary_number: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          membership_status: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          member_name: string | null;
+          branch_id: string | null;
+          relationship: string | null;
+          relationship_label: string | null;
+          is_primary: boolean | null;
+          status: string | null;
+          verification_status: string | null;
+          verification_evidence_kind: string | null;
+          verified_at: string | null;
+          verified_by_label: string | null;
+          rejected_reason: string | null;
+          recorded_on: string | null;
+          recorded_by_label: string | null;
+          ended_on: string | null;
+          ended_reason: string | null;
+          supersedes_number: string | null;
+          document_count: number | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      benefit_payment_register: {
+        Row: {
+          id: string | null;
+          payment_number: string | null;
+          claim_id: string | null;
+          claim_number: string | null;
+          claim_type: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          client_id: string | null;
+          member_name: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          amount: number | null;
+          recipient_kind: string | null;
+          recipient_name: string | null;
+          recipient_beneficiary_number: string | null;
+          payment_method: string | null;
+          external_reference: string | null;
+          expense_account_code: string | null;
+          expense_account_name: string | null;
+          cash_account_code: string | null;
+          cash_account_name: string | null;
+          value_date: string | null;
+          journal_entry_id: string | null;
+          paid_at: string | null;
+          paid_by_label: string | null;
+          reversed_at: string | null;
+          reversed_by_label: string | null;
+          reversal_reason: string | null;
+          reversal_journal_entry_id: string | null;
+          is_live: boolean | null;
+        };
+        Relationships: [];
+      };
+      membership_meeting_register: {
+        Row: {
+          id: string | null;
+          meeting_number: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          meeting_type: string | null;
+          title: string | null;
+          venue: string | null;
+          scheduled_at: string | null;
+          meeting_date: string | null;
+          status: string | null;
+          agenda: string | null;
+          minutes: string | null;
+          minutes_finalised_at: string | null;
+          minutes_finalised_by_label: string | null;
+          minutes_amended_at: string | null;
+          minutes_amendment_note: string | null;
+          rescheduled_from: string | null;
+          reschedule_reason: string | null;
+          cancelled_at: string | null;
+          cancellation_reason: string | null;
+          attendance_recorded: number | null;
+          present_count: number | null;
+          absent_count: number | null;
+          expected_members: number | null;
+          action_count: number | null;
+          open_action_count: number | null;
+          created_at: string | null;
+          created_by_label: string | null;
+        };
+        Relationships: [];
+      };
+      meeting_attendance_register: {
+        Row: {
+          id: string | null;
+          meeting_id: string | null;
+          meeting_number: string | null;
+          meeting_title: string | null;
+          meeting_date: string | null;
+          branch_id: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          client_id: string | null;
+          client_number: string | null;
+          member_name: string | null;
+          member_phone: string | null;
+          attendance: string | null;
+          absence_reason: string | null;
+          note: string | null;
+          marked_at: string | null;
+          marked_by_label: string | null;
+          corrected_at: string | null;
+          correction_count: number | null;
+        };
+        Relationships: [];
+      };
       member_loan_register: {
         Row: {
           loan_id: string | null;
@@ -4886,6 +5988,521 @@ export type Database = {
     };
 
     Functions: {
+      // --- Polytos Phase 4: benefits -----------------------------------------
+      //
+      // Four, and the two that are SECURITY DEFINER each check a capability
+      // inside: a cap computed from a partial view of a member's history is a
+      // cap that over-approves, and a business-wide aggregate has no row for a
+      // policy to filter. `medical_benefit_consumed` is deliberately absent —
+      // it is an input to an assessment and to nothing else, and a type for it
+      // would advertise a call no screen should make.
+
+      /**
+       * Polytos Phase 4. Which expense account a benefit of this type is
+       * debited to: 5210 medical, 5220 family condolence, 5230 member
+       * bereavement. One answer to "which account does a condolence payment
+       * hit", rather than three literals scattered through the posting path.
+       */
+      benefit_expense_account: {
+        Args: { p_claim_type: string };
+        Returns: string | null;
+      };
+
+      /**
+       * Polytos Phase 4. What a benefit of this type is worth before caps:
+       * `(bill * rate_bps + 5000) / 10000` in bigint for medical — half-up,
+       * never floating point — and the policy's fixed figure for the other
+       * two.
+       *
+       * IMMUTABLE and pure, so a caller may evaluate it: it discloses only
+       * the arithmetic the published policy already states.
+       */
+      benefit_amount_for_claim: {
+        Args: {
+          p_claim_type: string;
+          p_rate_bps: number;
+          p_bill_amount: number | null;
+          p_condolence_benefit: number;
+          p_bereavement_benefit: number;
+        };
+        Returns: number | null;
+      };
+
+      /**
+       * Polytos Phase 4. The benefit year containing an event, under either
+       * basis. NULL bounds for a NULL basis, which is how an undecided annual
+       * period reaches the caller as a refusal rather than as a guess.
+       */
+      benefit_policy_year_bounds: {
+        Args: { p_basis: string; p_activated_on: string; p_event_date: string };
+        Returns: {
+          period_from: string | null;
+          period_to: string | null;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 4. The complete set of benefit claim transitions.
+       * Everything absent is refused by the guard: a draft cannot become
+       * paid, a rejected claim cannot be paid, an unassessed claim cannot be
+       * approved, and a paid claim cannot be paid twice.
+       */
+      benefit_claim_transition_allowed: {
+        Args: { p_from: string; p_to: string };
+        Returns: boolean;
+      };
+
+      /**
+       * Polytos Phase 4. What a member has committed of their medical benefit
+       * year: the money and the claim count, over assessed, approved and paid
+       * claims. Counting paid alone would let two approvals share one
+       * ceiling; a reversed claim is absent, because the money came back.
+       *
+       * Gated on `benefits:assess` or `benefits:approve` inside. As a
+       * SECURITY INVOKER read the figure would silently fall to zero for a
+       * caller who cannot see every one of the member's claims, and a cap
+       * computed from a partial history is a cap that over-approves.
+       */
+      medical_benefit_consumed: {
+        Args: {
+          p_membership_id: string;
+          p_period_from: string;
+          p_period_to: string;
+          p_exclude_claim_id?: string | null;
+        };
+        Returns: {
+          consumed_amount: number;
+          consumed_claims: number;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 4. The live primary beneficiary of a membership and its
+       * verification state — one row or none, and **no name**. SECURITY
+       * INVOKER, so a caller sees it only if their own policies let them; the
+       * identity is in `member_beneficiary_identities`, behind
+       * `membership:view_sensitive`.
+       */
+      member_primary_beneficiary: {
+        Args: { p_membership_id: string };
+        Returns: {
+          beneficiary_id: string | null;
+          beneficiary_number: string | null;
+          relationship: string | null;
+          verification_status: string | null;
+          verified_at: string | null;
+          verified_by_label: string | null;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 4. The claim a benefit-documents object belongs to,
+       * from segment four of its path. NULL for a beneficiary document, which
+       * denies every claim-scoped policy.
+       */
+      storage_path_claim_id: {
+        Args: { p_name: string };
+        Returns: string | null;
+      };
+
+      /**
+       * Polytos Phase 4. Whether an object is attached to a beneficiary record
+       * rather than to a claim. One spelling of the literal, in one place.
+       */
+      storage_path_is_beneficiary: {
+        Args: { p_name: string };
+        Returns: boolean;
+      };
+
+      /**
+       * Polytos Phase 4. Records a beneficiary against a live membership,
+       * unverified, writing the record and its identity together so neither
+       * can exist without the other.
+       *
+       * `p_supersedes_id` makes it a change: the old record becomes
+       * superseded with its details intact, which is refused while a
+       * bereavement claim on the membership is live — because the recipient
+       * the business is deciding on must not move under the decision.
+       */
+      register_member_beneficiary: {
+        Args: {
+          p_membership_id: string;
+          p_full_name: string;
+          p_relationship: string;
+          p_phone: string;
+          p_alternative_phone?: string | null;
+          p_village_area?: string | null;
+          p_district?: string | null;
+          p_identity_document_kind?: string | null;
+          p_identity_reference?: string | null;
+          p_is_primary?: boolean;
+          p_supersedes_id?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Verifies or refuses a beneficiary record. Refuses a
+       * verification from whoever recorded it, by profile id **and** by actor
+       * label — the label because an archived account leaves `recorded_by`
+       * NULL, and a control that stopped applying when somebody left would be
+       * the worst kind.
+       */
+      verify_member_beneficiary: {
+        Args: {
+          p_beneficiary_id: string;
+          p_verified: boolean;
+          p_evidence_kind: string;
+          p_evidence_path?: string | null;
+          p_note?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Polytos Phase 4. Ends a nomination with a reason, keeping every detail. */
+      revoke_member_beneficiary: {
+        Args: { p_beneficiary_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Opens a benefit claim as a draft under the
+       * membership's own policy version. One function for all three types,
+       * with the schema's CHECK constraints refusing the wrong combination —
+       * three signatures over one table would mean the one that drifted was
+       * the one nobody tested.
+       *
+       * The claimed amount is derived from the policy rather than accepted,
+       * so a claimant cannot ask for more than the rate allows.
+       */
+      open_benefit_claim: {
+        Args: {
+          p_membership_id: string;
+          p_claim_type: string;
+          p_event_date?: string | null;
+          p_provider_name?: string | null;
+          p_admission_at?: string | null;
+          p_discharge_at?: string | null;
+          p_bill_amount?: number | null;
+          p_deceased_name?: string | null;
+          p_deceased_relationship?: string | null;
+          p_beneficiary_id?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Submits a draft, freezing every fact it asserts.
+       * Deliberately validates no eligibility rule: a claim that cannot
+       * succeed should be recorded and then refused with a reason the member
+       * can be shown.
+       */
+      submit_benefit_claim: { Args: { p_claim_id: string }; Returns: string };
+
+      /** Polytos Phase 4. Marks a claim as being checked, so the register shows it. */
+      begin_benefit_verification: { Args: { p_claim_id: string }; Returns: string };
+
+      /** Polytos Phase 4. Puts a claim back to the claimant, saying what is missing. */
+      request_benefit_information: {
+        Args: { p_claim_id: string; p_note: string };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Assesses a claim and returns the amount.
+       *
+       * Refuses on every eligibility code, computes in integer arithmetic,
+       * and freezes a snapshot of everything relied on — including the payee,
+       * by copy. Holds an advisory lock on the membership, so two medical
+       * assessments cannot share one annual cap.
+       */
+      assess_benefit_claim: {
+        Args: { p_claim_id: string; p_note?: string | null };
+        Returns: number;
+      };
+
+      /**
+       * Polytos Phase 4. Approves an assessed claim and returns the amount.
+       *
+       * Refuses an approval from whoever assessed it, and re-asks every
+       * eligibility rule because an approval is a fresh decision.
+       * `p_approved_amount` exists for the day the client settles whether an
+       * eligible claim may be paid in part; until then anything below the
+       * assessment is refused with the decision named.
+       */
+      approve_benefit_claim: {
+        Args: {
+          p_claim_id: string;
+          p_approved_amount?: number | null;
+          p_note?: string | null;
+        };
+        Returns: number;
+      };
+
+      /**
+       * Polytos Phase 4. Refuses a claim with a reason, at any stage a refusal
+       * can follow — including after approval, which is how an approval is
+       * withdrawn before the money goes.
+       */
+      reject_benefit_claim: {
+        Args: { p_claim_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /** Polytos Phase 4. Withdraws a claim before a decision, with a reason. */
+      cancel_benefit_claim: {
+        Args: { p_claim_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Records an uploaded document, unchecked, having
+       * first confirmed the object is really in the bucket. The object itself
+       * is written by the caller's own session through the storage policies,
+       * so the two halves are authorised independently.
+       */
+      attach_benefit_document: {
+        Args: {
+          p_claim_id: string | null;
+          p_beneficiary_id: string | null;
+          p_kind: string;
+          p_object_path: string;
+          p_content_type: string;
+          p_byte_size: number;
+          p_label?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Records that somebody checked a piece of evidence.
+       * Refuses a check from whoever attached it: evidence uploaded and
+       * attested by one hand is evidence nobody checked.
+       */
+      verify_benefit_document: {
+        Args: { p_document_id: string; p_verified: boolean; p_note?: string | null };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Pays an approved benefit: debit 5210/5220/5230,
+       * credit the branch cash account. The recipient comes from the
+       * assessment snapshot and never from the live beneficiary record.
+       * Idempotent on `p_idempotency_key`, with the capability check above the
+       * replay (ADR-056).
+       */
+      post_benefit_payment: {
+        Args: {
+          p_claim_id: string;
+          p_payment_method: string;
+          p_external_reference: string | null;
+          p_idempotency_key: string;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Reverses a payment: posts the contra journal, links
+       * the pair, and moves the claim to the terminal reversed state. Never
+       * deletes, never reopens the claim, and releases the annual cap the
+       * claim had consumed because the money came back.
+       */
+      reverse_benefit_payment: {
+        Args: { p_payment_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Schedules a meeting at a branch the caller can see.
+       * No mandatory day or hour is imposed: the documents say monthly and
+       * nothing more.
+       */
+      schedule_membership_meeting: {
+        Args: {
+          p_branch_id: string;
+          p_meeting_type: string;
+          p_title: string;
+          p_venue: string;
+          p_scheduled_at: string;
+          p_agenda?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Moves a scheduled meeting, keeping the **first** date
+       * it was announced for — that is the one members remember, and keeping
+       * the most recent one instead would lose it.
+       */
+      reschedule_membership_meeting: {
+        Args: {
+          p_meeting_id: string;
+          p_scheduled_at: string;
+          p_reason: string;
+          p_venue?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Cancels a scheduled meeting, and refuses to cancel
+       * one people attended — a meeting that took place is marked held,
+       * whatever anybody wants the record to say.
+       */
+      cancel_membership_meeting: {
+        Args: { p_meeting_id: string; p_reason: string };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Marks or corrects one member's attendance.
+       *
+       * The same answer twice is a no-op, so a double tap cannot rewrite a
+       * register; a different answer is a correction and needs a reason,
+       * which is appended to `meeting_attendance_corrections` before the row
+       * moves.
+       */
+      mark_meeting_attendance: {
+        Args: {
+          p_meeting_id: string;
+          p_membership_id: string;
+          p_attendance: string;
+          p_absence_reason?: string | null;
+          p_note?: string | null;
+          p_correction_reason?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Writes or amends a held meeting's minutes. Refused
+       * for a meeting that has not happened, and an amendment to finalised
+       * minutes needs a note saying what changed.
+       */
+      record_meeting_minutes: {
+        Args: {
+          p_meeting_id: string;
+          p_minutes: string;
+          p_amendment_note?: string | null;
+        };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Marks minutes as the record. A separate act from
+       * writing them, because minutes everybody can still edit are not a
+       * record of what was decided.
+       */
+      finalise_meeting_minutes: { Args: { p_meeting_id: string }; Returns: string };
+
+      /**
+       * Polytos Phase 4. Records something a meeting decided somebody would
+       * do. The assignee is a staff profile with an active account, not a
+       * typed name: "somebody will look into it" is how an action item becomes
+       * nobody's.
+       */
+      add_meeting_action_item: {
+        Args: {
+          p_meeting_id: string;
+          p_description: string;
+          p_assigned_to?: string | null;
+          p_due_on?: string | null;
+        };
+        Returns: string;
+      };
+
+      /** Polytos Phase 4. Moves an action item along, stamping who closed it. */
+      update_meeting_action_item: {
+        Args: { p_action_id: string; p_status: string; p_note?: string | null };
+        Returns: string;
+      };
+
+      /**
+       * Polytos Phase 4. Every reason a claim cannot be assessed, as codes
+       * rather than one raise, so an assessment screen can list them all at
+       * once instead of revealing them a refusal at a time.
+       *
+       * The same function `assess_benefit_claim` refuses on, which is what
+       * makes the screen's answer and the button's answer the same answer.
+       * Seven of its sixteen codes name a client decision nobody has made.
+       */
+      benefit_claim_eligibility: {
+        Args: { p_claim_id: string };
+        Returns: {
+          failure_code: string;
+          detail: string;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 4. The Benefits dashboard in one round trip, gated on
+       * `benefits:view`. Money counts live payments only: a reversed payment
+       * is money the business did not spend, and counting it would disagree
+       * with the trial balance.
+       */
+      benefit_summary: {
+        Args: { p_from?: string | null; p_to?: string | null };
+        Returns: {
+          claims_draft: number;
+          claims_submitted: number;
+          claims_under_verification: number;
+          claims_information_required: number;
+          claims_assessed: number;
+          claims_approved: number;
+          claims_rejected: number;
+          claims_paid: number;
+          claims_total: number;
+          paid_total: number;
+          paid_medical: number;
+          paid_condolence: number;
+          paid_bereavement: number;
+          payments_reversed: number;
+          reversed_total: number;
+          approved_awaiting_payment: number;
+          members_with_beneficiary: number;
+          members_with_verified_beneficiary: number;
+          beneficiaries_awaiting_verification: number;
+          live_memberships: number;
+          meetings_upcoming: number;
+          meetings_held_in_period: number;
+          attendance_recorded_in_period: number;
+          meeting_actions_open: number;
+          benefits_open: boolean;
+          blocked_reason: string | null;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 4. What the benefits scheme cost over a period, by
+       * promise, read from the General Ledger rather than from the claim
+       * table — so it reconciles against the trial balance by construction
+       * and a disagreement between the two becomes visible. Gated on
+       * `reports:view_financial`, because who may read the company's expense
+       * accounts is a financial-reporting question.
+       */
+      benefit_expense_by_type: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          account_code: string;
+          account_name: string;
+          claim_type: string | null;
+          posted_debits: number;
+          posted_credits: number;
+          net_expense: number;
+        }[];
+      };
+
+      /**
+       * Polytos Phase 4. Why benefits are shut under a policy version, naming
+       * the undecided rules in the words a person would use. The counterpart
+       * of `member_lending_blocked_reason`: a banner that does not say what is
+       * missing teaches the reader to scroll past it.
+       */
+      benefits_blocked_reason: {
+        Args: { p_version_id: string };
+        Returns: string | null;
+      };
+
       // --- Polytos Phase 3: member loans -------------------------------------
       // The eligibility engine, the configurable interest engine and the
       // savings-pledge reads. `member_loan_eligibility_of` and
