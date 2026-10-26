@@ -437,7 +437,7 @@ describe('memberLoanCeiling', () => {
     expect(memberLoanCeiling(toUgx(600_000), null)).toBeNull();
   });
 
-  it('multiplies the savings base by the multiplier, half-up', () => {
+  it('multiplies the savings base by the multiplier, rounding down', () => {
     expect(memberLoanCeiling(toUgx(600_000), 20_000)).toBe(1_200_000);
     expect(memberLoanCeiling(toUgx(600_000), 10_000)).toBe(600_000);
     expect(memberLoanCeiling(toUgx(600_000), 5_000)).toBe(300_000);
@@ -627,6 +627,7 @@ describe('memberLendingReadiness', () => {
     });
 
     expect(readiness.isReady).toBe(false);
+    expect(readiness.pricingReady, 'nothing can be priced either').toBe(false);
     expect(readiness.outstanding).toEqual([
       'interest_basis',
       'interest_method',
@@ -643,7 +644,7 @@ describe('memberLendingReadiness', () => {
         savingsToLoanMultiplierBps: 20_000,
         monthAnchor: 'clamp_to_month_end',
       }),
-    ).toEqual({ outstanding: [], isReady: true });
+    ).toEqual({ outstanding: [], isReady: true, pricingReady: true });
   });
 
   it('treats a decided zero as decided', () => {
@@ -658,6 +659,7 @@ describe('memberLendingReadiness', () => {
 
     expect(readiness.outstanding).toEqual([]);
     expect(readiness.isReady).toBe(true);
+    expect(readiness.pricingReady).toBe(true);
   });
 
   it('reports the anchor alone when the three policy questions are answered', () => {
@@ -674,6 +676,30 @@ describe('memberLendingReadiness', () => {
 
     expect(readiness.outstanding).toEqual(['month_anchor']);
     expect(readiness.isReady).toBe(false);
+
+    // And the distinction the banner depends on. A reader told "nothing can be
+    // approved" while weekly member loans are being approved every day stops
+    // believing the banner, so the two states are reported separately.
+    expect(readiness.pricingReady).toBe(true);
+  });
+
+  it('is not pricing-ready while a policy question is open, anchor or no anchor', () => {
+    for (const open of [
+      { interestBasis: null },
+      { interestMethod: null },
+      { savingsToLoanMultiplierBps: null },
+    ]) {
+      const readiness = memberLendingReadiness({
+        interestBasis: 'per_month',
+        interestMethod: 'flat',
+        savingsToLoanMultiplierBps: 20_000,
+        monthAnchor: 'clamp_to_month_end',
+        ...open,
+      });
+
+      expect(readiness.pricingReady, JSON.stringify(open)).toBe(false);
+      expect(readiness.isReady).toBe(false);
+    }
   });
 });
 

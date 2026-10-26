@@ -78,11 +78,20 @@ export function MemberLendingStatus({
       }
     >
       <div className="min-w-0 space-y-3">
-        <p>
-          Applications can be prepared and eligibility can be read. Nothing can be
-          approved: the database refuses it, so there is no risk of a loan being written
-          on terms nobody settled.
-        </p>
+        {readiness.pricingReady ? (
+          <p>
+            A member loan can be priced and approved, but only where it is collected
+            weekly — the programme&rsquo;s shorter terms. A longer loan is collected
+            calendar-monthly, which cannot be scheduled until the decision below is made,
+            and the database refuses it rather than guessing a date.
+          </p>
+        ) : (
+          <p>
+            Applications can be prepared and eligibility can be read. Nothing can be
+            approved: the database refuses it, so there is no risk of a loan being written
+            on terms nobody settled.
+          </p>
+        )}
 
         {open.length > 0 ? (
           <ul className="min-w-0 space-y-2">

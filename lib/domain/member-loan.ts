@@ -531,6 +531,23 @@ export interface MemberLendingReadiness {
   /** The decisions still open, in the order above. */
   readonly outstanding: readonly MemberLendingDecisionKey[];
   readonly isReady: boolean;
+  /**
+   * Whether a member loan can be *priced* at all.
+   *
+   * The three policy questions — the basis, the method and the multiplier —
+   * decide what a member loan costs and how much of it a member may have.
+   * Answering all three opens weekly member loans up to the programme's weekly
+   * boundary, and leaves nothing else to settle for them.
+   *
+   * The fourth decision, the month anchor, is about *scheduling* rather than
+   * pricing: without it the calendar-monthly cadence cannot generate dates, so
+   * loans beyond the weekly boundary are refused and shorter ones are not.
+   *
+   * Separate from `isReady` because the two states are genuinely different and
+   * a reader told "nothing can be approved" while weekly loans are being
+   * approved every day stops believing the banner. See ADR-059.
+   */
+  readonly pricingReady: boolean;
 }
 
 /**
@@ -554,7 +571,13 @@ export function memberLendingReadiness(state: {
   if (state.savingsToLoanMultiplierBps === null) {
     outstanding.push('savings_to_loan_multiplier_bps');
   }
+  // Recorded before the anchor, so `pricingReady` is "the three are answered"
+  // rather than "nothing is outstanding but the anchor" — which would be the
+  // same thing today and would stop being so the moment a fifth decision
+  // joined the list.
+  const pricingReady = outstanding.length === 0;
+
   if (state.monthAnchor === null) outstanding.push('month_anchor');
 
-  return { outstanding, isReady: outstanding.length === 0 };
+  return { outstanding, isReady: outstanding.length === 0, pricingReady };
 }

@@ -38,6 +38,20 @@ import type { MemberLoanPage, MemberLoanRow } from '@/lib/data/member-loans';
  * that are *about the membership*: which member, which policy version, what
  * savings secure it. The rest of the loan is one tap away in the place it has
  * always been.
+ *
+ * ## Why the membership number and the pledge drop below `2xl`
+ *
+ * Nine columns do not fit the counter laptop. At 1440px the rail takes 256 of
+ * it, and the status badge was clipped at the table's right edge — the column
+ * was there, and the word in it was not readable without scrolling the table
+ * sideways, which is the worst of both.
+ *
+ * The two that go are the two a reader can get elsewhere in one tap: the
+ * membership number is on the loan's own screen beside everything else frozen
+ * at approval, and the pledge is there too. What stays is what this register
+ * is *for* — which loan, whose, how much, how long, how it is collected, what
+ * is left, and what state it is in. Found by photographing the screen at the
+ * width it is used at, not by reading the component.
  */
 export function MemberLoanRegister({
   page,
@@ -158,7 +172,7 @@ export function MemberLoanRegister({
                 <tr>
                   <TableHead width="ref">Loan</TableHead>
                   <TableHead width="name-wide">Member</TableHead>
-                  <TableHead width="ref" hideBelow="xl">
+                  <TableHead width="ref" hideBelow="2xl">
                     Membership
                   </TableHead>
                   <TableHead width="money" align="numeric">
@@ -173,7 +187,7 @@ export function MemberLoanRegister({
                   <TableHead width="money" align="numeric">
                     Outstanding
                   </TableHead>
-                  <TableHead width="money" align="numeric" hideBelow="xl">
+                  <TableHead width="money" align="numeric" hideBelow="2xl">
                     Pledged
                   </TableHead>
                   <TableHead width="status">Status</TableHead>
@@ -193,7 +207,7 @@ export function MemberLoanRegister({
                     <TableCell width="name-wide">
                       <TableLead primary={row.fullName} secondary={row.clientNumber} />
                     </TableCell>
-                    <TableCell width="ref" className="font-mono" hideBelow="xl">
+                    <TableCell width="ref" className="font-mono" hideBelow="2xl">
                       {row.membershipNumber ?? '—'}
                     </TableCell>
                     <TableCell width="money" align="numeric">
@@ -208,7 +222,7 @@ export function MemberLoanRegister({
                     <TableCell width="money" align="numeric">
                       <Money amount={row.totalOutstanding} variant="bare" />
                     </TableCell>
-                    <TableCell width="money" align="numeric" hideBelow="xl">
+                    <TableCell width="money" align="numeric" hideBelow="2xl">
                       <Money amount={row.pledgedAmount} variant="bare" />
                     </TableCell>
                     <TableCell width="status">
