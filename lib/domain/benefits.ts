@@ -110,6 +110,14 @@ export function benefitRecipientKindFor(type: BenefitClaimType): BenefitRecipien
   return type === 'member_bereavement' ? 'beneficiary' : 'member';
 }
 
+/** How a payment names its payee on screen. */
+export const BENEFIT_RECIPIENT_KIND_LABELS: Readonly<
+  Record<BenefitRecipientKind, string>
+> = {
+  member: 'Paid to the member',
+  beneficiary: 'Paid to the registered next of kin',
+} as const;
+
 // ---------------------------------------------------------------------------
 // The lifecycle
 // ---------------------------------------------------------------------------

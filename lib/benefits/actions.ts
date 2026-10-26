@@ -59,6 +59,10 @@ import { mapDatabaseError } from '@/lib/db-errors';
 import { toPublicError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { checkActorRateLimit } from '@/lib/security/rate-limit';
+import {
+  BENEFICIARY_PATH_SUBJECT,
+  uploadBenefitDocument,
+} from '@/lib/storage/benefit-documents';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   approveClaimSchema,
@@ -986,6 +990,127 @@ export async function attachBenefitDocumentAction(input: {
     message: 'Document attached. It still needs checking by somebody else.',
     documentId: typeof data === 'string' ? data : undefined,
   };
+}
+
+/**
+ * Upload a piece of evidence and record it, from a form.
+ *
+ * The two halves of `attachBenefitDocumentAction` with the file in front:
+ * store the object through the caller's own session, then record the metadata
+ * only if that succeeded. In that order, because a metadata row naming an
+ * object that does not exist would make a claim look evidenced when it is not
+ * — and the verification function checks the object's existence, so the row
+ * would then be unverifiable rather than merely wrong.
+ *
+ * ## The membership is read, never taken from the form
+ *
+ * The storage path carries the membership id, and the storage policies read
+ * it back out of the path to decide who may write there. A membership id
+ * supplied by the browser would therefore be a request to write into another
+ * member's folder: the policy would refuse it, and the metadata guard would
+ * refuse the row — but the right answer is not to ask in the first place. So
+ * it is read from the claim or the beneficiary record, as the caller, which
+ * means a caller who cannot see that claim gets nothing to upload against.
+ */
+export async function uploadBenefitDocumentAction(
+  _previous: BenefitActionResult | undefined,
+  formData: FormData,
+): Promise<BenefitActionResult> {
+  const claimId = formData.get('claimId');
+  const beneficiaryId = formData.get('beneficiaryId');
+  const forClaim = typeof claimId === 'string' && claimId !== '';
+
+  let actor;
+  try {
+    actor = await requirePermission(forClaim ? 'benefits:claim' : 'beneficiaries:manage');
+  } catch (error) {
+    return { ok: false, message: toPublicError(error).message };
+  }
+
+  const limit = await checkActorRateLimit('uploads.document', actor.profileId);
+  if (!limit.allowed) return { ok: false, message: limit.message };
+
+  const parsed = parseSafely(attachDocumentSchema, {
+    claimId: forClaim ? claimId : null,
+    beneficiaryId:
+      typeof beneficiaryId === 'string' && beneficiaryId !== '' ? beneficiaryId : null,
+    kind: formData.get('kind'),
+    label: formData.get('label'),
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: FIELD_ERROR_MESSAGE,
+      fieldErrors: parsed.error.fieldErrors,
+    };
+  }
+
+  const file = formData.get('file');
+
+  if (!(file instanceof File)) {
+    return { ok: false, message: 'Choose a file to upload.' };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Read as the caller: a claim or a beneficiary record they cannot see
+  // yields nothing, and the upload never happens.
+  const { data: owner, error: ownerError } = forClaim
+    ? await supabase
+        .from('benefit_claim_register')
+        .select('membership_id')
+        .eq('id', parsed.data.claimId ?? '')
+        .maybeSingle()
+    : await supabase
+        .from('member_beneficiary_register')
+        .select('membership_id')
+        .eq('id', parsed.data.beneficiaryId ?? '')
+        .maybeSingle();
+
+  if (ownerError !== null) {
+    logger.warn('Could not resolve the membership a benefit document belongs to.', {
+      code: ownerError.code,
+    });
+    return { ok: false, message: mapDatabaseError(ownerError).message };
+  }
+
+  const membershipId = (owner as { readonly membership_id?: string } | null)
+    ?.membership_id;
+
+  if (membershipId === undefined) {
+    return {
+      ok: false,
+      message: forClaim
+        ? 'That claim could not be found.'
+        : 'That beneficiary record could not be found.',
+    };
+  }
+
+  // Segment four of the path: the claim, or the literal the database spells in
+  // `storage_path_is_beneficiary()`.
+  const subject = forClaim ? (parsed.data.claimId ?? '') : BENEFICIARY_PATH_SUBJECT;
+
+  const upload = await uploadBenefitDocument(
+    membershipId,
+    parsed.data.kind,
+    subject,
+    file,
+  );
+
+  if (!upload.ok || upload.path === undefined) {
+    return { ok: false, message: upload.message ?? 'That file could not be saved.' };
+  }
+
+  return attachBenefitDocumentAction({
+    claimId: parsed.data.claimId ?? null,
+    beneficiaryId: parsed.data.beneficiaryId ?? null,
+    kind: parsed.data.kind,
+    objectPath: upload.path,
+    contentType: upload.contentType ?? file.type,
+    byteSize: upload.byteSize ?? file.size,
+    label: parsed.data.label ?? null,
+  });
 }
 
 /**

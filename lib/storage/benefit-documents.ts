@@ -72,6 +72,15 @@ export const BENEFIT_BUCKET = 'benefit-documents';
  */
 const SIGNED_URL_TTL_SECONDS = 60;
 
+/**
+ * Segment four of a beneficiary document's path.
+ *
+ * The literal the database spells in `storage_path_is_beneficiary()`, defined
+ * once here so the application and the storage policies cannot disagree about
+ * it. A claim's documents use the claim's id in the same position.
+ */
+export const BENEFICIARY_PATH_SUBJECT = 'beneficiary';
+
 export interface BenefitUploadOutcome {
   readonly ok: boolean;
   readonly path?: string;
