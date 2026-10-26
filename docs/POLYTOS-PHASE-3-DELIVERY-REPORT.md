@@ -577,9 +577,30 @@ with its before and after in `docs/POLYTOS-PHASE-3-TEST-REPORT.md` §9.
 | **Repository** | `JTREVORM/lending-manager` |
 | **Development branch** | `claude/beautiful-mccarthy-lth3q2` |
 | **Based on** | `0ecc7657967ceeddc1aa55b3a03fe22732570574` |
-| **Final commit SHA** | *see the delivery summary* |
-| **GitHub Actions run** | *see the delivery summary* |
-| **CI status** | *see the delivery summary* |
+| **Final commit SHA** | `b0bb1c515f010a204ffd98208c3da98e0dcfceb1` |
+| **GitHub Actions run** | [40274937992](https://github.com/JTREVORM/lending-manager/actions/runs/40274937992) |
+| **CI status** | **all three jobs passed** |
+
+### The CI run on the final SHA
+
+| Job | Conclusion | What it ran |
+| --- | --- | --- |
+| `checks, unit/integration, build` | ✅ success | typecheck, lint, format, 2,441 unit + integration tests, the money audit, a secret scan over source **and full history**, the production dependency audit, the production build, the client-bundle secret scan, and the bundle-size assertions |
+| `database (real PostgreSQL)` | ✅ success | all four vitest projects against a cluster rebuilt from every migration, then the upgrade and financial-regression check |
+| `browser E2E (production build, fresh seed)` | ✅ success | the stack brought up from zero — migrate, seed, build, serve — then the whole Playwright suite against it |
+
+Eight commits on the branch, four of them this session:
+
+```
+b0bb1c5  docs(polytos): Phase 3 specification, ADR-059, ADR-060 and the delivery report
+cd1e8ea  test(polytos): the member loan browser suite, on a partially open programme
+2c2789b  test(polytos): the member loan demonstration against an existing loan book
+47438b1  fix(polytos): two member-lending defects the browser found
+f5e3927  feat(polytos): the member loan demonstration seed and its regression gate
+1b14519  feat(polytos): the member lending interface, reporting and audit trail
+7a8df0d  feat(polytos): the member-loan domain, the calendar cadence, and 171 tests
+0c5d6d6  feat(polytos): Phase 3 database foundation for member loans
+```
 
 ### Nothing was merged or deployed
 
