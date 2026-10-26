@@ -4,7 +4,9 @@ import { Card } from '@/components/ui/card';
 import { ClientStatusBadge } from '@/components/clients/client-status-badge';
 import { PortalPaymentHistory } from '@/components/payments/portal-payment-history';
 import { PortalLoanCard } from '@/components/portal/portal-loan-card';
+import { PortalClaimsPanel } from '@/components/benefits/portal-claims-panel';
 import { PortalSavingsPanel } from '@/components/savings/portal-savings-panel';
+import { listPortalClaims } from '@/lib/data/benefits';
 import { listClientDelinquency } from '@/lib/data/delinquency';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
@@ -100,16 +102,21 @@ export default async function PortalPage() {
   // name, locale, timezone and logo, with the registration and tax numbers
   // left out. The portal shell above already reads it, so with the
   // request-scoped memoisation on that function this costs nothing here.
-  const [payments, branding, positions, loans, savingsAccount] = await Promise.all([
-    client === null ? Promise.resolve([]) : listClientPayments(client.id),
-    getPortalBranding(),
-    client === null ? Promise.resolve([]) : listClientDelinquency(client.id),
-    client === null ? Promise.resolve([]) : listClientLoans(client.id),
-    // Polytos Phase 2. Through the identity clause on `clients.profile_id`,
-    // so a member reads their own and nothing else — the panel contains no
-    // check about members, because the policy already is one.
-    client === null ? Promise.resolve(null) : getSavingsAccountForClient(client.id),
-  ]);
+  const [payments, branding, positions, loans, savingsAccount, benefitClaims] =
+    await Promise.all([
+      client === null ? Promise.resolve([]) : listClientPayments(client.id),
+      getPortalBranding(),
+      client === null ? Promise.resolve([]) : listClientDelinquency(client.id),
+      client === null ? Promise.resolve([]) : listClientLoans(client.id),
+      // Polytos Phase 2. Through the identity clause on `clients.profile_id`,
+      // so a member reads their own and nothing else — the panel contains no
+      // check about members, because the policy already is one.
+      client === null ? Promise.resolve(null) : getSavingsAccountForClient(client.id),
+      // Polytos Phase 4. Through the same identity clause, and through the view
+      // whose column list is the disclosure policy — so an assessor's note
+      // cannot reach this page even if a later edit asked for every column.
+      client === null ? Promise.resolve([]) : listPortalClaims(),
+    ]);
 
   // The second round of savings reads, which need the account id from the
   // first. Sequential by necessity rather than by choice, and skipped
@@ -211,6 +218,12 @@ export default async function PortalPage() {
           recent={[...savingsRecent].reverse().slice(0, 10)}
         />
       )}
+
+      {/* Benefit claims after savings and before loans, for the same reason
+          savings come first: a claim is money the business owes the member,
+          and a loan is money they owe it. Absent rather than empty for
+          somebody who has never claimed. */}
+      <PortalClaimsPanel claims={benefitClaims} />
 
       {client !== null && current.length > 0 ? (
         <section aria-labelledby="my-loans-heading" className="min-w-0 space-y-4">

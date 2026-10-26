@@ -575,3 +575,53 @@ export async function listOpenMeetingActions(
 
   return ((data ?? []) as unknown as Parameters<typeof toAction>[0][]).map(toAction);
 }
+
+// ---------------------------------------------------------------------------
+// Who an action item can be given to
+// ---------------------------------------------------------------------------
+
+export interface MeetingAssignee {
+  readonly profileId: string;
+  readonly fullName: string;
+}
+
+/**
+ * The members of staff an action item can be assigned to.
+ *
+ * Read as the caller from `profiles`, whose select policy requires
+ * `users:view` — which a Manager and an Owner hold and a
+ * Secretary/Treasurer does not. So this returns an empty list for the person
+ * who most often writes the minutes, and that is not a fault to paper over:
+ * the form says it cannot offer names rather than pretending there are none,
+ * and the item is recorded unassigned.
+ *
+ * It is not fixed by reading with a privileged client. "Who works here" is a
+ * staff directory question, `users:view` is the capability that answers it,
+ * and widening it for the convenience of one form would widen it for
+ * everything. An action item assigned to nobody is a real and ordinary thing;
+ * a Secretary who needs one assigned asks the Manager who holds the names.
+ *
+ * Unlike `listWitnessCandidates`, the caller is **not** excluded: an action
+ * item taken on by the person recording it is the commonest case of all.
+ */
+export async function listMeetingAssignees(): Promise<readonly MeetingAssignee[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('status', 'active')
+    .order('full_name', { ascending: true })
+    .limit(200);
+
+  if (error !== null) {
+    // A policy refusal as often as a fault, so not a warning: the form has a
+    // sentence for the empty case.
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    profileId: row.id,
+    fullName: row.full_name,
+  }));
+}
