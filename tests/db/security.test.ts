@@ -78,6 +78,39 @@ describeDb('row level security', () => {
       'account_transfers:SELECT',
       'audit_log:SELECT',
       // Phase 10. The branch network and the ledger: SELECT only. Nothing writes to a journal through a session; every posting is made by a definer function.
+            // Polytos Phase 4. SELECT only almost everywhere: a beneficiary is
+      // registered by `register_member_beneficiary`, a claim is moved by the
+      // lifecycle functions, a payment is posted by `post_benefit_payment`
+      // and a register is marked by `mark_meeting_attendance` — every one a
+      // definer function that applies the capability check, the separation of
+      // duties and, where money moves, the journal in the same transaction. A
+      // session with INSERT could create a claim nobody assessed or a payment
+      // with no posting behind it.
+      //
+      // Two exceptions, both deliberate:
+      //
+      //   `benefit_claim_documents:DELETE` — an unchecked document on an open
+      //   claim is a thing people need to undo, and the delete guard refuses
+      //   anything else with a message that says why.
+      //
+      //   `membership_meetings:UPDATE` — the scheduling functions run as the
+      //   table owner, and the policy narrows the grant to `meetings:manage`
+      //   within branch so that even a bare UPDATE from a session cannot move
+      //   another branch's meeting.
+      //
+      // DELETE appears on nothing else in this phase. `member_beneficiaries`,
+      // `benefit_claims` and `benefit_payments` all refuse it by trigger as
+      // well, because each is evidence of a decision about money.
+      'beneficiary_relationships:SELECT',
+      'benefit_assessment_snapshots:SELECT',
+      'benefit_claim_documents:DELETE',
+      'benefit_claim_documents:SELECT',
+      'benefit_claim_portal_view:SELECT',
+      'benefit_claim_register:SELECT',
+      'benefit_claims:SELECT',
+      'benefit_document_kinds:SELECT',
+      'benefit_payment_register:SELECT',
+      'benefit_payments:SELECT',
       'branch_cash_position:SELECT',
       'branches:SELECT',
       'business_settings:SELECT',
@@ -226,6 +259,13 @@ describeDb('row level security', () => {
       // two views. Both tables are written by `approve_loan` and the release
       // trigger, both SECURITY DEFINER, so the privilege a session would need
       // to forge a snapshot or a pledge simply does not exist.
+      'meeting_action_items:SELECT',
+      'meeting_attendance:SELECT',
+      'meeting_attendance_corrections:SELECT',
+      'meeting_attendance_register:SELECT',
+      'member_beneficiaries:SELECT',
+      'member_beneficiary_identities:SELECT',
+      'member_beneficiary_register:SELECT',
       'member_loan_eligibility:SELECT',
       'member_loan_eligibility_snapshots:SELECT',
       'member_loan_register:SELECT',
@@ -262,6 +302,9 @@ describeDb('row level security', () => {
       // everything including DELETE and TRUNCATE. This assertion found it.
       'membership_cards:SELECT',
       'membership_fee_receipts:SELECT',
+      'membership_meeting_register:SELECT',
+      'membership_meetings:SELECT',
+      'membership_meetings:UPDATE',
       'membership_policy_versions:INSERT',
       'membership_policy_versions:SELECT',
       'membership_policy_versions:UPDATE',
@@ -343,6 +386,17 @@ describeDb('row level security', () => {
       // Phase 10. Read policies only: no session role writes a journal,
       // a ledger account or a branch — every one of those is a definer
       // function's job.
+            // Polytos Phase 4. Read policies throughout, for the reason the Phase 2
+      // and Phase 3 tables have none that write: every benefit and meeting
+      // write is a definer function's. The two exceptions are the ones the
+      // grant list above explains.
+      'beneficiary_relationships:SELECT',
+      'benefit_assessment_snapshots:SELECT',
+      'benefit_claim_documents:DELETE',
+      'benefit_claim_documents:SELECT',
+      'benefit_claims:SELECT',
+      'benefit_document_kinds:SELECT',
+      'benefit_payments:SELECT',
       'branches:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
@@ -437,6 +491,11 @@ describeDb('row level security', () => {
       'loans:UPDATE',
       // Polytos Phase 3. One SELECT policy each, and no write policy
       // anywhere: nothing a session does writes either table.
+      'meeting_action_items:SELECT',
+      'meeting_attendance:SELECT',
+      'meeting_attendance_corrections:SELECT',
+      'member_beneficiaries:SELECT',
+      'member_beneficiary_identities:SELECT',
       'member_loan_eligibility_snapshots:SELECT',
       'member_loan_savings_pledges:SELECT',
       // Polytos Phase 1. A policy for every operation `authenticated` was
@@ -448,6 +507,8 @@ describeDb('row level security', () => {
       // writes a journal in the same transaction.
       'membership_cards:SELECT',
       'membership_fee_receipts:SELECT',
+      'membership_meetings:SELECT',
+      'membership_meetings:UPDATE',
       'membership_policy_versions:INSERT',
       'membership_policy_versions:SELECT',
       'membership_policy_versions:UPDATE',
@@ -529,6 +590,18 @@ describeDb('row level security', () => {
       .sort();
 
     expect([...new Set(unconditional)]).toEqual([
+      // Polytos Phase 4. Two more vocabularies, and they belong here for
+      // exactly the reason the other four do: one is a list of words for
+      // family relationships, the other a list of document names. Neither
+      // names a person or an amount, and every beneficiary and claim form has
+      // to render both.
+      //
+      // `beneficiary_relationships.condolence_eligible` is the only column on
+      // either that carries a *rule*, and it is NULL on every row — the
+      // client has not defined an eligible family member — so reading the
+      // table discloses no entitlement either.
+      'beneficiary_relationships',
+      'benefit_document_kinds',
       'guarantor_consent_terms',
       'permissions',
       'role_permissions',
@@ -538,13 +611,20 @@ describeDb('row level security', () => {
     // And the claim that it carries nothing personal, asserted rather than
     // assumed: a column named after a person or a sum would make the policy
     // above wrong.
-    const columns = await query<{ column_name: string }>(
-      `select column_name from information_schema.columns
-        where table_schema = 'public' and table_name = 'guarantor_consent_terms'`,
+    const columns = await query<{ table_name: string; column_name: string }>(
+      `select table_name, column_name from information_schema.columns
+        where table_schema = 'public'
+          and table_name in (
+            'guarantor_consent_terms',
+            'beneficiary_relationships',
+            'benefit_document_kinds')`,
     );
 
-    for (const { column_name } of columns) {
-      expect(column_name, 'guarantor_consent_terms column').not.toMatch(
+    for (const { table_name, column_name } of columns) {
+      // `label` is permitted: on all three it is the published wording, not
+      // anybody's name. The pattern below matches `name$`, which `label`
+      // is not, so nothing has to be excepted.
+      expect(column_name, `${table_name} column`).not.toMatch(
         /name$|phone|nin|amount|salary|balance/i,
       );
     }
@@ -561,7 +641,10 @@ describeDb('row level security', () => {
         where schemaname = 'public'
           and cmd = 'SELECT'
           and tablename not in
-              ('permissions', 'role_permissions', 'roles', 'guarantor_consent_terms')`,
+              ('permissions', 'role_permissions', 'roles', 'guarantor_consent_terms',
+               -- Polytos Phase 4. Two more published vocabularies, read
+               -- without qualification for the reason the other four are.
+               'beneficiary_relationships', 'benefit_document_kinds')`,
     );
 
     expect(rows.length).toBeGreaterThan(0);
@@ -773,6 +856,14 @@ describeDb('views', () => {
         // Phase 10. The three ledger views.
         // Phase 11. Five more: one register per money-movement document, and
         // the general ledger every financial drill-down reads.
+            // Polytos Phase 4. Five registers and the portal's read. Every one is
+    // `security_invoker`, so the policies beneath decide what a caller sees —
+    // and `benefit_claim_portal_view` carries the member's disclosure policy
+    // as its column list, so a portal screen cannot render an assessor's note
+    // by accident and a future `select *` cannot reintroduce one.
+      'benefit_claim_portal_view',
+        'benefit_claim_register',
+        'benefit_payment_register',
         'branch_cash_position',
         'collections_today',
         // Phase 9. The company's own identity, readable by every signed-in
@@ -828,10 +919,13 @@ describeDb('views', () => {
         // savings support, and member loans with their frozen eligibility
         // evidence beside them — each the one read a dashboard or a panel
         // makes, rather than a function call per member.
+        'meeting_attendance_register',
+        'member_beneficiary_register',
         'member_loan_eligibility',
         'member_loan_register',
         'member_savings_balances',
         'member_savings_contributions',
+        'membership_meeting_register',
         'membership_register',
         // Phase 15. The caller's notifications, each with whether that caller
         // has read it, and the one-row count the bell shows.
@@ -899,8 +993,10 @@ describeDb('views', () => {
     // views did in their first draft, and what the Polytos Phase 2 tables did
     // in theirs, until these assertions said so.
     // Two more from Polytos Phase 3: the member-loan eligibility register
-    // and the member-loan register.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(39);
+    // and the member-loan register. And six from Polytos Phase 4: the claim
+    // register and the portal's read of it, the beneficiary register, the
+    // payment register, the meeting register and the attendance register.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(45);
   });
 });
 
@@ -930,7 +1026,24 @@ describeDb('privileged functions', () => {
       // rule; it returns an id, and the row behind it stays behind the
       // select policy.
       'active_membership_policy_id',
+            // Polytos Phase 4. Every write path in the benefit and meeting modules
+      // is a definer function, because every one of them enforces something a
+      // session must not be able to skip: the capability, the separation of
+      // duties, the policy gate, the evidence check, the journal. The
+      // guards and the number-minting triggers are definer for the reason
+      // every earlier phase's are — they read `profiles` and the reference
+      // counter, neither of which a caller may reach.
+      //
+      // `benefit_claim_eligibility`, `medical_benefit_consumed`,
+      // `benefit_summary` and `benefit_expense_by_type` are definer *reads*,
+      // each with an explicit capability check: a cap computed from a partial
+      // view of a member's history is a cap that over-approves, and a
+      // business-wide aggregate has no row for a policy to filter. ADR-057's
+      // rule, and the registers that report per-member rows are
+      // `security_invoker` views instead.
+      'add_meeting_action_item',
       'apply_eligible_penalties',
+      'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
       'approve_reconciliation',
@@ -945,8 +1058,17 @@ describeDb('privileged functions', () => {
       // across; it restates the branch rule the policy on `memberships`
       // states, because the policies do not run for a definer function and
       // that is the whole privilege-escalation risk one carries.
+      'assess_benefit_claim',
       'assess_member_loan_eligibility',
+      'attach_benefit_document',
       'audit_actor_label',
+      'audit_attendance_corrected',
+      'audit_beneficiary_decided',
+      'audit_beneficiary_registered',
+      'audit_benefit_claim_decided',
+      'audit_benefit_claim_opened',
+      'audit_benefit_document_checked',
+      'audit_benefit_payment',
       'audit_client_change',
       'audit_client_guarantor_change',
       'audit_client_identity_change',
@@ -977,6 +1099,7 @@ describeDb('privileged functions', () => {
       // Neither carries a name, a phone number or a savings balance — the
       // trail is read by `audit:view`, which is broader than
       // `loans:view_sensitive`.
+      'audit_meeting_event',
       'audit_member_loan_assessed',
       'audit_member_loan_pledge',
       'audit_membership_card_change',
@@ -994,17 +1117,31 @@ describeDb('privileged functions', () => {
       'audit_settings_change',
       'audit_user_role_change',
       'backfill_ledger_history',
+      'begin_benefit_verification',
+      'benefit_claim_documents_delete_guard',
+      'benefit_claim_documents_guard',
+      'benefit_claim_eligibility',
+      'benefit_claims_assign_number',
+      'benefit_claims_guard',
+      'benefit_expense_account',
+      'benefit_expense_by_type',
+      'benefit_payments_assign_number',
+      'benefit_payments_guard',
+      'benefit_summary',
+      'benefits_blocked_reason',
       'branch_cash_account',
       'business_now',
       // Phase 12. The other half of the guard rail: a change to
       // business_settings that would strand an active product is refused.
       'business_settings_keep_products_valid',
       'business_timezone',
+      'cancel_benefit_claim',
       'cancel_loan',
       // Phase 12. Freezing the product terms writes an append-only table no
       // session may write, and the two trigger functions enforce the
       // product's own bounds and supply a default. None is granted to
       // `authenticated`.
+      'cancel_membership_meeting',
       'cancel_savings_withdrawal',
       'capture_loan_product_snapshot',
       'client_guarantors_guard_detach',
@@ -1026,6 +1163,7 @@ describeDb('privileged functions', () => {
       'disburse_loan',
       'enrol_member',
       'ensure_penalty_applied',
+      'finalise_meeting_minutes',
       'generate_loan_schedule',
       'guarantor_consent_terms_guard',
       'guarantors_guard_privileged_columns',
@@ -1082,6 +1220,7 @@ describeDb('privileged functions', () => {
       // written out at two call sites, because an advisory lock written twice
       // drifts onto two keys and then fails silently by never blocking.
       'lock_savings_capacity',
+      'mark_meeting_attendance',
       'mark_notifications_read',
       // Polytos Phase 3. The member-loan machinery.
       //
@@ -1104,6 +1243,9 @@ describeDb('privileged functions', () => {
       // deliberately **absent**: both are pure functions of their arguments,
       // so neither needs to run as the owner — which is the same reason
       // `calculate_loan_breakdown` is not here.
+      'medical_benefit_consumed',
+      'member_beneficiaries_assign_number',
+      'member_beneficiaries_guard',
       'member_lending_blocked_reason',
       'member_loan_eligibility_of',
       'member_loan_pledges_guard',
@@ -1148,6 +1290,8 @@ describeDb('privileged functions', () => {
       'membership_fee_is_posted',
       'membership_fee_receipts_assign_number',
       'membership_fee_receipts_guard',
+      'membership_meetings_assign_number',
+      'membership_meetings_guard',
       'membership_policy_allows',
       'membership_policy_versions_guard',
       'membership_terms_acceptances_guard',
@@ -1157,17 +1301,24 @@ describeDb('privileged functions', () => {
       'memberships_record_status',
       'memberships_stamp_provenance',
       'next_reference',
+      'notify_beneficiary_awaiting_verification',
+      'notify_benefit_claim_transition',
       'notify_client_blacklisted',
       'notify_collateral_realised',
       'notify_expense_pending',
       'notify_loan_transition',
       'notify_low_float',
+      'notify_meeting_action_assigned',
+      'notify_meeting_moved',
+      'notify_meeting_scheduled',
       'notify_payment_reversed',
       'notify_penalty_applied',
       'notify_promise_recorded',
       'notify_reconciliation_variance',
       'notify_transfer_pending',
+      'open_benefit_claim',
       'open_savings_account',
+      'post_benefit_payment',
       'post_disbursement_journal',
       'post_expense_journal',
       'post_journal',
@@ -1187,12 +1338,15 @@ describeDb('privileged functions', () => {
       'raise_notification',
       'record_audit_event',
       'record_expense',
+      'record_meeting_minutes',
       'record_membership_fee',
       'record_other_income',
       'record_security_event',
       'record_sign_in',
       'record_transfer',
       'redeem_membership_consent_code',
+      'register_member_beneficiary',
+      'reject_benefit_claim',
       'reject_expense',
       'reject_loan',
       'reject_reconciliation',
@@ -1201,7 +1355,10 @@ describeDb('privileged functions', () => {
       // the loan keeps the number of guarantors its product requires.
       'release_loan_guarantor',
       'repayment_frequencies_guard_identity',
+      'request_benefit_information',
       'request_savings_withdrawal',
+      'reschedule_membership_meeting',
+      'reverse_benefit_payment',
       'reverse_expense',
       'reverse_membership_fee',
       'reverse_other_income',
@@ -1212,6 +1369,7 @@ describeDb('privileged functions', () => {
       // numbering. SECURITY DEFINER so it can read `reference_sequences`,
       // which stays default-deny to every session; it re-checks
       // `settings:view` inside, because the grant alone decides nothing.
+      'revoke_member_beneficiary',
       'savings_accounts_assign_number',
       'savings_accounts_guard',
       'savings_accounts_stamp_provenance',
@@ -1224,8 +1382,11 @@ describeDb('privileged functions', () => {
       'savings_withdrawable_amount',
       'savings_withdrawal_requests_assign_number',
       'savings_withdrawal_requests_guard',
+      'schedule_membership_meeting',
       'settings_reference_sequences',
+      'submit_benefit_claim',
       'submit_reconciliation',
+      'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
       'user_has_permission',
@@ -1234,6 +1395,8 @@ describeDb('privileged functions', () => {
       'user_roles_guard_assignment',
       'user_roles_set_granted_by',
       'validate_loan_for_approval',
+      'verify_benefit_document',
+      'verify_member_beneficiary',
     ]);
   });
 
@@ -1320,6 +1483,18 @@ describeDb('privileged functions', () => {
       // same rule. It returns an id and nothing else; the row behind it is
       // still governed by `membership_policy_versions_select`.
       'active_membership_policy_id',
+            // Polytos Phase 4. The lifecycle functions a screen calls, the two
+      // reporting functions the dashboards read, and the pure helpers a
+      // caller may evaluate — `benefit_amount_for_claim`,
+      // `benefit_policy_year_bounds` and `benefit_claim_transition_allowed`
+      // disclose nothing: they are the arithmetic and the edge list, and a
+      // caller who runs them learns what the published policy already says.
+      //
+      // The guards, the audit triggers, the notification triggers and the
+      // number minters are **absent**, as they are in every earlier phase:
+      // nothing calls them but PostgreSQL.
+      'add_meeting_action_item',
+      'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
       'approve_reconciliation',
@@ -1329,12 +1504,23 @@ describeDb('privileged functions', () => {
       // `member_loans:view_eligibility` on the session and restates the
       // branch rule before it reads anything, and an invisible client and a
       // nonexistent one give it the same answer.
+      'assess_benefit_claim',
       'assess_member_loan_eligibility',
       // Phase 7. The business clock and the timezone it is read in. Granted
       // because every screen needs to know what "today" means to the
       // business, and because a date is not sensitive. Neither accepts a
       // date from a caller: `business_now` honours an override only on a
       // direct owner connection, which no application path has.
+      'attach_benefit_document',
+      'begin_benefit_verification',
+      'benefit_amount_for_claim',
+      'benefit_claim_eligibility',
+      'benefit_claim_transition_allowed',
+      'benefit_expense_account',
+      'benefit_expense_by_type',
+      'benefit_policy_year_bounds',
+      'benefit_summary',
+      'benefits_blocked_reason',
       'business_date',
       'business_now',
       'business_timezone',
@@ -1342,6 +1528,7 @@ describeDb('privileged functions', () => {
       // The preview screen calls it so staff see the authoritative figures
       // rather than the browser's.
       'calculate_loan_breakdown',
+      'cancel_benefit_claim',
       'cancel_loan',
       // Phase 9. The rate limiter. Granted to `authenticated` so a signed-in
       // caller's own budget is consumed on the path they are using; **not**
@@ -1353,6 +1540,7 @@ describeDb('privileged functions', () => {
       // capability on the session before it writes anything — which is why
       // they are reachable from a session at all. Their refusals are
       // asserted in tests/db/savings.test.ts and rls-savings.test.ts.
+      'cancel_membership_meeting',
       'cancel_savings_withdrawal',
       'client_has_live_loan',
       'consume_rate_limit',
@@ -1383,6 +1571,7 @@ describeDb('privileged functions', () => {
       // exactly the clients their own policies admit. Advice only: the
       // trigger and the approval validator are the enforcement.
       'enrol_member',
+      'finalise_meeting_minutes',
       'guarantor_candidates',
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
       // what Row Level Security allows it to.
@@ -1403,6 +1592,7 @@ describeDb('privileged functions', () => {
       // receipts it writes is derived from the session, never passed, so the
       // array of ids a caller supplies can only narrow what *they* can
       // already see. Nothing to forge.
+      'mark_meeting_attendance',
       'mark_notifications_read',
       'mask_nin',
       // Polytos Phase 1. The gate every later phase posts behind: whether one
@@ -1422,6 +1612,7 @@ describeDb('privileged functions', () => {
       // of its arguments that discloses nothing, and the application preview
       // calls it so that staff see the authoritative figures rather than the
       // browser's.
+      'medical_benefit_consumed',
       'member_lending_blocked_reason',
       'member_loan_cadence_for_term',
       'member_loan_interest',
@@ -1429,6 +1620,7 @@ describeDb('privileged functions', () => {
       // grant for the reason this list is about: it re-checks `loans:view` on
       // the session before it reads anything.
       'member_loan_summary',
+      'member_primary_beneficiary',
       'member_savings_qualification',
       'membership_fee_is_posted',
       'membership_policy_allows',
@@ -1437,6 +1629,7 @@ describeDb('privileged functions', () => {
       // for the same reason: pure, immutable, and the one place the rule is
       // stated, so the preview and the generator cannot disagree about it.
       'monthly_collection_date',
+      'open_benefit_claim',
       'open_savings_account',
       'payment_business_date',
       // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.
@@ -1444,6 +1637,7 @@ describeDb('privileged functions', () => {
       // Phase 6. The two trusted ledger paths. Each re-checks the caller's
       // capability inside, because SECURITY DEFINER means the grant alone
       // decides nothing.
+      'post_benefit_payment',
       'post_payment',
       // Phase 11. The four money-movement writers and their decisions.
       // Granted for the same reason `post_payment` is: the application
@@ -1455,18 +1649,24 @@ describeDb('privileged functions', () => {
       'post_savings_deposit',
       'post_savings_withdrawal',
       'record_expense',
+      'record_meeting_minutes',
       'record_membership_fee',
       'record_other_income',
       'record_security_event',
       'record_sign_in',
       'record_transfer',
       'redeem_membership_consent_code',
+      'register_member_beneficiary',
+      'reject_benefit_claim',
       'reject_expense',
       'reject_loan',
       'reject_reconciliation',
       'reject_transfer',
       'release_loan_guarantor',
+      'request_benefit_information',
       'request_savings_withdrawal',
+      'reschedule_membership_meeting',
+      'reverse_benefit_payment',
       'reverse_expense',
       'reverse_membership_fee',
       'reverse_other_income',
@@ -1480,24 +1680,32 @@ describeDb('privileged functions', () => {
       // Polytos Phase 3. Each answers one figure about an account the caller
       // has already named, and both are what the policy's live-loan rule is
       // written against — so they must give the same answer to every caller.
+      'revoke_member_beneficiary',
       'savings_pledged_amount',
       'savings_statement',
       'savings_summary',
       'savings_withdrawable_amount',
+      'schedule_membership_meeting',
       'settings_reference_sequences',
+      'storage_path_claim_id',
       'storage_path_client_id',
       'storage_path_guarantor_id',
+      'storage_path_is_beneficiary',
       'storage_path_kind',
       // Phase 13. Reads the path of a loan-documents object, for the three
       // storage policies that gate the bucket.
       'storage_path_loan_id',
       'storage_path_membership_id',
+      'submit_benefit_claim',
       'submit_reconciliation',
+      'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',
       'validate_loan_for_approval',
+      'verify_benefit_document',
+      'verify_member_beneficiary',
     ]);
   });
 
@@ -1535,7 +1743,7 @@ describeDb('privileged functions', () => {
 });
 
 describeDb('storage buckets', () => {
-  it('creates the five buckets, all private', async () => {
+  it('creates the six buckets, all private', async () => {
     const rows = await query<{
       id: string;
       public: boolean;
@@ -1545,6 +1753,12 @@ describeDb('storage buckets', () => {
           from storage.buckets order by id`);
 
     expect(rows.map((row) => row.id)).toEqual([
+      // Polytos Phase 4. Benefit evidence: hospital admissions, invoices,
+      // death certificates and relationship documents. Private, like the
+      // other five, and this is the one where it matters most — these are the
+      // most sensitive documents this system will ever hold, and a public
+      // bucket would make a leak a matter of guessing a UUID.
+      'benefit-documents',
       'client-documents',
       'company-assets',
       'guarantor-documents',

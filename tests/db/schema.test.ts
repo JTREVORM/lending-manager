@@ -33,6 +33,24 @@ describeDb('tables', () => {
     'account_reconciliations',
     'account_transfers',
     'audit_log',
+    // Polytos Phase 4: the relationship vocabulary a beneficiary or a
+    // deceased family member may stand in. `condolence_eligible` is NULL on
+    // every row, because the client has not defined an eligible family
+    // member and a default would be an invented eligibility rule.
+    'beneficiary_relationships',
+    // Polytos Phase 4: the benefit workflow. The assessment a claim was
+    // decided on (append-only), the claim itself, its evidence, the document
+    // vocabulary, and the payment with its journal behind it.
+    //
+    // There is no benefits *payable* table and no accrual: the documented
+    // pattern recognises and settles in one event, and modelling a liability
+    // the business has not said it carries would be inventing an accrual
+    // policy. See 20261022000200.
+    'benefit_assessment_snapshots',
+    'benefit_claim_documents',
+    'benefit_claims',
+    'benefit_document_kinds',
+    'benefit_payments',
     // Phase 10: the branch network and the double-entry ledger.
     'branches',
     'business_settings',
@@ -102,18 +120,36 @@ describeDb('tables', () => {
     // checkable, the registration fee and its receipt, the savings account
     // and its subledger, and the withdrawal a supervisor decides.
     //
-    // There is still no benefit, meeting or distribution table: those are
-    // Phases 4 and 5, and the rule holds — a table arrives with the
-    // workflow that posts to it.
+    // Polytos Phase 4 added the benefit and meeting tables above and below,
+    // under the same rule: each arrived with the workflow that writes it.
+    // There is still no distribution table — that is Phase 5, and the
+    // year-end formula is undecided.
     // Polytos Phase 3: the evidence a member loan was approved on, and how
     // much of the member's savings capacity it consumed. Both are written
     // only by `approve_loan`, both append-only, and neither posts a journal:
     // a pledge is a restriction on a liability, not a movement of one.
+    // Polytos Phase 4: who came to a meeting, and what an entry said before
+    // it was corrected. Nothing anywhere reads either to decide anything —
+    // the client's documents do not make attendance a condition of savings,
+    // a loan, a benefit or a profit share, so the schema does not either.
+    'meeting_action_items',
+    'meeting_attendance',
+    'meeting_attendance_corrections',
+    'member_beneficiaries',
+    // Polytos Phase 4: the payment instruction itself, split off because Row
+    // Level Security is row-level — a single table could only grant or deny
+    // the whole row, so the clerk who must see that a member has a verified
+    // next of kin would thereby see that person's name and number. The same
+    // split `client_identities` already makes for a National Identification
+    // Number.
+    'member_beneficiary_identities',
     'member_loan_eligibility_snapshots',
     'member_loan_savings_pledges',
     'membership_cards',
     'membership_consent_challenges',
     'membership_fee_receipts',
+    // Polytos Phase 4: monthly membership meetings.
+    'membership_meetings',
     'membership_policy_versions',
     'membership_status_history',
     'membership_terms_acceptances',
@@ -286,6 +322,54 @@ describeDb('foreign keys', () => {
       'account_transfers.reversed_by -> profiles (n)',
       'account_transfers.to_account_id -> ledger_accounts (r)',
       'audit_log.actor_profile_id -> profiles (r)',
+      // Polytos Phase 4. `r` on every fact a benefit decision depends on —
+      // the claim, the membership, the client, the branch, the policy
+      // version, the beneficiary the business authorised, the expense and
+      // cash accounts and the journal entries — and `n` only on attribution.
+      // The reason is the Phase 2 and Phase 3 reason, sharpened: the record
+      // of who the business paid and why must not be able to vanish because
+      // somebody removed a row somewhere else.
+      //
+      // `meeting_action_items.assigned_to` is `r` rather than `n`, which is
+      // the one departure. An action item whose assignee had been nulled
+      // would be an action assigned to nobody, which is the thing the
+      // profile reference exists to prevent; staff accounts are archived
+      // rather than deleted, so `r` costs nothing.
+      'benefit_assessment_snapshots.assessed_by -> profiles (n)',
+      'benefit_assessment_snapshots.beneficiary_id -> member_beneficiaries (r)',
+      'benefit_assessment_snapshots.claim_id -> benefit_claims (r)',
+      'benefit_assessment_snapshots.client_id -> clients (r)',
+      'benefit_assessment_snapshots.membership_id -> memberships (r)',
+      'benefit_assessment_snapshots.policy_version_id -> membership_policy_versions (r)',
+      'benefit_claim_documents.beneficiary_id -> member_beneficiaries (r)',
+      'benefit_claim_documents.claim_id -> benefit_claims (r)',
+      'benefit_claim_documents.client_id -> clients (r)',
+      'benefit_claim_documents.kind -> benefit_document_kinds (r)',
+      'benefit_claim_documents.membership_id -> memberships (r)',
+      'benefit_claim_documents.uploaded_by -> profiles (n)',
+      'benefit_claim_documents.verified_by -> profiles (n)',
+      'benefit_claims.assessed_by -> profiles (n)',
+      'benefit_claims.beneficiary_id -> member_beneficiaries (r)',
+      'benefit_claims.branch_id -> branches (r)',
+      'benefit_claims.client_id -> clients (r)',
+      'benefit_claims.created_by -> profiles (n)',
+      'benefit_claims.deceased_relationship -> beneficiary_relationships (r)',
+      'benefit_claims.decided_by -> profiles (n)',
+      'benefit_claims.membership_id -> memberships (r)',
+      'benefit_claims.policy_version_id -> membership_policy_versions (r)',
+      'benefit_claims.submitted_by -> profiles (n)',
+      'benefit_claims.verified_by -> profiles (n)',
+      'benefit_payments.branch_id -> branches (r)',
+      'benefit_payments.cash_account_id -> ledger_accounts (r)',
+      'benefit_payments.claim_id -> benefit_claims (r)',
+      'benefit_payments.client_id -> clients (r)',
+      'benefit_payments.expense_account_id -> ledger_accounts (r)',
+      'benefit_payments.journal_entry_id -> journal_entries (r)',
+      'benefit_payments.membership_id -> memberships (r)',
+      'benefit_payments.paid_by -> profiles (n)',
+      'benefit_payments.recipient_beneficiary_id -> member_beneficiaries (r)',
+      'benefit_payments.reversal_journal_entry_id -> journal_entries (r)',
+      'benefit_payments.reversed_by -> profiles (n)',
       // Phase 10. The branch network and the ledger. RESTRICT throughout on
       // anything a posting points at — a branch, an account, a loan or a
       // client that has been posted against cannot be removed, because the
@@ -474,6 +558,29 @@ describeDb('foreign keys', () => {
       // Phase 2 documents follow, and for the same reason: the record of what
       // the business lent against must not be able to vanish because somebody
       // removed a row somewhere else.
+      'meeting_action_items.assigned_to -> profiles (r)',
+      'meeting_action_items.completed_by -> profiles (n)',
+      'meeting_action_items.created_by -> profiles (n)',
+      'meeting_action_items.meeting_id -> membership_meetings (r)',
+      'meeting_attendance.client_id -> clients (r)',
+      'meeting_attendance.marked_by -> profiles (n)',
+      'meeting_attendance.meeting_id -> membership_meetings (r)',
+      'meeting_attendance.membership_id -> memberships (r)',
+      'meeting_attendance_corrections.attendance_id -> meeting_attendance (r)',
+      'meeting_attendance_corrections.corrected_by -> profiles (n)',
+      'meeting_attendance_corrections.meeting_id -> membership_meetings (r)',
+      'meeting_attendance_corrections.membership_id -> memberships (r)',
+      'member_beneficiaries.branch_id -> branches (r)',
+      'member_beneficiaries.client_id -> clients (r)',
+      'member_beneficiaries.membership_id -> memberships (r)',
+      'member_beneficiaries.recorded_by -> profiles (n)',
+      'member_beneficiaries.relationship -> beneficiary_relationships (r)',
+      // Self-referential, and `r`: the record a change replaced is what makes
+      // a historic payment explicable, so it cannot be removed while the
+      // replacement points at it.
+      'member_beneficiaries.supersedes_id -> member_beneficiaries (r)',
+      'member_beneficiaries.verified_by -> profiles (n)',
+      'member_beneficiary_identities.beneficiary_id -> member_beneficiaries (r)',
       'member_loan_eligibility_snapshots.captured_by -> profiles (n)',
       'member_loan_eligibility_snapshots.client_id -> clients (r)',
       'member_loan_eligibility_snapshots.loan_id -> loans (r)',
@@ -503,6 +610,9 @@ describeDb('foreign keys', () => {
       'membership_fee_receipts.recorded_by -> profiles (n)',
       'membership_fee_receipts.reversal_entry_id -> journal_entries (r)',
       'membership_fee_receipts.reversed_by -> profiles (n)',
+      'membership_meetings.branch_id -> branches (r)',
+      'membership_meetings.created_by -> profiles (n)',
+      'membership_meetings.minutes_finalised_by -> profiles (n)',
       'membership_policy_versions.approved_by -> profiles (n)',
       'membership_policy_versions.created_by -> profiles (n)',
       'membership_status_history.changed_by -> profiles (r)',
