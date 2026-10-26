@@ -144,40 +144,89 @@ the three. The trial balance foots after every operation.
 
 ---
 
-## Phase 3 — Member loans and the eligibility engine
+## Phase 3 — Member loans and the eligibility engine — **built**
 
-**Blocked on client decisions 1, 2 and 3**, and on Phase 2's savings
-balances.
+**Shipped**, with member lending held closed. Ten migrations numbered
+`20261021000100`–`20261021001000`. Full specification:
+`docs/POLYTOS-MEMBER-LOANS.md`.
+
+The three client decisions this phase was blocked on are **still open**, and
+the phase was built anyway. That is the change of approach worth recording:
+the infrastructure is complete and tested, every screen exists, and the
+database refuses to approve a loan that depends on an unanswered question.
+Waiting would have meant a phase delivered later and no sooner — the answers
+do not arrive faster for the code not existing.
 
 **Delivers.**
 
 | Item | Notes |
 | --- | --- |
-| The member loan product | A row in `loan_products`, with the member terms. Not a parallel lending engine |
-| `weekly` repayment cadence | A one-row insert: `interval_days = 7` |
-| **Calendar-monthly cadence** | The hard part. See `docs/POLYTOS-EXPANSION-ARCHITECTURE.md` §7 |
-| `member_loan_eligibility` | A view: qualified, and the ceiling their savings support |
-| Eligibility enforcement | In `validate_loan_for_approval()`, so it is refused at approval and not merely hidden in a form |
-| Screens | The member loan application; the eligibility panel on the Membership Profile |
+| The member loan product | `ML` in `loan_products`, with `requires_membership` and `interest_source = 'membership_policy'`. Ships **inactive**. Not a parallel lending engine |
+| `weekly` repayment cadence | `cadence_kind = 'fixed_days'`, `interval_days = 7`, active |
+| **Calendar-monthly cadence** | `cadence_kind = 'calendar_month'`, `interval_days` NULL, `month_anchor` write-once. Ships **inactive** |
+| `monthly_collection_date()` | Both anchor conventions, implemented and tested; neither a default |
+| `member_loan_eligibility_of()` | The assessment: 31 columns, `SECURITY DEFINER`, revoked from every role |
+| `member_loan_eligibility` | The view, `security_invoker`, behind `member_loans:view_eligibility` |
+| `member_loan_savings_pledges` | The savings a live member loan restricts. Append-only, no journal entry |
+| `member_loan_eligibility_snapshots` | What the business saw at approval, frozen. Append-only |
+| Eligibility enforcement | Ten new failure codes in `validate_loan_for_approval()`, re-evaluated inside `approve_loan` under an advisory lock |
+| Screens | `/member-loans` (two registers), `/member-loans/new`, the eligibility panel on the membership record, the member loan panel on the loan |
+| `member_loan_summary()` | Twenty figures, all derived. No total ceiling, deliberately |
 
-**The compatibility problem, restated because it is the main risk in the
-whole expansion.** `generate_loan_schedule()` builds collection dates as
-`D + k × interval_days`. That expresses weekly perfectly and cannot express
-a calendar month at all — 28, 29, 30 and 31 days are not a fixed interval,
-and an `interval_days = 30` cadence would drift a loan disbursed on 31
-January onto 2 March. The engine needs a second cadence kind, the existing
-arm must stay byte-for-byte identical, and a parity test must regenerate
-every existing schedule and prove nothing moved before the new arm is
-enabled.
+**The compatibility problem, as it was actually solved.**
+`generate_loan_schedule()` built collection dates as `D + k × interval_days`,
+which expresses weekly perfectly and cannot express a calendar month at all.
+It now has two arms and the fixed-day arm was copied **character-for-character**.
+`generator_version` stays `1` for `fixed_days` and is `2` only for
+`calendar_month`, because the fixed-day rules did not change.
 
-**Why the three decisions block it.** Whether 5% is per month or per loan,
-flat or reducing, and what multiple of savings a member may borrow, are the
-price and the size of the loan. There is nothing to build without them.
+`interval_days = 30` was never on the table: it would drift a loan disbursed
+on 31 January onto 2 March, and it is a different contract that happens to
+look similar.
 
-**Proof it is done.** Every existing schedule regenerates byte-identically.
-A member loan at each permitted term produces the collection dates the
-business expects, including across a 31-day month boundary. An unqualified
-member is refused at approval, not only in the form.
+**A fourth decision, which was not on the original list.** A calendar month is
+not always well defined — a loan disbursed on 31 January has no 31 February —
+so somebody has to say whether that collection falls on the last day of the
+month it lands in or the first day of the next. It is recorded as
+`repayment_frequencies.month_anchor` rather than as a tenth policy question,
+because it is a property of the cadence and not of the membership programme.
+See ADR-059.
+
+Its consequence is the one nobody would guess: **answering only decisions 1, 2
+and 3 opens weekly member loans of one and two months and leaves three-, four-
+and five-month loans refused.** The interface says so rather than claiming
+nothing can be approved.
+
+**Proof it is done.** Every existing schedule regenerates byte-identically —
+asserted by `tests/db/schedule-parity.test.ts` and by the
+`installment_schedule` figure in `scripts/verify-membership-upgrade.mjs`, which
+compares every collection date loan by loan across a populated upgrade. A
+member loan at each permitted term produces the collection dates the business
+expects, including across every 31-day month boundary of a year
+(`tests/db/calendar-month-schedule.test.ts`). An unqualified member is refused
+at approval by the database, asserted as a real authenticated role and as the
+table owner. Two concurrency races — two approvals against one savings
+balance, and a withdrawal against an approval — are run with real concurrent
+transactions.
+
+**Three defects the new tests found in the eligibility ceiling**, all fixed:
+capacity already consumed by a live pledge was ignored, so a member could
+borrow twice against the same savings; pending withdrawals were not reserved,
+so a member could borrow against money on its way out; and the ceiling rounded
+half-up while the pledge rounds up, which disagreed below a 1× multiplier.
+
+**What remains before member lending can open.** Four answers, and two
+configuration changes the business makes on a screen:
+
+1. decisions 1, 2 and 3 answered on a new policy version;
+2. `repayment_frequencies.month_anchor` chosen, and the `monthly` cadence
+   activated;
+3. the `ML` product activated.
+
+Note that publishing a new policy version supersedes the current one, and a
+savings account is frozen to the version it was opened under — so the accounts
+already open need handling deliberately at that point. See
+`docs/POLYTOS-MEMBER-LOANS.md` §12.
 
 ---
 
@@ -303,18 +352,32 @@ Phase 1 ──┤              Phase 2 (savings) ──┐
                                           Phase 6 (certification)
 ```
 
-Phases 1 and 2 are both built. The single most useful thing to take from this
-roadmap is now the shape of what remains:
+Phases 1, 2 and 3 are all built, and none of the nine decisions has been
+answered. That is not a contradiction: the diagram above shows which answers
+each phase's *operation* waits on, not which it needs to be **written**. The
+single most useful thing to take from this roadmap is now the shape of what
+remains:
 
 - **Savings cannot be *taken* until the client answers questions 4 and 5.**
   The module is written, tested and reviewed; answering those two and
   publishing a policy version carrying the answers is all that opens it.
-- **Phase 3 (member lending) additionally needs questions 1, 2 and 3** — the
-  interest basis, the interest method, and the savings-to-loan multiplier. It
-  will approve against `member_savings_qualification`, which Phase 2 built
+- **Member lending cannot be *approved* until questions 1, 2 and 3 are
+  answered** — the interest basis, the interest method, and the
+  savings-to-loan multiplier — **and a fourth decision that was not on the
+  original list**: what a calendar-monthly collection does in a month that has
+  no such day (`repayment_frequencies.month_anchor`, ADR-059). Answering the
+  three policy questions and not the fourth opens weekly member loans of one
+  and two months and leaves longer ones refused.
+
+  Phase 3 approves against `member_savings_qualification`, which Phase 2 built
   with an "as of" date for exactly that purpose.
 - **Phase 4 (benefits) needs questions 7, 8 and 9**, plus the further
   questions about what evidences an admission and who verifies it.
 - **Phase 5 (profit sharing) needs question 6**, and depends on the savings
   liability being a liability — which ADR-051 is about, and which is why
   getting it right in Phase 2 mattered more than any screen in it.
+
+One thing to plan for before any of those answers is published: a savings
+account is frozen to the policy version it was opened under, so a new version
+supersedes the old one and the accounts already open stop qualifying until
+they are handled deliberately. See `docs/POLYTOS-MEMBER-LOANS.md` §12.

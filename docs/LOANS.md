@@ -101,6 +101,14 @@ There are two implementations, deliberately:
 | **Authoritative** | `public.calculate_loan_breakdown` | Computes what is **stored** at approval |
 | Preview | `lib/domain/loan.ts` | Computes what staff **see** while entering a loan |
 
+Polytos Phase 3 added a member-loan pricing layer on top of both —
+`public.member_loan_interest()` and `lib/domain/member-loan.ts` — and it is a
+layer rather than a third engine. Its per-month reducing-balance arm
+**delegates** to the authoritative function above; only the flat arms compute
+anything of their own, and flat interest is one multiplication. A second
+reducing-balance implementation would be a second answer to the same question,
+and the two would diverge on a rounding boundary nobody tested.
+
 The split exists because `approve_loan` must not accept figures from its
 caller. An approver who could supply the breakdown could approve a loan at zero
 interest, and `loans:approve` is held by the Manager — so the figures are not
@@ -251,6 +259,25 @@ answer:
 | `frequency_not_permitted` | Not an active repayment frequency |
 | `insufficient_guarantors` | Fewer active guarantors than required |
 | `guarantor_incomplete` | A guarantor is missing a phone, occupation, location, relationship or NIN |
+| `cadence_anchor_undecided` | The cadence is calendar-monthly and `month_anchor` is not set |
+
+Polytos Phase 3 added ten more, which apply only to a product with
+`requires_membership`:
+
+| Code | Meaning |
+| --- | --- |
+| `member_product_not_member` | The product requires a membership and this client has none |
+| `member_not_active` | The membership is pending, suspended or ended |
+| `member_policy_not_open` | The member's own policy version does not open member lending |
+| `member_savings_missing` | No savings account |
+| `member_savings_suspended` | The savings account is not active |
+| `member_not_qualified` | The qualifying months have not been served |
+| `member_amount_above_ceiling` | More than the member's available savings support |
+| `member_term_above_maximum` | Longer than the member's own version permits |
+| `member_cadence_not_permitted` | Not the cadence this term requires |
+
+`cadence_anchor_undecided` is in the first table deliberately: it is a property
+of the cadence, so an ordinary loan collected calendar-monthly meets it too.
 
 **Every rule is re-evaluated at approval**, never carried forward from when the
 draft was entered. A client blacklisted between drafting and approval stops the
@@ -303,6 +330,34 @@ It fires on **any** path to `status = 'active'`, including a direct `UPDATE`,
 so bypassing `disburse_loan` gains nothing. The limit is also checked at
 *approval*, so a reviewer is told why rather than approving a loan that can
 never be disbursed.
+
+The rule counts **every** loan, member and ordinary alike. A member loan is a
+loan, so a member who already holds a running ordinary loan cannot take one —
+and that is the commonest refusal in practice, because membership does not
+convert or reprice a loan somebody already has.
+
+## Member loans
+
+A member loan is written in `loans` under a product with
+`requires_membership = true`. It goes through the same approval, the same
+disbursement, the same schedule generation, the same collections and the same
+reports. Four frozen columns and two rows are what make it a member loan:
+
+| Column | Holds |
+| --- | --- |
+| `loans.membership_id` | which membership it was lent against |
+| `loans.interest_basis` | `per_month` or `per_loan`, from the member's own version |
+| `loans.interest_method` | widened to admit `flat` |
+
+`loans_guard_member_terms()` freezes the membership and the basis at approval,
+for every caller including `service_role`: a later policy version does not
+reprice a loan already written.
+
+The two rows are `member_loan_eligibility_snapshots` (what the business saw) and
+`member_loan_savings_pledges` (what it committed), both written by
+`approve_loan` under a savings-capacity advisory lock. A pledge **restricts**
+the member's savings and posts no journal entry: the business still owes them
+every shilling. Full specification: `docs/POLYTOS-MEMBER-LOANS.md`.
 
 ## Snapshots
 
@@ -571,8 +626,15 @@ database is the authoritative generator; `addBusinessMonths` in
 
 ### The cadence
 
-Collections fall on `D + k × interval` for k = 1, 2, 3, …, each assigned to the
-one window containing it, stopping strictly before the final boundary.
+There are two **cadence kinds**, and `repayment_frequencies.cadence_kind` says
+which a cadence is. Everything else in this section describes `fixed_days`,
+which is every cadence the business offered before Polytos Phase 3 and whose
+generation arm was copied character-for-character into the two-arm function.
+`generator_version` stays `1` for a fixed-day schedule because its rules did
+not change; `2` means the calendar arm.
+
+Collections fall on `D + k × interval_days` for k = 1, 2, 3, …, each assigned
+to the one window containing it, stopping strictly before the final boundary.
 
 Building one global cadence and *assigning* it — rather than restarting the
 rhythm inside each month — is what guarantees the dates are strictly
@@ -583,6 +645,35 @@ It also means a month can get a different number of collections than its
 neighbours, which is correct. **Nothing assumes 30-day months**: a 600,000
 three-month daily loan disbursed on 10 October gets 30, 30 and **31**
 collections, not 90.
+
+### The calendar-month cadence
+
+`cadence_kind = 'calendar_month'` carries no `interval_days` at all, and that
+is the point: 28, 29, 30 and 31 days are not a fixed interval, and an
+`interval_days = 30` cadence would drift a loan disbursed on 31 January onto 2
+March. It is a different contract that happens to look similar.
+
+A calendar-monthly schedule writes **one collection per contractual month**,
+dated by `monthly_collection_date(anchor_date, months, month_anchor)`. Each
+installment therefore collects exactly that month's own obligation, and the
+money rules below reduce to the trivial case.
+
+A calendar month is not always well defined — a loan disbursed on the 31st has
+no 31 February — so the cadence carries `month_anchor`, which is write-once:
+settable while NULL, frozen from the moment it is set, enforced by
+`repayment_frequencies_guard_identity`.
+
+| `month_anchor` | 31 January, collection 1 |
+| --- | --- |
+| `clamp_to_month_end` | 28 February — PostgreSQL's own month arithmetic |
+| `roll_forward_to_next_month` | 1 March |
+
+Both are implemented and **neither is a default**. The `monthly` cadence ships
+`is_active = false` with a NULL anchor; `generate_loan_schedule` raises rather
+than guessing, and `validate_loan_for_approval` returns
+`cadence_anchor_undecided`. That code is not member-specific: an ordinary loan
+on a calendar-monthly cadence hits the same wall. See ADR-059 and
+`docs/POLYTOS-MEMBER-LOANS.md` §6.
 
 ### No collection, no disbursement
 

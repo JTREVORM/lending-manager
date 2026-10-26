@@ -187,6 +187,9 @@ seconds on a busy morning; a sign-in attempt every few seconds is somebody
 guessing a password. One number cannot describe both, and the number that
 protects sign-in would stop the business working.
 
+Every bucket, read out of `RATE_LIMIT_BUDGETS` in
+`lib/security/rate-limit.ts`, which is the only place they are defined:
+
 | Action | Budget | On store failure |
 | --- | --- | --- |
 | `auth.sign-in` | 8 / 5 min | **closed** |
@@ -194,9 +197,31 @@ protects sign-in would stop the business working.
 | `users.create` | 10 / hour | **closed** |
 | `users.reset-password` | 10 / hour | **closed** |
 | `payments.create` | 60 / min | open |
-| `payments.reverse` | 20 / hour | open |
+| `payments.reverse` | 20 / hour | **closed** |
+| `recovery.record` | 120 / 10 min | open |
+| `security.collateral` | 30 / min | open |
+| `security.decision` | 20 / hour | **closed** |
+| `membership.enrol` | 30 / min | open |
+| `membership.fee` | 60 / min | open |
+| `membership.consent` | 30 / min | open |
+| `membership.consent_code` | 10 / 15 min | **closed** |
+| `membership.card` | 20 / hour | open |
+| `savings.deposit` | 60 / min | open |
+| `savings.withdrawal` | 30 / min | open |
+| `member_loan.create` | 20 / hour | open |
+| `savings.withdrawal_decision` | 20 / hour | **closed** |
+| `savings.reverse` | 20 / hour | **closed** |
 | `loans.approve` | 20 / hour | open |
-| `loans.disburse` | 20 / hour | open |
+| `loans.disburse` | 20 / hour | **closed** |
+| `finance.transfer` | 30 / min | open |
+| `finance.transfer_decision` | 20 / hour | **closed** |
+| `finance.expense` | 30 / min | open |
+| `finance.expense_decision` | 20 / hour | **closed** |
+| `finance.income` | 60 / min | open |
+| `finance.reconciliation` | 20 / 10 min | open |
+| `finance.reconciliation_decision` | 20 / hour | **closed** |
+| `settings.update` | 30 / hour | **closed** |
+| `settings.product` | 30 / hour | **closed** |
 | `reports.export` | 10 / 10 min | open |
 | `reports.read` | 120 / min | open |
 | `uploads.document` | 20 / 10 min | open |
@@ -205,6 +230,24 @@ protects sign-in would stop the business working.
 where an unlimited attempt is worse than an outage. `open` lets it through: a
 database that cannot count is a database that cannot post a payment either, so
 refusing there would add a second, confusing failure on top of the real one.
+
+The division is not "writes are closed and reads are open". It is **whether
+the thing's own state already prevents a duplicate**. Where it does, the
+limiter fails open, because a store that cannot count must not stop a counter
+working: a deposit carries an idempotency key, a loan can only be approved
+from `pending_approval` and disbursed from `approved`, and an application
+opened twice is two drafts somebody can see and cancel.
+
+Where nothing in the record would tell two attempts apart, it fails closed —
+a reversal, a withdrawal decision, a settings change, a password change. Those
+are the ones where an unlimited retry is worse than an outage.
+
+Polytos Phase 3 added one bucket, `member_loan.create`, on an hour's window
+rather than a minute's — opening an application is deliberate work with a
+member in front of you, nobody opens twenty an hour, and a per-minute limit
+would be a brake on nothing. It fails open, like the deposit limiter, for the
+reason above. Approval and disbursement are not new buckets: a member loan
+goes through `loans.approve` and `loans.disburse`, because it is a loan.
 
 ### What is counted, and against whom
 

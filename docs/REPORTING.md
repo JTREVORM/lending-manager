@@ -768,7 +768,12 @@ a labelling preference is not a trade worth making, so it was not made.
 
 ## The reporting views
 
-Five, all `security_invoker`, all SELECT-only, none materialised.
+Phase 9's five, all `security_invoker`, all SELECT-only, none materialised.
+Later phases added their own to the same rules — Polytos Phase 2 the savings
+register and its two member views, Phase 3 the two below — and
+`tests/db/security.test.ts` carries the authoritative list, because an
+inventory asserted by a test cannot drift from the schema the way a table in a
+document can.
 
 | View | Shape | What it is for |
 | --- | --- | --- |
@@ -783,6 +788,32 @@ from effective so a reversal is excluded from every total without each call
 site remembering to filter. `collections_today` carries the one genuinely new
 quantity in the phase, `expected_today` (ADR-040). The two summaries aggregate
 the views above them, so a card and the detail beneath it cannot disagree.
+
+### Polytos Phase 3
+
+| View or function | Shape | What it is for |
+| --- | --- | --- |
+| `member_loan_eligibility` | One row per live membership | "Who can borrow": the qualifying months served, what the savings support, and why not where that is the answer |
+| `member_loan_register` | One row per member loan | The member loan register, with the membership and the pledge beside each loan |
+| `member_loan_summary()` | One row, 20 figures | The Member Lending dashboard in one round trip |
+
+Both views are `security_invoker`, so the policies on the tables beneath them
+decide what each caller sees — the ADR-057 rule.
+
+`member_loan_summary()` is `SECURITY DEFINER` and asks for `loans:view`
+itself, because it reports the business rather than a member: there is no
+*row* for a policy to filter. It is the same arrangement `savings_summary`
+has.
+
+It deliberately reports **no total ceiling**. Summing what the business could
+lend across every qualified member would be read as a commitment nobody made,
+and while the savings multiplier is undecided every term of it is absent
+anyway. The counts — qualified, not yet qualified, holding a member loan — are
+the useful version of the same question.
+
+Like every figure here, all twenty are derived from the payment ledger and the
+pledge table rather than stored, so a reversal moves them the instant it
+commits and the panel cannot disagree with the register beneath it.
 
 `client_statement_view` was considered and not built: a statement is a header,
 a schedule, a payment list and a balance — four shapes one view cannot express
