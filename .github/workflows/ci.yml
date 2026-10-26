@@ -141,25 +141,27 @@ jobs:
       - name: Build a local throwaway cluster and apply every migration
         run: npm run db:local:setup
 
-      # `test:db` runs three vitest projects in sequence: the database suite,
-      # the demonstration seeder's, then the borrower-reuse one. The seeder's
-      # is separate because the policy version it publishes is global state
-      # that would collide with every membership suite. Borrower reuse is
-      # separate again because it needs a database the synthetic seeder has
-      # never touched — once those six fee and deposit keys are spent on
-      # synthetic clients, reuse correctly refuses to remap them. See the
-      # header of vitest.config.mts. Each project's own globalSetup rebuilds
-      # the cluster the previous step created, so this one step covers all
-      # three.
-      - name: Database tests, the demonstration seeder, then borrower reuse
+      # `test:db` runs four vitest projects in sequence: the database suite,
+      # the demonstration seeder's, the borrower-reuse one, then the member
+      # loan demonstration's. The seeder's is separate because the policy
+      # version it publishes is global state that would collide with every
+      # membership suite. Borrower reuse is separate again because it needs a
+      # database the synthetic seeder has never touched — once those six fee
+      # and deposit keys are spent on synthetic clients, reuse correctly
+      # refuses to remap them. The member loan one is separate for both
+      # reasons at once: it publishes version 998.0 as the only version in
+      # force, and it reuses borrowers. See the header of vitest.config.mts.
+      # Each project's own globalSetup rebuilds the cluster the previous step
+      # created, so this one step covers all four.
+      - name: Database tests, the seeders, borrower reuse, member loans
         run: npm run test:db
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test
-          # `POLYTOS_SEED_DEMO` is deliberately **not** set here. The seeder
-          # refuses without it, and tests/db/demo-seed.test.ts supplies the
-          # phrase per child process — which is also how it can assert the
-          # refusals. Putting it in this job's environment would hand it to
-          # every other step for no gain.
+          # `POLYTOS_SEED_DEMO` is deliberately **not** set here, and neither
+          # is `POLYTOS_SEED_MEMBER_LOANS`. The seeder refuses without them,
+          # and each suite supplies the phrase per child process — which is
+          # also how they can assert the refusals. Putting either in this
+          # job's environment would hand it to every other step for no gain.
 
       - name: Upgrade and existing-borrower demo integration
         run: node scripts/verify-membership-upgrade.mjs

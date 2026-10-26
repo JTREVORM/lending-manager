@@ -92,7 +92,7 @@ export const MEMBER_LOAN_POLICY_VERSION = '998.0';
  * checking a date by hand gets the same answer — and the other convention is
  * equally implemented and equally tested. The business has decided neither.
  */
-const DEMO_MONTH_ANCHOR = 'clamp_to_month_end';
+export const DEMO_MONTH_ANCHOR = 'clamp_to_month_end';
 
 /**
  * The savings-to-loan multiplier the demonstration uses.
@@ -101,7 +101,7 @@ const DEMO_MONTH_ANCHOR = 'clamp_to_month_end';
  * Polytos rule** — question 3 is open, and the figure exists so the ceiling
  * arithmetic can be seen working rather than because anybody chose it.
  */
-const DEMO_MULTIPLIER_BPS = 20_000;
+export const DEMO_MULTIPLIER_BPS = 20_000;
 
 /**
  * The two people a member loan passes through.

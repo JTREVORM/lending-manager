@@ -176,6 +176,51 @@ describeDb('the guard rail', () => {
     ).rejects.toThrow(/business maximum/);
   });
 
+  it('holds the member product to the programme ceiling, not the business one', async () => {
+    // Two ceilings that mean two different things, and both are enforced. See
+    // ADR-060: three months is the longest ordinary loan the business writes,
+    // and five is what the membership programme's own documents promise its
+    // members.
+    const ceilings = await queryOne<{ business: string; programme: string }>(
+      `select
+         (select max_loan_term_months from public.business_settings where id = 1)::text
+           as business,
+         (select pg_catalog.max(member_loan_max_term_months)
+            from public.membership_policy_versions
+           where status in ('draft', 'active'))::text as programme`,
+    );
+
+    expect(
+      Number(ceilings.programme),
+      'the programme promises a longer member term than the business writes',
+    ).toBeGreaterThan(Number(ceilings.business));
+
+    // The member product sits above the business ceiling, legitimately.
+    const product = await queryOne<{ max_term_months: string }>(
+      `select max_term_months::text from public.loan_products where product_code = 'ML'`,
+    );
+
+    expect(Number(product.max_term_months)).toBe(Number(ceilings.programme));
+
+    // And is not unbounded: one month beyond the programme's own figure is
+    // refused, naming the programme rather than the business settings.
+    await expect(
+      query(
+        `update public.loan_products set max_term_months = $1 where product_code = 'ML'`,
+        [Number(ceilings.programme) + 1],
+      ),
+    ).rejects.toThrow(/membership programme's member loan maximum/);
+
+    // The ordinary products are still held to the business figure, so the
+    // exemption is the member product's alone.
+    await expect(
+      query(
+        `update public.loan_products set max_term_months = $1 where product_code = 'IL'`,
+        [Number(ceilings.business) + 1],
+      ),
+    ).rejects.toThrow(/business maximum/);
+  });
+
   // -------------------------------------------------------------------------
   // The other direction — migration 20261012000500.
   // -------------------------------------------------------------------------
