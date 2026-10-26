@@ -150,6 +150,69 @@ comment on column public.membership_policy_versions.medical_benefit_year_basis i
   'Polytos Phase 4. Whether the medical benefit''s annual cap and claim count run over the calendar year or over the year from the member''s own enrolment anniversary. NULL means the client has not decided; there is no default, because a member admitted in December and again in January has either one year''s cap or two. Deliberately not part of is_benefits_enabled: condolence and bereavement claims do not use it, and a gate that held the whole module hostage to a rule two of its three benefits ignore would be the single-switch mistake again.';
 
 -- ---------------------------------------------------------------------------
+-- And frozen once anybody is held to the version, like the other nine
+--
+-- `membership_policy_versions_guard` freezes every contractual column — the
+-- nine undecided rules included — the moment a version is approved or
+-- somebody is enrolled under it, for a reason that applies here word for
+-- word: a member enrolled while this rule was open did not agree to the
+-- answer somebody writes into it afterwards. A medical cap measured over the
+-- calendar year and one measured over the enrolment anniversary give a member
+-- admitted in December either one year's ceiling or two.
+--
+-- A separate trigger rather than a rewritten `membership_policy_versions_
+-- guard`. Replacing that function here would mean copying its 140 lines into
+-- this migration, where the copy would be the version that drifted — and the
+-- rule this adds composes with it rather than qualifying it. The same
+-- reasoning the storage path functions used: one statement of each rule, in
+-- the place the rule belongs to.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.membership_policy_year_basis_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_in_use boolean;
+begin
+  if new.medical_benefit_year_basis is not distinct from old.medical_benefit_year_basis
+  then
+    return new;
+  end if;
+
+  select exists (
+    select 1 from public.memberships m where m.policy_version_id = old.id
+  ) into v_in_use;
+
+  if v_in_use then
+    raise exception
+      'Members are enrolled under policy version %. Publish a new version rather than deciding the benefit year on this one.',
+      old.version using errcode = 'P0001';
+  end if;
+
+  if old.approved_at is not null then
+    raise exception
+      'Policy version % has been approved. Publish a new version rather than deciding the benefit year on this one.',
+      old.version using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.membership_policy_year_basis_guard() is
+  'Polytos Phase 4. BEFORE UPDATE on membership_policy_versions: freezes medical_benefit_year_basis once the version is approved or anybody is enrolled under it, exactly as membership_policy_versions_guard freezes the other nine undecided rules. Separate rather than folded into that function so neither is a copy of the other.';
+
+create trigger membership_policy_year_basis_guard
+  before update on public.membership_policy_versions
+  for each row execute function public.membership_policy_year_basis_guard();
+
+revoke all on function public.membership_policy_year_basis_guard() from public, anon, authenticated;
+
+
+-- ---------------------------------------------------------------------------
 -- benefit_amount_for_claim()
 --
 -- The whole of the benefit arithmetic, in one place that a test can drive
@@ -267,6 +330,12 @@ grant execute on function public.benefit_policy_year_bounds(text, date, date) to
 -- partial view of the history is a cap that over-approves. `benefits:assess`
 -- is the capability, because this figure is an input to an assessment and to
 -- nothing else.
+--
+-- The gate is a statement about a session, so it is inside the trusted-path
+-- exemption rather than above it: `auth.uid()` is NULL for a migration, for
+-- `service_role` and for the test harness, none of which hold a capability to
+-- check, and refusing them would mean a maintenance read of
+-- `benefit_claim_eligibility` could not run at all.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.medical_benefit_consumed(
@@ -282,7 +351,14 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not public.user_has_permission('benefits:assess')
+  -- A check about a *session*, so it is skipped where there is none:
+  -- `auth.uid()` is NULL for migrations, for `service_role` and for the test
+  -- harness, and refusing those would make the figure unreadable by the
+  -- trusted path that has no capabilities to hold. Every other rule in this
+  -- file is stated above its trusted-path exemption; this one *is* the
+  -- session rule, which is why it sits inside it.
+  if auth.uid() is not null
+     and not public.user_has_permission('benefits:assess')
      and not public.user_has_permission('benefits:approve') then
     raise exception 'permission denied for benefit consumption'
       using errcode = '42501';

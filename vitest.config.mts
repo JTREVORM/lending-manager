@@ -84,6 +84,7 @@ export default defineConfig({
             'tests/db/demo-seed.test.ts',
             'tests/db/demo-borrower-reuse.test.ts',
             'tests/db/member-loan-demo-seed.test.ts',
+            'tests/db/benefit-demo-seed.test.ts',
           ],
         },
       },
@@ -140,6 +141,28 @@ export default defineConfig({
           // It builds a loan book first as well, and then runs the seeder
           // five times — three for the fixed point, two for the refusals — so
           // it gets the widest budget of the five projects.
+          testTimeout: 400_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'seed-benefits',
+          environment: 'node',
+          include: ['tests/db/benefit-demo-seed.test.ts'],
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          // Polytos Phase 4. The benefit demonstration publishes policy
+          // version 997.0 and requires it to be the only version in force,
+          // for the reason `seed-member-loans` does: a savings account is
+          // frozen to the version it was opened under, so a second published
+          // version supersedes the first and silently un-qualifies every
+          // account opened under it. It also back-dates the demonstration
+          // memberships, which no other suite expects.
+          //
+          // It runs the seeder six times — three for the fixed point, three
+          // for the refusals — each a child process, so it gets a budget as
+          // wide as the member-loan suite's.
           testTimeout: 400_000,
         },
       },

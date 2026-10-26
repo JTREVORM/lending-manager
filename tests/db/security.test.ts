@@ -1294,6 +1294,12 @@ describeDb('privileged functions', () => {
       'membership_meetings_guard',
       'membership_policy_allows',
       'membership_policy_versions_guard',
+      // Polytos Phase 4. The tenth undecided rule — whether the medical
+      // benefit year runs from January or from the member's own anniversary —
+      // is frozen once anybody is enrolled under the version, exactly as the
+      // other nine are. A trigger of its own rather than 140 lines copied into
+      // the Phase 4 migration, where the copy would be the one that drifted.
+      'membership_policy_year_basis_guard',
       'membership_terms_acceptances_guard',
       'membership_terms_are_accepted',
       'memberships_assign_number',
