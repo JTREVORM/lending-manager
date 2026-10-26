@@ -132,6 +132,43 @@ There is deliberately **no** "Record a deposit" entry. A deposit is always to a
 *particular* member's account, so the entry would open a chooser that the
 register already is, one tap earlier.
 
+## Member Lending
+
+Polytos Phase 3. Immediately after Member Savings, because a member loan is
+assessed against savings and that is where a reader looks for it next.
+
+| Entry | Destination | Reuses | Capability |
+| --- | --- | --- | --- |
+| Who Can Borrow | `/member-loans?tab=members` | — | `member_loans:view_eligibility` |
+| Member Loans | `/member-loans?tab=loans` | the same screen, the other register | `member_loans:view_eligibility` |
+| Qualified Members | `/member-loans?tab=members&qualified=qualified` | eligibility register filter | `member_loans:view_eligibility` |
+| New Application | `/member-loans/new` | — | `member_loans:create` |
+
+`?tab=` is parsed by the page itself and narrows the heading and the register;
+`?qualified=` by `memberEligibilitySearchSchema`.
+
+**Two registers on one route rather than two routes.** "Who can borrow" and
+"who has borrowed" are answered from different tables, but they are the same
+screen's two views — reached from the rail, as the Phase 21 decision requires,
+rather than from a strip of tabs above the register. A strip here would be a
+second copy of one navigation and the only one of the two that could fall out
+of step with it.
+
+**There is deliberately no member-loan detail route.** A member loan opens at
+`/loans/{id}`, like every other loan, with a membership panel added to it. A
+second detail screen would be a second set of controls over one agreement.
+
+**`/member-loans/new` is listed before `/member-loans` in the route
+requirement table** (`lib/auth/routing.ts`), and the order is load-bearing —
+the same arrangement, and the same reason, as `/savings/withdrawals` above.
+Matched the other way round, the application form would inherit the section's
+floor and open to a Secretary/Treasurer, who may answer "do you qualify yet?"
+and may not commit the business to lending. `tests/e2e/specs/member-loans.spec.ts`
+points a Secretary straight at the URL.
+
+The Secretary/Treasurer therefore sees the first three entries and not the
+fourth, which is the only module in the rail where one role sees part of one.
+
 ## Loan Management
 
 Phase 13 reorganised the register around the **workflow**, and its ten stages

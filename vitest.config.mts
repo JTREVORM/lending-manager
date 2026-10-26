@@ -2,7 +2,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 /**
- * Three test projects, run separately because they need different
+ * Five test projects, run separately because they need different
  * environments and different prerequisites:
  *
  *   unit         Pure logic — money, rates, dates, phone numbers, validation,
@@ -26,6 +26,16 @@ import { defineConfig } from 'vitest/config';
  *                own `globalSetup`, which rebuilds the database first — so
  *                the seeder meets the empty database it is specified
  *                against, and leaves nothing behind for anything else.
+ *
+ *   seed-reuse   The same seeder against a database that already holds a loan
+ *                book, with borrower reuse opted in.
+ *
+ *   seed-member-loans
+ *                The Phase 3 member loan demonstration, which needs a
+ *                database of its own for two reasons: it publishes policy
+ *                version 998.0 as the *only* version in force, and borrower
+ *                reuse needs a database the synthetic seeder has never
+ *                touched.
  *
  * `npm run test:run` runs unit + integration, so it needs no database and is
  * the gate for CI. `npm run test:db` runs the database suite, then the
@@ -70,7 +80,11 @@ export default defineConfig({
           fileParallelism: false,
           testTimeout: 30_000,
           // Each seeder suite has a project of its own; see their headers.
-          exclude: ['tests/db/demo-seed.test.ts', 'tests/db/demo-borrower-reuse.test.ts'],
+          exclude: [
+            'tests/db/demo-seed.test.ts',
+            'tests/db/demo-borrower-reuse.test.ts',
+            'tests/db/member-loan-demo-seed.test.ts',
+          ],
         },
       },
       {
@@ -105,6 +119,28 @@ export default defineConfig({
           // way to disbursement — and then runs the seeder four times, so the
           // budget is wider again.
           testTimeout: 300_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'seed-member-loans',
+          environment: 'node',
+          include: ['tests/db/member-loan-demo-seed.test.ts'],
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          // The member loan demonstration publishes policy version 998.0 and
+          // requires it to be the only version in force: a savings account is
+          // frozen to the version it was opened under, so a second published
+          // version would supersede the first and silently un-qualify every
+          // account opened under it. Every membership suite in the `db`
+          // project publishes its own version, and `seed` publishes 999.0, so
+          // this needs a rebuild nobody else has written to.
+          //
+          // It builds a loan book first as well, and then runs the seeder
+          // five times — three for the fixed point, two for the refusals — so
+          // it gets the widest budget of the five projects.
+          testTimeout: 400_000,
         },
       },
     ],

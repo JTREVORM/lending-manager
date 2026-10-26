@@ -232,6 +232,22 @@ export async function deleteTestUsers(): Promise<void> {
       table: 'membership_consent_challenges',
       trigger: 'membership_consent_challenges_no_delete',
     },
+    // Polytos Phase 3. Both tables refuse DELETE and the pledge refuses an
+    // ordinary UPDATE, so both triggers come off for the teardown under the
+    // same owner-level exemption. Each holds every reference with RESTRICT,
+    // for the reason the Phase 2 documents do, so they are cleared explicitly
+    // and before the savings accounts, loans and memberships they name.
+    {
+      table: 'member_loan_eligibility_snapshots',
+      trigger: 'member_loan_snapshots_no_delete',
+    },
+    { table: 'member_loan_savings_pledges', trigger: 'member_loan_pledges_guard' },
+    { table: 'member_loan_savings_pledges', trigger: 'member_loan_pledges_no_delete' },
+    // The release trigger fires on a loan's status change, and the teardown
+    // changes none — but a loan deleted while it holds a pledge would fire it
+    // on nothing. Off, so the teardown does not depend on the order within a
+    // statement.
+    { table: 'loans', trigger: 'member_loan_release_pledge' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -272,6 +288,12 @@ export async function deleteTestUsers(): Promise<void> {
     );
     await query(`delete from public.savings_transactions`);
     await query(`delete from public.savings_withdrawal_requests`);
+
+    // Polytos Phase 3, before the savings accounts and the loans they name
+    // with RESTRICT.
+    await query(`delete from public.member_loan_savings_pledges`);
+    await query(`delete from public.member_loan_eligibility_snapshots`);
+
     await query(`delete from public.savings_accounts`);
     await query(`delete from public.membership_fee_receipts`);
     await query(`delete from public.membership_cards`);

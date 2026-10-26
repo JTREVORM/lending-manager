@@ -603,6 +603,12 @@ describeDb('payment row level security', () => {
         // the contribution months. Invoker on all three, so a member reading
         // any of them sees their own account and no other — the policy on
         // `savings_accounts` is what decides, not the view.
+        // Polytos Phase 3. One row per live membership with the ceiling their
+        // savings support, and member loans with their frozen eligibility
+        // evidence beside them — each the one read a dashboard or a panel
+        // makes, rather than a function call per member.
+        'member_loan_eligibility',
+        'member_loan_register',
         'member_savings_balances',
         'member_savings_contributions',
         'membership_register',

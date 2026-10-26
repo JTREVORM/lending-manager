@@ -3,6 +3,12 @@ import 'server-only';
 import { COMPANY_DEFAULTS } from '@/config/defaults';
 import { logger } from '@/lib/logger';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  isMonthAnchor,
+  isRepaymentCadenceKind,
+  type MonthAnchor,
+  type RepaymentCadenceKind,
+} from '@/lib/domain/repayment-schedule';
 
 /**
  * Reading the settings the Settings screen shows.
@@ -63,7 +69,18 @@ export interface LendingRules {
 export interface RepaymentCadence {
   readonly key: string;
   readonly label: string;
-  readonly intervalDays: number;
+  /**
+   * Polytos Phase 3. Null for a calendar-monthly cadence, where the step is a
+   * month rather than a number of days — see `cadenceKind`.
+   */
+  readonly intervalDays: number | null;
+  readonly cadenceKind: RepaymentCadenceKind;
+  /**
+   * For a calendar cadence, the convention for a month that has no such day.
+   * Null means the business has not decided it, and no monthly schedule can be
+   * generated until it does.
+   */
+  readonly monthAnchor: MonthAnchor | null;
   readonly isActive: boolean;
 }
 
@@ -107,7 +124,7 @@ export async function getSettingsSnapshot(): Promise<SettingsSnapshot> {
       supabase.from('business_settings').select('*').eq('id', 1).maybeSingle(),
       supabase
         .from('repayment_frequencies')
-        .select('key, label, interval_days, is_active')
+        .select('key, label, interval_days, cadence_kind, month_anchor, is_active')
         .order('sort_order', { ascending: true }),
       // Phase 12. Both need their own capability — `branches:view` and
       // `settings:view` — so either can come back empty for a caller who
@@ -205,6 +222,10 @@ export async function getSettingsSnapshot(): Promise<SettingsSnapshot> {
       key: row.key,
       label: row.label,
       intervalDays: row.interval_days,
+      cadenceKind: isRepaymentCadenceKind(row.cadence_kind)
+        ? row.cadence_kind
+        : 'fixed_days',
+      monthAnchor: isMonthAnchor(row.month_anchor) ? row.month_anchor : null,
       isActive: row.is_active,
     })),
 

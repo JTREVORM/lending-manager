@@ -276,6 +276,12 @@ describe('authorization matrix', () => {
     'savings:approve_withdrawal': ['manager', 'owner_admin'],
     'savings:post_withdrawal': ['manager', 'owner_admin'],
     'savings:view_reports': ['manager', 'owner_admin'],
+
+    // Polytos Phase 3. The counter answers "do I qualify yet?"; opening a
+    // member-loan application is withheld from it, as enrolment is, because
+    // it commits the business to lend against member savings.
+    'member_loans:view_eligibility': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'member_loans:create': ['manager', 'owner_admin'],
     'savings:reverse': ['owner_admin'],
 
     // --- Phase 3: clients ---------------------------------------------------
@@ -571,14 +577,41 @@ describe('profile statuses', () => {
 });
 
 describe('repayment frequency defaults', () => {
-  it('covers the three cadences the business supports', () => {
+  it('covers the cadences the business supports, and says which are open', () => {
     expect(REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.key)).toEqual([
       'daily',
       'every_2_days',
       'every_3_days',
+      // Polytos Phase 3. Seven days is a week, every week.
+      'weekly',
+      // Polytos Phase 3. A calendar month is not a number of days at all.
+      'monthly',
     ]);
     expect(REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.intervalDays)).toEqual([
-      1, 2, 3,
+      1,
+      2,
+      3,
+      7,
+      // Null, not 30: an `interval_days = 30` cadence would drift a loan
+      // disbursed on 31 January onto 2 March, 1 April, 1 May.
+      null,
+    ]);
+    expect(REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.cadenceKind)).toEqual([
+      'fixed_days',
+      'fixed_days',
+      'fixed_days',
+      'fixed_days',
+      'calendar_month',
+    ]);
+    // The monthly cadence is closed until the business decides what a monthly
+    // collection does in a month that has no such day. A cadence offered in a
+    // picker that approval would then refuse is a control that fails late.
+    expect(REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.isActive)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
     ]);
   });
 });

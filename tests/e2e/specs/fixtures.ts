@@ -50,16 +50,40 @@ export interface Fixtures {
     readonly saving: string;
     readonly withdrawn: string;
     readonly pendingConsent: string;
+    /**
+     * Polytos Phase 3. Two members whose only loan is a member loan.
+     *
+     *   borrowing  six unbroken months, and a running member loan with two of
+     *              its eight weekly collections made.
+     *   applying   six unbroken months, and an application awaiting approval.
+     *
+     * Separate people from the five above, and that is not tidiness: every one
+     * of those five already holds a live loan, and `active_loan_exists` refuses
+     * a second live loan to anybody. A member loan could not be written against
+     * any of them.
+     */
+    readonly borrowing: string;
+    readonly applying: string;
+    /**
+     * Six unbroken months, and a draft the browser suite submits and
+     * approves. Separate from `applying` because approving takes a pledge and
+     * makes them hold a live loan, which would change what `applying`'s
+     * eligibility panel says — and the read-only spec asserts that it says
+     * "may borrow".
+     */
+    readonly approving: string;
   };
   readonly membershipNumbers: {
     readonly qualified: string;
     readonly pendingConsent: string;
+    readonly borrowing: string;
   };
   readonly savings: {
     readonly qualified: string;
     readonly gapped: string;
     readonly saving: string;
     readonly withdrawn: string;
+    readonly borrowing: string;
   };
   readonly savingsAccountNumbers: {
     readonly qualified: string;
@@ -84,6 +108,42 @@ export interface Fixtures {
     readonly undecidedRules: number;
     readonly activitiesOpen: number;
     readonly activitiesClosed: number;
+  };
+  /** Polytos Phase 3. The two clients the member loans belong to. */
+  readonly memberClients: {
+    readonly borrowing: string;
+    readonly applying: string;
+    readonly approving: string;
+  };
+  readonly memberLoans: {
+    readonly active: string;
+    readonly activeNumber: string;
+    readonly draft: string;
+    readonly draftNumber: string;
+    readonly toApprove: string;
+    readonly toApproveNumber: string;
+    readonly toApprovePrincipal: number;
+    readonly principal: number;
+    readonly pledged: number;
+    readonly installments: number;
+  };
+  /**
+   * What the harness decided about member lending, and what it left open.
+   *
+   * `monthAnchor` is null on purpose: the harness answers the three policy
+   * questions so the member loan screens have data, and leaves the fourth —
+   * what a monthly collection does in a month that has no such day — open, so
+   * the screen that names outstanding decisions still has one to name and the
+   * refusal of a three-month loan can be seen. See the long note above the
+   * policy INSERT in `tests/e2e/harness/seed.mjs`.
+   */
+  readonly memberLending: {
+    readonly multiplierBps: number;
+    readonly interestBasis: string;
+    readonly interestMethod: string;
+    readonly monthAnchor: string | null;
+    readonly weeklyCadenceMaxMonths: number;
+    readonly maxTermMonths: number;
   };
 }
 

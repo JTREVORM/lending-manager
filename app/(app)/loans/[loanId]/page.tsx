@@ -11,6 +11,8 @@ import { LoanRecoveryPanel } from '@/components/loans/loan-recovery-panel';
 import { LoanStatusBadge } from '@/components/loans/loan-status-badge';
 import { RepaymentScheduleTable } from '@/components/loans/repayment-schedule-table';
 import { SectionTabs } from '@/components/ui/section-tabs';
+import { MemberLoanPanel } from '@/components/member-loans/member-loan-panel';
+import { getMemberLoan } from '@/lib/data/member-loans';
 import { ScheduleSummary } from '@/components/loans/schedule-summary';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -190,6 +192,12 @@ export default async function LoanDetailPage({
     canSeeRecovery && isDisbursed ? listLoanRecoveryActions(loanId) : Promise.resolve([]),
   ]);
 
+  // Polytos Phase 3. Null for every ordinary loan — `member_loan_register` is
+  // keyed on `loans.membership_id`, which only a member loan carries — and
+  // null for a caller the policies refuse, so the panel's absence is a
+  // database decision rather than a conditional written here.
+  const memberLoan = await getMemberLoan(loanId);
+
   // The stored schedule, verified before it is shown, on the same reasoning as
   // the breakdown below: a corrupt collection plan should announce itself
   // rather than render as a plausible table of wrong dates and amounts.
@@ -316,6 +324,9 @@ export default async function LoanDetailPage({
         label="Loan sections"
         tabs={[
           { id: 'terms-heading', label: 'Overview' },
+          ...(memberLoan !== null
+            ? [{ id: 'member-loan-heading', label: 'Membership' }]
+            : []),
           ...(position !== null ? [{ id: 'balance-heading', label: 'Balance' }] : []),
           ...(canSeeSchedule && schedule !== null
             ? [{ id: 'schedule-heading', label: 'Schedule' }]
@@ -437,6 +448,20 @@ export default async function LoanDetailPage({
         ) : null}
       </section>
 
+      {/* --- Polytos Phase 3: the membership half -------------------------- */}
+      {memberLoan !== null ? (
+        <section aria-labelledby="member-loan-heading" className="min-w-0 space-y-3">
+          <h2 id="member-loan-heading" className="text-text text-lg font-semibold">
+            Membership and savings
+          </h2>
+
+          <MemberLoanPanel
+            loan={memberLoan}
+            canSeeMembership={contextCan(context, 'membership:view')}
+          />
+        </section>
+      ) : null}
+
       {/* --- Balance ------------------------------------------------------ */}
       {position !== null ? (
         <section aria-labelledby="balance-heading" className="min-w-0 space-y-3">
@@ -544,6 +569,7 @@ export default async function LoanDetailPage({
             totalScheduledAmount={schedule.totalScheduledAmount}
             frequencyLabel={schedule.header.frequencyLabel}
             intervalDays={schedule.header.intervalDays}
+            monthAnchor={schedule.header.monthAnchor}
             disbursementDate={schedule.header.disbursementDate}
             reconciles={schedule.reconciles}
           />

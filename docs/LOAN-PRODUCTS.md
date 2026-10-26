@@ -18,6 +18,7 @@ configurable catalogue the Owner maintains from a screen.
 | `BL` | Business Loans | Offered | 300,000 – 20,000,000 | 15% / month | 1–3 months | Business |
 | `IL` | Individual Loans | Offered, **default** | 100,000 – 20,000,000 | 15% / month | 1–3 months | Individual |
 | `IL-LEGACY` | Individual Loan (migrated) | Withdrawn | 100,000 – 20,000,000 | 15% / month | 1–3 months | Individual |
+| `ML` | Member Loans | **Inactive** | 100,000 – 20,000,000 | 5% — from the policy, not this column | 1–5 months | Individual |
 
 Nothing above is compiled into the application. Every figure is a column on
 `loan_products`, and `/settings/products` is where the Owner changes it.
@@ -34,6 +35,35 @@ chosen for a new application.
 No historical figure was changed by the migration. The product field is
 populated truthfully, and a report that groups by product shows those loans as
 what they are: lending the business did before it had named products.
+
+### Why `ML` is different in two ways
+
+Polytos Phase 3. It is the first product with `requires_membership = true`,
+and the first with `interest_source = 'membership_policy'`.
+
+**It is priced from somewhere else.** `interest_source` says where a loan's
+rate, basis and method come from. For every other product it is `'product'`
+and the answer is the columns above. For `ML` it is `'membership_policy'`, and
+the answer is **the borrower's own frozen policy version** — because a member
+was promised terms when they enrolled, and the product changing afterwards
+must not reprice a loan they already hold. `capture_loan_product_snapshot`
+therefore never records a policy-priced loan as a rate override: the rate
+differs from the product's column by design, not because somebody overrode it.
+
+**Its term ceiling comes from the programme.** `business_settings.max_loan_term_months`
+is 3 and the confirmed Polytos figure is 5. Both are right: three months is
+the longest ordinary loan the business writes, five is what the membership
+programme's documents promise its members. `loan_products_within_business_rules`
+reads the ceiling for a `requires_membership` product from
+`max(member_loan_max_term_months)` across the policy versions in `draft` or
+`active`. That bound is a configuration envelope; the per-loan limit is
+enforced at approval against the borrower's own version. See ADR-060.
+
+**It ships inactive, and that is the point.** Four decisions are open — the
+interest basis, the interest method, the savings multiplier and the monthly
+collection anchor — and until they are answered the database refuses to
+approve a loan that depends on them. Activating the product is the last of
+three steps, not the first. See `docs/POLYTOS-MEMBER-LOANS.md`.
 
 ---
 

@@ -241,12 +241,21 @@ object no read policy could ever match again.
 
 That list is Phase 1's. Later phases added their own, and the authoritative
 list is `supabase/migrations/` itself — `ls` is more honest than a table that
-has to be remembered. The two most recent groups:
+has to be remembered. The three most recent groups:
 
 ```
 20261019000100–20261019000800   Polytos Phase 1: membership foundation
 20261020000100–20261020001400   Polytos Phase 2: enrolment, consent, savings
+20261021000100–20261021001000   Polytos Phase 3: member loans, eligibility,
+                                the calendar-month cadence
 ```
+
+Phase 3 is the first group that **rewrites a function the existing loan book
+already depends on** — `generate_loan_schedule` gains a second cadence arm.
+`scripts/verify-membership-upgrade.mjs` therefore applies all three groups to
+a populated book and compares 28 financial figures, among them every
+collection date on every loan, in order. Run it before accepting any change
+to a function that computes money or dates.
 
 See `docs/POLYTOS-MEMBERSHIP-SCHEMA.md` and `docs/POLYTOS-SAVINGS.md` for what
 each of those two groups contains and why.

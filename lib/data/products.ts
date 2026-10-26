@@ -14,6 +14,10 @@ import 'server-only';
  */
 
 import { logger } from '@/lib/logger';
+import {
+  isRepaymentCadenceKind,
+  type RepaymentCadenceKind,
+} from '@/lib/domain/repayment-schedule';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { LoanProduct, ProductStatus } from '@/lib/domain/loan-product';
 
@@ -173,7 +177,9 @@ export async function getBranchOptions(): Promise<readonly BranchOption[]> {
 export interface CadenceOption {
   readonly key: string;
   readonly label: string;
-  readonly intervalDays: number;
+  /** Polytos Phase 3. Null for a calendar-monthly cadence. */
+  readonly intervalDays: number | null;
+  readonly cadenceKind: RepaymentCadenceKind;
 }
 
 /** The repayment cadences a product may offer. Only active ones are listed. */
@@ -182,7 +188,7 @@ export async function getCadenceOptions(): Promise<readonly CadenceOption[]> {
 
   const { data, error } = await supabase
     .from('repayment_frequencies')
-    .select('key, label, interval_days')
+    .select('key, label, interval_days, cadence_kind')
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
@@ -195,5 +201,8 @@ export async function getCadenceOptions(): Promise<readonly CadenceOption[]> {
     key: row.key,
     label: row.label,
     intervalDays: row.interval_days,
+    cadenceKind: isRepaymentCadenceKind(row.cadence_kind)
+      ? row.cadence_kind
+      : 'fixed_days',
   }));
 }

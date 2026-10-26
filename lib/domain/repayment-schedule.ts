@@ -60,6 +60,7 @@ import {
   compareBusinessDates,
   daysBetween,
   instantToBusinessDate,
+  toBusinessDate,
   type BusinessDate,
 } from '@/lib/domain/datetime';
 import { divideEvenly, sumUgx, toUgx, type UgxAmount } from '@/lib/domain/money';
@@ -96,11 +97,120 @@ export const SCHEDULE_FAILURE_CODES = [
   'invalid_disbursement_date',
   'period_has_no_installments',
   'too_many_installments',
+  'month_anchor_undecided',
+  'dates_not_increasing',
   'period_inconsistent',
   'reconciliation_failed',
 ] as const;
 
 export type ScheduleFailureCode = (typeof SCHEDULE_FAILURE_CODES)[number];
+
+// ---------------------------------------------------------------------------
+// The cadence, and its two kinds
+//
+// Polytos Phase 3. A cadence is either a fixed number of days apart or one
+// calendar month apart, and the second cannot be expressed as the first: a
+// month is 28, 29, 30 or 31 days, so an `intervalDays = 30` cadence on a loan
+// disbursed on 31 January would collect on 2 March, 1 April, 1 May — dates
+// nobody agreed to, drifting a little further every month.
+//
+// The three fields below mirror `repayment_frequencies.cadence_kind`,
+// `.interval_days` and `.month_anchor` exactly, so a row read out of that
+// table maps straight onto a generation input and the validation here mirrors
+// the CHECK constraints there.
+// ---------------------------------------------------------------------------
+
+export const REPAYMENT_CADENCE_KINDS = ['fixed_days', 'calendar_month'] as const;
+export type RepaymentCadenceKind = (typeof REPAYMENT_CADENCE_KINDS)[number];
+
+export function isRepaymentCadenceKind(value: unknown): value is RepaymentCadenceKind {
+  return (
+    typeof value === 'string' &&
+    (REPAYMENT_CADENCE_KINDS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * What a monthly collection does when the agreed day of the month does not
+ * exist in a later month.
+ *
+ * Both are implemented and **neither is a default**. The business has not
+ * decided, `repayment_frequencies.month_anchor` is NULL until it does,
+ * `generate_loan_schedule` refuses a calendar cadence with no anchor, and
+ * `validate_loan_for_approval` refuses the approval a day earlier. See
+ * ADR-059.
+ */
+export const MONTH_ANCHORS = [
+  'clamp_to_month_end',
+  'roll_forward_to_next_month',
+] as const;
+export type MonthAnchor = (typeof MONTH_ANCHORS)[number];
+
+export function isMonthAnchor(value: unknown): value is MonthAnchor {
+  return (
+    typeof value === 'string' && (MONTH_ANCHORS as readonly string[]).includes(value)
+  );
+}
+
+export const MONTH_ANCHOR_LABELS: Readonly<Record<MonthAnchor, string>> = {
+  clamp_to_month_end: 'The last day of the month',
+  roll_forward_to_next_month: 'The first day of the following month',
+};
+
+export const MONTH_ANCHOR_DESCRIPTIONS: Readonly<Record<MonthAnchor, string>> = {
+  clamp_to_month_end:
+    'A loan disbursed on 31 January collects on 28 February (29 in a leap year), ' +
+    'then 31 March, 30 April, 31 May. The collection never falls in the following month.',
+  roll_forward_to_next_month:
+    'A loan disbursed on 31 January collects on 1 March, then 31 March, 1 May, ' +
+    '31 May. The collection never falls earlier in the month than the day agreed.',
+};
+
+/**
+ * The calendar-monthly collection date `months` after an anchor date.
+ *
+ * Mirrors `public.monthly_collection_date`, and a database test asserts the
+ * two agree across every awkward date: 31 January in a leap year and a common
+ * year, 29 and 30 January, 31 March, 31 December across the year boundary, and
+ * an ordinary mid-month date that neither convention moves.
+ *
+ * `clamp_to_month_end` is what `addBusinessMonths` already does — it clamps to
+ * the target month's last day and anchors on the original date rather than
+ * stepping, so a February clamp does not drag the rest of the loan earlier.
+ * It is also what PostgreSQL's `date + interval 'n months'` does, which is why
+ * the two implementations agree without either imitating the other.
+ */
+export function monthlyCollectionDate(
+  anchorDate: BusinessDate,
+  months: number,
+  anchor: MonthAnchor,
+): BusinessDate {
+  if (!Number.isInteger(months) || months < 1) {
+    throw new ScheduleGenerationError(
+      'invalid_interval',
+      `A monthly collection step must be at least one month; received ${String(months)}.`,
+    );
+  }
+
+  const clamped = addBusinessMonths(anchorDate, months);
+
+  if (anchor === 'clamp_to_month_end') return clamped;
+
+  // The clamp fired exactly when the target month is shorter than the anchor's
+  // day of the month, which is visible as the day having changed. Nothing else
+  // can change it: the day is preserved whenever the target month has one.
+  if (anchorDate.slice(8, 10) === clamped.slice(8, 10)) return clamped;
+
+  // The first day of the month after the one the clamp landed in. Derived from
+  // the clamped date rather than from the anchor, so a run of short months
+  // cannot be got wrong by arithmetic on the original day.
+  const year = Number(clamped.slice(0, 4));
+  const month = Number(clamped.slice(5, 7));
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+
+  return toBusinessDate(`${String(nextYear)}-${String(nextMonth).padStart(2, '0')}-01`);
+}
 
 /**
  * One contractual month, as the schedule engine needs to see it.
@@ -136,8 +246,30 @@ export interface ScheduleGenerationInput {
   /** The contractual monthly breakdown, in period order. */
   readonly periods: readonly SchedulePeriodInput[];
 
-  /** Days between consecutive collections: 1 daily, 2 every two days, 3 every three. */
-  readonly intervalDays: number;
+  /**
+   * Days between consecutive collections: 1 daily, 2 every two days, 7 weekly.
+   *
+   * Required for a `fixed_days` cadence and refused for a `calendar_month`
+   * one, where the step is a month rather than a number of days — the same
+   * rule `repayment_frequencies_interval_matches_kind` states in the database.
+   */
+  readonly intervalDays?: number | null;
+
+  /**
+   * Which kind of cadence. Defaults to `fixed_days`, which is what every
+   * schedule generated before Polytos Phase 3 was, so a caller passing only
+   * `intervalDays` is unchanged.
+   */
+  readonly cadenceKind?: RepaymentCadenceKind;
+
+  /**
+   * For a calendar cadence, what a collection does in a month that has no such
+   * day. Required there and refused for a fixed-day cadence.
+   *
+   * `null` is the state the business is actually in and is **refused**, naming
+   * the decision: a guessed collection date is worse than no schedule.
+   */
+  readonly monthAnchor?: MonthAnchor | null;
 }
 
 /** One scheduled collection. Every amount is whole shillings. */
@@ -171,7 +303,11 @@ export interface RepaymentSchedule {
   readonly installments: readonly ScheduledInstallment[];
   readonly windows: readonly SchedulePeriodWindow[];
   readonly disbursementDate: BusinessDate;
-  readonly intervalDays: number;
+  readonly cadenceKind: RepaymentCadenceKind;
+  /** Null for a calendar cadence, where the step is a month. */
+  readonly intervalDays: number | null;
+  /** Null for a fixed-day cadence. */
+  readonly monthAnchor: MonthAnchor | null;
   /** The first collection date. One interval after disbursement. */
   readonly firstDueDate: BusinessDate;
   /**
@@ -242,7 +378,8 @@ export interface RepaymentSchedule {
 export function generateRepaymentSchedule(
   input: ScheduleGenerationInput,
 ): RepaymentSchedule {
-  const { disbursementDate, periods, intervalDays } = input;
+  const { disbursementDate, periods } = input;
+  const cadenceKind = input.cadenceKind ?? 'fixed_days';
 
   // --- Input validation ----------------------------------------------------
   // Refused rather than coerced. Every one of these would otherwise produce a
@@ -254,18 +391,66 @@ export function generateRepaymentSchedule(
     );
   }
 
-  if (!Number.isInteger(intervalDays) || intervalDays < 1) {
-    throw new ScheduleGenerationError(
-      'invalid_interval',
-      `A collection interval must be a positive whole number of days, received ${String(intervalDays)}.`,
-    );
-  }
+  // --- The cadence, resolved once -----------------------------------------
+  // The same pairing the database states as two CHECK constraints: an
+  // interval is required where it means something and refused where it does
+  // not, and likewise an anchor. Stated here too rather than trusted from the
+  // row, because a caller reading from an untyped source can get either past
+  // the compiler.
+  let intervalDays: number | null = null;
+  let monthAnchor: MonthAnchor | null = null;
 
-  if (intervalDays > MAX_SUPPORTED_INTERVAL_DAYS) {
-    throw new ScheduleGenerationError(
-      'invalid_interval',
-      `A collection interval of ${String(intervalDays)} days is beyond the supported range of ${String(MAX_SUPPORTED_INTERVAL_DAYS)}.`,
-    );
+  if (cadenceKind === 'fixed_days') {
+    if (input.monthAnchor !== undefined && input.monthAnchor !== null) {
+      throw new ScheduleGenerationError(
+        'invalid_interval',
+        'A fixed-day cadence has no monthly collection anchor: the step is a number of days.',
+      );
+    }
+
+    const supplied = input.intervalDays;
+
+    if (
+      !Number.isInteger(supplied) ||
+      supplied === null ||
+      supplied === undefined ||
+      supplied < 1
+    ) {
+      throw new ScheduleGenerationError(
+        'invalid_interval',
+        `A collection interval must be a positive whole number of days, received ${String(supplied)}.`,
+      );
+    }
+
+    if (supplied > MAX_SUPPORTED_INTERVAL_DAYS) {
+      throw new ScheduleGenerationError(
+        'invalid_interval',
+        `A collection interval of ${String(supplied)} days is beyond the supported range of ${String(MAX_SUPPORTED_INTERVAL_DAYS)}.`,
+      );
+    }
+
+    intervalDays = supplied;
+  } else {
+    if (input.intervalDays !== undefined && input.intervalDays !== null) {
+      throw new ScheduleGenerationError(
+        'invalid_interval',
+        'A calendar-monthly cadence has no collection interval in days: the step is a month.',
+      );
+    }
+
+    // Fail shut, and name the decision. This is the state the business is in
+    // today, so it is the branch that actually runs — and a guessed collection
+    // date would put a day on a borrower's agreement that no person chose.
+    if (input.monthAnchor === undefined || input.monthAnchor === null) {
+      throw new ScheduleGenerationError(
+        'month_anchor_undecided',
+        'A calendar-monthly schedule needs the convention for a month that has no such ' +
+          'day, and the business has not decided it. Set the monthly collection anchor ' +
+          'on the calendar cadence first.',
+      );
+    }
+
+    monthAnchor = input.monthAnchor;
   }
 
   // `toBusinessDate` already rejects a malformed or impossible date, but a
@@ -322,56 +507,116 @@ export function generateRepaymentSchedule(
   }
 
   // --- The cadence ---------------------------------------------------------
-  // One global rhythm from the disbursement date, stopping strictly before the
-  // final contractual boundary.
-  const totalDays = daysBetween(disbursementDate, finalBoundary);
-  const upperBound = Math.floor(totalDays / intervalDays);
-
-  if (upperBound > MAX_SUPPORTED_INSTALLMENTS) {
-    throw new ScheduleGenerationError(
-      'too_many_installments',
-      `This loan would generate ${String(upperBound)} collections, beyond the supported maximum of ${String(MAX_SUPPORTED_INSTALLMENTS)}.`,
-    );
-  }
-
-  const cadence: BusinessDate[] = [];
-  for (let step = 1; step <= upperBound; step += 1) {
-    const dueDate = addBusinessDays(disbursementDate, step * intervalDays);
-
-    // `upperBound` is a floor, so the last candidate can land exactly on the
-    // boundary when the term divides evenly by the interval. Excluded, because
-    // the boundary belongs to the month that has not started.
-    if (compareBusinessDates(dueDate, finalBoundary) >= 0) break;
-
-    cadence.push(dueDate);
-  }
-
-  // --- Assign each collection to its contractual month ---------------------
   const datesByPeriod: BusinessDate[][] = periods.map(() => []);
-  let cursor = 0;
 
-  for (const [index] of periods.entries()) {
-    const windowEnd = bounds[index + 1];
+  if (cadenceKind === 'calendar_month') {
+    // One collection per contractual month, due at that month's end, carrying
+    // that month's whole obligation.
+    //
+    // Deliberately **not** run through the window assignment below, and the
+    // reason is worth stating because the first attempt at this looked like it
+    // could be. The natural monthly collection date for contractual month n is
+    // `D + n months` — which is precisely the *exclusive end* of month n's
+    // window and therefore inside month n+1's. Assigned through the windows,
+    // month 1's collection would land in month 2, month 1 would get nothing,
+    // and the zero-installment guard would fire on every monthly loan ever
+    // written.
+    //
+    // One collection per contractual month is also what the business
+    // described: a five-month member loan collecting monthly is five
+    // collections.
+    for (const [index] of periods.entries()) {
+      const bucket = datesByPeriod[index];
 
-    /* c8 ignore next 3 -- unreachable: bounds has an entry per period. */
-    if (windowEnd === undefined) continue;
+      /* c8 ignore next 3 -- unreachable: datesByPeriod is built from periods. */
+      if (bucket === undefined) continue;
 
-    const bucket = datesByPeriod[index];
+      // Non-null in this branch by the resolution above; the local binding is
+      // what tells the compiler so without a non-null assertion.
+      const anchorRule: MonthAnchor = monthAnchor ?? 'clamp_to_month_end';
 
-    /* c8 ignore next 3 -- unreachable: datesByPeriod is built from periods. */
-    if (bucket === undefined) continue;
+      bucket.push(monthlyCollectionDate(disbursementDate, index + 1, anchorRule));
+    }
 
-    // The cadence is sorted, so a single forward pass places every date.
-    while (cursor < cadence.length) {
-      const candidate = cadence[cursor];
+    // Strictly increasing, asserted rather than reasoned about. Both
+    // conventions are monotonic — a roll-forward lands on the 1st of a month
+    // the next collection falls later in — but a collection sheet that went
+    // backwards would be a contractual defect, and the check costs one pass
+    // over at most 120 dates.
+    const flat = datesByPeriod.flat();
 
-      /* c8 ignore next 3 -- unreachable: cursor is bounded by cadence.length. */
-      if (candidate === undefined) break;
+    for (let index = 1; index < flat.length; index += 1) {
+      const previous = flat[index - 1];
+      const current = flat[index];
 
-      if (compareBusinessDates(candidate, windowEnd) >= 0) break;
+      /* c8 ignore next 3 -- unreachable: index is bounded by flat.length. */
+      if (previous === undefined || current === undefined) continue;
 
-      bucket.push(candidate);
-      cursor += 1;
+      if (compareBusinessDates(current, previous) <= 0) {
+        throw new ScheduleGenerationError(
+          'dates_not_increasing',
+          `Collection ${String(index + 1)} falls on ${String(current)}, on or before ` +
+            `collection ${String(index)} on ${String(previous)}, under the ` +
+            `"${monthAnchor}" anchor.`,
+        );
+      }
+    }
+  } else {
+    // One global rhythm from the disbursement date, stopping strictly before
+    // the final contractual boundary.
+    //
+    // Non-null in this branch by the resolution above; the local binding is
+    // what tells the compiler so without a non-null assertion.
+    const cadenceIntervalDays = intervalDays ?? 1;
+
+    const totalDays = daysBetween(disbursementDate, finalBoundary);
+    const upperBound = Math.floor(totalDays / cadenceIntervalDays);
+
+    if (upperBound > MAX_SUPPORTED_INSTALLMENTS) {
+      throw new ScheduleGenerationError(
+        'too_many_installments',
+        `This loan would generate ${String(upperBound)} collections, beyond the supported maximum of ${String(MAX_SUPPORTED_INSTALLMENTS)}.`,
+      );
+    }
+
+    const cadence: BusinessDate[] = [];
+    for (let step = 1; step <= upperBound; step += 1) {
+      const dueDate = addBusinessDays(disbursementDate, step * cadenceIntervalDays);
+
+      // `upperBound` is a floor, so the last candidate can land exactly on the
+      // boundary when the term divides evenly by the interval. Excluded,
+      // because the boundary belongs to the month that has not started.
+      if (compareBusinessDates(dueDate, finalBoundary) >= 0) break;
+
+      cadence.push(dueDate);
+    }
+
+    // --- Assign each collection to its contractual month -------------------
+    let cursor = 0;
+
+    for (const [index] of periods.entries()) {
+      const windowEnd = bounds[index + 1];
+
+      /* c8 ignore next 3 -- unreachable: bounds has an entry per period. */
+      if (windowEnd === undefined) continue;
+
+      const bucket = datesByPeriod[index];
+
+      /* c8 ignore next 3 -- unreachable: datesByPeriod is built from periods. */
+      if (bucket === undefined) continue;
+
+      // The cadence is sorted, so a single forward pass places every date.
+      while (cursor < cadence.length) {
+        const candidate = cadence[cursor];
+
+        /* c8 ignore next 3 -- unreachable: cursor is bounded by cadence.length. */
+        if (candidate === undefined) break;
+
+        if (compareBusinessDates(candidate, windowEnd) >= 0) break;
+
+        bucket.push(candidate);
+        cursor += 1;
+      }
     }
   }
 
@@ -397,8 +642,11 @@ export function generateRepaymentSchedule(
         'period_has_no_installments',
         `Contractual month ${String(period?.periodNumber ?? index + 1)} ` +
           `(${String(windowStart)} to ${String(windowEnd)}, exclusive) would receive no ` +
-          `collection at an interval of ${String(intervalDays)} days. The repayment ` +
-          `frequency is too infrequent for this loan's contractual months.`,
+          `collection at ${
+            cadenceKind === 'calendar_month'
+              ? 'a calendar-monthly cadence'
+              : `an interval of ${String(intervalDays)} days`
+          }. The repayment frequency is too infrequent for this loan's contractual months.`,
       );
     }
   }
@@ -466,7 +714,9 @@ export function generateRepaymentSchedule(
     installments,
     windows,
     disbursementDate,
+    cadenceKind,
     intervalDays,
+    monthAnchor,
     firstDueDate: firstInstallment.dueDate,
     finalDueDate: lastInstallment.dueDate,
     totalScheduledPrincipal: sumUgx(
@@ -504,7 +754,7 @@ export function assertScheduleInvariants(
   schedule: RepaymentSchedule,
   periods: readonly SchedulePeriodInput[],
 ): void {
-  const { installments, disbursementDate, intervalDays } = schedule;
+  const { installments, disbursementDate } = schedule;
 
   const fail = (code: ScheduleFailureCode, message: string): never => {
     throw new ScheduleGenerationError(code, `Schedule invariant violated: ${message}`);
@@ -687,22 +937,69 @@ export function assertScheduleInvariants(
       );
     }
 
-    if (compareBusinessDates(installment.dueDate, windowEnd) >= 0) {
-      fail(
-        'period_inconsistent',
-        `${label} falls due on ${installment.dueDate}, on or after its contractual month closes on ${windowEnd}.`,
+    // Polytos Phase 3. A fixed-day collection falls strictly *inside* its
+    // contractual month, which is what makes a date belong to exactly one
+    // month. A calendar-monthly collection falls at that month's **close** —
+    // `D + n months` is the window's exclusive end — or, under the
+    // roll-forward convention, just after it. That is not a date landing in
+    // the wrong month: it is a month's obligation being collected at the end
+    // of the month, which is what "monthly collection" means. So the two
+    // cadences are checked against different statements of the same intent,
+    // and the calendar one is held to its own: exactly one collection, on or
+    // after the month's close, and never later than the close of the month
+    // after it.
+    if (schedule.cadenceKind === 'fixed_days') {
+      if (compareBusinessDates(installment.dueDate, windowEnd) >= 0) {
+        fail(
+          'period_inconsistent',
+          `${label} falls due on ${installment.dueDate}, on or after its contractual month closes on ${windowEnd}.`,
+        );
+      }
+    } else {
+      if (installment.periodInstallmentNumber !== 1) {
+        fail(
+          'period_inconsistent',
+          `${label} is collection ${String(installment.periodInstallmentNumber)} of its contractual month, and a calendar-monthly cadence collects each month exactly once.`,
+        );
+      }
+
+      if (compareBusinessDates(installment.dueDate, windowEnd) < 0) {
+        fail(
+          'period_inconsistent',
+          `${label} falls due on ${installment.dueDate}, before its contractual month closes on ${windowEnd}; a calendar-monthly collection gathers the month that has just ended.`,
+        );
+      }
+
+      const nextWindowEnd = addBusinessMonths(
+        disbursementDate,
+        installment.loanPeriodNumber + 1,
       );
+
+      if (compareBusinessDates(installment.dueDate, nextWindowEnd) >= 0) {
+        fail(
+          'period_inconsistent',
+          `${label} falls due on ${installment.dueDate}, a whole month or more after its own month closed on ${windowEnd}.`,
+        );
+      }
     }
   }
 
-  // The cadence itself: the first collection is exactly one interval after
-  // disbursement, which is the documented first-payment rule.
-  const expectedFirst = addBusinessDays(disbursementDate, intervalDays);
+  // The cadence itself: the first collection is exactly one step after
+  // disbursement, which is the documented first-payment rule — one interval
+  // for a fixed-day cadence, one month for a calendar one.
+  const expectedFirst =
+    schedule.cadenceKind === 'calendar_month'
+      ? monthlyCollectionDate(
+          disbursementDate,
+          1,
+          schedule.monthAnchor ?? 'clamp_to_month_end',
+        )
+      : addBusinessDays(disbursementDate, schedule.intervalDays ?? 1);
 
   if (schedule.firstDueDate !== expectedFirst) {
     fail(
       'period_inconsistent',
-      `the first collection is ${schedule.firstDueDate}, where one interval after disbursement is ${expectedFirst}.`,
+      `the first collection is ${schedule.firstDueDate}, where one step after disbursement is ${expectedFirst}.`,
     );
   }
 }

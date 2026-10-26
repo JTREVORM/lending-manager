@@ -2564,3 +2564,123 @@ empty database it is specified against and leaves nothing behind.
 
 The script never runs as part of a migration. Migrations run on deploy; this
 runs when somebody types the command and the phrase.
+
+---
+
+## ADR-059 — The monthly collection anchor lives on the cadence, not on the policy
+
+**Status.** Accepted, Polytos Phase 3.
+
+**Context.** The client's Polytos documents describe member loans collected
+weekly for short terms and monthly for longer ones. "Monthly" in the documents
+means a calendar month, not thirty days: a loan disbursed on the 15th is
+collected on the 15th.
+
+A calendar month is not always well defined. A loan disbursed on 31 January
+has no 31 February, so somebody has to decide whether that collection falls on
+the last day of the month it lands in, or on the first day of the next. The
+client has not decided, and the difference is a real date on a real receipt.
+
+The obvious place to record that decision is beside the three other
+undecided member-lending questions, as a tenth nullable column on
+`membership_policy_versions`.
+
+**Decision.** It is recorded as `repayment_frequencies.month_anchor`, on the
+cadence row, and the nine policy questions stay nine.
+
+**Why.**
+
+1. **It is a property of the cadence, not of the membership programme.** The
+   question is "what does *this* collection cadence do in a short month", and
+   the answer is the same whoever is borrowing. A non-member loan collected
+   calendar-monthly needs the same answer, and a policy column could not give
+   it one — the borrower has no policy version.
+
+2. **Policy versions are frozen and superseded; a cadence is configuration.**
+   A member is held to the version they enrolled under, and
+   `membership_policy_versions_guard` refuses to let anybody answer an open
+   question on an approved version. That is right for a term the member
+   agreed to. It is wrong for a scheduling convention: two members enrolled
+   under different versions must not have their collections land on different
+   days of the same month, because then the cadence is not one cadence.
+
+3. **The nine are the client's own list.** `docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md`
+   records nine questions, numbered, as the client's management committee has
+   them. Adding a tenth of our own invention to that list would make the
+   document disagree with the thing it is a record of.
+
+**Consequences.** The column is write-once rather than immutable: settable
+while NULL, frozen from the moment it is set, enforced by
+`repayment_frequencies_guard_identity`. A convention nobody has chosen can be
+chosen; one that has been chosen cannot be changed underneath schedules
+already generated from it.
+
+The `monthly` cadence ships **inactive** with a NULL anchor, so nothing can be
+scheduled against an undecided convention by accident. `generate_loan_schedule`
+raises rather than guessing, and `validate_loan_for_approval` returns
+`cadence_anchor_undecided` — which is not member-specific, because an ordinary
+loan on a calendar-monthly cadence would hit the same wall.
+
+It also means member lending has **four** outstanding decisions rather than
+three, and the fourth has a consequence nobody would guess from reading the
+other three: answering only the policy questions opens weekly member loans of
+one and two months and leaves three-, four- and five-month loans refused.
+`MEMBER_LENDING_DECISIONS` therefore lists all four in one place even though
+only three of them are policy columns, and `memberLendingReadiness` reports
+`pricingReady` separately from `isReady` so the interface can say "weekly
+loans work, longer ones do not" instead of "nothing can be approved". A banner
+that said the second while weekly loans were being approved every day would be
+a banner people stop reading.
+
+---
+
+## ADR-060 — A member loan's term ceiling comes from the membership programme
+
+**Status.** Accepted, Polytos Phase 3.
+
+**Context.** `business_settings.max_loan_term_months` is the lending
+business's own maximum, and `loan_products_within_business_rules` refuses a
+product whose `max_term_months` exceeds it. The confirmed Polytos figure for
+member loans is five months. The business setting is three.
+
+Both numbers are correct. They are answers to different questions: three
+months is the longest ordinary loan the business writes, and five months is
+what the membership programme's own documents promise its members.
+
+**Decision.** For a product with `requires_membership`, the term ceiling is
+`max(member_loan_max_term_months)` across the policy versions in
+`draft` or `active` status. The business setting continues to bound every
+other product.
+
+**Why.**
+
+1. **The programme is where the promise was made.** A member who was told
+   five months is owed five months, and the figure lives on the policy version
+   they enrolled under. Reading the ceiling from somewhere else would mean the
+   product could not express the thing the programme already promised.
+
+2. **Draft versions count, and that is deliberate.** The ceiling here is a
+   **configuration envelope** — the longest term any version the business is
+   working on could permit — not an authorisation. It exists so a product can
+   be configured before the version that uses it is in force, which is the
+   order the work actually happens in. The per-loan ceiling is enforced
+   separately and strictly: `validate_loan_for_approval` compares the loan's
+   own term against `member_loan_max_term_months` on **the borrower's own
+   frozen version**, and returns `member_term_above_maximum` otherwise.
+
+3. **`max` rather than the version in force.** When no version is in force —
+   a fresh database carries version 1.0 as an unapproved draft — there is no
+   figure at all, and a product that could not be configured until a version
+   was approved would make the first deployment impossible.
+
+**Consequences.** The two ceilings are enforced in two places and mean two
+different things, so both are stated wherever either is read: the product
+screen explains that a member loan's term comes from the programme, and the
+application form says the maximum "which the membership programme sets" rather
+than attributing it to the business settings.
+
+A reader auditing `business_settings.max_loan_term_months` will find one
+product that exceeds it. `loan_products_within_business_rules` carries the
+reason in its own comment, and `tests/db/loan-products.test.ts` asserts both
+arms — that an ordinary product is held to three months and a member product
+is held to five — so the exemption cannot be widened by accident.

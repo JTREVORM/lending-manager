@@ -231,6 +231,33 @@ decided. So the function **refuses with a message naming what has to be
 settled** rather than inventing a pledged amount — which would be inventing
 the member's security.
 
+### What Polytos Phase 3 added to this
+
+Phase 3 built the pledge, so `above_pledged` is now enforceable **wherever a
+pledge exists** — which is from the moment a member loan is approved, because
+that is when `approve_loan` writes the row. The bound is the pledge itself
+rather than "has a live loan": a figure the business recorded, not one computed
+afresh from a multiplier that may have moved.
+
+`request_savings_withdrawal` now takes `lock_savings_capacity` on the account,
+the same advisory lock `approve_loan` takes. Without it a withdrawal and an
+approval could each read the same balance and each proceed, and the member's
+savings would secure a loan and be gone.
+`tests/db/member-loan-concurrency.test.ts` runs that race with real concurrent
+transactions.
+
+`savings_pledged_amount(account_id, as_of)` and
+`savings_withdrawable_amount(account_id, as_of)` are where the arithmetic
+lives. A pledge is **not** a transaction: it posts no journal entry, writes no
+`savings_transactions` row and does not move account `2100`. The balance is
+unchanged and the business still owes the member every shilling — what changes
+is how much of it they may take out today. See
+`docs/POLYTOS-MEMBER-LOANS.md` §1 and §5.
+
+Where the policy still says `allowed` or `blocked`, Phase 3 changed nothing:
+those two arms were already correct and a pledge does not override a decision
+the business made.
+
 ---
 
 ## 7. Consent that can be checked

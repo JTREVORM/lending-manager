@@ -114,7 +114,7 @@ posture and what is deferred to Phase 2.
 | `npm run format` / `format:check` | Prettier. |
 | `npm run test` | Vitest, watch mode. |
 | `npm run test:run` | Unit + integration. No database needed. **The CI gate.** |
-| `npm run test:db` | Database suite, then the demonstration seeder's own project. Needs `DATABASE_URL`. |
+| `npm run test:db` | Database suite, then the three seeder projects — the synthetic seed, borrower reuse, and the member loan demonstration. Needs `DATABASE_URL`. |
 | `npm run test:coverage` | Coverage report. |
 | `npm run verify` | typecheck → lint → format:check → test:run → build. |
 | `npm run check:env` | Validate environment configuration; exits non-zero on failure. |
@@ -122,7 +122,7 @@ posture and what is deferred to Phase 2.
 | `npm run db:types` | Regenerate `types/database.types.ts`. |
 | `npm run db:local:setup` / `:migrate` / `:teardown` | Throwaway local cluster. |
 | `npm run audit:money` | Scan for floating-point arithmetic on money. |
-| `npm run seed:demo` | Polytos demonstration data: six members, their savings, a withdrawal and a reversal. **Refuses unless `POLYTOS_SEED_DEMO` is the exact enabling phrase and the database is on its allow-list.** Idempotent — running it twice posts nothing. |
+| `npm run seed:demo` | Polytos demonstration data: six members, their savings, a withdrawal and a reversal. **Refuses unless `POLYTOS_SEED_DEMO` is the exact enabling phrase and the database is on its allow-list.** Idempotent — running it twice posts nothing. Add `POLYTOS_SEED_MEMBER_LOANS` with its own phrase for the Phase 3 member loan scenarios, which are **local-only**: they publish a TEST ONLY policy version answering three decisions the client has not made. |
 | `node scripts/verify-membership-upgrade.mjs` | The upgrade path: applies the pre-Polytos migrations, seeds a real book, applies the Polytos migrations on top, and proves every financial figure is identical. |
 | `npm run e2e:up` / `e2e:down` / `e2e:env` | The end-to-end stack: PostgreSQL, the real PostgREST, an auth shim, a seeded database and the production build. |
 | `npm run test:e2e` | Browser tests against that stack. Needs it up. |
@@ -136,19 +136,30 @@ Every later phase must keep these passing.
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
 | Format | `npm run format:check` | clean |
-| Float-free money audit | `npm run audit:money` | 58 files, no hazard |
-| Unit and component tests | `npm run test:run` | 1,701 passed |
-| Database tests | `npm run test:db` | 1,056 passed |
-| Browser tests | `npm run test:e2e` | 339 passed |
+| Float-free money audit | `npm run audit:money` | 71 files, 5 engines, no hazard |
+| Unit and component tests | `npm run test:run` | 2,441 passed |
+| Database tests | `npm run test:db` | 1,677 passed (1,620 + 18 + 15 + 24) |
+| Upgrade and financial regression | `node scripts/verify-membership-upgrade.mjs` | 28 figures identical |
+| Browser tests | `npm run test:e2e` | 698 passed, 32 skipped |
 | Production build | `npm run build` | succeeds |
-| **Total** | | **3,096 assertions, 0 failed** |
+| **Total** | | **4,816 assertions, 0 failed** |
 
-The count by phase: 398 at the end of Phase 1, then 603, 1,087, 1,462, 1,749,
-2,003, 2,264, 2,576 and 2,757 in Vitest — plus 339 browser assertions from
-Phase 9, which are counted separately because they need a running stack rather
-than a test runner. Each phase keeps every earlier test passing; where an
-earlier test changed it is because the later phase deliberately changed the
-fact it asserted, and each one is named in that phase's report.
+`test:db` is four vitest projects run in sequence, each rebuilding the
+database first: the schema suite, then the three seeders — the synthetic
+demonstration, borrower reuse, and the Polytos Phase 3 member loans. Each
+needs a database the others have not written to, and the reasons are in the
+header of `vitest.config.mts`.
+
+The Vitest count by phase: 398 at the end of Phase 1, then 603, 1,087, 1,462,
+1,749, 2,003, 2,264, 2,576 and 2,757 through the first nine; then the upgrade
+phases and the three Polytos phases, reaching 4,118. Browser assertions are
+counted separately because they need a running stack rather than a test
+runner. Each phase's own report carries its figures and how they were
+produced; this table is the current total, not a history.
+
+Each phase keeps every earlier test passing; where an earlier test changed it
+is because the later phase deliberately changed the fact it asserted, and each
+one is named in that phase's report.
 
 Phase 9 is the phase to read on this subject. It passed every gate above and
 the application was still unusable, because none of these gates opens the
@@ -210,13 +221,15 @@ docs/          Architecture, database, decisions, security
 | | |
 | --- | --- |
 | [docs/POLYTOS-MEMBERSHIP-REQUIREMENTS.md](docs/POLYTOS-MEMBERSHIP-REQUIREMENTS.md) | What the client's documents say, and what they leave unsaid. |
-| [docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md](docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md) | What is settled, the **nine questions that are not**, which activity each one holds up, and what Phase 2 did with the two that gate savings. **Read this before planning any later phase.** |
+| [docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md](docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md) | What is settled, the **nine questions that are not**, which activity each one holds up, what Phase 2 did with the two that gate savings and Phase 3 with the three that gate lending — plus the fourth decision Phase 3 found, which is not one of the nine. **Read this before planning any later phase.** |
 | [docs/POLYTOS-SIX-PHASE-ROADMAP.md](docs/POLYTOS-SIX-PHASE-ROADMAP.md) | The six phases, what each delivers, and what each is blocked on. |
 | [docs/POLYTOS-EXPANSION-ARCHITECTURE.md](docs/POLYTOS-EXPANSION-ARCHITECTURE.md) | How the programme attaches to the existing lending system without forking it. |
 | [docs/POLYTOS-MEMBERSHIP-SCHEMA.md](docs/POLYTOS-MEMBERSHIP-SCHEMA.md) | Phase 1: the membership foundation — tables, the effective-dated policy, the five readiness gates, RLS. |
 | [docs/POLYTOS-PHASE-1-TEST-REPORT.md](docs/POLYTOS-PHASE-1-TEST-REPORT.md) | Phase 1's verification, figure by figure. |
 | [docs/POLYTOS-SAVINGS.md](docs/POLYTOS-SAVINGS.md) | Phase 2: enrolment, verifiable consent, the savings subledger, contributions and qualification, the withdrawal lifecycle, RLS, and what the phase deliberately does not do. |
 | [docs/POLYTOS-PHASE-2-TEST-REPORT.md](docs/POLYTOS-PHASE-2-TEST-REPORT.md) | Phase 2's verification, including the two defects only an authorisation test could find. |
+| [docs/POLYTOS-MEMBER-LOANS.md](docs/POLYTOS-MEMBER-LOANS.md) | Phase 3: member loans, the eligibility engine, the savings pledge that moves no money, the calendar-month cadence, and the four decisions that keep lending closed. |
+| [docs/POLYTOS-PHASE-3-TEST-REPORT.md](docs/POLYTOS-PHASE-3-TEST-REPORT.md) | Phase 3's verification, including the three defects the eligibility tests found in the ceiling. |
 
 Five decisions worth knowing before writing any code here:
 

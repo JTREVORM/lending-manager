@@ -105,6 +105,53 @@ two. So:
 So answering questions 4 and 5 opens the savings module. Answering 3 as well
 is what makes `above_pledged` usable and opens member lending.
 
+### What Polytos Phase 3 did with questions 1, 2 and 3
+
+The same thing, one layer up: every arm implemented, nothing defaulted,
+nothing approvable while a question is open.
+
+- **Both arms of question 1 and both of question 2 are implemented**, in
+  `member_loan_interest()` — except the one combination that does not describe
+  a calculation. "5% once per loan, on a reducing balance" has nothing to
+  reduce against: a reducing-balance schedule charges a rate *per period* on
+  the balance outstanding in that period, and a rate that is not per-period
+  cannot be one of them. That combination **raises** rather than guessing, and
+  `tests/unit/member-loan.test.ts` asserts the refusal. Three of four, and the
+  fourth refused for a stated reason.
+- **The per-month reducing-balance arm delegates to `calculate_loan_breakdown`**,
+  the engine the rest of the loan book uses, rather than reimplementing it. A
+  second reducing-balance implementation would be a second answer to the same
+  question, and the two would diverge on a rounding boundary nobody tested.
+- **Question 3 is the whole eligibility formula**, as this document said it
+  would be, and it is read from the policy version rather than from anywhere
+  else. While it is open, `member_loan_eligibility_of` shows no ceiling and
+  `validate_loan_for_approval` refuses the approval with
+  `member_policy_not_open`.
+
+### A fourth decision Phase 3 found, which is not one of the nine
+
+The nine above are the client's own list and stay nine. Phase 3 needed one
+more answer, and it is recorded outside them on purpose:
+
+> When a monthly collection day does not exist in a later month — a loan
+> disbursed on 31 January — does the collection fall on the last day of that
+> month, or on the first day of the next?
+
+It lives on `repayment_frequencies.month_anchor`, not on
+`membership_policy_versions`, because it is a property of the **cadence** and
+not of the membership programme: the answer is the same whoever is borrowing,
+and a non-member loan collected calendar-monthly needs the same answer from a
+borrower who has no policy version. See ADR-059.
+
+Both conventions are implemented, both are tested, neither is a default. The
+`monthly` cadence ships inactive with a NULL anchor.
+
+Its consequence is worth stating plainly because nobody would guess it from
+reading questions 1 to 3: **answering 1, 2 and 3 and not the anchor opens
+weekly member loans of one and two months, and leaves three-, four- and
+five-month loans refused.** The member lending screens say so in those words
+rather than claiming nothing can be approved.
+
 ### Two of the further questions below now have consequences in code
 
 - **"What counts as a qualifying month?"** Phase 2 implemented *a deposit, or
@@ -180,7 +227,7 @@ the decisions that activity actually waits on:
 | --- | --- | --- |
 | Enrolment and registration fees | `is_enrolment_enabled` | **Nothing.** Active and approved is the whole condition |
 | Member savings | `is_savings_enabled` | 4 (consecutive months), 5 (withdrawal against a live loan) |
-| Member loans | `is_member_lending_enabled` | the savings rules, because the loan is secured against them, plus 1 (basis), 2 (method), 3 (multiplier) |
+| Member loans | `is_member_lending_enabled` | the savings rules, because the loan is secured against them, plus 1 (basis), 2 (method), 3 (multiplier). Scheduling a loan beyond the weekly boundary additionally needs `repayment_frequencies.month_anchor`, which is not a policy column — see ADR-059 |
 | Benefit payments | `is_benefits_enabled` | 7 (annual cap), 8 (claims a year), 9 (waiting period) |
 | Year-end profit sharing | `is_profit_sharing_enabled` | 6 (distribution basis) |
 
@@ -238,10 +285,14 @@ all nine questions open. Every one of the five gates is therefore shut.
 
 ## 5. What this phase deliberately did **not** decide
 
-- **Whether the 5% member rate becomes a loan product.** It will, in Phase 3,
-  and the compatibility problem is recorded in
+- **Whether the 5% member rate becomes a loan product.** It did, in Phase 3:
+  `ML`, with `interest_source = 'membership_policy'` so it is priced from the
+  borrower's own version rather than from the product, and shipped
+  **inactive**. The compatibility problem recorded in
   `docs/POLYTOS-EXPANSION-ARCHITECTURE.md` §7 — the existing scheduling engine
-  cannot express calendar-monthly collection dates.
+  could not express calendar-monthly collection dates — was solved by a second
+  cadence arm, with the first copied character-for-character. See
+  `docs/POLYTOS-MEMBER-LOANS.md` §6.
 - **Which ledger accounts the new postings use.** Proposed in
   `docs/POLYTOS-EXPANSION-ARCHITECTURE.md` §6; no account is created and no
   journal source type is added in this phase.

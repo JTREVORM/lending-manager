@@ -164,7 +164,13 @@ describeDb('schedule engine parity', () => {
       const principal = toUgx(50_001 + Math.floor(random() * 4_949_999));
       const termMonths = 1 + Math.floor(random() * 3);
       const bps = Math.floor(random() * 3_001); // 0% to 30%
-      const intervalDays = 1 + Math.floor(random() * 3);
+      // Polytos Phase 3 added `weekly`, so the sweep covers the four fixed-day
+      // cadences the business offers rather than the three it used to. Drawn
+      // from the real set rather than a range, so a cadence the business
+      // retires drops out of the sweep by editing one line.
+      const FIXED_DAY_INTERVALS = [1, 2, 3, 7] as const;
+      const intervalDays =
+        FIXED_DAY_INTERVALS[Math.floor(random() * FIXED_DAY_INTERVALS.length)] ?? 1;
 
       // Four years of anchors, sweeping every month length, both month-end
       // clamps and two leap years.
@@ -373,5 +379,162 @@ describeDb('schedule engine parity', () => {
       // And, whichever engine, nothing is lost.
       expect(sqlParts.reduce((total, part) => total + part, 0)).toBe(amount);
     }
+  });
+  // =========================================================================
+  // Polytos Phase 3 — the calendar-monthly arm
+  //
+  // The fixed-day arm above is the one every stored schedule was built by, and
+  // its parity is what proves nothing moved. This is the new arm, and it needs
+  // its own parity for the same reason: the preview a member is shown is the
+  // TypeScript engine's and the dates they are collected on are the
+  // database's.
+  //
+  // The database side is driven through `public.monthly_collection_date`
+  // rather than through a hand-copied expression, because that function *is*
+  // the rule — `generate_loan_schedule` calls it, so there is nothing to keep
+  // in step.
+  // =========================================================================
+  it('agrees with the TypeScript engine on calendar-monthly schedules', async () => {
+    const random = makeRandom(20_261_021);
+    let checked = 0;
+
+    for (const anchor of ['clamp_to_month_end', 'roll_forward_to_next_month'] as const) {
+      for (let iteration = 0; iteration < 120; iteration += 1) {
+        const principal = toUgx(100_001 + Math.floor(random() * 4_899_999));
+        const termMonths = 1 + Math.floor(random() * 5);
+        const bps = Math.floor(random() * 1_001);
+
+        const disbursementDate = addDays(
+          toBusinessDate('2024-01-01'),
+          Math.floor(random() * 1_096),
+        );
+
+        const contract = calculateLoan({
+          principal,
+          monthlyInterestRateBps: bps,
+          termMonths,
+        });
+
+        const periods: readonly SchedulePeriodInput[] = contract.periods.map(
+          (period) => ({
+            periodNumber: period.periodNumber,
+            principalPortion: period.principalPortion,
+            interest: period.interest,
+            totalObligation: period.totalObligation,
+          }),
+        );
+
+        const typescript = generateRepaymentSchedule({
+          disbursementDate,
+          periods,
+          cadenceKind: 'calendar_month',
+          monthAnchor: anchor,
+        });
+
+        const sql = await query<{ months: string; due_date: string }>(
+          `select step::text as months,
+                  public.monthly_collection_date($1::date, step, $3)::text as due_date
+             from pg_catalog.generate_series(1, $2::int) as step
+            order by step`,
+          [disbursementDate, termMonths, anchor],
+        );
+
+        const context = `${anchor}: principal ${String(principal)}, term ${String(termMonths)}, bps ${String(bps)}, disbursed ${disbursementDate}`;
+
+        // One collection per contractual month, by construction on both sides.
+        expect(typescript.installments.length, `${context}: count`).toBe(termMonths);
+        expect(sql.length, `${context}: count`).toBe(termMonths);
+
+        for (const [index, installment] of typescript.installments.entries()) {
+          expect(installment.dueDate, `${context}: collection ${String(index + 1)}`).toBe(
+            sql[index]?.due_date,
+          );
+
+          // And each collection gathers its own month's whole obligation, with
+          // no division and therefore no remainder to lose.
+          expect(
+            installment.scheduledPrincipal,
+            `${context}: principal ${String(index + 1)}`,
+          ).toBe(contract.periods[index]?.principalPortion);
+          expect(
+            installment.scheduledInterest,
+            `${context}: interest ${String(index + 1)}`,
+          ).toBe(contract.periods[index]?.interest);
+        }
+
+        expect(typescript.cadenceKind, context).toBe('calendar_month');
+        expect(typescript.intervalDays, context).toBeNull();
+        expect(typescript.monthAnchor, context).toBe(anchor);
+        expect(typescript.totalScheduledAmount, context).toBe(
+          contract.totalExpectedRepayment,
+        );
+
+        checked += 1;
+      }
+    }
+
+    expect(checked).toBe(240);
+  });
+
+  it('refuses a calendar-monthly preview while the convention is undecided', () => {
+    // Fail shut, on both sides. The database arm is asserted in
+    // tests/db/calendar-month-schedule.test.ts; this is the preview, so a
+    // member is never shown a collection date nobody chose.
+    const contract = calculateLoan({
+      principal: toUgx(500_000),
+      monthlyInterestRateBps: 500,
+      termMonths: 3,
+    });
+
+    expect(() =>
+      generateRepaymentSchedule({
+        disbursementDate: toBusinessDate('2026-01-31'),
+        periods: contract.periods.map((period) => ({
+          periodNumber: period.periodNumber,
+          principalPortion: period.principalPortion,
+          interest: period.interest,
+          totalObligation: period.totalObligation,
+        })),
+        cadenceKind: 'calendar_month',
+        monthAnchor: null,
+      }),
+    ).toThrow(/has not decided it/i);
+  });
+
+  it('refuses a cadence carrying both an interval and an anchor', () => {
+    const contract = calculateLoan({
+      principal: toUgx(500_000),
+      monthlyInterestRateBps: 500,
+      termMonths: 2,
+    });
+
+    const periods = contract.periods.map((period) => ({
+      periodNumber: period.periodNumber,
+      principalPortion: period.principalPortion,
+      interest: period.interest,
+      totalObligation: period.totalObligation,
+    }));
+
+    // The same pairing the two CHECK constraints state in the database, so
+    // the preview cannot be asked for a schedule the generator would refuse.
+    expect(() =>
+      generateRepaymentSchedule({
+        disbursementDate: toBusinessDate('2026-01-15'),
+        periods,
+        cadenceKind: 'calendar_month',
+        intervalDays: 30,
+        monthAnchor: 'clamp_to_month_end',
+      }),
+    ).toThrow(/no collection interval in days/i);
+
+    expect(() =>
+      generateRepaymentSchedule({
+        disbursementDate: toBusinessDate('2026-01-15'),
+        periods,
+        cadenceKind: 'fixed_days',
+        intervalDays: 7,
+        monthAnchor: 'clamp_to_month_end',
+      }),
+    ).toThrow(/no monthly collection anchor/i);
   });
 });

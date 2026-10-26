@@ -40,6 +40,13 @@ const SCREENS = [
   // surface is exactly where a contrast ratio quietly lands under 4.5:1.
   '/membership',
   '/membership/policies',
+  // Polytos Phase 3. The two member-lending registers are the widest tables
+  // added since the guarantor register — nine columns and seven — and the
+  // application form is the only screen in the application that renders a
+  // live-recomputed money table while somebody types into it. Both shapes
+  // fail a contrast or a header-association check before a simpler one does.
+  '/member-loans',
+  '/member-loans?tab=loans',
   '/guarantors',
   '/loans',
   '/loans/new',

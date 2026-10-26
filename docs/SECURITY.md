@@ -620,6 +620,93 @@ adding a table to this phase.
 | A one-time consent code is six digits | The entropy that matters is not in the code: a single live challenge per membership and version, a ten-minute window, one use, and five attempts. All four are enforced in the database. A longer code read over a phone is mistyped more often, which is a real cost against no gain. |
 | The demonstration seeder can write to one hosted project, by design | It must be able to, or there is no way to demonstrate the system. The allow-list names exactly one project reference, the enabling phrase has to be typed, and `tests/db/demo-seed.test.ts` asserts that every refusal writes nothing. The connection named `Primary` is refused because it is not on the list — and its reference is recorded nowhere in this repository. |
 
+## Polytos Phase 3 verification
+
+Member lending's authorisation was attacked from the outside in
+`tests/db/member-loan-security.test.ts` (25 tests) and
+`tests/db/member-loan-approval.test.ts` (27 tests) — as `anon`, as each of the
+four roles, as a member, as `service_role`, and as the table owner. Every
+statement runs as a real database role with a real JWT subject, so the
+application is bypassed by construction.
+
+| Attack | Result |
+| --- | --- |
+| `anon` reads either new table, either view or the assessment function | Nothing. Asserted relation by relation. |
+| `member_loan_eligibility_of` called directly, by a session | Refused. Execute is revoked from `public`, `anon` and `authenticated`, so no request arriving at PostgREST can reach it. The door a screen uses is `assess_member_loan_eligibility`, which checks the capability first. |
+| A caller without `member_loans:view_eligibility` reads the eligibility view | Nothing. `security_invoker = true`, so the policies decide. |
+| A caller without `loans:view` reads a pledge or a snapshot | Nothing. |
+| An INSERT, UPDATE or DELETE on either new table, as any role | Refused. No grant to anybody, and RLS with no write policy behind that. |
+| The same, as the table owner | Refused. Statement-level guard triggers make both tables append-only. |
+| A snapshot claiming a member qualified when they did not | Refused by `member_loan_snapshots_qualified`. |
+| A snapshot whose amount exceeds its own stated ceiling | Refused by `member_loan_snapshots_within_ceiling`. |
+| A pledge whose amount does not follow from its principal and multiplier | Refused by `member_loan_pledges_amount_follows`. |
+| Approving a member loan with a rate supplied by the caller | The rate is overwritten from the borrower's own frozen policy version. A draft carrying any rate is repriced at approval. |
+| Changing `membership_id` or `interest_basis` after approval, as `service_role` | Refused by `loans_guard_member_terms`. |
+| Approving for a member whose policy version does not open lending | Refused, `member_policy_not_open`. |
+| Approving above the member's ceiling, computed from a stale form value | Refused. The ceiling is recomputed inside `approve_loan`, under the savings-capacity lock, from the loan's own figures. |
+| Two approvals racing for one savings balance | One succeeds. The lock is taken **before** validation, not after. |
+| A withdrawal racing an approval for the same savings | Serialised by the same lock; the savings cannot both secure a loan and leave. |
+| A Secretary opening `/member-loans/new` by URL | Refused. `lib/auth/routing.ts` lists the longer prefix first, so the page does not inherit the section's floor. Asserted in a browser. |
+| A borrower reaching any member-lending screen | Nothing. Asserted in a browser. |
+| The audit trail carrying a name, a phone number or a savings balance | None. The JSON keys are asserted, not scanned for as text. |
+
+### No new capability for approval, deliberately
+
+There is no `member_loans:approve`. Approval is `loans:approve`, because a
+member loan is a loan — a separate capability would mean a person who could
+approve member loans and not ordinary ones, a distinction the business does
+not make and a second approval path to audit. The two capabilities Phase 3
+does add are `member_loans:view_eligibility` (counter work) and
+`member_loans:create` (committing the business to lend).
+
+### One definer function, and why no session can reach it
+
+`member_loan_eligibility_of` reads savings histories across members, which no
+session may do directly. It is `SECURITY DEFINER` because the assessment has
+to see what the caller cannot, and `revoke all … from public, anon,
+authenticated` means no request arriving at PostgREST can call it — the exact
+arrangement `generate_loan_schedule` has, and for the same reason: its only
+legitimate callers are other privileged functions that have already decided
+who may act. The door a screen uses is `assess_member_loan_eligibility`, which
+checks `member_loans:view_eligibility` first.
+
+`service_role` retains execute, as it does on every such function in this
+schema. That is not a hole and not an exemption: `service_role` is the
+backend key, it bypasses Row Level Security by design, and it can already read
+every savings row directly — a revoke here would remove nothing it does not
+have another way. What matters is that the roles a *browser* can present,
+`anon` and `authenticated`, cannot.
+
+`tests/db/security.test.ts` carries the function in its `SECURITY DEFINER`
+inventory with that reason, and asserts the privilege list exhaustively, so a
+later grant to `authenticated` fails the build.
+
+`member_loan_summary` is definer and checks `loans:view` itself, because it
+reports the business rather than a member — the ADR-057 rule, applied again.
+
+### No hole was found in Phase 3
+
+Unlike Phase 2, the attack tests found no authorisation defect. The three
+defects this phase did find were all in the **eligibility arithmetic**, not in
+its authorisation, and each would have over-lent rather than over-disclosed:
+the ceiling ignored capacity a live pledge had consumed, pending withdrawals
+were not reserved, and the ceiling's rounding disagreed with the pledge's
+below a 1× multiplier. They are recorded in
+`docs/POLYTOS-PHASE-3-TEST-REPORT.md` §2.
+
+That is not a claim that the module is secure because nothing was found. It is
+a record of what was attacked and what happened; the table above is the
+evidence, and the tests are the thing to re-run.
+
+### Known gaps after Polytos Phase 3
+
+| Gap | Why it is acceptable for now |
+| --- | --- |
+| No hosted verification | Nothing in Phase 3 was run against a hosted Supabase project. The brief forbids applying Phase 3 migrations to one during development, and hosted access is not configured in this environment. A hosted release needs its own verification step. |
+| Member lending is not activated | The `ML` product and the `monthly` cadence both ship `inactive`, and four decisions are open. Nothing can be approved that depends on an unanswered question, which is the intended state rather than a gap — but it does mean the *live* path has not been exercised against real member money, only against synthetic. |
+| The member loan demonstration seeder publishes a TEST ONLY policy version | It has to, or member lending cannot be demonstrated at all. It is refused on every non-local target, refuses to run where another version is in force, and labels the version `TEST ONLY` in its title and its notes. It can reach no hosted project. |
+| A pledge is not visible to the member | The portal shows a savings balance and not what restricts it. A member who tried to withdraw pledged savings would be refused with a reason, but would not have known beforehand. Phase 5 builds the member's own view of this. |
+
 ## Reporting
 
 Security issues in this system should go to the Owner/Administrator directly,

@@ -2,6 +2,7 @@ import { BadgeCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { MemberLoanEligibilityPanel } from '@/components/member-loans/eligibility-panel';
 import { MembershipCardPanel } from '@/components/membership/membership-card-panel';
 import { MembershipHistory } from '@/components/membership/membership-history';
 import { MembershipMoneyPanel } from '@/components/membership/membership-money-panel';
@@ -26,6 +27,10 @@ import {
   listMembershipCards,
   listMembershipConsent,
 } from '@/lib/data/savings';
+import {
+  assessMemberLoanEligibility,
+  getMemberLendingState,
+} from '@/lib/data/member-loans';
 import {
   MEMBERSHIP_ACTIVITY_LABELS,
   MEMBERSHIP_STATUS_DESCRIPTIONS,
@@ -83,17 +88,24 @@ export default async function MembershipDetailPage({
 
   if (membership === null) notFound();
 
-  const [history, policy, receipt, consent, savingsAccount, cards] = await Promise.all([
-    listMembershipHistory(membership.id),
-    getMembershipPolicy(membership.policyVersionId),
-    // Each of these comes back empty or null for a caller the policies refuse,
-    // so an absence on this page is a database decision rather than a
-    // conditional written here.
-    getMembershipFeeReceipt(membership.id),
-    listMembershipConsent(membership.id),
-    getSavingsAccountForMembership(membership.id),
-    listMembershipCards(membership.id),
-  ]);
+  const [history, policy, receipt, consent, savingsAccount, cards, eligibility, lending] =
+    await Promise.all([
+      listMembershipHistory(membership.id),
+      getMembershipPolicy(membership.policyVersionId),
+      // Each of these comes back empty or null for a caller the policies refuse,
+      // so an absence on this page is a database decision rather than a
+      // conditional written here.
+      getMembershipFeeReceipt(membership.id),
+      listMembershipConsent(membership.id),
+      getSavingsAccountForMembership(membership.id),
+      listMembershipCards(membership.id),
+      // Polytos Phase 3. Null for a caller without
+      // `member_loans:view_eligibility`, which is its own capability because an
+      // assessment is a lending offer rather than a view of savings — so the
+      // panel is absent for a reader entitled to the rest of this page.
+      assessMemberLoanEligibility(membership.clientId),
+      getMemberLendingState(),
+    ]);
 
   const canSeeClient = contextCan(context, 'clients:view');
   const next = membershipTransitionsFrom(membership.status);
@@ -141,6 +153,7 @@ export default async function MembershipDetailPage({
         tabs={[
           { id: 'membership-profile-heading', label: 'Membership' },
           { id: 'membership-money-heading', label: 'Fee and savings' },
+          { id: 'membership-lending-heading', label: 'Member loan' },
           { id: 'membership-lifecycle-heading', label: 'Lifecycle' },
           { id: 'membership-terms-heading', label: 'Terms' },
         ]}
@@ -246,6 +259,19 @@ export default async function MembershipDetailPage({
             decided, and this system records nothing against a rule nobody has approved.
           </p>
         </Card>
+      </section>
+
+      {/* --- Polytos Phase 3: may this member borrow ------------------ */}
+      <section aria-labelledby="membership-lending-heading" className="min-w-0 space-y-3">
+        <h2 id="membership-lending-heading" className="text-text text-lg font-semibold">
+          Member loan eligibility
+        </h2>
+
+        <MemberLoanEligibilityPanel
+          eligibility={eligibility}
+          lending={lending}
+          canApply={contextCan(context, 'member_loans:create')}
+        />
       </section>
 
       {/* --- Lifecycle --------------------------------------------------- */}

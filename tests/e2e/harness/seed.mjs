@@ -233,6 +233,37 @@ const PEOPLE = [
     'Namugongo',
     'Wakiso',
   ],
+  // Indexes 13, 14 and 15. Polytos Phase 3, and left out of the loan book on
+  // purpose: `active_loan_exists` refuses a second live loan to anybody, and
+  // every one of the five members above was chosen for what their *savings*
+  // demonstrate — all five already hold a live loan. So the members a member
+  // loan can actually be written against are people whose only loan is that
+  // member loan.
+  //
+  // Three of them, not two, and the third is not padding. The browser suite
+  // approves a member loan in a real browser, and an approval takes a pledge
+  // against the member's savings and makes them hold a live loan — so a
+  // member used for that cannot also be the member whose eligibility panel is
+  // asserted to read "may borrow". Index 15 exists so the write spec has
+  // somebody of its own to approve and the read-only spec does not depend on
+  // which file ran first.
+  [
+    'Nsubuga Ronald Kaggwa',
+    'male',
+    '1988-06-21',
+    'Dairy trader',
+    'Kyaliwajjala',
+    'Wakiso',
+  ],
+  ['Namutebi Sarah Nakato', 'female', '1991-03-04', 'Grocer', 'Bukoto', 'Kampala'],
+  [
+    'Wasswa Emmanuel Kizza',
+    'male',
+    '1986-11-12',
+    'Hardware dealer',
+    'Kiwatule',
+    'Kampala',
+  ],
 ];
 
 const GUARANTOR_NAMES = [
@@ -1032,6 +1063,44 @@ async function seedMembershipAndSavings() {
   // `is_savings_enabled` waits on, and therefore what makes the savings module
   // open at all. The migration seeds version 1.0 as an unapproved draft, so the
   // harness publishes its own rather than editing the seed's.
+  // Polytos Phase 3. The savings-to-loan multiplier the harness lends at.
+  //
+  // ## Why the harness answers three of the four decisions and not the fourth
+  //
+  // Member lending needs four answers: the interest basis, the interest
+  // method, the savings-to-loan multiplier, and what a monthly collection
+  // does in a month that has no such day. The business has settled none of
+  // them, and the hosted demonstration shows exactly that — four decisions
+  // outstanding, applications preparable, nothing approvable.
+  //
+  // A browser suite that only ever met that state could not see the member
+  // loan screens at all: no eligibility ceiling, no repayment preview, no
+  // approved loan, no pledge, no schedule. So this harness answers the three
+  // **policy** questions with figures of its own — illustrative, and said to
+  // be so in the version's own notes, like every other figure here — and
+  // leaves the fourth, the month anchor, open.
+  //
+  // That is not a convenience. It is the most informative single state the
+  // system has:
+  //
+  //   * weekly member loans of one and two months can be priced, approved,
+  //     scheduled and collected, so every Phase 3 screen has real data;
+  //   * three-, four- and five-month loans are still refused, because they
+  //     need the monthly cadence and the monthly cadence needs the anchor —
+  //     which is the consequence of answering only three of the four, and the
+  //     one nobody would guess from reading the questions;
+  //   * the status banner still names an outstanding decision, so the screen
+  //     that exists to say what is missing has something to say.
+  //
+  // The fully blocked state — nothing priceable at all — is covered by the
+  // database suite's refusals and by `scripts/demo-member-loans.ts`.
+  //
+  // They are written into this INSERT rather than updated afterwards because
+  // an approved version is immutable: `membership_policy_versions_guard`
+  // refuses to let anybody answer an open question on a version members are
+  // already enrolled under, which is the whole point of freezing it.
+  const MEMBER_MULTIPLIER_BPS = 15_000;
+
   const policyVersion = await one(
     `insert into public.membership_policy_versions
      (version, title, effective_from, status, approved_at, approved_by_label,
@@ -1042,6 +1111,7 @@ async function seedMembershipAndSavings() {
       medical_benefit_rate_bps, medical_benefit_min_admission_days,
       family_condolence_benefit, member_bereavement_benefit,
       qualifying_months_consecutive, savings_withdrawal_with_active_loan,
+      interest_basis, interest_method, savings_to_loan_multiplier_bps,
       notes)
    values
      ('2.0', 'Polytos membership terms (harness)',
@@ -1051,8 +1121,14 @@ async function seedMembershipAndSavings() {
       500, 5, 2, 3,
       500, 1, 100000, 200000,
       false, 'allowed',
-      'Published by the browser-test harness. Illustrative figures.')
+      'per_month', 'reducing_balance_monthly', $1::int,
+      'Published by the browser-test harness. Illustrative figures. The '
+        || 'interest basis, the interest method and the savings multiplier '
+        || 'are the harness''s own illustrative answers and are NOT decisions '
+        || 'of the business; the monthly collection anchor is left open, which '
+        || 'is why member loans beyond two months are still refused.')
    returning id, version`,
+    [MEMBER_MULTIPLIER_BPS],
   );
 
   /** The first day of the month `back` months before today. */
@@ -1259,6 +1335,240 @@ async function seedMembershipAndSavings() {
     memberQualified.membershipId,
   ]);
 
+  // -------------------------------------------------------------------------
+  // Polytos Phase 3: member lending
+  //
+  // The three policy answers are in the version above, where they had to be.
+  // What is left is the configuration the business would change on a screen:
+  // the product, and the cadence it may be collected on.
+  //
+  // The product the business would activate once it had decided. Member loans
+  // are priced from the borrower's own policy version rather than from the
+  // product, which is what `interest_source = 'membership_policy'` means, so
+  // activating it settles nothing the policy has not already settled.
+  //
+  // Weekly only, because the monthly cadence has no anchor and is therefore
+  // still inactive. A product offering a cadence the business cannot schedule
+  // would be an application form that leads to a refusal.
+  await q(
+    `update public.loan_products
+        set status = 'active',
+            allowed_repayment_frequencies = array['weekly'],
+            default_repayment_frequency = 'weekly'
+      where product_code = 'ML'`,
+  );
+
+  const memberProduct = await one(
+    `select id, min_amount::text, max_amount::text, grace_period_days::text,
+            penalty_rate_bps::text
+       from public.loan_products where product_code = 'ML'`,
+  );
+
+  /**
+   * Enrol a member with six unbroken qualifying months and no other loan.
+   *
+   * Six months at the minimum is what `savings_qualifying_months` requires, so
+   * these two qualify under either arm of the consecutive rule — which keeps
+   * them qualified whichever way the business eventually answers question 4.
+   */
+  const enrolBorrowingMember = (client) =>
+    enrolWithSavings(client, [
+      [6, [50_000]],
+      [5, [50_000]],
+      [4, [50_000]],
+      [3, [50_000]],
+      [2, [50_000]],
+      [1, [50_000]],
+    ]);
+
+  const memberBorrowing = await enrolBorrowingMember(clients[13]);
+  const memberApplying = await enrolBorrowingMember(clients[14]);
+  const memberApproving = await enrolBorrowingMember(clients[15]);
+
+  /**
+   * Drive a member loan through the real path, as the real people.
+   *
+   * Nothing here is written around the engine. The draft carries no rate —
+   * `approve_loan` reads the borrower's own frozen policy version and prices
+   * it, writes the eligibility snapshot the decision was made on, and pledges
+   * the savings that secure it. Approval is the Manager's and disbursement is
+   * the Owner's, because the Manager does not hold `loans:disburse`: a
+   * harness that used one profile for both would render that separation as
+   * though it were not there.
+   */
+  async function openMemberLoan({
+    client,
+    membershipId,
+    principal,
+    termMonths,
+    daysAgo,
+  }) {
+    void membershipId;
+
+    const draft = await asUser(
+      secretary,
+      `insert into public.loans
+         (client_id, loan_product_id, principal_amount, interest_rate_bps,
+          interest_method, loan_term_months, repayment_frequency,
+          min_loan_amount_applied, max_loan_amount_applied,
+          grace_period_days_applied, penalty_rate_bps_applied,
+          proposed_disbursement_date, notes)
+       values ($1, $2, $3, 0, 'reducing_balance_monthly', $4, 'weekly',
+               $5, $6, $7, $8,
+               -- An application still waiting for a decision proposes today,
+               -- not a day in the past: daysAgo is null for that case.
+               current_date - coalesce($9::integer, 0), $10)
+       returning id`,
+      [
+        client.id,
+        memberProduct.id,
+        principal,
+        termMonths,
+        Number(memberProduct.min_amount),
+        Number(memberProduct.max_amount),
+        Number(memberProduct.grace_period_days),
+        Number(memberProduct.penalty_rate_bps),
+        daysAgo,
+        'Member loan against savings, secured by the pledge.',
+      ],
+    );
+
+    const loanId = draft[0].id;
+    await attachGuarantors(loanId, client.id);
+
+    if (daysAgo === null) {
+      // Left as a draft on purpose: the approval screen exists to show an
+      // application waiting for a decision, and a harness without one could
+      // not reach it.
+      const row = await one(`select loan_number from public.loans where id = $1`, [
+        loanId,
+      ]);
+      return { loanId, ...row, client };
+    }
+
+    await asUser(
+      secretary,
+      `update public.loans set status = 'pending_approval' where id = $1`,
+      [loanId],
+    );
+    await asUser(manager, `select public.approve_loan($1)`, [loanId]);
+
+    // Back-dated the same way every other loan here is, and for the same
+    // reason: the schedule anchors on `disbursed_at`, so a loan disbursed
+    // today has every collection still ahead of it and nothing to show.
+    await q(`alter table public.loans disable trigger user`);
+    await q(
+      `update public.loans
+          set status = 'active',
+              created_at = $2::timestamptz,
+              submitted_at = $3::timestamptz,
+              approved_at = $4::timestamptz,
+              disbursed_at = $5::timestamptz,
+              disbursed_by = $6
+        where id = $1`,
+      [
+        loanId,
+        at(daysAgo + 4, '08:00:00'),
+        at(daysAgo + 3, '09:30:00'),
+        at(daysAgo + 1, '14:00:00'),
+        at(daysAgo, '09:00:00'),
+        owner.profileId,
+      ],
+    );
+    await q(`alter table public.loans enable trigger user`);
+
+    await asOwnerAtClock(
+      at(daysAgo, '09:05:00'),
+      `select public.generate_loan_schedule($1)`,
+      [loanId],
+    );
+
+    const row = await one(
+      `select l.loan_number,
+              (select count(*)::int from public.loan_installments i
+                where i.loan_id = l.id) as installments,
+              (select p.pledged_amount::text from public.member_loan_savings_pledges p
+                where p.loan_id = l.id) as pledged
+         from public.loans l where l.id = $1`,
+      [loanId],
+    );
+
+    return { loanId, ...row, client };
+  }
+
+  // Running, with two of its eight weekly collections made. 300,000 against
+  // 300,000 saved at 1.5×, so 200,000 of the member's savings is pledged and
+  // 100,000 of it is still theirs to withdraw — the arithmetic the eligibility
+  // panel exists to show, with a figure on either side of it.
+  const memberLoanActive = await openMemberLoan({
+    client: clients[13],
+    membershipId: memberBorrowing.membershipId,
+    principal: 300_000,
+    termMonths: 2,
+    daysAgo: 20,
+  });
+
+  for (const collectionDaysAgo of [13, 6]) {
+    await collectMinimum(memberLoanActive.loanId, {
+      daysAgo: collectionDaysAgo,
+      method: 'cash',
+      reference: null,
+    });
+  }
+
+  // And two waiting for a decision. One is read-only evidence that an
+  // application can sit in the pipeline; the other is the one the browser
+  // suite actually submits and approves, which is why it belongs to a member
+  // nothing else asserts about.
+  const memberLoanDraft = await openMemberLoan({
+    client: clients[14],
+    membershipId: memberApplying.membershipId,
+    principal: 200_000,
+    termMonths: 1,
+    daysAgo: null,
+  });
+
+  const memberLoanToApprove = await openMemberLoan({
+    client: clients[15],
+    membershipId: memberApproving.membershipId,
+    principal: 250_000,
+    termMonths: 2,
+    daysAgo: null,
+  });
+
+  {
+    const pledged = await one(
+      `select coalesce(sum(pledged_amount), 0)::text as total,
+              count(*)::int as n
+         from public.member_loan_savings_pledges where released_at is null`,
+    );
+
+    const liability = await one(
+      `select
+       (select coalesce(sum(signed_amount), 0)::bigint
+          from public.savings_transactions)::text as subledger,
+       (select balance::text from public.ledger_account_balances where code = '2100')
+         as ledger`,
+    );
+
+    // A pledge restricts savings; it does not spend them. If this ever failed,
+    // member lending would be quietly taking money out of members' accounts.
+    if (liability.subledger !== liability.ledger) {
+      throw new Error(
+        `a pledge moved money: subledger ${liability.subledger} against ` +
+          `ledger 2100 ${liability.ledger}`,
+      );
+    }
+
+    console.log(
+      `member lending: ${String(pledged.n)} pledge(s) holding ${pledged.total}; ` +
+        `${memberLoanActive.loan_number} active with ` +
+        `${String(memberLoanActive.installments)} weekly collections, ` +
+        `${memberLoanDraft.loan_number} and ${memberLoanToApprove.loan_number} ` +
+        'awaiting approval',
+    );
+  }
+
   // What the policy in force actually decides, read back from the database
   // rather than counted by hand.
   //
@@ -1326,20 +1636,52 @@ async function seedMembershipAndSavings() {
       saving: memberSaving.membershipId,
       withdrawn: memberWithdrawn.membershipId,
       pendingConsent: memberPending.membershipId,
+      borrowing: memberBorrowing.membershipId,
+      applying: memberApplying.membershipId,
+      approving: memberApproving.membershipId,
     },
     membershipNumbers: {
       qualified: memberQualified.membershipNumber,
       pendingConsent: memberPending.membershipNumber,
+      borrowing: memberBorrowing.membershipNumber,
     },
     savings: {
       qualified: memberQualified.savingsAccountId,
       gapped: memberGapped.savingsAccountId,
       saving: memberSaving.savingsAccountId,
       withdrawn: memberWithdrawn.savingsAccountId,
+      borrowing: memberBorrowing.savingsAccountId,
     },
     savingsAccountNumbers: {
       qualified: memberQualified.accountNumber,
       withdrawn: memberWithdrawn.accountNumber,
+    },
+    // Polytos Phase 3.
+    memberClients: {
+      borrowing: clients[13].id,
+      applying: clients[14].id,
+      approving: clients[15].id,
+    },
+    memberLoans: {
+      active: memberLoanActive.loanId,
+      activeNumber: memberLoanActive.loan_number,
+      draft: memberLoanDraft.loanId,
+      draftNumber: memberLoanDraft.loan_number,
+      toApprove: memberLoanToApprove.loanId,
+      toApproveNumber: memberLoanToApprove.loan_number,
+      toApprovePrincipal: 250_000,
+      principal: 300_000,
+      pledged: Number(memberLoanActive.pledged),
+      installments: Number(memberLoanActive.installments),
+    },
+    memberLending: {
+      multiplierBps: MEMBER_MULTIPLIER_BPS,
+      interestBasis: 'per_month',
+      interestMethod: 'reducing_balance_monthly',
+      // Left open on purpose; see the long note above the policy INSERT.
+      monthAnchor: null,
+      weeklyCadenceMaxMonths: 2,
+      maxTermMonths: 5,
     },
     withdrawals: {
       paid: withdrawalRequestId,

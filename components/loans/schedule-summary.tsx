@@ -3,6 +3,7 @@ import { Money } from '@/components/ui/money';
 import { type BusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import { DateValue } from '@/components/ui/data-value';
+import { MONTH_ANCHOR_LABELS, type MonthAnchor } from '@/lib/domain/repayment-schedule';
 
 /**
  * The schedule at a glance.
@@ -23,6 +24,7 @@ export function ScheduleSummary({
   totalScheduledAmount,
   frequencyLabel,
   intervalDays,
+  monthAnchor,
   disbursementDate,
   reconciles,
 }: {
@@ -33,7 +35,13 @@ export function ScheduleSummary({
   readonly totalScheduledInterest: number;
   readonly totalScheduledAmount: number;
   readonly frequencyLabel: string;
-  readonly intervalDays: number;
+  /**
+   * Polytos Phase 3. Null for a calendar-monthly schedule, where the step is a
+   * month rather than a number of days — so the cadence is described by the
+   * anchor convention instead.
+   */
+  readonly intervalDays: number | null;
+  readonly monthAnchor?: MonthAnchor | null;
   readonly disbursementDate: BusinessDate;
   readonly reconciles: boolean;
 }) {
@@ -61,7 +69,11 @@ export function ScheduleSummary({
             <dd className="text-text text-lg font-semibold">
               {frequencyLabel}
               <span className="text-text-muted ml-1 text-sm font-normal">
-                (every {intervalDays === 1 ? 'day' : `${String(intervalDays)} days`})
+                {intervalDays === null
+                  ? monthAnchor === null || monthAnchor === undefined
+                    ? '(once a calendar month)'
+                    : `(once a calendar month, ${MONTH_ANCHOR_LABELS[monthAnchor].toLowerCase()} where the day does not exist)`
+                  : `(every ${intervalDays === 1 ? 'day' : `${String(intervalDays)} days`})`}
               </span>
             </dd>
           </div>

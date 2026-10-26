@@ -712,3 +712,97 @@ export async function deleteProbeFrequencies(): Promise<void> {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Polytos Phase 3 — member loans
+// ---------------------------------------------------------------------------
+
+/**
+ * A member-loan application draft, naming the member loan product.
+ *
+ * Separate from `createDraftLoan` because a member loan has to name `ML`
+ * explicitly: `loans_stamp_product` assigns the **default** product when none
+ * is given, and the default is ordinary personal lending. A member-loan test
+ * that relied on that would be testing an Individual Loan.
+ *
+ * The placeholder price columns mirror what `createLoanAction` writes and what
+ * `createDraftLoan` writes: they are NOT NULL, a draft has to be savable, and
+ * approval overwrites every one of them from the borrower's own policy
+ * version.
+ */
+export async function createMemberLoanDraft(
+  clientId: string,
+  options?: {
+    readonly principal?: number;
+    readonly termMonths?: number;
+    readonly frequency?: string;
+    readonly proposedRateBps?: number | null;
+    readonly withoutLoanGuarantors?: boolean;
+  },
+): Promise<string> {
+  const row = await queryOne<{ id: string }>(
+    `insert into public.loans
+       (client_id, loan_product_id, principal_amount, interest_rate_bps,
+        interest_method, loan_term_months, repayment_frequency,
+        proposed_interest_rate_bps, min_loan_amount_applied,
+        grace_period_days_applied, penalty_rate_bps_applied,
+        proposed_disbursement_date)
+     values ($1,
+             (select id from public.loan_products where product_code = 'ML'),
+             $2, 500, 'reducing_balance_monthly', $3, $4, $5::int, 100000, 3, 5000,
+             current_date)
+     returning id`,
+    [
+      clientId,
+      options?.principal ?? 400_000,
+      options?.termMonths ?? 2,
+      options?.frequency ?? 'weekly',
+      options?.proposedRateBps ?? null,
+    ],
+  );
+
+  if (options?.withoutLoanGuarantors !== true) {
+    await attachClientGuarantorsToLoan(row.id, clientId, { consent: true });
+  }
+
+  return row.id;
+}
+
+/**
+ * Attempt an approval as a real signed-in user and return the refusal, if any.
+ *
+ * `approveLoan` throws, which is right for a fixture driving a loan forward
+ * and wrong for the many Phase 3 tests whose whole subject is *which* rule
+ * refused. This returns the message instead, so a test can assert on the
+ * failure codes `validate_loan_for_approval` produced.
+ */
+export async function tryApproveLoan(
+  loanId: string,
+  actors: LoanActors,
+): Promise<string | null> {
+  await submitLoan(loanId, actors);
+
+  try {
+    await runAsCommitted(actors.owner, [
+      { sql: `select public.approve_loan($1)`, params: [loanId] },
+    ]);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/** Approve an already-submitted loan, returning the refusal if there is one. */
+export async function tryApproveSubmittedLoan(
+  loanId: string,
+  actors: LoanActors,
+): Promise<string | null> {
+  try {
+    await runAsCommitted(actors.owner, [
+      { sql: `select public.approve_loan($1)`, params: [loanId] },
+    ]);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}

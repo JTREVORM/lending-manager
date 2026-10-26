@@ -37,6 +37,11 @@ const FINANCIAL_FILES = [
   // dates, so it is held to the same standard as the engine that produced it.
   'lib/domain/repayment-schedule.ts',
   'lib/data/schedules.ts',
+  // Polytos Phase 3. The member loan engine computes a contractual breakdown
+  // under a configurable interest basis and method, and a borrowing ceiling
+  // from a multiplier — so it is held to the same standard as the engine it
+  // delegates its reducing-balance arm to.
+  'lib/domain/member-loan.ts',
   // The screens that render money. They only format, but a `toFixed` here
   // would show a borrower a different figure from the one on record.
   'components/loans/loan-breakdown-table.tsx',
@@ -142,7 +147,7 @@ const PERMITTED_MONEY_IMPORTS = new Set([
 const ACKNOWLEDGED = [
   {
     path: 'lib/domain/repayment-schedule.ts',
-    snippet: 'Math.floor(totalDays / intervalDays)',
+    snippet: 'Math.floor(totalDays / cadenceIntervalDays)',
     reason:
       'how many collection dates fit in the term — a count of days, not an amount. ' +
       'Every amount in this file goes through divideEvenly, which is BigInt.',
@@ -194,7 +199,13 @@ for (const file of FINANCIAL_FILES) scan(file);
 const migrations = readdirSync('supabase/migrations')
   .filter(
     (name) =>
-      (name.startsWith('20261004') || name.startsWith('20261005')) &&
+      // Phases 4 and 5 — the loan calculation and the schedule generator —
+      // and Polytos Phase 3, which adds the member interest engine, the
+      // eligibility ceiling and the pledge arithmetic to the same files'
+      // worth of risk.
+      (name.startsWith('20261004') ||
+        name.startsWith('20261005') ||
+        name.startsWith('20261021')) &&
       name.endsWith('.sql'),
   )
   .map((name) => join('supabase/migrations', name));
@@ -202,15 +213,18 @@ const migrations = readdirSync('supabase/migrations')
 for (const file of migrations) scan(file);
 
 // --- The money.ts exclusion, verified ---------------------------------------
-// Four engines: the Phase 4 loan calculation, the Phase 5 schedule
-// allocation, the Phase 6 payment allocation and the Phase 7 delinquency and
-// penalty arithmetic. Each must reach the money layer only through helpers
+// Five engines: the Phase 4 loan calculation, the Phase 5 schedule
+// allocation, the Phase 6 payment allocation, the Phase 7 delinquency and
+// penalty arithmetic, and the Polytos Phase 3 member loan breakdown and
+// borrowing ceiling. Each must reach the money layer only through helpers
 // this audit has cleared as integer or BigInt throughout.
 for (const enginePath of [
   'lib/domain/loan.ts',
   'lib/domain/repayment-schedule.ts',
   'lib/domain/payment.ts',
   'lib/domain/delinquency.ts',
+  // Polytos Phase 3.
+  'lib/domain/member-loan.ts',
 ]) {
   const engine = readFileSync(enginePath, 'utf8');
   const importBlock = /import\s*\{([^}]*)\}\s*from\s*'@\/lib\/domain\/money'/.exec(
@@ -276,7 +290,7 @@ if (findings.length > 0) {
 
 const count = FINANCIAL_FILES.length + migrations.length;
 console.log(`  ${String(count)} financial files scanned, no hazard found`);
-console.log('  all four engines reach only integer/BigInt money helpers');
+console.log('  all five engines reach only integer/BigInt money helpers');
 console.log(
   `  ${String(ACKNOWLEDGED.length)} acknowledged non-money exemption(s), each verified present`,
 );

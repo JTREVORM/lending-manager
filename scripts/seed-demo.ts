@@ -64,6 +64,14 @@ import {
   verifyBorrowerBridge,
   type DemoBorrower,
 } from './demo-existing-borrowers';
+import {
+  ensureMemberLendingPolicy,
+  memberLoanDemoRequested,
+  MemberLoanDemoRefused,
+  MEMBER_LOAN_ENABLE_PHRASE,
+  seedMemberLoanScenarios,
+  type MemberLoanTally,
+} from './demo-member-loans';
 
 // Mirror Next.js's precedence, so a developer's `.env.local` is what decides
 // which database this talks to — the same file the application reads.
@@ -361,6 +369,13 @@ async function main(): Promise<void> {
     console.error('This script writes clients, memberships, fee receipts, savings');
     console.error('deposits and journal entries. It runs only when somebody means it:\n');
     console.error(`  POLYTOS_SEED_DEMO=${ENABLE_PHRASE} npm run seed:demo\n`);
+    console.error('Polytos Phase 3 member loan scenarios need a second phrase, and run');
+    console.error('only against a local throwaway database — they publish a policy');
+    console.error('version answering three decisions the client has not made:\n');
+    console.error(
+      `  POLYTOS_SEED_DEMO=${ENABLE_PHRASE} \\\n` +
+        `  POLYTOS_SEED_MEMBER_LOANS=${MEMBER_LOAN_ENABLE_PHRASE} npm run seed:demo\n`,
+    );
     console.error('Nothing has been written.');
     process.exit(1);
   }
@@ -395,6 +410,8 @@ async function main(): Promise<void> {
   const client = new pg.Client({ connectionString });
   await client.connect();
 
+  let memberLoanTally: MemberLoanTally | null = null;
+
   const tally: Tally = {
     clientsCreated: 0,
     membersEnrolled: 0,
@@ -411,7 +428,49 @@ async function main(): Promise<void> {
       MEMBERS,
       process.env.POLYTOS_DEMO_BORROWER_REUSE,
     );
-    const policyId = await ensurePolicy(client);
+    // --- Polytos Phase 3: member lending, local only --------------------
+    //
+    // Its own phrase, because it publishes a policy version answering three
+    // decisions the client has not made — and refused on any hosted target,
+    // because putting those figures in front of a reader there would present
+    // them as the programme's terms. Decided *before* the policy, because the
+    // member-lending version has to be the demonstration's only version: see
+    // the head of scripts/demo-member-loans.ts for why the two cannot coexist.
+    const memberLoans = memberLoanDemoRequested(process.env.POLYTOS_SEED_MEMBER_LOANS);
+
+    if (memberLoans && target.kind !== 'local') {
+      console.error(
+        'Member loan demonstration data is refused on a hosted database.\n\n' +
+          'It publishes a policy version answering the interest basis, the interest\n' +
+          'method and the savings-to-loan multiplier — three decisions the client has\n' +
+          'not made. Those figures must not appear on a hosted project as though they\n' +
+          "were the programme's terms.\n\n" +
+          'Nothing has been written.',
+      );
+      process.exit(1);
+    }
+
+    let policyId: string;
+
+    try {
+      policyId = memberLoans
+        ? await ensureMemberLendingPolicy(client)
+        : await ensurePolicy(client);
+    } catch (error) {
+      // A refusal here is guidance, not a fault: it says which database this
+      // mode needs and why, so a stack trace would bury the one useful line.
+      if (error instanceof MemberLoanDemoRefused) {
+        console.error('');
+        console.error('Member loan demonstration data is refused on this database.');
+        console.error('');
+        console.error(error.message);
+        console.error('');
+        console.error('Nothing has been written.');
+        process.exit(1);
+      }
+      throw error;
+    }
+
     const witness = await ensureWitness(client, target);
     const approver = await ensureApprover(client, target);
 
@@ -427,6 +486,28 @@ async function main(): Promise<void> {
 
     await reconcile(client);
     await verifyBorrowerBridge(client, MEMBERS, borrowers);
+
+    if (memberLoans) {
+      console.log('');
+      console.log('Member loan scenarios (TEST ONLY policy, isolated database):');
+
+      // The Owner, for disbursement and collection. A Manager holds
+      // `loans:approve` and deliberately not `loans:disburse`, so one profile
+      // cannot originate, approve and pay out a loan — and a demonstration
+      // using one profile for both would render that separation as though it
+      // were not there.
+      const owner = await ensureStaffProfile(client, target, {
+        fullName: 'DEMO Branch Owner',
+        phone: '+256700000197',
+        role: 'owner_admin',
+        label: 'owner',
+      });
+
+      memberLoanTally = await seedMemberLoanScenarios(client, {
+        approver,
+        disburser: owner,
+      });
+    }
   } finally {
     await client.end();
   }
@@ -439,6 +520,28 @@ async function main(): Promise<void> {
   console.log(`  withdrawals paid     ${String(tally.withdrawalsPaid)}`);
   console.log(`  reversals posted     ${String(tally.reversalsPosted)}`);
   console.log(`  already present      ${String(tally.alreadyPresent)}`);
+
+  if (memberLoanTally !== null) {
+    console.log('');
+    console.log(
+      '  member loan applications opened   ' + String(memberLoanTally.applicationsOpened),
+    );
+    console.log(
+      '  member loans approved             ' + String(memberLoanTally.loansApproved),
+    );
+    console.log(
+      '  member loans disbursed            ' + String(memberLoanTally.loansDisbursed),
+    );
+    console.log(
+      '  collections posted                ' + String(memberLoanTally.paymentsPosted),
+    );
+    console.log(
+      '  approvals refused, as intended    ' + String(memberLoanTally.approvalsRefused),
+    );
+    console.log(
+      '  member loans already present      ' + String(memberLoanTally.alreadyPresent),
+    );
+  }
 
   if (
     tally.clientsCreated === 0 &&

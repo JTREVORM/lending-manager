@@ -68,7 +68,7 @@ async function productId(code: string): Promise<string> {
 
 // ===========================================================================
 describeDb('the seeded catalogue', () => {
-  it('offers the four products the business sells, plus the migrated one', async () => {
+  it('offers the four products the business sells, the member product, and the migrated one', async () => {
     const rows = await query<{
       product_code: string;
       status: string;
@@ -83,8 +83,18 @@ describeDb('the seeded catalogue', () => {
       'SL',
       'BL',
       'IL',
+      // Polytos Phase 3. Member lending, priced by the borrower's own
+      // membership policy version rather than by its own rate band.
+      'ML',
       'IL-LEGACY',
     ]);
+
+    // Inactive, and that is the honest state rather than a caution: its price
+    // is three decisions the client has not made — whether the 5% is monthly
+    // or once, whether it is flat or reducing, and what multiple of savings
+    // may be borrowed. A product offered in a picker that approval would then
+    // refuse is a control that fails late.
+    expect(rows.find((row) => row.product_code === 'ML')?.status).toBe('inactive');
 
     // The migrated product exists so that a loan agreed before products
     // existed can name what it actually was. It is inactive, so it cannot be
@@ -162,6 +172,51 @@ describeDb('the guard rail', () => {
     await expect(
       query(
         `update public.loan_products set max_term_months = 24 where product_code = 'IL'`,
+      ),
+    ).rejects.toThrow(/business maximum/);
+  });
+
+  it('holds the member product to the programme ceiling, not the business one', async () => {
+    // Two ceilings that mean two different things, and both are enforced. See
+    // ADR-060: three months is the longest ordinary loan the business writes,
+    // and five is what the membership programme's own documents promise its
+    // members.
+    const ceilings = await queryOne<{ business: string; programme: string }>(
+      `select
+         (select max_loan_term_months from public.business_settings where id = 1)::text
+           as business,
+         (select pg_catalog.max(member_loan_max_term_months)
+            from public.membership_policy_versions
+           where status in ('draft', 'active'))::text as programme`,
+    );
+
+    expect(
+      Number(ceilings.programme),
+      'the programme promises a longer member term than the business writes',
+    ).toBeGreaterThan(Number(ceilings.business));
+
+    // The member product sits above the business ceiling, legitimately.
+    const product = await queryOne<{ max_term_months: string }>(
+      `select max_term_months::text from public.loan_products where product_code = 'ML'`,
+    );
+
+    expect(Number(product.max_term_months)).toBe(Number(ceilings.programme));
+
+    // And is not unbounded: one month beyond the programme's own figure is
+    // refused, naming the programme rather than the business settings.
+    await expect(
+      query(
+        `update public.loan_products set max_term_months = $1 where product_code = 'ML'`,
+        [Number(ceilings.programme) + 1],
+      ),
+    ).rejects.toThrow(/membership programme's member loan maximum/);
+
+    // The ordinary products are still held to the business figure, so the
+    // exemption is the member product's alone.
+    await expect(
+      query(
+        `update public.loan_products set max_term_months = $1 where product_code = 'IL'`,
+        [Number(ceilings.business) + 1],
       ),
     ).rejects.toThrow(/business maximum/);
   });
@@ -362,7 +417,9 @@ describeDb('who may change a product', () => {
       );
 
       expect(result.ok, role).toBe(true);
-      expect(result.rows[0]?.count, role).toBe(5);
+      // Six from Polytos Phase 3: the four the business sells, the migrated
+      // one, and the member product.
+      expect(result.rows[0]?.count, role).toBe(6);
     }
   });
 

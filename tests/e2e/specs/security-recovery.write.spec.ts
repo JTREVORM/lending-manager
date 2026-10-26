@@ -80,13 +80,42 @@ test.describe('the Debt & Security hub', () => {
     await page.goto('/recovery?view=risk');
     await expectNoErrorBoundary(page);
 
+    // Matched as a definition term rather than as page text. Since Polytos
+    // Phase 3 the book carries a second loan product, so `RiskBreakdown`
+    // renders the by-product table — which repeats all five labels as column
+    // headers, and an unscoped text match resolves two of each. Only the
+    // summary renders them as `<dt>`.
     for (const label of ['PAR 1', 'PAR 7', 'PAR 30', 'PAR 60', 'PAR 90']) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible();
+      await expect(page.getByRole('term').filter({ hasText: label })).toBeVisible();
     }
 
     // Principal, not total outstanding and not the arrears figure — the two
     // substitutions that quietly turn PAR into a different ratio.
     await expect(page.getByText(/over total\s+outstanding principal/i)).toBeVisible();
+  });
+
+  test('breaks PAR out by loan product, now that there is more than one', async ({
+    page,
+  }) => {
+    await page.goto('/recovery?view=risk');
+    await expectNoErrorBoundary(page);
+
+    // `RiskBreakdown` returns null for a single slice, because a one-row
+    // breakdown says nothing the summary above it did not. Until Polytos
+    // Phase 3 put a member loan in the book every harness loan was on one
+    // product, so this table had never rendered in a browser.
+    const byProduct = page.getByRole('table', {
+      name: /Portfolio at risk by loan product/i,
+    });
+
+    await expect(byProduct).toBeVisible();
+
+    // More than one row, or the component would have declined to draw it.
+    expect(await byProduct.locator('tbody tr').count()).toBeGreaterThan(1);
+
+    // Each row names its product and carries the five ratios beside the
+    // principal they are ratios of.
+    await expect(byProduct.getByText(/Member Loans/i).first()).toBeVisible();
   });
 });
 

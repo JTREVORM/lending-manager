@@ -476,6 +476,44 @@ Recording this in Phase 1 is the point of recording it: Phase 3 now starts
 from "the engine needs a second cadence kind and a parity test" rather than
 from "the member product should be easy, it is just another product".
 
+### How it was actually built — Polytos Phase 3
+
+All five points were implemented as written, with one correction worth
+recording because this document got it wrong.
+
+1. ✅ `repayment_frequencies.cadence_kind`, constrained to `fixed_days` or
+   `calendar_month`, with `interval_days` NOT NULL for the first and NULL for
+   the second — paired by CHECK rather than merely made nullable, so a
+   calendar cadence cannot carry a misleading interval. `cadence_kind` is
+   immutable and the new `month_anchor` is write-once, both in
+   `repayment_frequencies_guard_identity`.
+2. ✅ `generate_loan_schedule()` has two arms and the `fixed_days` arm was
+   copied **character-for-character**. `generator_version` stays `1` for
+   fixed-day schedules, because those rules did not change; `2` marks the
+   calendar arm. (An earlier draft bumped both to `2` and the schedule-audit
+   test caught it, which is the test working as intended.)
+3. ⚠️ **Not a policy value.** This document said the anchor "must be recorded
+   as a policy value". It is recorded as `repayment_frequencies.month_anchor`
+   instead, and the reason is in ADR-059: the question is what *this cadence*
+   does in a short month, and the answer is the same whoever is borrowing — a
+   non-member loan collected calendar-monthly needs the same answer from a
+   borrower who has no policy version. A policy column could not give it one.
+
+   It was asked and not answered, so **both** conventions are implemented and
+   neither is a default: `clamp_to_month_end` (PostgreSQL's own arithmetic) and
+   `roll_forward_to_next_month`. The cadence ships inactive with a NULL anchor,
+   and the generator raises rather than guessing.
+4. ✅ `tests/db/schedule-parity.test.ts` extended, and the
+   `installment_schedule` figure in `scripts/verify-membership-upgrade.mjs`
+   compares every collection date on every loan across a populated upgrade.
+   `tests/db/calendar-month-schedule.test.ts` adds 34 tests for the new arm,
+   including every 31-day month boundary of a year under both anchors.
+5. ✅ `weekly` ships active with `interval_days = 7`; `monthly` ships
+   inactive. One- and two-month member loans work with the three policy
+   questions answered and nothing else.
+
+Full specification: `docs/POLYTOS-MEMBER-LOANS.md`.
+
 ---
 
 ## 8. Performance

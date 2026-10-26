@@ -6,6 +6,10 @@ import { toBusinessDate, type BusinessDate } from '@/lib/domain/datetime';
 import { toUgx, type UgxAmount } from '@/lib/domain/money';
 import {
   assertScheduleInvariants,
+  isMonthAnchor,
+  isRepaymentCadenceKind,
+  type MonthAnchor,
+  type RepaymentCadenceKind,
   type RepaymentSchedule,
   type ScheduledInstallment,
   type SchedulePeriodInput,
@@ -43,7 +47,15 @@ export interface LoanScheduleHeader {
   readonly loanId: string;
   readonly repaymentFrequency: string;
   readonly frequencyLabel: string;
-  readonly intervalDays: number;
+  /**
+   * Polytos Phase 3. `fixed_days` for every schedule generated before it, and
+   * for every daily, two-day, three-day and weekly schedule since.
+   */
+  readonly cadenceKind: RepaymentCadenceKind;
+  /** Null for a calendar-monthly schedule, where the step is a month. */
+  readonly intervalDays: number | null;
+  /** Null for a fixed-day schedule. */
+  readonly monthAnchor: MonthAnchor | null;
   readonly disbursementDate: BusinessDate;
   readonly businessTimezone: string;
   readonly generatorVersion: number;
@@ -80,7 +92,7 @@ export async function getLoanScheduleHeader(
   const { data, error } = await supabase
     .from('loan_schedules')
     .select(
-      'loan_id, repayment_frequency, frequency_label, interval_days, disbursement_date, business_timezone, generator_version, generated_at',
+      'loan_id, repayment_frequency, frequency_label, interval_days, cadence_kind, month_anchor, disbursement_date, business_timezone, generator_version, generated_at',
     )
     .eq('loan_id', loanId)
     .maybeSingle();
@@ -96,7 +108,11 @@ export async function getLoanScheduleHeader(
     loanId: String(data.loan_id),
     repaymentFrequency: String(data.repayment_frequency),
     frequencyLabel: String(data.frequency_label),
-    intervalDays: Number(data.interval_days),
+    cadenceKind: isRepaymentCadenceKind(data.cadence_kind)
+      ? data.cadence_kind
+      : 'fixed_days',
+    intervalDays: data.interval_days === null ? null : Number(data.interval_days),
+    monthAnchor: isMonthAnchor(data.month_anchor) ? data.month_anchor : null,
     disbursementDate: toBusinessDate(String(data.disbursement_date)),
     businessTimezone: String(data.business_timezone),
     generatorVersion: Number(data.generator_version),
@@ -228,7 +244,9 @@ export async function verifyStoredSchedule(loanId: string): Promise<string | nul
     })),
     windows: [],
     disbursementDate: header.disbursementDate,
+    cadenceKind: header.cadenceKind,
     intervalDays: header.intervalDays,
+    monthAnchor: header.monthAnchor,
     firstDueDate: first.dueDate,
     finalDueDate: last.dueDate,
     totalScheduledPrincipal: toUgx(
