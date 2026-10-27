@@ -43,6 +43,36 @@ export const optionalString = (max = 255) =>
 export const uuidSchema = z.string().uuid('Must be a valid identifier.');
 
 /**
+ * An optional form field: `schema` when answered, `null` when it is not.
+ *
+ * ## Why this exists
+ *
+ * `formData.get('x')` returns the **empty string** for a control the person
+ * left alone — an untouched text box, a select sitting on its placeholder, a
+ * blank date. It returns `null` only when the field is not in the form at
+ * all. So `someSchema.nullable().optional()` describes a shape no browser
+ * ever sends: the parse fails with "Phone number is required" against a field
+ * the form itself labels optional.
+ *
+ * Earlier phases wrote `z.union([schema, z.literal('')])` inline, a dozen
+ * times, and Phase 4 needed a dozen more. This is that idiom, named — and
+ * named after the thing it models, which is a field somebody may leave empty.
+ *
+ * It was not a theoretical tidy-up. Phase 4's beneficiary form shipped with
+ * two fields the schema refused when blank, and because every unit test
+ * handed the schema a parsed object rather than a `FormData`, only the
+ * browser suite caught it.
+ */
+export const optionalField = <Schema extends z.ZodType>(schema: Schema) =>
+  z
+    .union([schema, z.literal('')])
+    .transform((value): z.output<Schema> | null =>
+      value === '' ? null : (value as z.output<Schema>),
+    )
+    .nullable()
+    .optional();
+
+/**
  * A person's full name.
  *
  * Permits the letters, spaces, hyphens and apostrophes that Ugandan names

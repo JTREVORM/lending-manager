@@ -30,14 +30,24 @@ import type { MembershipSummary } from '@/lib/data/membership';
 export function MemberChooser({
   memberships,
   query,
-  hrefFor,
+  hrefs,
   heading,
   description,
 }: {
   readonly memberships: readonly MembershipSummary[];
   readonly query: string;
-  /** Where picking this membership goes. */
-  readonly hrefFor: (membership: MembershipSummary) => string;
+  /**
+   * Where picking each membership goes, keyed on its id.
+   *
+   * A map rather than the `hrefFor(membership)` callback this started as,
+   * because this is a Client Component and the pages that render it are
+   * Server Components: a function cannot cross that boundary, and React
+   * throws on the attempt. The build is happy either way — the error is at
+   * render — so `/benefits/claims/new` and `/beneficiaries/new` answered 500
+   * in CI while every local check passed. The server builds the links it
+   * means and sends strings.
+   */
+  readonly hrefs: Readonly<Record<string, string>>;
   readonly heading: string;
   readonly description: string;
 }) {
@@ -73,7 +83,7 @@ export function MemberChooser({
           {memberships.map((membership) => (
             <li key={membership.id}>
               <RowLink
-                href={hrefFor(membership)}
+                href={hrefs[membership.id] ?? '#'}
                 className="record-surface focus-visible:outline-accent block rounded-lg p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <div className="flex min-w-0 items-center justify-between gap-3">

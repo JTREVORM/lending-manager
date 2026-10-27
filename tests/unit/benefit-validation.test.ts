@@ -515,3 +515,140 @@ describe('the register filters', () => {
     if (parsed.success) expect(parsed.data.query).toBeNull();
   });
 });
+
+// ===========================================================================
+describe('what a browser actually sends', () => {
+  /**
+   * `formData.get('x')` is the **empty string** for a control somebody left
+   * alone — an untouched text box, a select on its placeholder, a blank date.
+   * It is `null` only when the field is absent from the form altogether.
+   *
+   * Every test above hands these schemas a parsed object, which is a shape no
+   * browser produces. Phase 4 shipped a beneficiary form whose optional
+   * alternative number and optional identity document were both **refused
+   * when blank** — "Phone number is required" against a field the form itself
+   * labels optional — and the thirty-one tests above all passed. Only the
+   * browser suite caught it, in CI.
+   *
+   * So these parse the blank string, field by field, as the form sends it.
+   */
+  const beneficiary = {
+    membershipId: UUID,
+    fullName: 'Hadija Nakato',
+    relationship: 'spouse',
+    phone: '0771234567',
+    isPrimary: 'true',
+  };
+
+  it('reads an unanswered beneficiary field as no answer', () => {
+    const parsed = registerBeneficiaryFormSchema.safeParse({
+      ...beneficiary,
+      alternativePhone: '',
+      identityDocumentKind: '',
+      identityReference: '',
+      villageArea: '',
+      district: '',
+      supersedesId: '',
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.alternativePhone).toBeNull();
+      expect(parsed.data.identityDocumentKind).toBeNull();
+      expect(parsed.data.supersedesId).toBeNull();
+    }
+  });
+
+  it('still refuses a badly typed number, blank being the only exception', () => {
+    expect(
+      registerBeneficiaryFormSchema.safeParse({
+        ...beneficiary,
+        alternativePhone: '12345',
+      }).success,
+    ).toBe(false);
+
+    expect(
+      registerBeneficiaryFormSchema.safeParse({
+        ...beneficiary,
+        identityDocumentKind: 'library_card',
+        identityReference: 'X1',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('reads a blank discharge time as a member still admitted', () => {
+    // The medical form's discharge is optional on purpose: a claim can be
+    // opened while the member is in hospital. A blank one is not a bad time.
+    const parsed = medicalClaimSchema.safeParse({
+      membershipId: UUID,
+      providerName: 'Mulago National Referral Hospital',
+      admissionAt: '2026-03-10T09:00',
+      dischargeAt: '',
+      billAmount: '400,000',
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.dischargeAt).toBeNull();
+  });
+
+  it('reads a blank beneficiary choice as none named', () => {
+    // And the database is what refuses the *assessment* for a claim with no
+    // verified payee — `beneficiary_missing` — which is where that belongs.
+    const parsed = bereavementClaimSchema.safeParse({
+      membershipId: UUID,
+      deceasedName: 'Ssemakula Kyagaba John',
+      dateOfDeath: '2026-03-01',
+      beneficiaryId: '',
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.beneficiaryId).toBeNull();
+  });
+
+  it('reads a blank note as no note, and keeps the rules that need one', () => {
+    expect(assessClaimSchema.safeParse({ claimId: UUID, note: '' }).success).toBe(true);
+
+    expect(
+      verifyDocumentSchema.safeParse({ documentId: UUID, verified: 'true', note: '' })
+        .success,
+    ).toBe(true);
+
+    // A refusal still has to be explained. Blank tolerance is about an
+    // optional field, not about dropping a rule.
+    expect(
+      verifyDocumentSchema.safeParse({ documentId: UUID, verified: false, note: '' })
+        .success,
+    ).toBe(false);
+
+    expect(
+      verifyBeneficiarySchema.safeParse({
+        beneficiaryId: UUID,
+        verified: true,
+        evidenceKind: 'witnessed_in_branch',
+        note: '',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('reads the unused half of a document attachment as absent', () => {
+    // A document hangs on a claim **or** on a beneficiary, never both. The
+    // form carries one hidden field for each and leaves the other empty.
+    const parsed = attachDocumentSchema.safeParse({
+      claimId: '',
+      beneficiaryId: UUID,
+      kind: 'relationship_document',
+      label: '',
+    });
+
+    expect(parsed.success).toBe(true);
+
+    // Both blank is still refused: a document attached to nothing.
+    expect(
+      attachDocumentSchema.safeParse({
+        claimId: '',
+        beneficiaryId: '',
+        kind: 'relationship_document',
+      }).success,
+    ).toBe(false);
+  });
+});

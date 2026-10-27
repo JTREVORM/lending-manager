@@ -37,7 +37,7 @@ import {
   MEETING_STATUSES,
   MEETING_TYPES,
 } from '@/lib/domain/meetings';
-import { businessDateSchema, optionalString, uuidSchema } from './common';
+import { businessDateSchema, optionalField, optionalString, uuidSchema } from './common';
 
 /**
  * An instant from a form, interpreted in Africa/Kampala.
@@ -128,7 +128,7 @@ export const markAttendanceSchema = z
     attendance: z.enum(MEETING_ATTENDANCE_VALUES, {
       error: 'Say whether the member came.',
     }),
-    absenceReason: z.enum(MEETING_ABSENCE_REASONS).nullable().optional(),
+    absenceReason: optionalField(z.enum(MEETING_ABSENCE_REASONS)),
     note: optionalString(500),
     correctionReason: optionalString(500),
   })
@@ -177,8 +177,8 @@ export const addActionItemSchema = z.object({
    * action item becomes nobody's, and the database refuses an assignee whose
    * account is not active.
    */
-  assignedTo: uuidSchema.nullable().optional(),
-  dueOn: businessDateSchema.nullable().optional(),
+  assignedTo: optionalField(uuidSchema),
+  dueOn: optionalField(businessDateSchema),
 });
 
 export const updateActionItemSchema = z.object({

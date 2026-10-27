@@ -379,8 +379,15 @@ export async function listExpectedMembers(
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
+    // `id` and not `membership_id`: the register view's own key column is
+    // `id`, because it is a view *of* memberships. PostgREST answers 400 for
+    // a column that does not exist, which this read turned into a 500 on the
+    // meeting page — and no database test could have caught it, because those
+    // run SQL directly and never name a column list the way PostgREST parses
+    // one. `tests/db/postgrest-columns.test.ts` now checks every
+    // column this application asks PostgREST for against the real schema.
     .from('membership_register')
-    .select('membership_id, membership_number, client_id, full_name, phone, status')
+    .select('id, membership_number, client_id, full_name, phone, status')
     .eq('branch_id', branchId)
     .in('status', ['active', 'suspended'])
     .order('full_name', { ascending: true })
@@ -395,7 +402,7 @@ export async function listExpectedMembers(
 
   return (
     (data ?? []) as unknown as readonly {
-      readonly membership_id: string | null;
+      readonly id: string | null;
       readonly membership_number: string | null;
       readonly client_id: string | null;
       readonly full_name: string | null;
@@ -403,7 +410,7 @@ export async function listExpectedMembers(
       readonly status: string | null;
     }[]
   ).map((row) => ({
-    membershipId: row.membership_id ?? '',
+    membershipId: row.id ?? '',
     membershipNumber: row.membership_number ?? '',
     clientId: row.client_id ?? '',
     memberName: row.full_name ?? '',

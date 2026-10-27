@@ -337,3 +337,75 @@ describe('the meetings list filters', () => {
     expect(meetingSearchSchema.safeParse({ status: 'nonsense' }).success).toBe(false);
   });
 });
+
+// ===========================================================================
+describe('what a browser actually sends', () => {
+  /**
+   * The same gap the benefit suite now covers, for the same reason: a control
+   * somebody left alone arrives as the **empty string**, not as `null`, so a
+   * schema written as `uuid | null` refuses the form that feeds it.
+   *
+   * The attendance register and the action-item form both have fields that
+   * are blank in the ordinary case — a member who was present has no absence
+   * reason, and an action item often has neither an owner nor a date yet.
+   */
+  it('reads a present member as having no reason for being away', () => {
+    const parsed = markAttendanceSchema.safeParse({
+      meetingId: UUID,
+      membershipId: UUID,
+      attendance: 'present',
+      absenceReason: '',
+      note: '',
+      correctionReason: '',
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.absenceReason).toBeNull();
+  });
+
+  it('still refuses a reason given for somebody who came', () => {
+    // Blank tolerance is about an unanswered field, not about dropping the
+    // rule: "present, because she was ill" is two contradictory answers.
+    expect(
+      markAttendanceSchema.safeParse({
+        meetingId: UUID,
+        membershipId: UUID,
+        attendance: 'present',
+        absenceReason: 'illness',
+      }).success,
+    ).toBe(false);
+
+    expect(
+      markAttendanceSchema.safeParse({
+        meetingId: UUID,
+        membershipId: UUID,
+        attendance: 'absent',
+        absenceReason: 'not_a_reason',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('reads an unassigned action item with no date as exactly that', () => {
+    const parsed = addActionItemSchema.safeParse({
+      meetingId: UUID,
+      description: 'Collect the savings book from the Nansana branch.',
+      assignedTo: '',
+      dueOn: '',
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.assignedTo).toBeNull();
+      expect(parsed.data.dueOn).toBeNull();
+    }
+
+    // And a malformed date is still a malformed date.
+    expect(
+      addActionItemSchema.safeParse({
+        meetingId: UUID,
+        description: 'Collect the savings book from the Nansana branch.',
+        dueOn: '31/12/2026',
+      }).success,
+    ).toBe(false);
+  });
+});

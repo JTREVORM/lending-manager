@@ -54,6 +54,7 @@ import { PAYMENT_METHODS } from '@/lib/domain/payment';
 import {
   businessDateSchema,
   fullNameSchema,
+  optionalField,
   optionalString,
   ugandanPhoneSchema,
   ugxAmountFromText,
@@ -146,14 +147,14 @@ export const registerBeneficiarySchema = z.object({
     .min(1, 'Choose the beneficiary’s relationship to the member.')
     .max(40),
   phone: ugandanPhoneSchema,
-  alternativePhone: ugandanPhoneSchema.nullable().optional(),
+  alternativePhone: optionalField(ugandanPhoneSchema),
   villageArea: optionalString(120),
   district: optionalString(120),
-  identityDocumentKind: z.enum(BENEFICIARY_IDENTITY_DOCUMENT_KINDS).nullable().optional(),
+  identityDocumentKind: optionalField(z.enum(BENEFICIARY_IDENTITY_DOCUMENT_KINDS)),
   identityReference: optionalString(60),
   isPrimary: z.coerce.boolean(),
   /** Set when this record replaces another, which supersedes it. */
-  supersedesId: uuidSchema.nullable().optional(),
+  supersedesId: optionalField(uuidSchema),
 });
 
 export type RegisterBeneficiaryInput = z.infer<typeof registerBeneficiarySchema>;
@@ -214,7 +215,7 @@ export const verifyBeneficiarySchema = z
       error: 'Say what the verification rests on.',
     }),
     evidencePath: optionalString(500),
-    note: benefitReasonSchema.nullable().optional(),
+    note: optionalField(benefitReasonSchema),
   })
   .superRefine((value, ctx) => {
     const needsDocument =
@@ -272,7 +273,7 @@ export const medicalClaimSchema = z
       .min(3, 'Name the hospital or clinic.')
       .max(150, 'That name is too long.'),
     admissionAt: kampalaInstantSchema,
-    dischargeAt: kampalaInstantSchema.nullable().optional(),
+    dischargeAt: optionalField(kampalaInstantSchema),
     billAmount: hospitalBillSchema,
   })
   .superRefine((value, ctx) => {
@@ -324,7 +325,7 @@ export const bereavementClaimSchema = z.object({
   membershipId: uuidSchema,
   deceasedName: fullNameSchema,
   dateOfDeath: businessDateSchema,
-  beneficiaryId: uuidSchema.nullable().optional(),
+  beneficiaryId: optionalField(uuidSchema),
 });
 
 export type BereavementClaimInput = z.infer<typeof bereavementClaimSchema>;
@@ -355,7 +356,7 @@ export const assessClaimSchema = z.object({
    * genuine to the member it is about, so `benefit_claim_portal_view` does not
    * carry it.
    */
-  note: benefitNoteSchema.nullable().optional(),
+  note: optionalField(benefitNoteSchema),
 });
 
 /**
@@ -392,7 +393,7 @@ export const verifyDocumentSchema = z
   .object({
     documentId: uuidSchema,
     verified: z.coerce.boolean(),
-    note: benefitReasonSchema.nullable().optional(),
+    note: optionalField(benefitReasonSchema),
   })
   .superRefine((value, ctx) => {
     if (!value.verified && (value.note ?? null) === null) {
@@ -418,8 +419,8 @@ export const verifyDocumentSchema = z
  */
 export const attachDocumentSchema = z
   .object({
-    claimId: uuidSchema.nullable().optional(),
-    beneficiaryId: uuidSchema.nullable().optional(),
+    claimId: optionalField(uuidSchema),
+    beneficiaryId: optionalField(uuidSchema),
     kind: z.string().trim().min(1, 'Say what the document is.').max(60),
     label: optionalString(200),
   })

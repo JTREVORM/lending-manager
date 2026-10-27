@@ -68,9 +68,12 @@ export default async function NewBeneficiaryPage({
           query={query}
           heading="Whose next of kin is this?"
           description="Live memberships only. A beneficiary belongs to a membership, and the bereavement benefit is paid against it."
-          hrefFor={(membership) =>
-            `${ROUTES.beneficiaries}/new?membershipId=${membership.id}`
-          }
+          hrefs={Object.fromEntries(
+            live.map((membership) => [
+              membership.id,
+              `${ROUTES.beneficiaries}/new?membershipId=${membership.id}`,
+            ]),
+          )}
         />
       </div>
     );

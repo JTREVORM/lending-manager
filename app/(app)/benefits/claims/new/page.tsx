@@ -95,11 +95,14 @@ export default async function NewBenefitClaimPage({
           query={query}
           heading="Which member is this claim for?"
           description="Live memberships only. A claim is opened against the membership, and its rules read the membership's own policy version."
-          hrefFor={(membership) =>
-            `${ROUTES.newBenefitClaim}?membershipId=${membership.id}${
-              typeParam === '' ? '' : `&type=${typeParam}`
-            }`
-          }
+          hrefs={Object.fromEntries(
+            live.map((membership) => [
+              membership.id,
+              `${ROUTES.newBenefitClaim}?membershipId=${membership.id}${
+                typeParam === '' ? '' : `&type=${typeParam}`
+              }`,
+            ]),
+          )}
         />
       </div>
     );
