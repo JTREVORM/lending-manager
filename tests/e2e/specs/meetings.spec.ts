@@ -142,8 +142,13 @@ test.describe('a meeting that happened', () => {
 
     // Nothing in this system attaches a consequence to absence, because the
     // client has not decided there is one. So no screen may imply a penalty.
+    //
+    // Scoped to `main`, which is the page rather than the shell: the
+    // navigation rail carries a "Penalties" report — a real feature of the
+    // loan book — and an unscoped assertion would be testing the rail
+    // instead of this screen.
     for (const word of [/penalt/i, /fine/i, /sanction/i, /warning/i]) {
-      await expect(page.getByText(word), String(word)).toHaveCount(0);
+      await expect(page.locator('main').getByText(word), String(word)).toHaveCount(0);
     }
   });
 

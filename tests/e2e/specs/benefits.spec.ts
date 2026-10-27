@@ -245,8 +245,14 @@ test.describe('a claim says where it has got to', () => {
     ).toBeVisible();
 
     // And it is not presented as a refusal, because the member has not been
-    // turned down.
-    await expect(page.getByText(/Refused/).filter({ visible: true })).toHaveCount(0);
+    // turned down. Scoped to `main` for the reason the meeting suite scopes
+    // its own: the shell is not this screen.
+    await expect(
+      page
+        .locator('main')
+        .getByText(/Refused/)
+        .filter({ visible: true }),
+    ).toHaveCount(0);
   });
 
   test('shows the frozen assessment behind a decided claim', async ({ page }) => {
@@ -305,7 +311,7 @@ test.describe('the registers find what somebody is looking for', () => {
     // A beneficiary's name is the business's payment instruction and lives
     // behind `membership:view_sensitive` in another table. The register view
     // carries none, so none can appear here however the page is edited.
-    await expect(page.getByText('Hadija Nakato')).toHaveCount(0);
+    await expect(page.locator('main').getByText('Hadija Nakato')).toHaveCount(0);
   });
 
   test('opens the approval queue on what is waiting for an approver', async ({
