@@ -61,6 +61,19 @@ export const REFERENCE_SCOPES = [
   'savings_transaction',
   'savings_withdrawal',
   'membership_card',
+  // Polytos Phase 4. A claim is an internal document like a withdrawal
+  // request, so `BC` follows `WD`'s five digits rather than the member-facing
+  // four. A beneficiary record takes five for the same reason — a change
+  // produces a *second* record superseding the first, and the two have to be
+  // distinguishable on paper, so there will be more of them than there are
+  // members. A payment is separate from its claim because the claim is the
+  // request and the payment is the receipt somebody signs for. A meeting takes
+  // four, like a membership number, because it is quoted in minutes people
+  // read.
+  'benefit_claim',
+  'beneficiary',
+  'benefit_payment',
+  'membership_meeting',
 ] as const;
 export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
 
@@ -87,6 +100,10 @@ export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = 
   savings_transaction: 'Savings transactions',
   savings_withdrawal: 'Withdrawal requests',
   membership_card: 'Membership cards',
+  benefit_claim: 'Benefit claims',
+  beneficiary: 'Beneficiary records',
+  benefit_payment: 'Benefit payments',
+  membership_meeting: 'Membership meetings',
 };
 
 export interface ReferenceFormat {
@@ -127,6 +144,14 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   },
   savings_withdrawal: { scope: 'savings_withdrawal', prefix: 'WD', padding: 5 },
   membership_card: { scope: 'membership_card', prefix: 'MC', padding: 4 },
+  benefit_claim: { scope: 'benefit_claim', prefix: 'BC', padding: 5 },
+  beneficiary: { scope: 'beneficiary', prefix: 'BN', padding: 5 },
+  benefit_payment: { scope: 'benefit_payment', prefix: 'BP', padding: 5 },
+  membership_meeting: {
+    scope: 'membership_meeting',
+    prefix: 'MM',
+    padding: 4,
+  },
 } as const;
 
 export class ReferenceError extends Error {

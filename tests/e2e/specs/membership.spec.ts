@@ -147,12 +147,31 @@ test.describe('the register is honest about what exists', () => {
   test('offers no control for a workflow that still does not exist', async ({ page }) => {
     await page.goto('/membership');
 
-    // Benefit claims, meetings and the profit share all wait on rules the
-    // client has not decided. A control for any of them would be exactly the
-    // lie Phase 1 wrote this test to prevent.
-    for (const name of [/pay benefit/i, /record a claim/i, /profit share/i, /meeting/i]) {
+    // The profit share still waits on a rule the client has not decided, and
+    // nothing anywhere in the application may offer it. That is the lie Phase
+    // 1 wrote this test to prevent, and it is asserted across the whole
+    // document — the navigation included.
+    for (const name of [/profit share/i]) {
       await expect(page.getByRole('button', { name }), String(name)).toHaveCount(0);
       await expect(page.getByRole('link', { name }), String(name)).toHaveCount(0);
+    }
+
+    // Benefits and meetings used to be on that list and are **not** any more,
+    // because Phase 4 built them: the rail now carries a "Member Benefits"
+    // module and a "Meetings" one, and an assertion that no control anywhere
+    // mentions a meeting became an assertion that Phase 4 was never
+    // delivered. CI caught it the first time the browser suite ran against
+    // the new shell, which is the test doing its job in the other direction.
+    //
+    // What survives is the narrower claim this test was always about: the
+    // **membership register** offers no benefit or meeting control of its
+    // own. A claim is opened from the benefits section or from a member's
+    // profile, where the policy gate and the member's own status are in view;
+    // a register of members is neither of those places.
+    const main = page.locator('main');
+    for (const name of [/pay benefit/i, /record a claim/i, /mark the register/i]) {
+      await expect(main.getByRole('button', { name }), String(name)).toHaveCount(0);
+      await expect(main.getByRole('link', { name }), String(name)).toHaveCount(0);
     }
   });
 });

@@ -160,6 +160,49 @@ export const ROUTES = {
   memberLoans: '/member-loans',
   newMemberLoan: '/member-loans/new',
 
+  /**
+   * Polytos Phase 4. Benefits, beneficiaries and meetings.
+   *
+   * `/benefits` is the section, singular, for the reason `/finance` is: it is
+   * the programme's promise rather than a bag of claim records. The dashboard
+   * lives at its root, the register at `/benefits/claims`, and a claim opens
+   * at `/benefits/claims/{id}`.
+   *
+   * ## Why the approval queue and the payment queue are their own routes
+   *
+   * They are different people's work, and each is guarded by the capability
+   * that does it. A Manager assesses and pays; an Owner approves. Making
+   * either a filter on the register would put a Manager one tap from a screen
+   * the route guard refuses them — which savings learned with its withdrawal
+   * queue, and the answer is the same: a route per act, offered only to the
+   * people who hold it.
+   *
+   * ## Why beneficiaries are a route and not only a panel
+   *
+   * They are both. The panel on the membership profile is where a beneficiary
+   * is registered, because next of kin is a fact about a member. The register
+   * at `/beneficiaries` exists for the opposite question — *which* members
+   * have an unverified record — and that one has no membership to hang off.
+   * An unverified beneficiary is a bereavement benefit that cannot be paid,
+   * and nobody discovers that at a convenient moment.
+   *
+   * ## Meetings
+   *
+   * Its own section rather than entries under Membership, for the reason
+   * savings got one: the work is different. A meeting is a date, a register
+   * and a set of minutes, read by whoever is clerking — not a view of any one
+   * member.
+   */
+  benefits: '/benefits',
+  benefitClaims: '/benefits/claims',
+  newBenefitClaim: '/benefits/claims/new',
+  benefitApprovals: '/benefits/approvals',
+  benefitPayments: '/benefits/payments',
+  benefitReports: '/benefits/reports',
+  beneficiaries: '/beneficiaries',
+  meetings: '/meetings',
+  newMeeting: '/meetings/new',
+
   /** Phase 11. Money that is not a loan: transfers, expenses, fees, counts. */
   finance: '/finance',
   transfers: '/finance/transfers',

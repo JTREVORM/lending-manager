@@ -18,7 +18,7 @@
     "test": "vitest",
     "test:run": "vitest run --project unit --project integration",
     "test:coverage": "vitest run --project unit --project integration --coverage",
-    "test:db": "vitest run --project db && vitest run --project seed && vitest run --project seed-reuse && vitest run --project seed-member-loans",
+    "test:db": "vitest run --project db && vitest run --project seed && vitest run --project seed-reuse && vitest run --project seed-member-loans && vitest run --project seed-benefits",
     "check:env": "tsx scripts/check-env.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",

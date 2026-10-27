@@ -41,6 +41,15 @@ const PAGES = [
   // the one worth a budget.
   '/recovery',
   '/reports',
+  // Polytos Phase 4. The benefits section joins the budgeted pages because
+  // the phase that added it raised the bundle-total ceiling by 84 KB, and a
+  // total raised without the new routes under a per-page budget would be a
+  // total raised on trust. These three are the section's registers — the
+  // screens a Secretary/Treasurer and a Manager open repeatedly — so they are
+  // where a regression would be felt.
+  '/benefits',
+  '/benefits/claims',
+  '/meetings',
 ] as const;
 
 interface PageCost {

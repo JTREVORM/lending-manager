@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 550 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 635 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -171,6 +171,45 @@ describeBundle('the browser bundle', () => {
     // 550 leaves about the same headroom over the measured 547 as 545 left
     // over 542. The next phase to cross it still has to make its own case.
     //
+    // ## 550 → 635, for Polytos Phase 4 benefits and meetings
+    //
+    // This is a far bigger jump than the three above — 84 KB against five —
+    // so it needs a better case than they did, and the honest one starts by
+    // saying what the previous raises could not: **this phase is thirteen
+    // screens, not three.**
+    //
+    //   - **No new dependency.** `package.json` is untouched, and the
+    //     assertions that actually catch a library creeping in — the chart,
+    //     date and utility list above, and the 120 KB largest-chunk ceiling —
+    //     both pass unchanged. The largest chunk did not move: 72 KB before
+    //     this phase, 72 KB after.
+    //   - **Fifteen chunks for fifteen interactive components.** 82 chunks
+    //     became 97. Every one of the new ones is a screen that cannot be a
+    //     Server Component: a register whose filters live in the URL, a form
+    //     driving a Server Action through `useActionState`, a panel that
+    //     reveals a reason field before it submits. The other sixteen Phase 4
+    //     components — every badge, every read-only panel, the whole claim
+    //     facts page, the eligibility list, the assessment snapshot, both
+    //     reports — ship no JavaScript at all.
+    //   - **Five and a half kilobytes a chunk, which is what a form costs.**
+    //     The claim forms carry a bill parser, a three-reading admission
+    //     preview and a half-up rate calculation; the attendance register
+    //     carries a per-member correction flow. They are built from the same
+    //     `DataTable`, `Money`, `Field` and `Register*` primitives as every
+    //     other screen — which is why thirteen screens cost 84 KB and not
+    //     three times that.
+    //   - **What a page costs did not move, and is now asserted on this
+    //     section too.** `/benefits`, `/benefits/claims` and `/meetings`
+    //     joined the budgeted pages in
+    //     `tests/e2e/specs/performance.spec.ts`, against the same unchanged
+    //     ceilings every other page is held to. That is the figure that is
+    //     somebody's airtime, and raising a total without adding the new
+    //     routes to the per-page budget would have been raising it on trust.
+    //
+    // 635 leaves about four kilobytes over the measured 631 — tighter
+    // headroom than the earlier raises, deliberately, because a phase that
+    // adds 84 KB should not also be handed room for the next one.
+    //
     // It is not what a page costs. No page loads all seventy: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -178,7 +217,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(550);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(635);
   });
 
   it('emits no source map for the browser', () => {

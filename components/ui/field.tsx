@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, type ReactNode } from 'react';
+import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils/cn';
 import { Input, type InputProps } from './input';
@@ -75,6 +75,101 @@ export function Field({
 
       {hint !== undefined ? (
         <p id={hintId} className={cn('text-text-muted text-xs', hintClassName)}>
+          {hint}
+        </p>
+      ) : null}
+
+      {error !== undefined ? (
+        <p id={errorId} role="alert" className="text-danger text-xs font-medium">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A labelled `<select>`, with the same plumbing as `Field`.
+ *
+ * Phase 4 needed ten of these — a claim type, a relationship, a meeting type,
+ * an absence reason, a document kind, a payment method on a benefit payment —
+ * and the inline markup every earlier form carries was already six lines of
+ * class names that four screens had copied slightly differently. One
+ * component, so the control height, the focus ring and the error wiring match
+ * `Field` by construction rather than by somebody remembering.
+ *
+ * `placeholder` renders as a disabled empty option, so a select with no
+ * sensible default starts unanswered and `required` means something. Without
+ * it the first option would be silently "chosen" by the browser, which is how
+ * a form ends up recording an answer nobody gave.
+ */
+export function SelectField({
+  label,
+  hint,
+  error,
+  required = false,
+  placeholder,
+  options,
+  ...selectProps
+}: Omit<ComponentProps<'select'>, 'id'> & {
+  readonly label: string;
+  readonly hint?: ReactNode;
+  readonly error?: string;
+  readonly required?: boolean;
+  /** The unanswered state, as a disabled empty option. */
+  readonly placeholder?: string;
+  readonly options: readonly {
+    readonly value: string;
+    readonly label: string;
+    readonly disabled?: boolean;
+  }[];
+}) {
+  const generatedId = useId();
+  const selectId = `select-${generatedId}`;
+  const hintId = `${selectId}-hint`;
+  const errorId = `${selectId}-error`;
+
+  const describedBy =
+    [hint !== undefined ? hintId : null, error !== undefined ? errorId : null]
+      .filter((value): value is string => value !== null)
+      .join(' ') || undefined;
+
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor={selectId} required={required}>
+        {label}
+      </Label>
+
+      <select
+        id={selectId}
+        required={required}
+        aria-invalid={error !== undefined}
+        aria-describedby={describedBy}
+        className={cn(
+          // The same two densities `Input` uses, from the same tokens: roomy
+          // and touch-sized on a phone, the reference's compact control from
+          // `md` up. A select that did not match the inputs beside it is the
+          // drift this component exists to stop.
+          'bg-surface text-text w-full border',
+          'min-h-touch rounded-lg px-4 py-3.5 text-base',
+          'md:min-h-9 md:rounded-sm md:px-2.5 md:py-1.5 md:text-[13px]',
+          'transition-[color,background-color,border-color,box-shadow] duration-150',
+          'focus-visible:border-accent focus-visible:[box-shadow:var(--ring-focus)] focus-visible:outline-none',
+          'disabled:bg-surface-sunken disabled:text-text-muted disabled:cursor-not-allowed',
+          error === undefined ? 'border-border-strong' : 'border-danger',
+        )}
+        {...selectProps}
+      >
+        {placeholder === undefined ? null : <option value="">{placeholder}</option>}
+        {options.map((option) => (
+          <option key={option.value} value={option.value} disabled={option.disabled}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      {hint !== undefined ? (
+        <p id={hintId} className="text-text-muted text-xs">
           {hint}
         </p>
       ) : null}

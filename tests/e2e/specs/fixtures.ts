@@ -137,6 +137,79 @@ export interface Fixtures {
    * refusal of a three-month loan can be seen. See the long note above the
    * policy INSERT in `tests/e2e/harness/seed.mjs`.
    */
+  /**
+   * Polytos Phase 4. Named by what each record *is*, like everything else in
+   * this manifest.
+   *
+   *   beneficiaries.verified  checked against a document by somebody other
+   *                           than the person who recorded it
+   *   beneficiaries.pending   recorded and unchecked — the state the register
+   *                           exists to find, because it is a bereavement
+   *                           benefit that cannot be paid
+   *   benefitClaims.paid      a medical claim taken the whole way: evidence
+   *                           checked, assessed, approved by a second person,
+   *                           paid, with a journal entry behind it
+   *   benefitClaims.toApprove assessed and waiting for an approver, so the
+   *                           queue is not empty and the browser suite has a
+   *                           claim to approve without first building one
+   *   benefitClaims.held      complete, checked, in good standing — and held,
+   *                           because nobody has defined which relatives a
+   *                           condolence benefit covers
+   *   meetings.held           last month's, with a register, a correction,
+   *                           finalised minutes and two action items
+   *   meetings.upcoming       next month's, so "when is the next one" has an
+   *                           answer
+   */
+  readonly beneficiaries: {
+    readonly verified: string;
+    readonly pending: string;
+  };
+  readonly benefitClaims: {
+    readonly paid: string;
+    readonly paidNumber: string;
+    readonly paidAmount: number;
+    readonly toApprove: string;
+    readonly toApproveNumber: string;
+    readonly toApproveAmount: number;
+    /**
+     * A second assessed claim, never written to. The browser suite approves
+     * and pays `toApprove`, and Playwright runs files in parallel — so an
+     * assertion that the approval queue is not empty needs a claim no spec
+     * consumes.
+     */
+    readonly awaiting: string;
+    readonly awaitingNumber: string;
+    readonly held: string;
+    readonly heldNumber: string;
+  };
+  readonly meetings: {
+    readonly held: string;
+    readonly heldNumber: string;
+    readonly upcoming: string;
+    readonly upcomingNumber: string;
+    /**
+     * A special meeting for the write spec to mark, write up and add an item
+     * to — separate for the same reason `awaiting` is: marking the upcoming
+     * monthly meeting would move it to `held` and the read spec asserting
+     * "when is the next one" would depend on worker order.
+     */
+    readonly toWorkOn: string;
+    readonly toWorkOnNumber: string;
+  };
+  /**
+   * What the harness decided about benefits, and what it left open.
+   *
+   * Four illustrative answers, because `is_benefits_enabled` waits on three of
+   * them and nothing could be assessed without them. They are the harness's
+   * own and **not** decisions of the business — the same status the member
+   * lending figures above have.
+   */
+  readonly benefitPolicy: {
+    readonly annualCap: number;
+    readonly claimsPerYear: number;
+    readonly waitingDays: number;
+    readonly yearBasis: string;
+  };
   readonly memberLending: {
     readonly multiplierBps: number;
     readonly interestBasis: string;

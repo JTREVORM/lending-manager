@@ -284,6 +284,56 @@ describe('authorization matrix', () => {
     'member_loans:create': ['manager', 'owner_admin'],
     'savings:reverse': ['owner_admin'],
 
+    // --- Polytos Phase 4: beneficiaries -------------------------------------
+    // A beneficiary is who receives UGX 200,000 when a member dies, so
+    // recording one and attesting to it are two capabilities — and
+    // `verify_member_beneficiary` additionally refuses a verification from
+    // whoever recorded the record, which is what makes the split a control
+    // rather than a label on this page: a Manager holds both.
+    //
+    // `membership:view_sensitive` is the narrow one. The counter holds
+    // `beneficiaries:view` and not this: knowing that a member has a verified
+    // next of kin is counter work, and reading that person's telephone number
+    // and identity reference is not.
+    'beneficiaries:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'beneficiaries:manage': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'beneficiaries:verify': ['manager', 'owner_admin'],
+    'membership:view_sensitive': ['manager', 'owner_admin'],
+
+    // --- Polytos Phase 4: benefits ------------------------------------------
+    // Read the four stages down the column rather than across the row: no
+    // single role below the Owner holds two non-adjacent ones, so no one role
+    // can carry a claim from the counter to cash.
+    //
+    //                        claim  assess  approve  pay
+    //   Secretary/Treasurer    x       -       -      -
+    //   Manager                x       x       -      x
+    //   Owner/Admin            x       x       x      x
+    //
+    // The Owner holds everything, as they do everywhere else here, and
+    // `approve_benefit_claim` is what stops them being both the assessor and
+    // the approver of one claim. A rule that *no* person may hold both keys
+    // would make a claim unapprovable on any day the one other key-holder is
+    // out, which in a business of three people is not a control but an
+    // outage.
+    //
+    // Reversing a benefit payment is absent, deliberately: it takes
+    // `savings:reverse` above, the Owner's alone and already the authority
+    // over every other reversal in this programme.
+    'benefits:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'benefits:claim': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'benefits:assess': ['manager', 'owner_admin'],
+    'benefits:approve': ['owner_admin'],
+    'benefits:pay': ['manager', 'owner_admin'],
+
+    // --- Polytos Phase 4: meetings ------------------------------------------
+    // Clerical work, so the counter does it. A member holds neither: the
+    // register is recorded by staff about members, and the portal has no
+    // meetings surface — publishing minutes to the membership is a disclosure
+    // decision nobody has made.
+    'meetings:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'meetings:manage': ['secretary_treasurer', 'manager', 'owner_admin'],
+
     // --- Phase 3: clients ---------------------------------------------------
     // A borrower is absent from every row here, including `clients:view`.
     // They read their own client record through the identity clause in the

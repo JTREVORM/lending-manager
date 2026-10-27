@@ -179,12 +179,6 @@ export const PERMISSIONS = [
   // the read, because from Polytos Phase 2 they are the people taking savings
   // over the counter and cannot do that without looking a member up.
   //
-  // There is deliberately no `membership:view_sensitive` yet. The Phase 1
-  // schema holds no personal data of its own — the member *is* the client,
-  // behind `clients:view`, and their National Identification Number is behind
-  // `clients:view_nin`. The capability arrives in Polytos Phase 4 with the
-  // beneficiary and benefit-claim tables it would actually guard; declaring
-  // it now would promise a restriction over nothing.
   /** See the membership register, a membership record and the published policy. */
   'membership:view',
   /** Enrol an existing client as a member. */
@@ -203,6 +197,23 @@ export const PERMISSIONS = [
    * without asking anybody.
    */
   'membership:manage_policies',
+  /**
+   * See a beneficiary's contact details and identity reference.
+   *
+   * Polytos Phase 4, and the capability Phase 1 deliberately declined to
+   * declare: the Phase 1 schema held no personal data of its own — the member
+   * *is* the client, behind `clients:view` — so declaring it then would have
+   * promised a restriction over nothing.
+   *
+   * `member_beneficiary_identities` is that data, and it is the business's
+   * **payment instruction** for the bereavement benefit. It lives in a table
+   * of its own rather than behind a column rule, because Row Level Security
+   * is row-level: a single table could only grant or deny the whole row, so
+   * the clerk who must be able to see *that* a member has a verified next of
+   * kin would thereby see who she is and how to reach her. The same split
+   * `client_identities` already makes for a National Identification Number.
+   */
+  'membership:view_sensitive',
 
   // --- Member savings ------------------------------------------------------
   //
@@ -264,6 +275,72 @@ export const PERMISSIONS = [
   'member_loans:view_eligibility',
   /** Open a member-loan application against a member's savings record. */
   'member_loans:create',
+
+  // --- Beneficiaries -------------------------------------------------------
+  //
+  // Polytos Phase 4. A row in `member_beneficiaries` decides who receives
+  // UGX 200,000 when a member dies. The obvious fraud against a benefits
+  // scheme is not a forged hospital bill — it is a member of staff who
+  // records themselves as the beneficiary of a member they expect to die.
+  //
+  // So registering and verifying are two capabilities, and
+  // `verify_member_beneficiary` additionally refuses a verification from
+  // whoever recorded the record. Without that refusal the split would exist
+  // only on this page: a Manager holds both.
+  /** See that a member has a registered next of kin, and whether it is verified. */
+  'beneficiaries:view',
+  /** Register a member's beneficiary, or request a change to one. */
+  'beneficiaries:manage',
+  /** Confirm a beneficiary record against its evidence. Never whoever recorded it. */
+  'beneficiaries:verify',
+
+  // --- Benefits ------------------------------------------------------------
+  //
+  // Polytos Phase 4. A benefit is money leaving the business on the strength
+  // of a document somebody produced: nobody here saw the admission, nobody
+  // attended the funeral, and the invoice is a photograph. So the act splits
+  // into the four judgements it actually contains, each held by somebody who
+  // can refuse the one before it — the shape a savings withdrawal already
+  // uses, with one stage more, because a withdrawal returns a member their
+  // own money and a benefit spends the company's.
+  //
+  // `approve_benefit_claim` refuses an approval from the person who assessed
+  // it, by profile id *and* by actor label. That is the control the roadmap
+  // calls the one that must not be collapsed, and it is what makes the split
+  // hold for the Owner, who holds both keys and must — a rule that no person
+  // may hold both would make a claim unapprovable on any day the one other
+  // key-holder is out.
+  //
+  // Deliberately absent: a `benefits:reverse`. Reversing a posted benefit
+  // payment takes `savings:reverse`, the Owner's alone and already the
+  // authority over every other reversal in this programme; a second
+  // capability over the same class of act would be two answers to "who may
+  // un-say a payment".
+  /** See the benefit claim register, a claim and its history. */
+  'benefits:view',
+  /** Open a benefit claim for a member and attach the evidence supplied. */
+  'benefits:claim',
+  /** Check a claim's evidence against the policy and record what is payable. */
+  'benefits:assess',
+  /** Approve or refuse an assessed claim. Never the person who assessed it. */
+  'benefits:approve',
+  /** Pay an approved benefit and post it to the ledger. */
+  'benefits:pay',
+
+  // --- Meetings ------------------------------------------------------------
+  //
+  // Polytos Phase 4. Two capabilities, because scheduling a meeting and
+  // recording who attended are the same kind of act — clerical, reversible,
+  // and about no money at all.
+  //
+  // Deliberately absent: a `meetings:attend`. Attendance is recorded *by
+  // staff about members*; a member has no account that could mark themselves
+  // present, and inventing one would be inventing a self-service register
+  // nobody asked for.
+  /** See the meeting calendar, a meeting, its minutes and its attendance register. */
+  'meetings:view',
+  /** Schedule, reschedule or cancel a meeting, record attendance, write minutes. */
+  'meetings:manage',
 
   // --- Clients -------------------------------------------------------------
   // The spelling is `resource:action` with one colon, which is the format the
@@ -561,6 +638,26 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // savings.
     'member_loans:view_eligibility',
 
+    // Polytos Phase 4. The counter is the person a bereaved family walks up
+    // to, so they open the claim and take the documents; they read the
+    // register to answer "has my claim been decided?"; and they register
+    // beneficiaries, because next of kin is collected at enrolment and at the
+    // counter afterwards.
+    //
+    // They do not verify a beneficiary, do not assess, do not approve and do
+    // not pay. And they hold `beneficiaries:view` but **not**
+    // `membership:view_sensitive`: knowing that a member has a verified next
+    // of kin is counter work; reading that person's telephone number and
+    // identity reference is not.
+    'beneficiaries:view',
+    'beneficiaries:manage',
+    'benefits:view',
+    'benefits:claim',
+
+    // Meetings are clerical work, and this is the role that does it.
+    'meetings:view',
+    'meetings:manage',
+
     // The business's own description of this role is that they record loan
     // details and amounts. So: everything up to asking for a decision, and
     // nothing that makes one.
@@ -680,6 +777,28 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'member_loans:view_eligibility',
     'member_loans:create',
 
+    // Polytos Phase 4. Supervises the programme: verifies beneficiary
+    // records, assesses claims and pays approved ones.
+    //
+    // **Not** `benefits:approve`. That is the independent judgement above the
+    // assessment, and granting a Manager both would make the separation
+    // depend entirely on the function refusing them, with nothing behind it
+    // if that refusal were ever relaxed. The structure and the function both
+    // say it, which is why it holds.
+    //
+    // `membership:view_sensitive`, because an assessor has to look at who the
+    // business is about to pay and a payer has to hand over the money.
+    'beneficiaries:view',
+    'beneficiaries:manage',
+    'beneficiaries:verify',
+    'membership:view_sensitive',
+    'benefits:view',
+    'benefits:claim',
+    'benefits:assess',
+    'benefits:pay',
+    'meetings:view',
+    'meetings:manage',
+
     // Reviews and approves, and may return a draft for correction.
     //
     // Deliberately **not** `loans:disburse`. A Manager also holds
@@ -798,6 +917,24 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
 
     'member_loans:view_eligibility',
     'member_loans:create',
+
+    'beneficiaries:view',
+    'beneficiaries:manage',
+    'beneficiaries:verify',
+    'membership:view_sensitive',
+
+    // Every benefit stage, including both halves of the control. The
+    // function-level refusal is what stops the Owner being the assessor and
+    // the approver of one claim — and that, rather than withholding a key, is
+    // the only arrangement that works in a business this size.
+    'benefits:view',
+    'benefits:claim',
+    'benefits:assess',
+    'benefits:approve',
+    'benefits:pay',
+
+    'meetings:view',
+    'meetings:manage',
 
     'loans:view',
     'loans:create',

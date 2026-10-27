@@ -65,6 +65,14 @@ import {
   type DemoBorrower,
 } from './demo-existing-borrowers';
 import {
+  BENEFIT_ENABLE_PHRASE,
+  BenefitDemoRefused,
+  benefitDemoRequested,
+  ensureBenefitPolicy,
+  seedBenefitScenarios,
+  type BenefitTally,
+} from './demo-benefits';
+import {
   ensureMemberLendingPolicy,
   memberLoanDemoRequested,
   MemberLoanDemoRefused,
@@ -376,6 +384,15 @@ async function main(): Promise<void> {
       `  POLYTOS_SEED_DEMO=${ENABLE_PHRASE} \\\n` +
         `  POLYTOS_SEED_MEMBER_LOANS=${MEMBER_LOAN_ENABLE_PHRASE} npm run seed:demo\n`,
     );
+    console.error('Polytos Phase 4 benefit, beneficiary and meeting scenarios need a');
+    console.error('third phrase, and also run only against a local throwaway database:');
+    console.error('they publish a policy version answering three decisions the client');
+    console.error('has not made, and treat three family relationships as eligible for a');
+    console.error('condolence benefit, which nobody has decided:\n');
+    console.error(
+      `  POLYTOS_SEED_DEMO=${ENABLE_PHRASE} \\\n` +
+        `  POLYTOS_SEED_BENEFITS=${BENEFIT_ENABLE_PHRASE} npm run seed:demo\n`,
+    );
     console.error('Nothing has been written.');
     process.exit(1);
   }
@@ -411,6 +428,7 @@ async function main(): Promise<void> {
   await client.connect();
 
   let memberLoanTally: MemberLoanTally | null = null;
+  let benefitTally: BenefitTally | null = null;
 
   const tally: Tally = {
     clientsCreated: 0,
@@ -438,6 +456,46 @@ async function main(): Promise<void> {
     // the head of scripts/demo-member-loans.ts for why the two cannot coexist.
     const memberLoans = memberLoanDemoRequested(process.env.POLYTOS_SEED_MEMBER_LOANS);
 
+    // --- Polytos Phase 4: benefits, local only --------------------------
+    //
+    // Its own phrase for the same reason, and refused alongside the member
+    // loan mode rather than merged with it: only one policy version may be in
+    // force, and a single version answering both sets would present seven
+    // unapproved figures at once with no way for a reader to tell which
+    // demonstration each belonged to.
+    const benefits = benefitDemoRequested(process.env.POLYTOS_SEED_BENEFITS);
+
+    if (memberLoans && benefits) {
+      console.error(
+        'The member loan and benefit demonstrations cannot run together.\n\n' +
+          'Only one membership policy version may be in force, and each mode needs its\n' +
+          'own: the member-lending version answers the interest basis, the interest\n' +
+          'method and the savings multiplier, and the benefits version answers the\n' +
+          'medical ceiling, the claims-per-year limit and the benefit year. One version\n' +
+          'answering all six would put six figures nobody approved in front of a reader\n' +
+          'with no way to tell which demonstration each belonged to.\n\n' +
+          'Run them against two separate local databases.\n\n' +
+          'Nothing has been written.',
+      );
+      process.exit(1);
+    }
+
+    if (benefits && target.kind !== 'local') {
+      console.error(
+        'Benefit demonstration data is refused on a hosted database.\n\n' +
+          "It publishes a policy version answering the medical benefit's annual ceiling,\n" +
+          'how many claims a year it allows and whether the benefit year runs from\n' +
+          'January or from the member’s own anniversary — three decisions the client has\n' +
+          'not made — and it treats a spouse, a child and a parent as eligible for a\n' +
+          'condolence benefit, which nobody has decided either.\n\n' +
+          'It also writes synthetic claim evidence, synthetic approvals and synthetic\n' +
+          'benefit payments. None of that may appear on a hosted project, where it would\n' +
+          'read as the programme’s terms and as management decisions.\n\n' +
+          'Nothing has been written.',
+      );
+      process.exit(1);
+    }
+
     if (memberLoans && target.kind !== 'local') {
       console.error(
         'Member loan demonstration data is refused on a hosted database.\n\n' +
@@ -455,10 +513,22 @@ async function main(): Promise<void> {
     try {
       policyId = memberLoans
         ? await ensureMemberLendingPolicy(client)
-        : await ensurePolicy(client);
+        : benefits
+          ? await ensureBenefitPolicy(client)
+          : await ensurePolicy(client);
     } catch (error) {
       // A refusal here is guidance, not a fault: it says which database this
       // mode needs and why, so a stack trace would bury the one useful line.
+      if (error instanceof BenefitDemoRefused) {
+        console.error('');
+        console.error('Benefit demonstration data is refused on this database.');
+        console.error('');
+        console.error(error.message);
+        console.error('');
+        console.error('Nothing has been written.');
+        process.exit(1);
+      }
+
       if (error instanceof MemberLoanDemoRefused) {
         console.error('');
         console.error('Member loan demonstration data is refused on this database.');
@@ -508,6 +578,30 @@ async function main(): Promise<void> {
         disburser: owner,
       });
     }
+
+    if (benefits) {
+      console.log('');
+      console.log('Benefit, beneficiary and meeting scenarios (TEST ONLY policy):');
+
+      // Four capabilities and three people, because a benefit passes through
+      // three pairs of hands by design: the Secretary records, a Manager
+      // checks and assesses, the Owner approves — and `approve_benefit_claim`
+      // refuses an approval from whoever assessed. A demonstration using one
+      // profile throughout would render every one of those controls as though
+      // it were not there.
+      const owner = await ensureStaffProfile(client, target, {
+        fullName: 'DEMO Branch Owner',
+        phone: '+256700000197',
+        role: 'owner_admin',
+        label: 'owner',
+      });
+
+      benefitTally = await seedBenefitScenarios(client, {
+        recorder: witness,
+        checker: approver,
+        approver: owner,
+      });
+    }
   } finally {
     await client.end();
   }
@@ -540,6 +634,49 @@ async function main(): Promise<void> {
     );
     console.log(
       '  member loans already present      ' + String(memberLoanTally.alreadyPresent),
+    );
+  }
+
+  if (benefitTally !== null) {
+    console.log('');
+    console.log(
+      '  beneficiaries registered          ' +
+        String(benefitTally.beneficiariesRegistered),
+    );
+    console.log(
+      '  beneficiaries verified            ' + String(benefitTally.beneficiariesVerified),
+    );
+    console.log(
+      '  benefit claims opened             ' + String(benefitTally.claimsOpened),
+    );
+    console.log(
+      '  evidence documents attached       ' + String(benefitTally.documentsAttached),
+    );
+    console.log(
+      '  claims assessed                   ' + String(benefitTally.claimsAssessed),
+    );
+    console.log(
+      '  claims approved                   ' + String(benefitTally.claimsApproved),
+    );
+    console.log('  benefits paid                     ' + String(benefitTally.claimsPaid));
+    console.log(
+      '  payments reversed                 ' + String(benefitTally.paymentsReversed),
+    );
+    console.log(
+      '  claims refused, as intended       ' + String(benefitTally.claimsRefused),
+    );
+    console.log('  claims held on an undecided rule  ' + String(benefitTally.claimsHeld));
+    console.log(
+      '  meetings scheduled                ' + String(benefitTally.meetingsScheduled),
+    );
+    console.log(
+      '  attendance marked                 ' + String(benefitTally.attendanceMarked),
+    );
+    console.log(
+      '  action items recorded             ' + String(benefitTally.actionsRecorded),
+    );
+    console.log(
+      '  benefit records already present   ' + String(benefitTally.alreadyPresent),
     );
   }
 
@@ -795,9 +932,20 @@ async function seedMember(
     (context.existingBorrower ? 'existing loan borrower' : 'synthetic demo client');
 
   // --- The membership ----------------------------------------------------
+  // Any membership, not only a live one. A demonstration member whose
+  // membership has since been recorded `deceased` — which the Phase 4 benefit
+  // scenarios do, so a bereavement benefit can be demonstrated — still has a
+  // membership this seeder created, and enrolling them again would be the
+  // seeder inventing a second one every run. (The fee's idempotency key
+  // already prevents it; this makes the intent explicit rather than relying on
+  // a replay to cover a probe that asked the wrong question.)
+  //
+  // A client who genuinely rejoins is enrolled afresh by a person, with a new
+  // membership number, because the savings qualification and the benefit
+  // waiting period both start again. That is a decision, not a seeding step.
   const liveMembership = await client.query<{ id: string; status: string }>(
-    `select id, status from public.memberships
-      where client_id = $1 and status in ('pending', 'active', 'suspended')`,
+    `select id, status from public.memberships where client_id = $1
+      order by applied_on limit 1`,
     [clientId],
   );
 

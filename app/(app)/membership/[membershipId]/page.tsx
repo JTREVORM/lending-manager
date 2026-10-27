@@ -2,6 +2,7 @@ import { BadgeCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { MembershipBenefitsPanel } from '@/components/benefits/membership-benefits-panel';
 import { MemberLoanEligibilityPanel } from '@/components/member-loans/eligibility-panel';
 import { MembershipCardPanel } from '@/components/membership/membership-card-panel';
 import { MembershipHistory } from '@/components/membership/membership-history';
@@ -16,6 +17,10 @@ import { SectionTabs } from '@/components/ui/section-tabs';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
+import {
+  listBeneficiariesForMembership,
+  listClaimsForMembership,
+} from '@/lib/data/benefits';
 import {
   getMembership,
   getMembershipPolicy,
@@ -88,24 +93,40 @@ export default async function MembershipDetailPage({
 
   if (membership === null) notFound();
 
-  const [history, policy, receipt, consent, savingsAccount, cards, eligibility, lending] =
-    await Promise.all([
-      listMembershipHistory(membership.id),
-      getMembershipPolicy(membership.policyVersionId),
-      // Each of these comes back empty or null for a caller the policies refuse,
-      // so an absence on this page is a database decision rather than a
-      // conditional written here.
-      getMembershipFeeReceipt(membership.id),
-      listMembershipConsent(membership.id),
-      getSavingsAccountForMembership(membership.id),
-      listMembershipCards(membership.id),
-      // Polytos Phase 3. Null for a caller without
-      // `member_loans:view_eligibility`, which is its own capability because an
-      // assessment is a lending offer rather than a view of savings — so the
-      // panel is absent for a reader entitled to the rest of this page.
-      assessMemberLoanEligibility(membership.clientId),
-      getMemberLendingState(),
-    ]);
+  const [
+    history,
+    policy,
+    receipt,
+    consent,
+    savingsAccount,
+    cards,
+    eligibility,
+    lending,
+    beneficiaries,
+    claims,
+  ] = await Promise.all([
+    listMembershipHistory(membership.id),
+    getMembershipPolicy(membership.policyVersionId),
+    // Each of these comes back empty or null for a caller the policies refuse,
+    // so an absence on this page is a database decision rather than a
+    // conditional written here.
+    getMembershipFeeReceipt(membership.id),
+    listMembershipConsent(membership.id),
+    getSavingsAccountForMembership(membership.id),
+    listMembershipCards(membership.id),
+    // Polytos Phase 3. Null for a caller without
+    // `member_loans:view_eligibility`, which is its own capability because an
+    // assessment is a lending offer rather than a view of savings — so the
+    // panel is absent for a reader entitled to the rest of this page.
+    assessMemberLoanEligibility(membership.clientId),
+    getMemberLendingState(),
+    // Polytos Phase 4. Both empty for a caller the policies refuse — a
+    // borrower reading their own membership gets their own claims through
+    // the portal view and no beneficiary rows at all, because a
+    // beneficiary record is staff-only.
+    listBeneficiariesForMembership(membership.id),
+    listClaimsForMembership(membership.id),
+  ]);
 
   const canSeeClient = contextCan(context, 'clients:view');
   const next = membershipTransitionsFrom(membership.status);
@@ -253,12 +274,29 @@ export default async function MembershipDetailPage({
 
         <Card>
           <p className="text-text-muted text-[13px]">
-            Benefit claims and the year-end profit share are not recorded here. The
-            medical benefit&rsquo;s annual cap, how many claims a year it allows, any
-            waiting period and the profit distribution formula are all still to be
-            decided, and this system records nothing against a rule nobody has approved.
+            The year-end profit share is not recorded here: the profit distribution
+            formula is still to be decided, and this system records nothing against a rule
+            nobody has approved. Benefit claims are below.
           </p>
         </Card>
+      </section>
+
+      {/* --- Polytos Phase 4: next of kin and benefit claims ------------- */}
+      <section
+        aria-labelledby="membership-benefits-heading"
+        className="min-w-0 space-y-3"
+      >
+        <h2 id="membership-benefits-heading" className="text-text text-lg font-semibold">
+          Benefits and next of kin
+        </h2>
+
+        <MembershipBenefitsPanel
+          membershipId={membership.id}
+          beneficiaries={beneficiaries}
+          claims={claims}
+          canManageBeneficiaries={contextCan(context, 'beneficiaries:manage')}
+          canClaim={contextCan(context, 'benefits:claim')}
+        />
       </section>
 
       {/* --- Polytos Phase 3: may this member borrow ------------------ */}

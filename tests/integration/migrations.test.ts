@@ -136,11 +136,24 @@ describe('row level security', () => {
     // re-read it are the guarantors who signed it — who hold a borrower's
     // portal login and nothing more — so gating it on a staff capability
     // would hide a contract from the person bound by it.
+    //
+    // Polytos Phase 4 adds two more vocabularies, and they belong here for
+    // exactly the reason the first three do: one is a list of words for family
+    // relationships, the other a list of document names. Neither names a
+    // person or an amount, and every beneficiary and claim form has to render
+    // both.
+    //
+    // `beneficiary_relationships.condolence_eligible` is the only column on
+    // either that carries a *rule*, and it is NULL on every row — the client
+    // has not defined an eligible family member — so reading the table
+    // discloses no entitlement either.
     const PERMITTED = new Set([
       'roles',
       'permissions',
       'role_permissions',
       'guarantor_consent_terms',
+      'beneficiary_relationships',
+      'benefit_document_kinds',
     ]);
 
     const policies = [
@@ -345,6 +358,15 @@ describe('column type discipline', () => {
       // Polytos Phase 3. The row *is* the record that savings were pledged,
       // so its creation instant already has a name that says what it means.
       member_loan_savings_pledges: 'pledged_at',
+      // Polytos Phase 4, for the same reason as the Phase 3, 4 and 12
+      // snapshots: the row records the moment the business fixed what it
+      // relied on to decide a benefit. A `created_at` beside `captured_at`
+      // would be two columns holding one value.
+      benefit_assessment_snapshots: 'captured_at',
+      // Polytos Phase 4. The row *is* the record that an attendance entry was
+      // corrected, so its creation instant already has a name that says what
+      // it means.
+      meeting_attendance_corrections: 'corrected_at',
     };
 
     /**
@@ -453,6 +475,22 @@ describe('column type discipline', () => {
       // timestamp than a generic `updated_at`, which would imply the pledged
       // amount itself can be amended.
       'member_loan_savings_pledges',
+      // Polytos Phase 4. The beneficiary's own identity: UPDATE and DELETE
+      // are both refused by trigger, and no privilege is granted for either.
+      // A beneficiary's name or telephone number is not corrected in place —
+      // a change is a *new* record that supersedes this one, which is what
+      // keeps a payment made on the old details explicable. An `updated_at`
+      // here would be a column that can never advance, and worse, one that
+      // implied the payment instruction could be edited.
+      'member_beneficiary_identities',
+      // Polytos Phase 4. The assessment a claim was decided on, append-only
+      // in exactly the way the Phase 3 and Phase 4 snapshots are, and the
+      // correction history beside the attendance register, append-only in
+      // exactly the way `client_remarks` is. A snapshot that could be edited
+      // would not be a snapshot, and a correction history that could be
+      // edited would make every corrected entry unexplainable.
+      'benefit_assessment_snapshots',
+      'meeting_attendance_corrections',
     ]);
 
     for (const table of createdTables) {
@@ -758,6 +796,9 @@ describe('types stay in step with the schema', () => {
       // callable over the API, and EXECUTE is revoked from `anon` and
       // `authenticated` on all of them.
       'membership_policy_versions_guard',
+      // Polytos Phase 4. Freezes the tenth undecided rule once anybody is
+      // held to the version, as the other nine are.
+      'membership_policy_year_basis_guard',
       'memberships_assign_number',
       'memberships_stamp_provenance',
       'memberships_guard_transition',
@@ -828,6 +869,37 @@ describe('types stay in step with the schema', () => {
       'ensure_penalty_applied',
       'apply_eligible_penalties',
       'is_table_owner_session',
+
+      // --- Polytos Phase 4 ---------------------------------------------------
+      //
+      // The guards, the number minters, the audit writers and the
+      // notification raisers. Nothing calls any of them but PostgreSQL, and
+      // each is revoked from every application role — a client type for one
+      // would advertise a call that is always refused. The revocations are
+      // asserted exhaustively in `tests/db/security.test.ts`.
+      'member_beneficiaries_assign_number',
+      'member_beneficiaries_guard',
+      'benefit_claims_assign_number',
+      'benefit_claims_guard',
+      'benefit_claim_documents_guard',
+      'benefit_claim_documents_delete_guard',
+      'benefit_payments_assign_number',
+      'benefit_payments_guard',
+      'membership_meetings_assign_number',
+      'membership_meetings_guard',
+      'audit_beneficiary_registered',
+      'audit_beneficiary_decided',
+      'audit_benefit_claim_opened',
+      'audit_benefit_claim_decided',
+      'audit_benefit_document_checked',
+      'audit_benefit_payment',
+      'audit_meeting_event',
+      'audit_attendance_corrected',
+      'notify_benefit_claim_transition',
+      'notify_beneficiary_awaiting_verification',
+      'notify_meeting_scheduled',
+      'notify_meeting_moved',
+      'notify_meeting_action_assigned',
       // Phase 14. Trigger functions on the security and recovery tables.
       'loan_collateral_guard',
       'loan_recovery_actions_stamp_author',

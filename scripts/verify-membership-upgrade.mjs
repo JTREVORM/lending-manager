@@ -70,8 +70,16 @@ const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
  * that could move a date on a loan already written. `installment_schedule`
  * below compares every collection date and every scheduled figure, loan by
  * loan, in order.
+ *
+ * Phase 4 adds benefits and meetings, which touch no loan at all — but it is
+ * in this list for two reasons rather than one. It has to be applied *after*
+ * Phase 1, because its tables reference `memberships`, and a prefix missing
+ * from this list is applied as part of the "existing" schema, which is first.
+ * And the claim worth measuring is exactly that it changes nothing: a phase
+ * that writes a new expense account and a new journal source type is a phase
+ * that could, in principle, move a trial balance.
  */
-const PHASE_PREFIXES = ['20261019', '20261020', '20261021'];
+const PHASE_PREFIXES = ['20261019', '20261020', '20261021', '20261022'];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
@@ -333,7 +341,7 @@ if (Number(seeded.rows[0].loans) === 0 || Number(seeded.rows[0].journals) === 0)
 log('capturing the financial baseline');
 const beforeSnapshot = await capture(client);
 
-log(`applying ${String(phase.length)} Polytos Phase 1 migrations on top`);
+log(`applying ${String(phase.length)} Polytos migrations on top`);
 for (const name of phase) {
   psql(`-f '${join(MIGRATIONS, name)}'`);
   log(`  ${name}`);
@@ -356,14 +364,21 @@ const created = await client.query(
                          'savings_accounts', 'savings_transactions',
                          'savings_withdrawal_requests',
                          'member_loan_eligibility_snapshots',
-                         'member_loan_savings_pledges')`,
+                         'member_loan_savings_pledges',
+                         -- Polytos Phase 4.
+                         'member_beneficiaries', 'member_beneficiary_identities',
+                         'benefit_claims', 'benefit_claim_documents',
+                         'benefit_assessment_snapshots', 'benefit_payments',
+                         'membership_meetings', 'meeting_attendance',
+                         'meeting_attendance_corrections',
+                         'meeting_action_items')`,
 );
 
-const EXPECTED_TABLES = 12;
+const EXPECTED_TABLES = 22;
 
 if (created.rows[0].n !== EXPECTED_TABLES) {
   console.error(
-    `error: expected ${String(EXPECTED_TABLES)} membership and savings tables after ` +
+    `error: expected ${String(EXPECTED_TABLES)} Polytos tables after ` +
       `the upgrade, found ${String(created.rows[0].n)}.`,
   );
   process.exit(1);
@@ -387,6 +402,21 @@ for (const table of [
   // business assessed them, which is why both are checked empty.
   'member_loan_eligibility_snapshots',
   'member_loan_savings_pledges',
+  // Polytos Phase 4. An upgrade that invented a benefit payment would have
+  // taken money out of the business against a claim nobody made, and one that
+  // invented a beneficiary would have invented a payment instruction — which
+  // is why the payment, the claim, the snapshot and the beneficiary are all
+  // checked empty rather than only the first.
+  'member_beneficiaries',
+  'member_beneficiary_identities',
+  'benefit_claims',
+  'benefit_claim_documents',
+  'benefit_assessment_snapshots',
+  'benefit_payments',
+  'membership_meetings',
+  'meeting_attendance',
+  'meeting_attendance_corrections',
+  'meeting_action_items',
 ]) {
   const rows = await client.query(`select count(*)::int as n from public.${table}`);
   if (rows.rows[0].n !== 0) {
@@ -620,8 +650,9 @@ if (failures > 0) {
 console.log(
   `\nUpgrade verified: ${String(before.length)} existing migrations, a seeded book, ` +
     `then ${String(phase.length)} new migrations. Every one of ${String(Object.keys(BASELINE).length)} ` +
-    `financial figures is identical, the twelve membership, savings and member ` +
-    `loan tables exist and are empty, and 2100 Member Savings is zero.`,
+    `financial figures is identical, the ${String(EXPECTED_TABLES)} membership, ` +
+    `savings, member loan, benefit and meeting tables exist and are empty, and ` +
+    `2100 Member Savings is zero.`,
 );
 
 // ---------------------------------------------------------------------------

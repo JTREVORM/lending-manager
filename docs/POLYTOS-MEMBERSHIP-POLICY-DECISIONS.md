@@ -76,9 +76,9 @@ is a real answer and not an absence.
 | 4 | Must the six qualifying months be **consecutive**? | `qualifying_months_consecutive` | Decides whether a missed month restarts the clock. **Phase 2 built both arms; savings do not open until this is answered.** |
 | 5 | May savings be **withdrawn** while a member loan is active? | `savings_withdrawal_with_active_loan` | Three readings are plausible — allowed, blocked, or only the excess above what secures the loan. **Phase 2 built the first two; the third is refused with a message, because the excess needs question 3.** |
 | 6 | How is the year-end profit share **calculated**? | `profit_distribution_basis` | Pro-rata on savings, pro-rata weighted by months held, or equal shares. Phase 5 is this formula. |
-| 7 | What is the **annual cap** on the medical benefit per member? | `medical_benefit_annual_cap` | 5% of an uncapped bill is an uncapped liability. Phase 4 cannot assess a claim against no ceiling. |
-| 8 | How many medical **claims a year** may a member make? | `medical_benefit_claims_per_year` | Same reason. |
-| 9 | Is there a **waiting period** between enrolment and a first benefit claim? | `benefit_waiting_period_days` | Zero and "none" are the same answer; "nobody has said" is not. Phase 4 needs the number. |
+| 7 | What is the **annual cap** on the medical benefit per member? | `medical_benefit_annual_cap` | 5% of an uncapped bill is an uncapped liability. **Phase 4 built both arms; benefits do not open until this is answered.** |
+| 8 | How many medical **claims a year** may a member make? | `medical_benefit_claims_per_year` | Same reason, and the same answer: **built, enforced only once set.** |
+| 9 | Is there a **waiting period** between enrolment and a first benefit claim? | `benefit_waiting_period_days` | Zero and "none" are the same answer; "nobody has said" is not. **Phase 4 measures it from `activated_on` and skips the check entirely while it is NULL.** |
 
 ### What Polytos Phase 2 did with questions 4 and 5
 
@@ -151,6 +151,107 @@ reading questions 1 to 3: **answering 1, 2 and 3 and not the anchor opens
 weekly member loans of one and two months, and leaves three-, four- and
 five-month loans refused.** The member lending screens say so in those words
 rather than claiming nothing can be approved.
+
+### What Polytos Phase 4 did with questions 7, 8 and 9
+
+The same thing again, and the most consequential version of it: **every one of
+the three is left NULL, and nothing about benefits can be assessed, approved
+or paid while any of them is.** `is_benefits_enabled` is a generated column
+waiting on exactly those three, and `assess_benefit_claim`,
+`approve_benefit_claim` and `post_benefit_payment` each re-ask the gate at the
+moment they would act.
+
+What Phase 4 *did* build, under those three open questions:
+
+- **Both arms of the cap.** With a cap set, a claim that would exceed what is
+  left of it is refused with `medical_cap_exceeded` rather than trimmed —
+  because whether a benefit may be paid **in part** is itself undecided, and
+  paying the remainder would be inventing a rule in the member's disfavour.
+  The consumption is counted over `assessed`, `approved` and `paid` claims
+  under an advisory lock on the membership, so two claims cannot share one
+  ceiling.
+- **The claim count**, enforced only when it is set.
+- **The waiting period**, measured from `activated_on` and skipped entirely
+  while the column is NULL. Zero and NULL are different answers and the module
+  treats them as such: zero is a decision, NULL is not.
+- **Everything that does not depend on them.** A claim can be recorded, its
+  evidence attached and checked, a beneficiary registered and verified. §6 of
+  the Phase 4 brief is explicit about this, and the reason is practical: a
+  business that could not write down that somebody came in and asked would
+  keep that record on paper.
+
+### A tenth decision Phase 4 found, and five more with consequences in code
+
+The nine are the client's own list and stay nine. Phase 4 needed one more
+answer about the medical benefit, and it is recorded outside them for the
+reason Phase 3's monthly anchor is:
+
+> Does the medical benefit's annual cap and claim count run over the
+> **calendar year**, or over the year from the **member's own enrolment
+> anniversary**?
+
+It lives on `membership_policy_versions.medical_benefit_year_basis`, nullable,
+with both arms implemented in `benefit_policy_year_bounds()` and no default. A
+member admitted in December and again in January has either one year's ceiling
+or two, and nothing in the documents says which.
+
+It is deliberately **not** part of `is_benefits_enabled`, for the reason
+ADR-059 gave for keeping the anchor off the lending gate: it bears on one
+benefit rather than on the activity. Condolence and bereavement claims have no
+annual cap and do not wait on it; only a medical assessment does, and it is
+refused with `medical_year_basis_undecided`. Its consequence is worth stating
+plainly: **answering 7, 8 and 9 and not the year basis opens the condolence
+and bereavement benefits and leaves every medical claim held.** The claim
+screen says so in those words.
+
+Phase 4 also found that this column was not frozen when the other nine are,
+and fixed it — `membership_policy_year_basis_guard` refuses the change once
+the version is approved or anybody is enrolled under it. A member enrolled
+while the rule was open did not agree to the answer somebody writes into it
+afterwards, and that reasoning does not stop at the ninth question.
+
+Five of the "further questions" below now have consequences in code, and each
+is a refusal naming the decision rather than a default:
+
+- **Who is an eligible family member** for the condolence benefit.
+  `beneficiary_relationships.condolence_eligible` is NULL on **every** row,
+  and a condolence claim is held with
+  `relationship_eligibility_undecided` — which names the relationship the
+  member actually claimed, so the decision can be taken on a real case.
+- **What evidence establishes a hospital admission, and who verifies it.**
+  Phase 4 implemented the *shape* of an answer without choosing one: a
+  required admission record and a required invoice, each attached by one
+  person and checked by another, with the object's existence in a private
+  bucket verified by the database. Which documents the business will accept,
+  and whether a Manager is the right checker, remain the client's.
+- **Who may be a registered next of kin, how many, and who authorises a
+  change.** The schema permits several with exactly one primary; a change is a
+  new record that supersedes the old one in the same statement, and
+  `beneficiaries:manage` is what records it. That is a capability, not a
+  procedure, and the procedure is not written.
+- **Does suspension stop savings, stop benefits, or both?** A suspended
+  member's claim is held with `membership_suspended_undecided`. Nothing is
+  refused and nothing is paid.
+- **Is there a monthly meeting attendance obligation, and does missing one
+  affect standing?** Phase 4 records attendance in four answers and attaches
+  **no consequence to any of them** — no cumulative count, no flag, no effect
+  on savings, a loan or a benefit. `tests/unit/meetings.test.ts` asserts that
+  absence, so adding one has to change a test that says it is not there.
+
+### And one question Phase 3 left for Phase 4, which Phase 4 is leaving for the client
+
+> If a bereavement benefit is payable while the member holds an outstanding
+> member loan, is the benefit reduced by what the loan owes, is the pledge
+> released first, or are the two independent?
+
+Phase 4 does not answer it. Where the member owes nothing the question does
+not arise and the claim proceeds; where they owe something the claim is held
+with `bereavement_loan_offset_undecided`, and the message names the number of
+live loans and the principal outstanding. **Nothing is netted, no pledge is
+released and no savings are touched** — the figures are shown to the assessor
+and acted on by nobody. The assessment snapshot carries both figures and a
+CHECK constraint forces the outstanding principal to zero on a bereavement
+snapshot, so a row that implied an answer cannot be written.
 
 ### Two of the further questions below now have consequences in code
 

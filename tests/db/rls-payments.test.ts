@@ -563,6 +563,14 @@ describeDb('payment row level security', () => {
       // in full in tests/db/security.test.ts, which asserts its column list.
       expect(rows.map((row) => row.relname)).toEqual([
         // Phase 10 adds the three ledger views.
+        // Polytos Phase 4 adds five registers and the portal's read. Every
+        // one sets `security_invoker`, which matters most here: a definer view
+        // over `benefit_claims` would hand every member's medical claim to
+        // anybody who could select from it, and a definer view over the
+        // beneficiary register would hand over the payment instructions.
+        'benefit_claim_portal_view',
+        'benefit_claim_register',
+        'benefit_payment_register',
         'branch_cash_position',
         'collections_today',
         'company_identity',
@@ -607,10 +615,13 @@ describeDb('payment row level security', () => {
         // savings support, and member loans with their frozen eligibility
         // evidence beside them — each the one read a dashboard or a panel
         // makes, rather than a function call per member.
+        'meeting_attendance_register',
+        'member_beneficiary_register',
         'member_loan_eligibility',
         'member_loan_register',
         'member_savings_balances',
         'member_savings_contributions',
+        'membership_meeting_register',
         'membership_register',
         // Phase 15. `security_invoker` on both, which is what makes the
         // notification policy — and therefore the per-reader audience — apply

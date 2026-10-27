@@ -122,6 +122,20 @@ export async function publishTestPolicy(options: {
   readonly interestMethod?: 'flat' | 'reducing_balance_monthly' | null;
   readonly savingsToLoanMultiplierBps?: number | null;
   /**
+   * Polytos Phase 4, the three decisions benefits wait on — plus the annual
+   * period, which Phase 4 found and which is not one of the client's nine.
+   *
+   * All four default to **undecided**, for the same reason the lending three
+   * do: a fixture that silently opened benefits would make every test that
+   * depends on them being shut pass for the wrong reason, and there are more
+   * of those than there are tests of benefits themselves. A test that wants
+   * an assessable claim says so, in the test.
+   */
+  readonly medicalAnnualCap?: number | null;
+  readonly medicalClaimsPerYear?: number | null;
+  readonly benefitWaitingPeriodDays?: number | null;
+  readonly medicalYearBasis?: 'calendar_year' | 'enrolment_anniversary' | null;
+  /**
    * Defaults to `active`. Pass `superseded` for a historical version a test
    * needs to point at: `membership_policy_versions_one_active` allows exactly
    * one version in force, so a fixture that wants a second version has to say
@@ -139,11 +153,14 @@ export async function publishTestPolicy(options: {
         medical_benefit_rate_bps, medical_benefit_min_admission_days,
         family_condolence_benefit, member_bereavement_benefit,
         qualifying_months_consecutive, savings_withdrawal_with_active_loan,
-        interest_basis, interest_method, savings_to_loan_multiplier_bps)
+        interest_basis, interest_method, savings_to_loan_multiplier_bps,
+        medical_benefit_annual_cap, medical_benefit_claims_per_year,
+        benefit_waiting_period_days, medical_benefit_year_basis)
      values ($1, $2, (public.business_date() - $3::int), $8,
              pg_catalog.now(), 'test fixture',
              $4, $5, 6, 500, 5, 2, 3, 500, 1, 100000, 200000, $6, $7,
-             $9, $10, $11::int)
+             $9, $10, $11::int,
+             $12::bigint, $13::smallint, $14::smallint, $15)
      returning id`,
     [
       options.version,
@@ -157,6 +174,10 @@ export async function publishTestPolicy(options: {
       options.interestBasis ?? null,
       options.interestMethod ?? null,
       options.savingsToLoanMultiplierBps ?? null,
+      options.medicalAnnualCap ?? null,
+      options.medicalClaimsPerYear ?? null,
+      options.benefitWaitingPeriodDays ?? null,
+      options.medicalYearBasis ?? null,
     ],
   );
   return row.id;

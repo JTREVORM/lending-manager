@@ -1101,6 +1101,24 @@ async function seedMembershipAndSavings() {
   // already enrolled under, which is the whole point of freezing it.
   const MEMBER_MULTIPLIER_BPS = 15_000;
 
+  // Polytos Phase 4. The harness's own illustrative answers to the benefit
+  // rules, and **not** decisions of the business. Three of them have to be
+  // answered or `is_benefits_enabled` stays false and no claim in the harness
+  // could be assessed at all; the fourth, the benefit year, is the tenth
+  // decision §9 of the brief names.
+  //
+  // The cap is deliberately small — two ordinary hospital bills reach it — so
+  // the screen that explains a claim held by the ceiling has a real claim to
+  // explain. The waiting period is 30 days, which is why the memberships are
+  // back-dated below: measured from an activation this morning, every claim in
+  // the harness would be held for that one reason and nine other things would
+  // be hidden.
+  const BENEFIT_ANNUAL_CAP = 150_000;
+  const BENEFIT_CLAIMS_PER_YEAR = 3;
+  const BENEFIT_WAITING_DAYS = 30;
+  const BENEFIT_YEAR_BASIS = 'calendar_year';
+  const BENEFIT_ACTIVATION_DAYS_AGO = 220;
+
   const policyVersion = await one(
     `insert into public.membership_policy_versions
      (version, title, effective_from, status, approved_at, approved_by_label,
@@ -1112,6 +1130,8 @@ async function seedMembershipAndSavings() {
       family_condolence_benefit, member_bereavement_benefit,
       qualifying_months_consecutive, savings_withdrawal_with_active_loan,
       interest_basis, interest_method, savings_to_loan_multiplier_bps,
+      medical_benefit_annual_cap, medical_benefit_claims_per_year,
+      benefit_waiting_period_days, medical_benefit_year_basis,
       notes)
    values
      ('2.0', 'Polytos membership terms (harness)',
@@ -1122,13 +1142,26 @@ async function seedMembershipAndSavings() {
       500, 1, 100000, 200000,
       false, 'allowed',
       'per_month', 'reducing_balance_monthly', $1::int,
+      $2::bigint, $3::int, $4::int, $5,
       'Published by the browser-test harness. Illustrative figures. The '
         || 'interest basis, the interest method and the savings multiplier '
         || 'are the harness''s own illustrative answers and are NOT decisions '
         || 'of the business; the monthly collection anchor is left open, which '
-        || 'is why member loans beyond two months are still refused.')
+        || 'is why member loans beyond two months are still refused. Polytos '
+        || 'Phase 4 adds four more illustrative answers — the medical annual '
+        || 'cap, the claims a member may make in a year, the waiting period '
+        || 'and whether the benefit year runs from January — because '
+        || 'is_benefits_enabled waits on three of them and nothing could be '
+        || 'assessed without them. The profit distribution basis is left open, '
+        || 'so the policy screen still has an undecided rule to name.')
    returning id, version`,
-    [MEMBER_MULTIPLIER_BPS],
+    [
+      MEMBER_MULTIPLIER_BPS,
+      BENEFIT_ANNUAL_CAP,
+      BENEFIT_CLAIMS_PER_YEAR,
+      BENEFIT_WAITING_DAYS,
+      BENEFIT_YEAR_BASIS,
+    ],
   );
 
   /** The first day of the month `back` months before today. */
@@ -1569,6 +1602,546 @@ async function seedMembershipAndSavings() {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Polytos Phase 4: next of kin, benefit claims and meetings
+  //
+  // Everything here goes through the same functions the screens call, as the
+  // same people: the Secretary records and brings the papers, the Manager
+  // checks the papers and assesses, the Owner approves, the Manager pays. Not
+  // one of those steps could be done by another of them —
+  // `verify_benefit_document` refuses the person who attached the document and
+  // `approve_benefit_claim` refuses whoever assessed the claim — so a harness
+  // that used one session throughout would seed data the product cannot
+  // produce, and the screens would be demonstrating controls that were never
+  // exercised.
+  // -------------------------------------------------------------------------
+  const benefits = await (async () => {
+    // The memberships are enrolled this morning, and the waiting period above
+    // is measured from activation. So they are moved back, under the same
+    // owner-level trigger exemption the test fixtures and the demonstration
+    // seeder use — and the result is more coherent rather than less, because
+    // six months of savings deposits on a membership activated today never
+    // made sense either.
+    await q(
+      `alter table public.memberships disable trigger memberships_guard_transition`,
+    );
+    try {
+      await q(
+        `update public.memberships
+            set applied_on = (public.business_date() - $1::int),
+                activated_on = case
+                  when activated_on is null then null
+                  else (public.business_date() - $1::int)
+                end
+          where applied_on > (public.business_date() - $1::int)`,
+        [BENEFIT_ACTIVATION_DAYS_AGO],
+      );
+    } finally {
+      await q(
+        `alter table public.memberships enable trigger memberships_guard_transition`,
+      );
+    }
+
+    // Which relatives a condolence benefit covers is undecided, and the
+    // harness answers it for three of them so one arm of the rule can be seen
+    // working. The label says TEST ONLY because the label is what a reader
+    // sees on the form; every other relationship stays NULL, so a cousin still
+    // produces `relationship_eligibility_undecided`.
+    await q(
+      `update public.beneficiary_relationships
+          set condolence_eligible = true,
+              label = label || ' (harness: treated as eligible)'
+        where key in ('spouse', 'child', 'parent') and condolence_eligible is null`,
+    );
+
+    /** An object in the evidence bucket, so a document can be attached to it. */
+    const putObject = async (membershipId, kind, subject, seed) => {
+      const path = `benefits/${membershipId}/${kind}/${subject}/${seed}.pdf`;
+      await q(
+        `insert into storage.objects (bucket_id, name, metadata)
+         values ('benefit-documents', $1, jsonb_build_object('size', 20480))
+         on conflict (bucket_id, name) do nothing`,
+        [path],
+      );
+      return path;
+    };
+
+    /** Attach the evidence a claim of this type cannot be assessed without. */
+    const attachRequired = async (claimId, membershipId, kinds) => {
+      const ids = [];
+      for (const kind of kinds) {
+        const path = await putObject(membershipId, kind, claimId, `${kind}-harness`);
+        const [row] = await asUser(
+          secretary,
+          `select public.attach_benefit_document(
+                    $1, null, $2, $3, 'application/pdf', 20480,
+                    'Harness evidence') as id`,
+          [claimId, kind, path],
+        );
+        ids.push(row.id);
+      }
+      return ids;
+    };
+
+    // --- The next of kin ---------------------------------------------------
+    //
+    // One verified and one left unchecked. The unchecked one is the state the
+    // register exists to find: a bereavement benefit that cannot be paid, and
+    // nobody discovers it at a convenient moment.
+    const [verifiedBeneficiary] = await asUser(
+      secretary,
+      `select public.register_member_beneficiary(
+                $1, 'Hadija Nakato', 'spouse', '+256772120001', null,
+                'Kalerwe', 'Kampala', 'national_id', 'CM91000001HARN', true, null) as id`,
+      [memberQualified.membershipId],
+    );
+
+    {
+      const path = await putObject(
+        memberQualified.membershipId,
+        'relationship_evidence',
+        'beneficiary',
+        'beneficiary-harness',
+      );
+
+      await asUser(
+        secretary,
+        `select public.attach_benefit_document(
+                  null, $1, 'relationship_evidence', $2, 'application/pdf', 20480,
+                  'Harness relationship evidence')`,
+        [verifiedBeneficiary.id, path],
+      );
+
+      // The Manager, never the Secretary who recorded it: two hands, enforced
+      // in the database rather than by this harness remembering.
+      await asUser(
+        manager,
+        `select public.verify_member_beneficiary(
+                  $1, true, 'relationship_document', $2,
+                  'Checked against the marriage certificate.')`,
+        [verifiedBeneficiary.id, path],
+      );
+    }
+
+    const [pendingBeneficiary] = await asUser(
+      secretary,
+      `select public.register_member_beneficiary(
+                $1, 'Peter Atim', 'child', '+256772120002', null,
+                'Kawempe', 'Kampala', null, null, true, null) as id`,
+      [memberSaving.membershipId],
+    );
+
+    // --- A medical claim paid end to end ----------------------------------
+    //
+    // Four nights, five ward days, four clock days: longer than one day on
+    // every reading, so the measure question does not arise. 5% of 400,000 is
+    // exactly 20,000 — the figure the brief itself quotes.
+    const paidClaim = await (async () => {
+      const [opened] = await asUser(
+        secretary,
+        `select public.open_benefit_claim(
+                  $1, 'medical', null, 'Mulago Specialised Hospital',
+                  (((public.business_date() - 24) + interval '8 hours')
+                     at time zone 'Africa/Kampala'),
+                  (((public.business_date() - 20) + interval '10 hours')
+                     at time zone 'Africa/Kampala'),
+                  400000, null, null, null) as id`,
+        [memberQualified.membershipId],
+      );
+
+      const documents = await attachRequired(opened.id, memberQualified.membershipId, [
+        'hospital_admission',
+        'medical_invoice',
+      ]);
+
+      await asUser(secretary, `select public.submit_benefit_claim($1)`, [opened.id]);
+      await asUser(manager, `select public.begin_benefit_verification($1)`, [opened.id]);
+
+      for (const documentId of documents) {
+        await asUser(
+          manager,
+          `select public.verify_benefit_document($1, true,
+                    'Checked against the admission record.')`,
+          [documentId],
+        );
+      }
+
+      await asUser(
+        manager,
+        `select public.assess_benefit_claim($1,
+                  'Four nights, invoice and admission record both checked.')`,
+        [opened.id],
+      );
+
+      // The Owner, because `approve_benefit_claim` refuses an approval from
+      // whoever assessed — by name as well as by account, so it holds even for
+      // somebody who holds both capabilities.
+      await asUser(
+        owner,
+        `select public.approve_benefit_claim($1, null, 'Approved at the assessed figure.')`,
+        [opened.id],
+      );
+
+      await asUser(
+        manager,
+        `select public.post_benefit_payment($1, 'cash', null, gen_random_uuid())`,
+        [opened.id],
+      );
+
+      return one(
+        `select id, claim_number, approved_amount::text as amount
+           from public.benefit_claims where id = $1`,
+        [opened.id],
+      );
+    })();
+
+    // --- A medical claim assessed and waiting for an approver -------------
+    //
+    // So the approval queue is not empty when an Owner opens it, and so the
+    // browser suite has a claim to approve and pay without first having to
+    // build one.
+    const claimToApprove = await (async () => {
+      const [opened] = await asUser(
+        secretary,
+        `select public.open_benefit_claim(
+                  $1, 'medical', null, 'Nsambya Hospital',
+                  (((public.business_date() - 14) + interval '7 hours')
+                     at time zone 'Africa/Kampala'),
+                  (((public.business_date() - 11) + interval '11 hours')
+                     at time zone 'Africa/Kampala'),
+                  260000, null, null, null) as id`,
+        [memberGapped.membershipId],
+      );
+
+      const documents = await attachRequired(opened.id, memberGapped.membershipId, [
+        'hospital_admission',
+        'medical_invoice',
+      ]);
+
+      await asUser(secretary, `select public.submit_benefit_claim($1)`, [opened.id]);
+      await asUser(manager, `select public.begin_benefit_verification($1)`, [opened.id]);
+
+      for (const documentId of documents) {
+        await asUser(
+          manager,
+          `select public.verify_benefit_document($1, true, 'Checked at the counter.')`,
+          [documentId],
+        );
+      }
+
+      await asUser(
+        manager,
+        `select public.assess_benefit_claim($1, 'Three nights, both documents checked.')`,
+        [opened.id],
+      );
+
+      return one(
+        `select id, claim_number, assessed_amount::text as amount
+           from public.benefit_claims where id = $1`,
+        [opened.id],
+      );
+    })();
+
+    // --- A second claim assessed and waiting ------------------------------
+    //
+    // Two, not one, and the reason is scheduling rather than coverage:
+    // `benefits.write.spec.ts` approves and pays the one above, and
+    // Playwright runs files in parallel across workers — so a read spec
+    // asserting that the approval queue is not empty would pass or fail
+    // depending on which worker got there first. This one is never written
+    // to, which is what makes that assertion stable.
+    const claimAwaiting = await (async () => {
+      const [opened] = await asUser(
+        secretary,
+        `select public.open_benefit_claim(
+                  $1, 'medical', null, 'Kiruddu Hospital',
+                  (((public.business_date() - 18) + interval '9 hours')
+                     at time zone 'Africa/Kampala'),
+                  (((public.business_date() - 15) + interval '12 hours')
+                     at time zone 'Africa/Kampala'),
+                  180000, null, null, null) as id`,
+        [memberBorrowing.membershipId],
+      );
+
+      const documents = await attachRequired(opened.id, memberBorrowing.membershipId, [
+        'hospital_admission',
+        'medical_invoice',
+      ]);
+
+      await asUser(secretary, `select public.submit_benefit_claim($1)`, [opened.id]);
+      await asUser(manager, `select public.begin_benefit_verification($1)`, [opened.id]);
+
+      for (const documentId of documents) {
+        await asUser(
+          manager,
+          `select public.verify_benefit_document($1, true, 'Both documents seen.')`,
+          [documentId],
+        );
+      }
+
+      await asUser(
+        manager,
+        `select public.assess_benefit_claim($1, 'Three nights; invoice checked.')`,
+        [opened.id],
+      );
+
+      return one(
+        `select id, claim_number, assessed_amount::text as amount
+           from public.benefit_claims where id = $1`,
+        [opened.id],
+      );
+    })();
+
+    // --- A condolence claim held on an undecided rule ---------------------
+    //
+    // A cousin. The evidence is complete and checked, the membership is in
+    // good standing, and the claim still cannot be assessed — because nobody
+    // has defined which family members the benefit covers. That is the screen
+    // worth having: a claim held with the decision named rather than a
+    // "not available" nobody can act on.
+    const heldClaim = await (async () => {
+      const [opened] = await asUser(
+        secretary,
+        `select public.open_benefit_claim(
+                  $1, 'family_condolence', (public.business_date() - 9),
+                  null, null, null, null,
+                  'Alice Mugisha', 'cousin', null) as id`,
+        [memberWithdrawn.membershipId],
+      );
+
+      const documents = await attachRequired(opened.id, memberWithdrawn.membershipId, [
+        'family_death_evidence',
+        'relationship_evidence',
+      ]);
+
+      await asUser(secretary, `select public.submit_benefit_claim($1)`, [opened.id]);
+      await asUser(manager, `select public.begin_benefit_verification($1)`, [opened.id]);
+
+      for (const documentId of documents) {
+        await asUser(
+          manager,
+          `select public.verify_benefit_document($1, true,
+                    'Burial programme and the local council letter both seen.')`,
+          [documentId],
+        );
+      }
+
+      return one(`select id, claim_number from public.benefit_claims where id = $1`, [
+        opened.id,
+      ]);
+    })();
+
+    // --- The meetings ------------------------------------------------------
+    //
+    // One held last month with a register, minutes and two action items, and
+    // one still to come. The held one carries a correction, because a register
+    // that could be silently rewritten would not be evidence of anything —
+    // and the correction trail is a screen.
+    // The branch the demonstration members belong to, read from one of them
+    // rather than assumed: `clients_stamp_branch` fills it, and a meeting's
+    // register is its own branch's live memberships, so a meeting convened at
+    // any other branch would have nobody to mark.
+    const meetingBranch = await one(
+      `select c.branch_id as id
+         from public.memberships m
+         join public.clients c on c.id = m.client_id
+        where m.id = $1`,
+      [memberQualified.membershipId],
+    );
+
+    const heldMeeting = await (async () => {
+      const [scheduled] = await asUser(
+        secretary,
+        `select public.schedule_membership_meeting(
+                  $1, 'monthly_general', 'Monthly general meeting',
+                  'The branch hall, Kalerwe',
+                  (((public.business_date() - interval '1 month')::date
+                     + interval '14 hours') at time zone 'Africa/Kampala'),
+                  'Savings for the month, the benefits scheme, and next of kin records.')
+           as id`,
+        [meetingBranch.id],
+      );
+
+      // Marking the first member present is what moves the meeting to `held`:
+      // the status is derived from the register rather than set by hand.
+      const register = [
+        [memberQualified.membershipId, 'present', null],
+        [memberGapped.membershipId, 'present', null],
+        [memberSaving.membershipId, 'apology', 'travel'],
+        [memberWithdrawn.membershipId, 'absent', 'work'],
+        [memberBorrowing.membershipId, 'represented', 'work'],
+      ];
+
+      for (const [membershipId, attendance, reason] of register) {
+        await asUser(
+          secretary,
+          `select public.mark_meeting_attendance($1, $2, $3, $4, null, null)`,
+          [scheduled.id, membershipId, attendance, reason],
+        );
+      }
+
+      // One answer changed afterwards. The previous entry is kept in an
+      // append-only table with the reason beside it.
+      await asUser(
+        secretary,
+        `select public.mark_meeting_attendance($1, $2, 'present', null, null, $3)`,
+        [
+          scheduled.id,
+          memberWithdrawn.membershipId,
+          'Marked absent in error — the member signed the sheet late.',
+        ],
+      );
+
+      await asUser(secretary, `select public.record_meeting_minutes($1, $2, null)`, [
+        scheduled.id,
+        'The meeting reviewed savings for the month, heard that the benefits ' +
+          'scheme is recorded in the system but that four rules remain ' +
+          'undecided — the medical ceiling, the number of claims a year, any ' +
+          'waiting period and which relatives a condolence benefit covers — ' +
+          'and agreed to put all four to the next general meeting. Members ' +
+          'were asked to bring next of kin details.',
+      ]);
+
+      await asUser(owner, `select public.finalise_meeting_minutes($1)`, [scheduled.id]);
+
+      const [done] = await asUser(
+        secretary,
+        `select public.add_meeting_action_item(
+                  $1, 'Visit the three members who have not saved this month.',
+                  $2::uuid, (public.business_date() - 10)) as id`,
+        [scheduled.id, manager.profileId],
+      );
+
+      await asUser(
+        secretary,
+        `select public.update_meeting_action_item($1, 'completed',
+                  'All three visited; two have since paid in.')`,
+        [done.id],
+      );
+
+      // Overdue and still open, so the dashboard has something to chase. An
+      // item with a date somebody has passed is the one thing a minute book
+      // never surfaces.
+      await asUser(
+        secretary,
+        `select public.add_meeting_action_item(
+                  $1, 'Obtain next of kin details from every member.',
+                  $2::uuid, (public.business_date() - 3)) as id`,
+        [scheduled.id, secretary.profileId],
+      );
+
+      return one(
+        `select id, meeting_number from public.membership_meetings where id = $1`,
+        [scheduled.id],
+      );
+    })();
+
+    const upcomingMeeting = await (async () => {
+      const [scheduled] = await asUser(
+        secretary,
+        `select public.schedule_membership_meeting(
+                  $1, 'monthly_general', 'Monthly general meeting',
+                  'The branch hall, Kalerwe',
+                  (((public.business_date() + interval '1 month')::date
+                     + interval '14 hours') at time zone 'Africa/Kampala'),
+                  'The four undecided benefit rules, and the year-end share.') as id`,
+        [meetingBranch.id],
+      );
+
+      return one(
+        `select id, meeting_number from public.membership_meetings where id = $1`,
+        [scheduled.id],
+      );
+    })();
+
+    // A meeting for the browser suite to mark, write up and add an item to.
+    // Separate from the two above for the reason the second assessed claim is
+    // separate: a write spec that marked the upcoming monthly meeting would
+    // move it to `held`, and the read spec asserting "when is the next one"
+    // would then pass or fail depending on worker order.
+    //
+    // `special` rather than `monthly_general`, because one monthly general
+    // meeting per branch per calendar month is the one rule the client's
+    // documents do state and the database enforces it.
+    const meetingToWorkOn = await (async () => {
+      const [scheduled] = await asUser(
+        secretary,
+        `select public.schedule_membership_meeting(
+                  $1, 'special', 'Special meeting on the benefits scheme',
+                  'The branch hall, Kalerwe',
+                  (((public.business_date() + 3) + interval '15 hours')
+                     at time zone 'Africa/Kampala'),
+                  'The four undecided benefit rules.') as id`,
+        [meetingBranch.id],
+      );
+
+      return one(
+        `select id, meeting_number from public.membership_meetings where id = $1`,
+        [scheduled.id],
+      );
+    })();
+
+    // The benefit payments and the General Ledger must agree, to the shilling.
+    // There is no second ledger: `post_benefit_payment` writes one journal
+    // entry through `post_journal`, like every other movement in this system.
+    {
+      const expense = await one(
+        `select
+           (select coalesce(sum(case when reversed_at is null then amount else 0 end), 0)
+              ::bigint from public.benefit_payments)::text as paid,
+           (select coalesce(sum(b.balance), 0)::bigint
+              from public.ledger_account_balances b
+             where b.code in ('5210', '5220', '5230'))::text as ledger`,
+      );
+
+      if (expense.paid !== expense.ledger) {
+        throw new Error(
+          `benefit payments ${expense.paid} do not match the benefits expense ` +
+            `accounts ${expense.ledger}`,
+        );
+      }
+
+      console.log(
+        `benefits: ${paidClaim.claim_number} paid ${expense.paid} both sides; ` +
+          `${claimToApprove.claim_number} and ${claimAwaiting.claim_number} ` +
+          `awaiting approval; ${heldClaim.claim_number} held on an undecided rule`,
+      );
+    }
+
+    return {
+      beneficiaries: {
+        verified: verifiedBeneficiary.id,
+        pending: pendingBeneficiary.id,
+      },
+      benefitClaims: {
+        paid: paidClaim.id,
+        paidNumber: paidClaim.claim_number,
+        paidAmount: Number(paidClaim.amount),
+        toApprove: claimToApprove.id,
+        toApproveNumber: claimToApprove.claim_number,
+        toApproveAmount: Number(claimToApprove.amount),
+        awaiting: claimAwaiting.id,
+        awaitingNumber: claimAwaiting.claim_number,
+        held: heldClaim.id,
+        heldNumber: heldClaim.claim_number,
+      },
+      meetings: {
+        held: heldMeeting.id,
+        heldNumber: heldMeeting.meeting_number,
+        upcoming: upcomingMeeting.id,
+        upcomingNumber: upcomingMeeting.meeting_number,
+        toWorkOn: meetingToWorkOn.id,
+        toWorkOnNumber: meetingToWorkOn.meeting_number,
+      },
+      benefitPolicy: {
+        annualCap: BENEFIT_ANNUAL_CAP,
+        claimsPerYear: BENEFIT_CLAIMS_PER_YEAR,
+        waitingDays: BENEFIT_WAITING_DAYS,
+        yearBasis: BENEFIT_YEAR_BASIS,
+      },
+    };
+  })();
+
   // What the policy in force actually decides, read back from the database
   // rather than counted by hand.
   //
@@ -1693,6 +2266,8 @@ async function seedMembershipAndSavings() {
       activitiesOpen: Number(policyFacts.activities_open),
       activitiesClosed: 5 - Number(policyFacts.activities_open),
     },
+    // Polytos Phase 4.
+    ...benefits,
   };
 }
 

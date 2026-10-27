@@ -248,6 +248,40 @@ export async function deleteTestUsers(): Promise<void> {
     // on nothing. Off, so the teardown does not depend on the order within a
     // statement.
     { table: 'loans', trigger: 'member_loan_release_pledge' },
+    // Polytos Phase 4. Every benefit and meeting table is append-only in
+    // substance: the snapshots, the payments, the corrections and the claims
+    // all refuse DELETE, and most refuse an ordinary UPDATE as well. Each
+    // holds every reference with RESTRICT, for the reason the Phase 2 and
+    // Phase 3 documents do, so all of them are cleared explicitly and before
+    // the memberships, clients, journals and profiles they name.
+    { table: 'member_beneficiaries', trigger: 'member_beneficiaries_no_delete' },
+    { table: 'member_beneficiaries', trigger: 'member_beneficiaries_guard' },
+    { table: 'member_beneficiaries', trigger: 'audit_beneficiary_decided' },
+    {
+      table: 'member_beneficiary_identities',
+      trigger: 'member_beneficiary_identities_no_delete',
+    },
+    { table: 'benefit_claims', trigger: 'benefit_claims_no_delete' },
+    { table: 'benefit_claims', trigger: 'benefit_claims_guard' },
+    { table: 'benefit_claims', trigger: 'audit_benefit_claim_decided' },
+    { table: 'benefit_claims', trigger: 'notify_benefit_claim_transition' },
+    {
+      table: 'benefit_claim_documents',
+      trigger: 'benefit_claim_documents_delete_guard',
+    },
+    { table: 'benefit_claim_documents', trigger: 'audit_benefit_document_checked' },
+    { table: 'benefit_assessment_snapshots', trigger: 'benefit_snapshots_no_delete' },
+    { table: 'benefit_payments', trigger: 'benefit_payments_no_delete' },
+    { table: 'benefit_payments', trigger: 'benefit_payments_guard' },
+    { table: 'benefit_payments', trigger: 'audit_benefit_payment' },
+    { table: 'membership_meetings', trigger: 'membership_meetings_no_delete' },
+    { table: 'membership_meetings', trigger: 'membership_meetings_guard' },
+    { table: 'membership_meetings', trigger: 'audit_meeting_event' },
+    { table: 'membership_meetings', trigger: 'notify_meeting_moved' },
+    {
+      table: 'meeting_attendance_corrections',
+      trigger: 'attendance_corrections_no_delete',
+    },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -288,6 +322,31 @@ export async function deleteTestUsers(): Promise<void> {
     );
     await query(`delete from public.savings_transactions`);
     await query(`delete from public.savings_withdrawal_requests`);
+
+    // Polytos Phase 4, innermost first and all of it before the journals
+    // below: a benefit payment names its journal entry with RESTRICT, and the
+    // claim names the payment, and the snapshot and the documents name the
+    // claim. The beneficiary identity goes before the record it hangs off,
+    // and both go before the memberships further down.
+    await query(`delete from public.meeting_attendance_corrections`);
+    await query(`delete from public.meeting_attendance`);
+    await query(`delete from public.meeting_action_items`);
+    await query(`delete from public.membership_meetings`);
+    await query(`delete from public.benefit_claim_documents`);
+    await query(`delete from public.benefit_assessment_snapshots`);
+    // The claim and its payment reference each other, both with RESTRICT, so
+    // neither table can go first. Unlinking the claim side is the way
+    // through — the same move the paid withdrawal above needs, and possible
+    // only on the claim, because the payment refuses UPDATE as well.
+    await query(
+      `update public.benefit_claims
+          set status = 'approved', payment_id = null
+        where payment_id is not null`,
+    );
+    await query(`delete from public.benefit_payments`);
+    await query(`delete from public.benefit_claims`);
+    await query(`delete from public.member_beneficiary_identities`);
+    await query(`delete from public.member_beneficiaries`);
 
     // Polytos Phase 3, before the savings accounts and the loans they name
     // with RESTRICT.
@@ -434,6 +493,77 @@ export async function asUserScript(
     } finally {
       client.release();
     }
+  }
+}
+
+/**
+ * Run several statements attributed to one user, and **commit** them.
+ *
+ * ## Why this exists, and why it does not switch role
+ *
+ * `asUserScript` rolls back, which is right for an assertion and useless for
+ * a fixture. Polytos Phase 4 is the first phase whose fixtures need committed
+ * state that is *attributed to a particular person*: a verified beneficiary
+ * cannot be produced by one actor, because `verify_member_beneficiary`
+ * refuses a verification from whoever recorded the record. A fixture built
+ * through `query()` runs as the table owner, where `current_profile_id()` is
+ * NULL and `audit_actor_label()` is `system` for both halves — so the
+ * refusal fires and no test can ever hold a verified anything.
+ *
+ * So this sets the JWT subject, which is what `current_profile_id()` and
+ * `audit_actor_label()` read, and deliberately does **not** `set role
+ * authenticated`. The consequence is exactly what a fixture wants and nothing
+ * more:
+ *
+ *   * the session resolves to a named profile, so every capability check and
+ *     every separation-of-duties refusal in the function applies — a fixture
+ *     cannot reach a state the product refuses;
+ *   * Row Level Security does not apply, because the owner is exempt — so a
+ *     fixture is not also a test of the policies.
+ *
+ * Tests of the policies use `asUser`, `asUserScript`, `asAnon` and
+ * `asServiceRole`, all of which do switch role. Using this one to assert an
+ * authorization outcome would prove nothing, which is why its name says
+ * `Committed` rather than `AsUser`.
+ */
+export async function asUserCommitted(
+  user: Pick<TestUser, 'authUserId'>,
+  statements: readonly { readonly sql: string; readonly params?: readonly unknown[] }[],
+): Promise<AttemptResult> {
+  const { getClient } = await import('./db');
+  const client = await getClient();
+
+  try {
+    await client.query('begin');
+    await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+      user.authUserId,
+    ]);
+
+    let last: AttemptResult = { ok: true, rows: [], rowCount: 0 };
+
+    for (const statement of statements) {
+      const result = await client.query(statement.sql, [...(statement.params ?? [])]);
+      last = {
+        ok: true,
+        rows: result.rows as Record<string, unknown>[],
+        rowCount: result.rowCount ?? 0,
+      };
+    }
+
+    await client.query('commit');
+    return last;
+  } catch (error) {
+    await client.query('rollback');
+    const pgError = error as { code?: string; message?: string };
+    return {
+      ok: false,
+      code: pgError.code,
+      message: pgError.message,
+      rows: [],
+      rowCount: 0,
+    };
+  } finally {
+    client.release();
   }
 }
 

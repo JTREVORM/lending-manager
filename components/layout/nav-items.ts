@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   Banknote,
+  CalendarDays,
   Bell,
   ChartColumn,
   Landmark,
@@ -10,6 +11,7 @@ import {
   PiggyBank,
   Receipt,
   Settings,
+  HeartHandshake,
   ShieldAlert,
   UserCircle,
   Users,
@@ -115,6 +117,12 @@ export const NAV_MODULE_IDS = [
   // Loans, because it is the membership programme's lending rather than the
   // whole book.
   'member_loans',
+  // Polytos Phase 4. After Member Lending, because a benefit is the other
+  // thing the membership programme pays out and that is where a reader looks
+  // for it next; and before Loans, because both belong to the programme
+  // rather than to the whole book.
+  'benefits',
+  'meetings',
   'loans',
   'collections',
   'debt',
@@ -418,6 +426,135 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'New Application',
         permission: 'member_loans:create',
         phase: 23,
+      },
+    ],
+  },
+  {
+    // Polytos Phase 4. Benefits.
+    //
+    // Seven entries, and the order is the order a claim moves: the dashboard,
+    // the register, a new claim, the two queues, the payment history and the
+    // beneficiary register.
+    //
+    // The two queues are sidebar entries behind the capability that works
+    // them — `benefits:assess` for the claims waiting to be checked,
+    // `benefits:approve` for the ones waiting for a decision, `benefits:pay`
+    // for the money. That is three different people, and offering any of them
+    // a screen the route guard refuses would teach them the system is
+    // unreliable. The savings module learned this with its withdrawal queue.
+    //
+    // Beneficiaries are here as well as on the membership profile, and the
+    // two answer different questions. The panel on a member's record is where
+    // a nomination is taken. This entry answers "which members have an
+    // unverified one" — and an unverified beneficiary is a bereavement
+    // benefit that cannot be paid, which nobody discovers at a convenient
+    // moment.
+    id: 'benefits',
+    label: 'Member Benefits',
+    icon: HeartHandshake,
+    items: [
+      {
+        href: ROUTES.benefits,
+        label: 'Benefits Dashboard',
+        permission: 'benefits:view',
+        phase: 24,
+      },
+      {
+        href: ROUTES.benefitClaims,
+        label: 'Claims Register',
+        permission: 'benefits:view',
+        phase: 24,
+      },
+      {
+        href: ROUTES.newBenefitClaim,
+        label: 'New Claim',
+        permission: 'benefits:view',
+        requires: ['benefits:claim'],
+        phase: 24,
+      },
+      {
+        // Claims submitted and waiting for somebody to check the documents.
+        href: `${ROUTES.benefitClaims}?status=submitted`,
+        label: 'Awaiting Verification',
+        permission: 'benefits:view',
+        requires: ['benefits:assess'],
+        phase: 24,
+      },
+      {
+        href: ROUTES.benefitApprovals,
+        label: 'Approval Queue',
+        permission: 'benefits:approve',
+        phase: 24,
+      },
+      {
+        href: ROUTES.benefitPayments,
+        label: 'Benefit Payments',
+        permission: 'benefits:pay',
+        phase: 24,
+      },
+      {
+        href: ROUTES.benefitReports,
+        label: 'Benefits Reports',
+        permission: 'benefits:view',
+        phase: 24,
+      },
+      {
+        href: ROUTES.beneficiaries,
+        label: 'Beneficiary Register',
+        permission: 'beneficiaries:view',
+        phase: 24,
+      },
+      {
+        // Who recorded a beneficiary, who verified it, who assessed a claim
+        // and who approved it. The same shape the Clients, Membership and
+        // Savings modules give their own history entries.
+        href: `${ROUTES.audit}?entity=benefit_claim`,
+        label: 'Benefits History',
+        permission: 'audit:view',
+        phase: 24,
+      },
+    ],
+  },
+  {
+    // Polytos Phase 4. Monthly meetings.
+    //
+    // Four entries. The calendar is first because the question this section
+    // is opened with is almost always "when is the next one"; the upcoming
+    // and past views are the two halves of that; and scheduling is behind
+    // `meetings:manage`.
+    //
+    // There is nothing here about standing, attendance thresholds or
+    // consequences, because the client's documents establish none — and the
+    // schema has no column that would support one. See
+    // lib/domain/meetings.ts.
+    id: 'meetings',
+    label: 'Meetings',
+    icon: CalendarDays,
+    items: [
+      {
+        href: ROUTES.meetings,
+        label: 'Meetings Calendar',
+        permission: 'meetings:view',
+        phase: 24,
+      },
+      {
+        href: `${ROUTES.meetings}?status=upcoming`,
+        label: 'Upcoming Meetings',
+        permission: 'meetings:view',
+        phase: 24,
+      },
+      {
+        href: `${ROUTES.meetings}?status=held`,
+        label: 'Past Meetings',
+        permission: 'meetings:view',
+        phase: 24,
+      },
+      {
+        href: ROUTES.newMeeting,
+        label: 'Schedule Meeting',
+        permission: 'meetings:view',
+        requires: ['meetings:manage'],
+        phase: 24,
       },
     ],
   },
