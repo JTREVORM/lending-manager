@@ -30,7 +30,7 @@
  *   bash tests/e2e/harness/stack.sh down
  */
 import { createRequire } from 'node:module';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const require = createRequire(new URL('../package.json', import.meta.url));
@@ -108,12 +108,40 @@ const SCREENS = [
   },
 ];
 
-const executablePath = process.env.E2E_CHROMIUM ?? '/opt/pw-browsers/chromium';
+/**
+ * Where Chromium is.
+ *
+ * Two environments run this, and they put the browser in different places.
+ * The container these screens were authored in has it pre-installed at
+ * `/opt/pw-browsers/chromium`; a CI runner has whatever
+ * `npx playwright install` downloaded, under `~/.cache/ms-playwright`, which
+ * only Playwright itself knows the path to. So: the explicit override, then
+ * the pre-installed binary **if it is actually there**, then Playwright's own
+ * resolution. Passing a path that does not exist fails with `ENOENT` and no
+ * hint, which is how this script quietly became local-only.
+ */
+const preinstalled = process.env.E2E_CHROMIUM ?? '/opt/pw-browsers/chromium';
+const executablePath = existsSync(preinstalled)
+  ? preinstalled
+  : chromium.executablePath();
+
 const browser = await chromium.launch({ executablePath });
 
 const owner = JSON.parse(readFileSync(join(ROOT, '.e2e', 'state', 'owner.json'), 'utf8'));
 
 const timings = [];
+
+/**
+ * Screens that did not answer 200.
+ *
+ * It used to be enough to print these, because a person was watching the
+ * output. Now that CI runs this step and uploads the PNGs as the delivery's
+ * evidence, a silent failure would publish a photograph of an error page as
+ * proof the screen works. So they are counted, and the script exits non-zero
+ * at the end if any were seen — after capturing everything, because the
+ * screenshot of the broken screen is the useful part of the report.
+ */
+const badResponses = [];
 
 for (const viewport of VIEWPORTS) {
   const context = await browser.newContext({
@@ -143,6 +171,9 @@ for (const viewport of VIEWPORTS) {
       samples.push(Date.now() - started);
       if (response?.status() !== 200) {
         console.error(`  ! ${screen.path} returned ${String(response?.status())}`);
+        badResponses.push(
+          `${screen.path} (${viewport.name}) → ${String(response?.status())}`,
+        );
       }
     }
 
@@ -209,6 +240,9 @@ for (const screen of RESTRICTED) {
 
   if (response?.status() !== 200) {
     console.error(`  ! ${screen.path} returned ${String(response?.status())}`);
+    badResponses.push(
+      `${screen.path} (as the ${screen.state}) → ${String(response?.status())}`,
+    );
   }
 
   const file = join(OUT, `${screen.name}-desktop.png`);
@@ -240,3 +274,10 @@ console.log(
         .map((row) => `${row.screen}/${row.viewport}`)
         .join(', ')}`,
 );
+
+if (badResponses.length > 0) {
+  console.error('');
+  console.error(`  ${String(badResponses.length)} screen(s) did not answer 200:`);
+  for (const row of badResponses) console.error(`    ${row}`);
+  process.exit(1);
+}

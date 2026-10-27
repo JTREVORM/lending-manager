@@ -220,6 +220,38 @@ jobs:
           source <(bash tests/e2e/harness/stack.sh env)
           npx playwright test
 
+      # ----------------------------------------------------------------
+      # The delivery evidence for Polytos Phase 4.
+      #
+      # `scripts/capture-benefit-screens.mjs` photographs nineteen screens at
+      # four viewports, plus two screens that need a role other than the
+      # Owner, and writes a timing table beside them. It asserts nothing — the
+      # assertions are the suite above — and it writes no data, so it is safe
+      # here, after the tests, on the same seeded stack.
+      #
+      # It runs in CI rather than locally because it needs the real PostgREST
+      # binary and a Chromium, and the authoring container could fetch
+      # neither. `if: success()` because a screenshot taken after a failing
+      # suite would be evidence of nothing; the Playwright artifact below
+      # covers that case instead. It reuses the storage states the suite's
+      # `auth.setup.ts` wrote, which is why it cannot run before it.
+      - name: Capture the Phase 4 screens
+        if: success()
+        run: |
+          source <(bash tests/e2e/harness/stack.sh env)
+          node scripts/capture-benefit-screens.mjs
+
+      - name: Upload the Phase 4 screens
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-phase-4-screens
+          # The PNGs and `timings.json` only — never `.e2e/state/`, which
+          # holds the harness's session cookies.
+          path: .e2e/shots/benefits/
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Tear down the stack
         if: always()
         run: bash tests/e2e/harness/stack.sh down || true
