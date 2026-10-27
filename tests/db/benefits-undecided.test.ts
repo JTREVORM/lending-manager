@@ -275,8 +275,16 @@ describeDb('the tenth decision is frozen like the other nine', () => {
   it('allows it on a draft nobody has approved or been enrolled under', async () => {
     // The other side of the same rule, inside a transaction that is always
     // rolled back: a version cannot be deleted once it exists — the no-delete
-    // trigger says so — and a suite that left an approved `46.0` behind would
+    // trigger says so — and a suite that left an approved version behind would
     // fail on its second run against the same database.
+    //
+    // `947.0` and day 947, far outside the band every other suite draws from.
+    // The `db` project runs its files in parallel against one database, and
+    // both `version` and `effective_from` are unique — so a number another
+    // suite happens to hold makes this test fail for a reason that has
+    // nothing to do with what it is testing. CI found exactly that: `46.0`
+    // belongs to `meetings.test.ts`, which had not started yet when this ran
+    // locally.
     const outcome = await inRollbackTransaction(async (client) => {
       const draft = await client.query<{ id: string }>(
         `insert into public.membership_policy_versions
@@ -286,8 +294,8 @@ describeDb('the tenth decision is frozen like the other nine', () => {
             member_loan_weekly_cadence_max_months, non_member_loan_max_term_months,
             medical_benefit_rate_bps, medical_benefit_min_admission_days,
             family_condolence_benefit, member_bereavement_benefit)
-         values ('46.0', 'A draft, for the year-basis freeze test',
-                 (public.business_date() - 879), 'draft',
+         values ('947.0', 'A draft, for the year-basis freeze test',
+                 (public.business_date() - 947), 'draft',
                  5000, 50000, 6, 500, 5, 2, 3, 500, 1, 100000, 200000)
          returning id`,
       );
