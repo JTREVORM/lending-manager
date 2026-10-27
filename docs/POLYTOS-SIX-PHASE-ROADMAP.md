@@ -230,10 +230,19 @@ already open need handling deliberately at that point. See
 
 ---
 
-## Phase 4 — Membership benefits and meetings
+## Phase 4 — Membership benefits and meetings — **built**
 
-**Blocked on client decisions 7, 8 and 9**, and on the verification and
-approval steps the documents require but do not describe.
+**Built, and still blocked on client decisions 7, 8 and 9** — which is the
+state the phase was designed to be deliverable in. Every arm of every rule is
+implemented, nothing is defaulted, and while any of the three is open
+`is_benefits_enabled` is false and no claim can be assessed, approved or
+paid. What *is* open is recording a claim, attaching its evidence, checking
+that evidence, and registering and verifying next of kin — because a business
+that could not write down that somebody came in and asked would keep that
+record on paper.
+
+See `docs/POLYTOS-BENEFITS.md` and `docs/POLYTOS-MEETINGS.md` for the modules,
+and `docs/POLYTOS-PHASE-4-DELIVERY-REPORT.md` for what was verified.
 
 **Delivers.**
 
@@ -267,6 +276,40 @@ above the annual cap is refused or part-paid, per the client's answer. A
 bereavement claim is refused where no next of kin is registered. The
 `membership:view_sensitive` matrix is asserted per role, and a borrower
 reads their own beneficiaries and nobody else's.
+
+**What was delivered against that, and the four places it differs.**
+
+1. **"Refused or part-paid, per the client's answer"** became *held*. A claim
+   that would exceed what is left of the cap is refused with
+   `medical_cap_exceeded` and not trimmed, because whether a benefit may be
+   paid in part is itself undecided — paying the remainder would be inventing
+   a rule in the member's disfavour. Both arms of the cap are implemented; the
+   third behaviour nobody asked for is not invented.
+
+2. **"A borrower reads their own beneficiaries"** became *a borrower reads
+   none*. A beneficiary record is a payment instruction and the policy on
+   `member_beneficiaries` has a member clause, but `member_beneficiary_
+   identities` — the names and telephone numbers — is a separate table behind
+   `membership:view_sensitive`, because Row Level Security cannot withhold a
+   column. A member sees their own claims through
+   `benefit_claim_portal_view`, whose column list is the disclosure policy.
+
+3. **Membership cards shipped in Phase 2**, not here: Phase 2 needed a card
+   number for the savings counter. This phase left that table alone.
+
+4. **Three decisions were found that the roadmap did not name**: the benefit
+   year (calendar or anniversary — the tenth policy question), which relatives
+   the condolence benefit covers, and whether an outstanding member loan
+   reduces a bereavement benefit. All three are refusals naming the decision,
+   and all three are recorded in
+   `docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md`.
+
+**And two tightenings to earlier phases**, both in the same direction:
+`medical_benefit_year_basis` is now frozen on an approved policy version like
+the other nine undecided rules, and three Phase 4 reporting functions had
+their capability checks moved inside the `auth.uid() is null` exemption that
+`savings_summary` states — the trusted path holds no capability to check, and
+could not read its own figures.
 
 ---
 

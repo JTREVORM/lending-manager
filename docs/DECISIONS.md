@@ -2684,3 +2684,422 @@ product that exceeds it. `loan_products_within_business_rules` carries the
 reason in its own comment, and `tests/db/loan-products.test.ts` asserts both
 arms — that an ordinary product is held to three months and a member product
 is held to five — so the exemption cannot be widened by accident.
+
+---
+
+## ADR-061 — The payee is frozen at assessment and read back at payment
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** A member bereavement benefit of UGX 200,000 is payable to the
+member's registered next of kin. Three facts about that sentence make it the
+most dangerous payment in the system: the member is dead and cannot confirm
+anything, the recipient is a third party the business may never have met, and
+the amount is fixed so nobody will query it.
+
+The obvious implementation passes the payee to the posting function, from the
+form the payer is looking at. The beneficiary record is right there; reading
+it at payment time is one join.
+
+**Decision.** `benefit_assessment_snapshots` copies the beneficiary's id,
+number, name, telephone number, relationship and verification moment at
+assessment. `post_benefit_payment(claim, method, reference, key)` takes **no
+recipient parameter** and reads it from that snapshot — not from the claim,
+and not from `member_beneficiaries`. `payBenefitSchema` has no field for one,
+and a unit test asserts the absence.
+
+**Why.**
+
+1. **A payee supplied by the payer can be anybody.** The approver signed for a
+   person; a payment that re-read the live record, or accepted a name, would
+   be made to whatever that record said at the moment the money moved. §11 of
+   the Phase 4 brief names this as the fraud to close, and the only way to
+   close it is for the authorisation to carry its own copy of what was
+   authorised.
+
+2. **Re-reading the live record is not safe even without malice.** A
+   beneficiary record legitimately changes: a member remarries, a child comes
+   of age, a telephone number moves. Each of those is a new record superseding
+   the old one, correctly. A payment authorised against the old record and
+   paid against the new one is a wrong payment nobody intended.
+
+3. **It makes the question answerable later.** "Who did we pay, and why them"
+   is asked years afterwards, and the snapshot answers it from the row the
+   decision was taken on rather than from a reconstruction.
+
+**Consequences.** A beneficiary record cannot be changed while a bereavement
+claim on that membership is live — `member_beneficiaries_guard` refuses it —
+because the thing the approver is deciding on must not move under the
+decision. A superseded record keeps its details **and its verification**, so a
+payment made against it stays explicable; there is no "only the active record
+is verified" invariant, and an earlier draft of this phase had one until it
+made the supersession path impossible.
+
+The snapshot also carries the payee's name, which makes the snapshot table
+sensitive: its select policy needs `membership:view_sensitive` for a
+bereavement row, so a Secretary/Treasurer who may run the claim register
+cannot read the assessment behind a bereavement claim. That is correct — an
+assessment snapshot is an officer's working record — and it is why the
+benefits payment register also withholds a beneficiary-payee row from a reader
+without that capability, rather than showing a name they should not have seen.
+
+---
+
+## ADR-062 — Three readings of "longer than one day", and a refusal rather than a choice
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** The medical benefit requires a hospital admission "longer than
+one day". The documents do not say what is being counted, and for a stay of
+about a day three readings disagree:
+
+| Monday 22:00 → Tuesday 09:00 | |
+| --- | --- |
+| nights slept | 1 |
+| days on a ward chart | 2 |
+| whole days elapsed by the clock | 0 |
+
+Every one of those is what somebody means by "a day" in some context. A ward
+chart says two; a lawyer reading "longer than one day" says the clock; the
+member says they spent a night in hospital.
+
+**Decision.** All three are computed at submission and stored on the claim.
+The assessment requires **every** reading to exceed the threshold, refuses
+with `admission_too_short` when none does, and **holds** the claim with
+`admission_measure_undecided` when they disagree.
+
+**Why.**
+
+1. **Picking one decides the rule silently, in a direction that has a price.**
+   The night count is the most generous of the three on a short stay and the
+   least generous on a long one. Choosing it would move money on every
+   borderline claim, under a rule the business never approved.
+
+2. **Requiring all three is the only reading that is safe in both
+   directions.** A stay that clears every reading qualifies under any
+   interpretation the client might choose, so paying it cannot be wrong. A
+   stay that clears none fails under all of them, so refusing it cannot be
+   wrong. Only the middle needs a decision, and that is exactly the set that
+   is held.
+
+3. **It is the shape Phase 3 already used.** Four interest basis/method
+   combinations: three implemented, the fourth raising because it does not
+   describe a calculation. Implement every arm, refuse the one that is not an
+   answer, default nothing.
+
+**Consequences.** The three readings are **stored** rather than recomputed, so
+a change in how the code counts can never alter what was assessed — and the
+assessment snapshot carries them again, with a CHECK constraint that they
+cleared the threshold the snapshot records.
+
+The screens show all three, on the form and on the claim, because the person
+entering the claim is the only one who can still go back to the hospital and
+ask for exact times. A claim whose readings disagree is far better learned at
+the counter than in a week.
+
+It also means the benefit has a fifth undecided rule that nobody listed: not
+the cap, the count, the period or the year basis, but *what a day is*. It is
+recorded in `docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md` with the other
+consequences, and the refusal names it.
+
+---
+
+## ADR-063 — A beneficiary's name lives in its own table, because policies are row-level
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** `member_beneficiaries` records who a member's bereavement benefit
+is payable to. Most of that record — the relationship, whether it is the
+primary, when it was registered, whether anybody has verified it — is what a
+Secretary/Treasurer needs to work the register. The name and the telephone
+numbers are different: they are the business's **payment instruction**, and
+they identify a third party who has consented to nothing.
+
+The capability that guards sensitive membership detail is
+`membership:view_sensitive`, held by a Manager and an Owner. So the
+requirement is: one table, two sensitivities.
+
+**Decision.** Two tables. `member_beneficiaries` holds everything a register
+needs, and `member_beneficiary_identities` holds the name, both telephone
+numbers, the village, the district and the identity document, behind a policy
+requiring `membership:view_sensitive` or the member's own identity.
+
+**Why.**
+
+1. **Row Level Security is row-level.** There is no `GRANT SELECT (column)`
+   that interacts with a policy, and a policy cannot withhold a column from a
+   row it permits. Column privileges exist, but they are granted per role
+   rather than per predicate — and the predicate here is "this membership's
+   own record, or a caller holding a capability".
+
+2. **The application cannot be the boundary.** A view that omitted the columns
+   would be bypassed by anybody reading the table directly over PostgREST,
+   which is exactly the audience the policies exist for.
+
+3. **Phase 1 already made this choice once.** `client_identities` holds the
+   National Identification Number for the same reason, and a reader who has
+   met that pattern will recognise this one. A second mechanism for the same
+   problem would be two things to get right.
+
+**Consequences.** `UPDATE` and `DELETE` on the identities table are refused
+outright by a trigger: a payment instruction is superseded, never edited. A
+change is a new beneficiary record with a new identity row, and the old one
+keeps its own.
+
+The duplicate-record rule had to move. "The same person registered twice"
+cannot be a unique index on a name the table no longer holds, so
+`member_beneficiaries` carries `identity_digest` — a SHA-256 of the
+normalised name and telephone number, computed by the registration function —
+and the partial unique index is over that. The digest is one-way, so it
+enforces the rule without reintroducing the data it was built to withhold.
+
+The data module reflects the split rather than hiding it: `listBeneficiaries`
+returns no name at all, and `getBeneficiaryIdentity` is a second read that
+returns `null` for a caller without the capability. One component renders "a
+verified spouse, registered on 4 October" for a counter and the name for a
+supervisor, and neither case is a branch in the data layer.
+
+---
+
+## ADR-064 — A capability check is a statement about a session, so it sits inside the trusted-path exemption
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** Three Phase 4 functions aggregate across members and therefore
+have to run as the owner: `medical_benefit_consumed`, `benefit_summary` and
+`benefit_expense_by_type`. A `SECURITY DEFINER` function has no policies
+applied to it, so each names its capability explicitly — the shape ADR-057
+established for a function that reports the business rather than a row.
+
+Each was first written as:
+
+```sql
+if not public.user_has_permission('benefits:view') then
+  raise exception 'permission denied for benefit summary' using errcode = '42501';
+end if;
+```
+
+Every test passed, because every test ran as a signed-in user.
+
+**Context that was missed.** `auth.uid()` is NULL for a migration, for
+`service_role` and for the test harness — none of which hold a capability to
+check. `user_has_permission` therefore returns false for all of them, and the
+gate refused the trusted path. A maintenance read of `benefit_claim_
+eligibility` could not run at all, and the demonstration seeder's own
+reconciliation step hit it.
+
+**Decision.** A capability check in a definer function is written as
+
+```sql
+if auth.uid() is not null
+   and not public.user_has_permission('benefits:view') then
+```
+
+which is what `savings_summary` has done since Phase 2.
+
+**Why.** The distinction is between two kinds of rule, and this project
+already states it: **rules binding every caller go above the trusted-path
+exemption, and rules about a session go inside it.** "A snapshot cannot
+contradict the policy it claims to follow" binds `service_role` too, and sits
+above. "Does this person hold `benefits:view`" is meaningless without a
+person, and sits inside.
+
+Writing it the other way does not make anything safer. `service_role` can read
+every one of those tables directly; a gate that refuses it merely makes the
+definer function less useful than the privilege the caller already has.
+
+**Consequences.** Three functions changed, and the Phase 2 precedent is now
+cited in each of their comments so the next one is written correctly the first
+time. The defect was found by the demonstration seeder rather than by a test,
+which is itself worth recording: the seeder runs on the trusted path and the
+suites do not, so it exercises a caller nothing else does.
+
+---
+
+## ADR-065 — The tenth undecided rule is frozen like the other nine
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** `membership_policy_versions_guard` freezes every contractual
+column the moment a version is approved or anybody is enrolled under it,
+including the nine columns holding the client's undecided questions. The
+reason it gives is that a member enrolled while a question was open did not
+agree to the answer somebody writes into it afterwards.
+
+Phase 4 added a tenth such column, `medical_benefit_year_basis`, and did not
+add it to that list.
+
+**Decision.** `membership_policy_year_basis_guard`, a separate `BEFORE UPDATE`
+trigger on the same table, refuses a change to that column once the version is
+approved or anybody is enrolled under it.
+
+**Why a separate trigger rather than the existing function.** Replacing
+`membership_policy_versions_guard` from a Phase 4 migration means copying its
+140 lines into that migration, where the copy becomes the definition. The next
+person to change the rule changes the Phase 1 file, the two disagree, and
+which one wins depends on migration order. The rule this adds **composes**
+with the existing one rather than qualifying it, so it is stated once, in the
+migration that introduces the column it is about.
+
+**Why it is frozen at all**, when the column is deliberately *not* part of
+`is_benefits_enabled`: the two questions are different. The gate asks "does
+this version open benefits", and the year basis bears on one benefit rather
+than on the activity — so it stays off the gate for the reason ADR-059 kept
+the monthly anchor off the lending gate. The freeze asks "may a term the
+member is held to be changed underneath them", and the answer does not depend
+on how many benefits the term touches. A cap measured over the calendar year
+and one measured over the enrolment anniversary give a member admitted in
+December either one year's ceiling or two, which is as material as any of the
+nine.
+
+**Consequences.** Deciding the benefit year means publishing a new policy
+version and re-accepting it, exactly as deciding the cap does. The
+demonstration seeder and the browser harness therefore publish their own
+versions rather than answering the question on one already in force — which
+they had to do anyway, because only one version may be in force and a savings
+account is frozen to the version it was opened under.
+
+---
+
+## ADR-066 — A document existing is not a fact established
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** A medical claim needs "evidence verification and approval", in the
+client's words. The documents do not say what the evidence is or who checks
+it, and the obvious implementation is a documents table with a required-kinds
+list: a claim with an admission record and an invoice attached is a claim with
+its evidence.
+
+**Decision.** Every attached document arrives `unchecked`.
+`assess_benefit_claim` counts only documents whose `verification_status` is
+`verified`, and `verify_benefit_document` refuses a check from whoever
+attached the document.
+
+**Why.**
+
+1. **Counting uploads measures diligence nobody performed.** A claim can be
+   fully documented and entirely unexamined, and that is the state an
+   evidence workflow most often degrades into: the required-kinds list becomes
+   a checklist somebody satisfies by attaching files. §12 of the Phase 4 brief
+   names it, and it is the commonest way this kind of feature becomes
+   decorative.
+
+2. **Two hands, as everywhere else in this system.** The person who brings a
+   document in is not the person who attests to it, for the same reason the
+   person who prepares a withdrawal is not the person who decides it.
+
+3. **The object has to exist.** `attach_benefit_document` refuses a path
+   naming a file nobody uploaded, because a metadata row pointing at nothing
+   is the purest form of the same failure: the claim looks documented and there
+   is nothing to look at. The path is checked against the bucket, and against
+   the membership and claim its own path segments name.
+
+**Consequences.** Verification is only possible while the claim is under
+verification — a conclusion about evidence on a claim nobody is working on is
+not a conclusion — so the application attaches documents while the claim is a
+draft and checks them after it is picked up. The two acts are separated by two
+states as well as by two people.
+
+Refusing a document requires a reason and accepting one does not. The
+asymmetry is deliberate: "I looked at this and it is what it says it is" needs
+no essay, while "I am not accepting this" has to reach whoever will have to
+produce a replacement, and a refusal with no reason is a dead end for the
+member.
+
+The one `DELETE` grant in the phase is a document nobody has checked, on a
+claim nobody has decided. A mis-attached file on a draft is something people
+need to undo; evidence an officer acted on is part of the record.
+
+---
+
+## ADR-067 — A meeting's status comes from its register
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** A meeting is scheduled, and then it happens. The straightforward
+implementation gives somebody a control: a "mark as held" button, or a status
+field on the editing form.
+
+**Decision.** There is no such control. `mark_meeting_attendance` moves a
+meeting from `scheduled` to `held` when the first member is marked present,
+and `cancel_membership_meeting` refuses a meeting that has any attendance at
+all — checking the register **before** it checks the status, so the refusal
+reads "people attended, so it happened" rather than "it is already held".
+
+**Why.**
+
+1. **Two statements about one afternoon will disagree.** A meeting with a
+   register and a `scheduled` status is a contradiction somebody has to
+   notice and reconcile, and the reconciliation will not happen: whoever
+   marked the register has moved on, and the dashboard counting "meetings
+   held" is already wrong.
+
+2. **The register is the evidence.** What makes a meeting a meeting is that
+   members came, and the system knows that. Asking a person to assert it
+   separately is asking them to restate something the data already says.
+
+3. **It makes cancellation safe.** A cancelled meeting that people attended
+   would be a record saying the afternoon did not happen, over the top of
+   five rows saying who was there.
+
+**Consequences.** A meeting nobody attended and nobody cancelled stays
+`scheduled` for ever. That is accepted, and it is honest: nothing in the
+system knows whether it happened, and inventing a "probably held, nobody
+marked it" state would be a guess rendered as a fact. The meetings list shows
+it, the register is empty, and somebody can mark it late.
+
+`postponed` exists in the status vocabulary and nothing writes it, because the
+client's documents describe no deferral-without-a-date process. It is in the
+CHECK constraint so that adding one later does not need a migration to widen
+a constraint under live rows, and `meetingMayBeMoved` treats it as
+unmovable — which is the safe reading until somebody defines it.
+
+---
+
+## ADR-068 — Attendance is recorded and carries no consequence
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** The membership programme meets monthly, and the system records
+who came. The question immediately behind that is what missing a meeting
+costs a member, and it is a question the client's documents do not touch:
+there is no fine, no warning, no effect on savings, no effect on eligibility
+for a loan or a benefit.
+
+Every instinct in a system like this pushes towards supplying one. An
+attendance rate is a number, and a number on a screen invites a threshold.
+
+**Decision.** Nothing in the module maps an attendance answer onto a
+consequence. No cumulative count of absences, no flag, no eligibility input,
+no colour that reads as a failure. `apology` and `represented` are rendered as
+information rather than as warnings, and the attendance rate is shown as a
+figure with no target beside it.
+
+**Why.**
+
+1. **A consequence is a policy, and this one would be a severe policy.**
+   "Missing three meetings affects your standing" is the kind of rule that
+   ends with a member refused a benefit they were entitled to, and it would
+   have been invented by an interface.
+
+2. **A number with a threshold is a decision even when nobody writes the
+   threshold down.** Colouring 56% red tells every reader that 56% is bad. The
+   figure is useful; the judgement is not ours.
+
+3. **`apology` exists precisely to avoid implying one.** A member who sent
+   word is not in the same position as one who did not, and the register can
+   say so without saying what either position costs.
+
+**Consequences.** `tests/unit/meetings.test.ts` asserts the absence — that no
+label in the module contains the words penalty, fine, suspend, warning or
+strike, and that nothing exported maps an answer to a score — so adding a
+consequence has to change a test that says there isn't one. The browser suite
+asserts the same thing on the rendered page.
+
+"Is there a monthly meeting attendance obligation, and does missing one affect
+standing?" is on the open-questions list in
+`docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md`. When it is answered, the place
+to implement it is a new function reading `meeting_attendance`, not a column
+on the attendance row — because the answer will be about a period, not about
+one meeting.
