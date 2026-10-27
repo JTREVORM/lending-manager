@@ -63,7 +63,7 @@ capabilities and the full role matrix), `tests/db/schema.test.ts`,
 
 ---
 
-## 2. The nine defects these tests, this build and CI found
+## 2. The eleven defects these tests, this build and CI found
 
 Each of these was found by writing the test or running the seeder, not by
 reading the code. Each was fixed in the layer that owned it.
@@ -191,12 +191,57 @@ dozen times, now named — applied to the twelve Phase 4 fields a form can leave
 blank. Both unit suites now parse the blank string field by field, as a form
 sends it, and assert the rules that must survive it. ADR-069 records the rule.
 
-**What this says about the suite.** Three defects, three screens, zero
-overlap: one was a database request, one a React boundary, one a form
-contract. None was reachable from a type, a constraint or a parsed object.
+### The two the second run found
+
+Those three fixes took the browser job from 30 failures to 3, and the
+remaining three specs were two more defects.
+
+### 2.10 A marked attendance row never collapsed
+
+`MemberRow`'s one button reads **Mark** when there is no answer, **Close**
+while the editor is open, and **Change** once it is shut. Recording an answer
+left the editor open — so the row showed a recorded answer *and* the controls
+for giving one, "Change" was never reachable at all, and somebody marking
+seven members in turn had a dead form sitting above each next name.
+
+The spec that found it is the one that corrects a register, and it could not
+reach the correction. Fixed by closing the row on a successful record, and
+only on a successful one: a refusal's message is rendered inside that form.
+
+### 2.11 The assignee list was read as empty when it is the caller's own record
+
+`profiles_select_self_or_directory` is named after what it does — your own
+row, or the whole directory if you hold `users:view`. Phase 4 read it as "a
+Secretary/Treasurer gets nothing", so `MeetingActionsPanel` carried a sentence
+saying the staff list could not be read, and a spec asserted that sentence.
+
+What a Secretary actually gets is one name: their own. So the panel was
+presenting a list of one as if it were the staff list, and the explanation it
+had for the restricted case was unreachable.
+
+The panel is now **told** whether the caller holds the directory capability
+rather than inferring it from the length of the list — a directory of one is a
+real possibility in a new branch, and a sentence that was wrong in that case
+would be worse than none — and the select carries a hint saying the list is
+limited to the records the caller may read. The spec asserts that, and the one
+name, instead of the wrong premise.
+
+This one is worth separating from the other four: the code did what it was
+written to do, and what was wrong was a reading of a Phase 1 policy. No type,
+constraint or unit test can catch a mistaken belief about an RLS predicate.
+Only a session as that role, against that policy, can.
+
+**What this says about the suite.** Five defects across five screens, with no
+overlap at all: a database request, a React boundary, a form contract, a piece
+of component state, and a misread security policy. None was reachable from a
+type, a constraint or a parsed object; three of the five were invisible to
+every tier below the browser.
+
 Phases 1–8 shipped 2,584 green unit tests over three defects only a real
-browser could see; Phase 4 has now done the same thing, which is the case for
-the browser job being mandatory rather than advisory.
+browser could see. Phase 4 shipped 2,558 green unit tests, 1,761 green
+database tests and a clean production build over five more. That is the case
+for the browser job being mandatory rather than advisory, and it is the reason
+this section is in the report rather than in a commit message.
 
 ---
 

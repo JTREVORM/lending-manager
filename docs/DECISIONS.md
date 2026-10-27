@@ -3219,3 +3219,54 @@ It does not replace the browser suite. It would not have caught either of
 the other two defects in the same CI run — a function passed to a Client
 Component, and a schema that refuses a blank optional field — because neither
 is a column.
+
+---
+
+## ADR-071 — A capability is checked, never inferred from the shape of what a read returned
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** `MeetingActionsPanel` needed to explain why the list of people an
+action item could be assigned to was short. It decided from the list itself:
+length zero meant "you may not read the staff directory", and anything else
+meant the list was complete.
+
+Both halves were wrong. `profiles_select_self_or_directory` returns the
+caller's own row to somebody without `users:view` — the policy is named after
+exactly that — so a Secretary/Treasurer gets one name rather than none, the
+explanation never appeared, and a list of one was presented as the staff
+directory. A browser spec asserting the unreachable sentence is what found it.
+
+The inference is also unsound in the other direction. A directory of one is a
+real state: a new branch with a single account. A panel that read that as "you
+have restricted permissions" would be telling an Owner something false about
+their own access.
+
+**Decision.** Where a screen explains *why* it is showing what it is showing,
+the capability is checked on the server and passed in as its own prop. The
+page computes `contextCan(context, 'users:view')` and hands it to the panel.
+The data's shape is never read as evidence about the reader's permissions.
+
+**Why.**
+
+1. **Row Level Security filters; it does not report.** A policy returns the
+   rows a caller may see. Nothing in the result distinguishes "there is one"
+   from "you may see one of several", and a predicate can change without the
+   result shape changing at all.
+
+2. **The two facts have different owners.** What is in the list is a question
+   for the database. What the reader is allowed to see is a question for
+   `lib/permissions`. Deriving the second from the first couples a sentence on
+   a screen to an RLS predicate nobody editing that screen will read.
+
+3. **It is the cheaper check.** The capability is already in the request
+   context — `guardPermission` put it there. There is no extra query.
+
+**Consequences.** `listMeetingAssignees` still returns only what the caller may
+read, and still does not reach around the policy with a privileged client:
+"who works here" is a staff directory question and `users:view` is the
+capability that answers it. What changed is that the panel no longer guesses
+which of the two lists it has.
+
+The empty-list branch is kept as the fallback it actually is, reworded from a
+claim about permissions to a statement about the read.

@@ -407,7 +407,7 @@ upgrade + financial regression            28 of 28 identical
 browser suite                              44 new specs
 ```
 
-`docs/POLYTOS-PHASE-4-TEST-REPORT.md` has the detail, including the nine
+`docs/POLYTOS-PHASE-4-TEST-REPORT.md` has the detail, including the eleven
 defects these tests found and what was done about each.
 
 The six skipped tests are `tests/integration/bundle.test.ts`, which measures
@@ -422,13 +422,16 @@ not fetch one — the download was refused by the sandbox, twice. The 44 new
 specs therefore ran for the first time in CI, **and the first run failed 30 of
 832 specs** over three real defects: a PostgREST column that does not exist, a
 function passed from a Server Component to a Client Component, and a form
-schema that refused two fields the form labels optional.
+schema that refused two fields the form labels optional. The second run failed
+3 of 838 over two more: an attendance row that never collapsed, so a
+correction could not be started, and a misread Phase 1 RLS policy that had the
+assignee list presenting one name as the whole staff directory.
 
-All three are fixed, each with a test that would now catch it, and all three
-are written up in §2.7–2.9 of the test report. They are recorded here rather
-than quietly repaired because they are the answer to a fair question about
-this delivery: every other tier was green at the moment that build had three
-500s in it.
+All five are fixed, each with a test that would now catch it, and all five are
+written up in §2.7–2.11 of the test report. They are recorded here rather than
+quietly repaired because they are the answer to a fair question about this
+delivery: every other tier of verification was green at the moment that build
+had three 500s in it.
 
 ### Screenshots
 
