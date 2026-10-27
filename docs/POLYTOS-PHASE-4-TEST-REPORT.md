@@ -2,9 +2,12 @@
 
 Membership benefits, claims, beneficiaries and monthly meetings.
 
-**Everything in this report was run on the commit it names, against a real
-PostgreSQL with every migration applied.** Nothing is asserted from reading
-the code, and no figure below was typed from memory.
+**Every figure in this report comes from CI run
+[40492198111](https://github.com/JTREVORM/lending-manager/actions/runs/40492198111)
+on commit `7aa1d5a`, against a real PostgreSQL with every migration applied —
+and, for the browser line, a real Chromium against the production build.**
+Nothing is asserted from reading the code, and no figure below was typed from
+memory. All three jobs passed; §J of the delivery report has the breakdown.
 
 ```
 typecheck                               clean
@@ -20,7 +23,7 @@ benefit demonstration                      25 passed
 money arithmetic audit                   clean (5 engines, 2 verified exemptions)
 production build                         clean (13 new routes)
 upgrade + financial regression            28 of 28 figures identical
-browser suite                            44 new specs, run in CI (§J)
+browser suite                              838 passed in CI (44 new)
 ```
 
 The six skipped tests are `tests/integration/bundle.test.ts`, which measures
@@ -403,10 +406,14 @@ refused by the sandbox, twice, which is also why the screenshots are taken in
 CI rather than here (§J of the delivery report).
 
 They ran in CI, and the first run **failed 30 specs** over three real defects
-— §2.7 to §2.9 above. That is recorded rather than quietly fixed, because it
-is the only honest answer to "were the browser tests worth writing": every
-other tier of this project's verification was green at the same moment, on a
-build with three 500s in it. §J records the run that passed.
+— §2.7 to §2.9 above — and the second failed 3 over two more, §2.10 and
+§2.11. That is recorded rather than quietly fixed, because it is the only
+honest answer to "were the browser tests worth writing": every other tier of
+this project's verification was green at the same moment, on a build with
+three 500s in it.
+
+**838 specs passed in 15.3 minutes** on the run §J names, desktop and mobile,
+against the production build on a freshly seeded database.
 
 ---
 
@@ -445,6 +452,13 @@ content-type check are asserted against rows in `storage.objects` written by
 the fixtures, which is what the database itself checks. The browser suite does
 not upload a file, because the harness has no storage service behind it — the
 upload path's magic-byte check is covered by a unit test instead.
+
+This is visible in the delivery screenshots: an attached document on a
+beneficiary record reads "This document could not be opened just now",
+because no signed URL can be issued without a storage service. The row, its
+checked state and the policy over it are all real; only the file is not. The
+screen saying so in a sentence rather than throwing is the intended
+behaviour, and §J repeats this so nobody reads the image as a defect.
 
 **Partially covered: the waiting period.** The demonstration seeder sets 30
 days and back-dates its memberships; the refusal itself

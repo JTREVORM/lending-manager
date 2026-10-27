@@ -449,10 +449,12 @@ timing table beside them. §J has the artifact.
 | | |
 | --- | --- |
 | Branch | `claude/eager-hypatia-ub12i1` |
-| Final commit | `b0d600d` |
-| Commits | 7 |
+| Verified commit | `7aa1d5a` |
+| Commits | 15 (this report's own §J fill-in is the fifteenth) |
 | Pull request | **none opened** |
+| Merge | **none** |
 | Deployment | **none** |
+| Hosted Supabase | **untouched** — no Phase 4 migration applied, no seeder run against it |
 
 ### The commits
 
@@ -464,22 +466,77 @@ e92ebc9  feat(polytos): the Phase 4 meeting screens and the member's own view
 8703da5  feat(polytos): the Phase 4 demonstration seeder
 beef9d7  test(polytos): the Phase 4 unit suites and the browser suite
 b0d600d  docs(polytos): the Phase 4 modules, eight ADRs and the test report
+34a0bec  fix(polytos): two CI failures — a version collision and the bundle budget
+908856f  chore(polytos): a capture script for the Phase 4 screens
+1fe95d9  test(polytos): scope the absence assertions to the page, not the shell
+c966859  fix(polytos): three defects the browser suite found, and a test for the class
+46a1725  chore(polytos): capture the Phase 4 screens in CI, where a browser exists
+ba609f1  fix(polytos): the register row stayed open, and the assignee list was misread
+7aa1d5a  docs(polytos): the five defects CI found, and three ADRs for the rules behind them
 ```
+
+The last five are the CI round trips. They are left in the history rather than
+squashed, because §2.7–2.11 of the test report refers to them and a delivery
+that hid its own corrections would be a worse record than one that shows them.
 
 ### CI
 
-Run: https://github.com/JTREVORM/lending-manager/actions/runs/40460437160
+**Run: https://github.com/JTREVORM/lending-manager/actions/runs/40492198111**
+— commit `7aa1d5a`, all three jobs green.
 
-| Job | Result |
-| --- | --- |
-| checks, unit/integration, build | _pending at the time of writing_ |
-| database (real PostgreSQL) | _pending_ |
-| browser E2E (production build, fresh seed) | _pending_ |
+| Job | Result | What it ran |
+| --- | --- | --- |
+| checks, unit/integration, build | **success** | typecheck, lint, format, 2,558 passed / 6 skipped (78 files), money audit clean over 71 financial files, secret scan, production dependency audit, `next build` |
+| database (real PostgreSQL) | **success** | 1,761 passed (74 files), then the four seeders in sequence — 18, 15, 24, 25 — then the upgrade verifier: 95 existing migrations, a seeded book, 46 new migrations, **28 of 28 financial figures identical**, 22 Polytos tables present and empty, `2100 Member Savings` zero |
+| browser E2E (production build, fresh seed) | **success** | **838 specs passed in 15.3 minutes** against the production build on a freshly seeded database, desktop and mobile |
+
+The six skipped tests are `tests/integration/bundle.test.ts`, which measures
+`.next/static`; the `checks` job runs the suite before `next build`, so there
+is nothing to measure yet. The same job's build then runs, and a separate
+local run with a build present passes all six.
 
 ### Screenshots
 
-_See the note in §I: the browser harness could not be started in this
-container._
+**Artifact: `polytos-phase-4-screens`** on the run above — 23 MB, 30-day
+retention, 78 PNGs and `timings.json`.
+
+`scripts/capture-benefit-screens.mjs` ran inside the browser job, after the
+suite and before teardown, on the same seeded stack and signed in with the
+storage states the suite's `auth.setup.ts` wrote. It asserts nothing and
+writes no data; it exits non-zero if any screen fails to answer 200, so the
+artifact existing is itself a statement that every screen rendered.
+
+```
+76 screen/viewport pairs captured        19 screens × desktop 1440, laptop 1366, tablet 820, mobile 390
+ 2 screens as somebody other than the Owner
+     beneficiary-restricted-secretary     a Secretary on a beneficiary record, with the name withheld
+     portal-my-claims                     the borrower's own view of their claims
+slowest: benefits-dashboard on desktop, 196ms median
+no screen overflows its viewport         maximum horizontal overflow across all 76: 0px
+```
+
+Two things a reviewer looking at those images should know, so neither reads
+as a defect:
+
+- **Relationship labels say "(harness: treated as eligible)".** The
+  demonstration policy opens a condolence vocabulary under a TEST ONLY policy
+  version, and the label says so on every screen it appears on. That is the
+  seeder refusing to let a demonstration value be mistaken for an approved
+  one, as §G requires.
+- **A document on the beneficiary record says "could not be opened just
+  now".** The Docker-free end-to-end harness has PostgreSQL, PostgREST and
+  the auth shim but no storage service, so a signed URL cannot be issued. The
+  row, its checked state and its policy are all real; only the file behind it
+  is not. The screen degrades with a sentence instead of an error, which is
+  the intended behaviour and is why it is visible in the screenshot at all.
+
+### What was not done, by instruction
+
+No pull request was opened. Nothing was merged. Nothing was deployed —
+Vercel was not invoked and no deployment was triggered. No Phase 4 migration
+was applied to the hosted Supabase project, the demonstration seeder refuses
+to run against a hosted project, and the connection named `Primary` was never
+used. Phase 5 has not been started.
 
 ---
 
