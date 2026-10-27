@@ -458,8 +458,13 @@ declare
 begin
   -- The gate. A business-wide aggregate has no row for a policy to filter, so
   -- the function names the capability — the same reasoning `savings_summary`
-  -- and `member_loan_summary` both carry.
-  if not public.user_has_permission('benefits:view') then
+  -- and `member_loan_summary` both carry, including the `auth.uid()` test:
+  -- the check is a statement about a *session*, and there is none for a
+  -- migration, for `service_role` or for the test harness, none of which hold
+  -- a capability to check. Without it a maintenance read of this figure could
+  -- not run at all.
+  if auth.uid() is not null
+     and not public.user_has_permission('benefits:view') then
     raise exception 'permission denied for benefit summary'
       using errcode = '42501';
   end if;
@@ -672,8 +677,11 @@ as $$
 begin
   -- `reports:view_financial`, not `benefits:view`: this is a figure from the
   -- General Ledger, and who may read the company's expense accounts is a
-  -- financial-reporting question rather than a benefits one.
-  if not public.user_has_permission('reports:view_financial') then
+  -- financial-reporting question rather than a benefits one. Inside the
+  -- `auth.uid()` test for the reason `savings_summary` states: a capability
+  -- check is about a session, and the trusted path has none.
+  if auth.uid() is not null
+     and not public.user_has_permission('reports:view_financial') then
     raise exception 'permission denied for benefit expense report'
       using errcode = '42501';
   end if;

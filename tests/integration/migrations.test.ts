@@ -796,6 +796,9 @@ describe('types stay in step with the schema', () => {
       // callable over the API, and EXECUTE is revoked from `anon` and
       // `authenticated` on all of them.
       'membership_policy_versions_guard',
+      // Polytos Phase 4. Freezes the tenth undecided rule once anybody is
+      // held to the version, as the other nine are.
+      'membership_policy_year_basis_guard',
       'memberships_assign_number',
       'memberships_stamp_provenance',
       'memberships_guard_transition',
