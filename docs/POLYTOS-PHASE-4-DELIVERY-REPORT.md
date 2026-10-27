@@ -394,9 +394,9 @@ in the browser suite.
 typecheck                               clean
 lint                                    clean
 format                                  clean
-unit + integration                      2,549 passed,  6 skipped
-database                                1,760 passed
-  Phase 4's own database suites            140 passed
+unit + integration                      2,558 passed,  6 skipped
+database                                1,761 passed
+  Phase 4's own database suites            141 passed
 demonstration seeder (savings)             18 passed
 borrower reuse                             15 passed
 member loan demonstration                  24 passed
@@ -407,17 +407,37 @@ upgrade + financial regression            28 of 28 identical
 browser suite                              44 new specs
 ```
 
-`docs/POLYTOS-PHASE-4-TEST-REPORT.md` has the detail, including the six
+`docs/POLYTOS-PHASE-4-TEST-REPORT.md` has the detail, including the nine
 defects these tests found and what was done about each.
 
-The six skipped unit tests are pre-existing and unrelated: they need a hosted
-Supabase project.
+The six skipped tests are `tests/integration/bundle.test.ts`, which measures
+`.next/static` and skips when there is no build to measure: CI's `checks` job
+runs the suite before `next build`. `npm run verify` builds first, and then
+all six pass.
 
-### What was not run in this container
+### What was not run in this container, and what CI found
 
 The browser suite needs a real PostgREST binary, and this environment could
-not fetch one — the download was refused by the sandbox. The 44 specs are
-written and CI runs them; §J records the result.
+not fetch one — the download was refused by the sandbox, twice. The 44 new
+specs therefore ran for the first time in CI, **and the first run failed 30 of
+832 specs** over three real defects: a PostgREST column that does not exist, a
+function passed from a Server Component to a Client Component, and a form
+schema that refused two fields the form labels optional.
+
+All three are fixed, each with a test that would now catch it, and all three
+are written up in §2.7–2.9 of the test report. They are recorded here rather
+than quietly repaired because they are the answer to a fair question about
+this delivery: every other tier was green at the moment that build had three
+500s in it.
+
+### Screenshots
+
+Taken in CI for the same reason the suite runs there — this container has no
+PostgREST and no Chromium reachable.
+`scripts/capture-benefit-screens.mjs` runs in the browser job after the suite
+and before teardown, on the same seeded stack, and uploads nineteen screens at
+four viewports plus two screens that need a role other than the Owner, with a
+timing table beside them. §J has the artifact.
 
 ---
 

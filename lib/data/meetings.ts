@@ -595,18 +595,28 @@ export interface MeetingAssignee {
 /**
  * The members of staff an action item can be assigned to.
  *
- * Read as the caller from `profiles`, whose select policy requires
- * `users:view` — which a Manager and an Owner hold and a
- * Secretary/Treasurer does not. So this returns an empty list for the person
- * who most often writes the minutes, and that is not a fault to paper over:
- * the form says it cannot offer names rather than pretending there are none,
- * and the item is recorded unassigned.
+ * Read as the caller from `profiles`, under
+ * `profiles_select_self_or_directory`: **your own row, or the directory if
+ * you hold `users:view`.** A Manager and an Owner hold it; a
+ * Secretary/Treasurer does not.
+ *
+ * So this returns what the caller may read, which for the person who most
+ * often writes the minutes is one name — their own. That is a short list, not
+ * an empty one, and the form has to say which it is: a select showing one
+ * name without explanation reads as "there is one member of staff". The
+ * panel is told separately whether the caller holds the directory
+ * capability, rather than guessing from the length of this list, and says so.
+ *
+ * (Phase 4 shipped with the wrong reading of that policy — "the Secretary
+ * gets nothing" — and a browser spec asserting the empty-list sentence. The
+ * policy's own name says `self_or_directory`. Two specs failed on it in CI.)
  *
  * It is not fixed by reading with a privileged client. "Who works here" is a
  * staff directory question, `users:view` is the capability that answers it,
  * and widening it for the convenience of one form would widen it for
  * everything. An action item assigned to nobody is a real and ordinary thing;
- * a Secretary who needs one assigned asks the Manager who holds the names.
+ * a Secretary who needs it assigned to somebody else asks whoever holds the
+ * names.
  *
  * Unlike `listWitnessCandidates`, the caller is **not** excluded: an action
  * item taken on by the person recording it is the commonest case of all.

@@ -3103,3 +3103,119 @@ standing?" is on the open-questions list in
 to implement it is a new function reading `meeting_attendance`, not a column
 on the attendance row — because the answer will be about a period, not about
 one meeting.
+
+---
+
+## ADR-069 — An unanswered form field is the empty string, and the schema says so
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** `formData.get('alternativePhone')` returns `''` when somebody
+leaves that box alone. It returns `null` only when the field is absent from
+the form altogether. A Zod field written `ugandanPhoneSchema.nullable()
+.optional()` therefore describes a shape no browser ever submits, and the
+form it validates fails with **"Phone number is required"** against a field
+whose own label says *(optional)*.
+
+Phase 4 shipped exactly that, twice on one form — the alternative number and
+the identity document — and the thirty-one validation tests over that schema
+all passed, because every one of them handed it a parsed object. The browser
+suite in CI was the only thing that saw it.
+
+Earlier phases had met the same problem and solved it in place:
+`z.union([schema, z.literal('')])` followed by a transform appears inline a
+dozen times across `lib/validation/`. It was never named, so Phase 4 wrote
+twelve more optional fields without it.
+
+**Decision.** Every optional field whose value can come from a form control is
+declared with `optionalField(schema)` from `lib/validation/common.ts`. It
+accepts the schema or the empty string, and reads the empty string as `null`.
+A field that cannot be blank stays required, with the message a person can act
+on.
+
+**Why.**
+
+1. **The schema should describe what crosses the boundary.** The boundary here
+   is an HTML form, and an HTML form says "unanswered" with `''`. A schema
+   that only accepts `null` is documenting a caller that does not exist.
+
+2. **Normalising in the action instead would hide the rule.** A helper that
+   blanked out empty strings before parsing would make every optional field
+   work and no schema say which fields are optional — and the next action
+   written without it would fail the same way.
+
+3. **It is not a relaxation.** `optionalField(z.enum(...))` still refuses
+   `library_card`; `optionalField(businessDateSchema)` still refuses
+   `31/12/2026`. Blank is the only new input, and blank is what the form
+   sends.
+
+**Consequences.** `tests/unit/benefit-validation.test.ts` and
+`tests/unit/meeting-validation.test.ts` each carry a `what a browser actually
+sends` block that parses the blank string field by field, and asserts the
+rules that must survive it: a document refusal still needs a note, a member
+marked present still may not carry a reason for being away, both halves of a
+document attachment still may not be empty at once.
+
+The twelve inline unions in earlier phases were left alone. They are correct;
+rewriting working validation in a phase about benefits would be a change
+nobody asked for and a diff nobody could review against its brief.
+
+---
+
+## ADR-070 — Every column this application asks PostgREST for is checked against the schema
+
+**Status.** Accepted, Polytos Phase 4.
+
+**Context.** `listExpectedMembers` asked `membership_register` for
+`membership_id`. That view's key column is `id` — it is a view *of*
+memberships — so PostgREST answered 400, the data function threw, and
+`/meetings/[meetingId]` returned 500 for every meeting in the system.
+
+What makes it worth an ADR is that no existing check could have caught it:
+
+- **TypeScript cannot.** A PostgREST select list is a string, and the row
+  type is asserted after the call. The compiler is being told the answer.
+- **The database suites cannot.** They connect to PostgreSQL directly and
+  never name a column list the way PostgREST parses one.
+- **The unit suites cannot.** They have no database.
+- **The integration suites cannot.** They render components against mocked
+  data layers, which is the point of them.
+
+So the only check was a browser opening that screen, and the whole class was
+unguarded: a renamed column, a view that stops exposing one, a typo in a
+forty-column select list. Each is a 500 on one screen, found by whoever opens
+it.
+
+**Decision.** `tests/db/postgrest-columns.test.ts` reads every
+`.from('x').select('…')` in the ten `lib/` directories that talk to PostgREST
+and checks each column against `information_schema.columns`. It runs in the
+`db` project, because it needs a real schema; it needs no seed data and no
+roles.
+
+**Why these limits.**
+
+1. **Select lists only.** Filter arguments — `.eq('branch_id', …)` — are not
+   checked. A query chain is often built across several statements, so a
+   parser following one would be guessing, and a test that fails for a reason
+   that is not a defect is worse than no test at all.
+
+2. **Embedded resources are flattened out.** `guarantors(full_name, phone)`
+   names columns on the joined relation, not on this one. Splitting the list
+   on commas first would hand `phone` to the outer table and fail against
+   four correct queries, which it did on the first run.
+
+3. **A floor on the count.** The test asserts it found more than 200
+   references before checking any of them. A refactor that moved these reads
+   somewhere the parser does not look would otherwise leave it green while
+   checking nothing.
+
+**Consequences.** The check is cheap — one `information_schema` query and a
+regex over 34 files, under a second — and it is the only thing in the suite
+that tests the *shape* of a PostgREST request rather than its result. A
+migration that renames a column now fails in the database job rather than on
+a screen.
+
+It does not replace the browser suite. It would not have caught either of
+the other two defects in the same CI run — a function passed to a Client
+Component, and a schema that refuses a blank optional field — because neither
+is a column.

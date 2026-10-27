@@ -31,10 +31,18 @@ import { MeetingActionBadge } from './meeting-badges';
  * against an account that still exists. So the field is a profile, and
  * `add_meeting_action_item` refuses one whose account is not active.
  *
- * When the staff list cannot be read — a Secretary/Treasurer does not hold
- * `users:view`, and they are usually the person writing the minutes — the
- * form says so and records the item unassigned, which is a real and ordinary
- * state. It does not reach around the policy with a privileged read.
+ * The names on offer are the ones the caller may read.
+ * `profiles_select_self_or_directory` gives a holder of `users:view` the
+ * directory and everybody else their own row — so a Secretary/Treasurer, who
+ * is usually the person writing the minutes, sees exactly one name: theirs.
+ *
+ * A select showing one name and nothing else reads as "there is one member of
+ * staff", so the panel is told whether the caller holds the directory
+ * capability and says which list this is. It is **not** inferred from the
+ * length of the list: a directory of one is a real possibility in a new
+ * branch, and a sentence that was wrong in that case would be worse than
+ * none. The form does not reach around the policy with a privileged read, and
+ * an item recorded unassigned is a real and ordinary state.
  *
  * ## Overdue is computed from the business date, not the browser's
  *
@@ -46,12 +54,18 @@ export function MeetingActionsPanel({
   meetingId,
   actions,
   assignees,
+  canSeeStaffDirectory,
   businessDate,
   canManage,
 }: {
   readonly meetingId: string;
   readonly actions: readonly MeetingActionItem[];
   readonly assignees: readonly MeetingAssignee[];
+  /**
+   * Whether `assignees` is the staff directory or only what the caller may
+   * read of it. From `users:view`, checked on the server.
+   */
+  readonly canSeeStaffDirectory: boolean;
   readonly businessDate: string;
   readonly canManage: boolean;
 }) {
@@ -108,9 +122,8 @@ export function MeetingActionsPanel({
 
             {assignees.length === 0 ? (
               <p className="text-text-muted text-sm">
-                The staff list cannot be read with your permissions, so this item will be
-                recorded unassigned. Somebody holding the staff directory permission can
-                give it an owner.
+                No staff record could be read, so this item will be recorded unassigned.
+                Somebody holding the staff directory permission can give it an owner.
               </p>
             ) : (
               <SelectField
@@ -122,6 +135,11 @@ export function MeetingActionsPanel({
                   label: assignee.fullName,
                 }))}
                 error={result?.fieldErrors?.assignedTo?.[0]}
+                hint={
+                  canSeeStaffDirectory
+                    ? undefined
+                    : 'This list shows only the staff records your permissions let you read. Somebody holding the staff directory permission can assign it to anyone else.'
+                }
               />
             )}
 

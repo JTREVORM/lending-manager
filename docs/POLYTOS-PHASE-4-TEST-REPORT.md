@@ -10,9 +10,9 @@ the code, and no figure below was typed from memory.
 typecheck                               clean
 lint                                    clean
 format                                  clean
-unit + integration                      2,549 passed,  6 skipped   (78 files)
-database                                1,760 passed,  0 skipped   (73 files)
-  of which Phase 4's own suites           140 passed               ( 7 files)
+unit + integration                      2,558 passed,  6 skipped   (78 files)
+database                                1,761 passed,  0 skipped   (74 files)
+  of which Phase 4's own suites           141 passed               ( 8 files)
 demonstration seeder (savings)             18 passed
 borrower reuse                             15 passed
 member loan demonstration                  24 passed
@@ -20,12 +20,15 @@ benefit demonstration                      25 passed
 money arithmetic audit                   clean (5 engines, 2 verified exemptions)
 production build                         clean (13 new routes)
 upgrade + financial regression            28 of 28 figures identical
-browser suite                            44 new specs, run in CI
+browser suite                            44 new specs, run in CI (§J)
 ```
 
-The six skipped unit tests and the skipped file are pre-existing and unrelated
-to this phase; they are the environment-gated checks that need a hosted
-Supabase project.
+The six skipped tests are `tests/integration/bundle.test.ts`, which measures
+`.next/static` and skips when there is no build to measure. CI's `checks` job
+runs the suite before `next build`, so they skip there; running `npm run
+verify` locally builds first and all six pass. They are not Phase 4's and they are
+not disabled: the bundle ceiling they assert was raised by this phase, with
+the case written out in the test itself.
 
 ---
 
@@ -41,10 +44,11 @@ Supabase project.
 | `tests/db/benefits-undecided.test.ts` | 6 | what the module does under the policy the client **actually** has |
 | `tests/db/meetings.test.ts` | 26 | the monthly rule, the derived status, corrections, minutes, action items |
 | `tests/db/benefit-demo-seed.test.ts` | 25 | the demonstration seeder, run for real, six times |
+| `tests/db/postgrest-columns.test.ts` | 1 | every column this application asks PostgREST for, against the real schema |
 | `tests/unit/benefits.test.ts` | 32 | the domain in isolation, figures written out by hand |
 | `tests/unit/meetings.test.ts` | 18 | the domain, including the absences |
-| `tests/unit/benefit-validation.test.ts` | 31 | the write surface, including two fields that must not exist |
-| `tests/unit/meeting-validation.test.ts` | 22 | the write surface and the two asymmetries the database owns |
+| `tests/unit/benefit-validation.test.ts` | 37 | the write surface, including two fields that must not exist and six blank ones that must be allowed |
+| `tests/unit/meeting-validation.test.ts` | 25 | the write surface, the two asymmetries the database owns, and what a browser actually sends |
 | `tests/e2e/specs/benefits.spec.ts` | 24 | the screens, as four roles, at 390px |
 | `tests/e2e/specs/meetings.spec.ts` | 14 | the meeting screens, same |
 | `tests/e2e/specs/benefits.write.spec.ts` | 6 | approving, paying, marking a register by pressing buttons |
@@ -59,7 +63,7 @@ capabilities and the full role matrix), `tests/db/schema.test.ts`,
 
 ---
 
-## 2. The six defects these tests and this build found
+## 2. The nine defects these tests, this build and CI found
 
 Each of these was found by writing the test or running the seeder, not by
 reading the code. Each was fixed in the layer that owned it.
@@ -135,6 +139,64 @@ message needs.
 
 Fixed by moving the attendance check above the status check.
 `tests/db/meetings.test.ts` asserts the message.
+
+### The three the browser suite found, and nothing else could have
+
+The first CI run of the browser job failed 30 of 832 specs. All thirty trace
+back to three defects, and the reason each one survived every other check is
+worth recording — it is the argument for the browser tier existing.
+
+### 2.7 `/meetings/[meetingId]` answered 500 for every meeting
+
+`listExpectedMembers` asked `membership_register` for `membership_id`. That
+view's key column is `id`, because it is a view *of* memberships. PostgREST
+answers 400 for a column that does not exist, the data function threw, and
+nine specs failed on the error boundary rather than on anything they were
+testing.
+
+No check in the project could have caught it. A select list is a string and
+the row type is asserted after the call, so TypeScript is being told the
+answer; the database suites speak SQL directly and never name a column list
+the way PostgREST parses one; the unit suites have no database.
+
+Fixed in `lib/data/meetings.ts`, and the **class** closed by
+`tests/db/postgrest-columns.test.ts`, which checks every column this
+application asks PostgREST for — 400-odd across ten `lib/` directories —
+against `information_schema`. ADR-070 records what it checks and what it
+deliberately does not.
+
+### 2.8 Two "new" screens answered 500 because a function crossed a boundary
+
+`MemberChooser` is a Client Component and took `hrefFor` — a function — as a
+prop from two Server Component pages. A function cannot be serialised across
+that boundary, so `/benefits/claims/new` and `/beneficiaries/new` threw at
+render. The build is happy either way, which is why typecheck, lint and
+`next build` all passed over it.
+
+Fixed by sending the links as strings keyed on the membership id: the server
+builds the URLs it means.
+
+### 2.9 The beneficiary form refused two fields it labels optional
+
+`formData.get('x')` is the **empty string** for a control somebody left alone,
+not `null`. So `ugandanPhoneSchema.nullable().optional()` describes a shape no
+browser submits, and the form failed with "Phone number is required" against
+the optional alternative number, and with an enum refusal against the "No
+document was shown" option.
+
+Thirty-one validation tests passed over that schema, because every one of them
+handed it an already-parsed object. Fixed with `optionalField` in
+`lib/validation/common.ts` — the idiom earlier phases had written inline a
+dozen times, now named — applied to the twelve Phase 4 fields a form can leave
+blank. Both unit suites now parse the blank string field by field, as a form
+sends it, and assert the rules that must survive it. ADR-069 records the rule.
+
+**What this says about the suite.** Three defects, three screens, zero
+overlap: one was a database request, one a React boundary, one a form
+contract. None was reachable from a type, a constraint or a parsed object.
+Phases 1–8 shipped 2,584 green unit tests over three defects only a real
+browser could see; Phase 4 has now done the same thing, which is the case for
+the browser job being mandatory rather than advisory.
 
 ---
 
@@ -292,7 +354,14 @@ asserting "the queue is not empty" must not depend on worker order.
 
 **These were not run in this container.** The browser job needs a real
 PostgREST binary, and this environment cannot fetch one — the download was
-refused. They run in CI, and §J of the delivery report records the result.
+refused by the sandbox, twice, which is also why the screenshots are taken in
+CI rather than here (§J of the delivery report).
+
+They ran in CI, and the first run **failed 30 specs** over three real defects
+— §2.7 to §2.9 above. That is recorded rather than quietly fixed, because it
+is the only honest answer to "were the browser tests worth writing": every
+other tier of this project's verification was green at the same moment, on a
+build with three 500s in it. §J records the run that passed.
 
 ---
 
@@ -317,7 +386,10 @@ refused. They run in CI, and §J of the delivery report records the result.
 ## 9. Deviations, and what is not covered
 
 **Not covered: the browser suite in this container.** As §7 says, PostgREST
-could not be fetched here. The specs are written and CI runs them.
+could not be fetched here — the download was refused by the sandbox on two
+attempts. The specs ran in CI, where the first run found three defects
+(§2.7–2.9) and the run named in §J of the delivery report passed. The
+screenshots are taken in the same job, for the same reason.
 
 **Not covered: a hosted Supabase project.** Deliberately, and by instruction.
 No Phase 4 migration has been applied to the hosted project, and the
@@ -355,6 +427,9 @@ npm run build
 npm run db:local:setup
 export DATABASE_URL=postgresql://lending@localhost:5433/lending_test
 npm run test:db          # db, seed, seed-reuse, seed-member-loans, seed-benefits
+                         # each project is its own `vitest run`, deliberately:
+                         # every seeder rebuilds the database, so one
+                         # invocation covering several would race itself
 node scripts/verify-membership-upgrade.mjs
 
 # Needs the end-to-end stack: PostgreSQL, PostgREST, the auth shim,

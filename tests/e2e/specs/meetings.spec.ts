@@ -223,21 +223,43 @@ test.describe('who may reach what', () => {
       }
     });
 
-    test('is told plainly that it cannot offer an assignee', async ({ page }) => {
+    test('is told that the assignee list is only what it may read', async ({ page }) => {
       await page.goto(`/meetings/${fixtures.meetings.toWorkOn}`);
 
-      // A Secretary does not hold `users:view`, so the staff list comes back
-      // empty for the person who usually writes the minutes. The form says so
-      // and records the item unassigned rather than reaching around the policy
-      // with a privileged read.
+      // `profiles_select_self_or_directory`: your own row, or the directory if
+      // you hold `users:view`. A Secretary does not hold it, so the list that
+      // comes back is one name — their own.
+      //
+      // This spec was first written against the wrong reading of that policy
+      // ("the Secretary gets nothing") and failed in CI, which is how the
+      // wrong reading was found. What it asserts now is the behaviour that
+      // matters: the form does not pass a one-name list off as the staff list,
+      // and it does not reach around the policy with a privileged read.
       await page.getByRole('button', { name: /add an action item/i }).click();
+
+      const select = page.getByLabel(/who is doing it/i);
+      await expect(select).toBeVisible();
 
       await expect(
         page
-          .getByText(/staff list cannot be read with your permissions/i)
+          .getByText(/only the staff records your permissions let you read/i)
           .filter({ visible: true })
           .first(),
       ).toBeVisible();
+
+      // One real name, plus the unanswered option — and the Secretary's own
+      // name is the one, because an item taken on by the person recording it
+      // is the commonest case of all.
+      await expect(select.locator('option')).toHaveCount(2);
+      await expect(select.locator('option').first()).toHaveText(
+        /nobody in particular yet/i,
+      );
+
+      // That an item *can* be recorded with no owner is asserted by
+      // `benefits.write.spec.ts`, which presses the buttons. Nothing is
+      // submitted from this file: it runs in both the desktop and the mobile
+      // project, and a write from a read spec would run twice against one
+      // seeded meeting.
     });
   });
 

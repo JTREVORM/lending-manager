@@ -129,12 +129,29 @@ function MemberRow({
   readonly corrections: readonly AttendanceCorrection[];
   readonly canManage: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+
   const [result, submit, pending] = useActionState<
     MeetingActionResult | undefined,
     FormData
-  >(markAttendanceAction, undefined);
+  >(async (previous, formData) => {
+    const next = await markAttendanceAction(previous, formData);
 
-  const [open, setOpen] = useState(false);
+    // Collapse the row once the answer is recorded. Somebody marking a
+    // register works down a list of seven: leaving the editor open on the
+    // member just answered means the next one is below a form nobody needs
+    // any more, and it leaves the row showing both a recorded answer and the
+    // controls for giving one. It also made the toggle unreachable — it reads
+    // "Close" while open and "Change" once closed, so a correction could not
+    // be started from a row that had just been marked, which is how CI found
+    // this.
+    //
+    // Only on success: a refusal has a message, and the message is inside the
+    // form.
+    if (next.ok) setOpen(false);
+
+    return next;
+  }, undefined);
   const [attendance, setAttendance] = useState<MeetingAttendance>(
     row?.attendance ?? 'present',
   );

@@ -65,6 +65,11 @@ export default async function MeetingPage({
 
   const canManage = contextCan(context, 'meetings:manage');
 
+  // Whether the assignee list below is the staff directory or only the
+  // caller's own record. `profiles_select_self_or_directory` decides what
+  // comes back; this decides what the form says about it.
+  const canSeeStaffDirectory = contextCan(context, 'users:view');
+
   const [attendance, expected, corrections, actions, assignees, { branding }] =
     await Promise.all([
       listMeetingAttendance(meeting.id),
@@ -169,6 +174,7 @@ export default async function MeetingPage({
         meetingId={meeting.id}
         actions={actions}
         assignees={assignees}
+        canSeeStaffDirectory={canSeeStaffDirectory}
         businessDate={today}
         canManage={canManage}
       />
