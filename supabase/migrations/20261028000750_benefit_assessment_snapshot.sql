@@ -180,9 +180,16 @@ declare
   v_loan_count integer := 0;
   v_pledged     bigint := 0;
   v_savings     bigint := 0;
-  -- The policy update's own figures.
+  -- The policy update's own figures. The next-of-kin listing is held as
+  -- scalars rather than as a record, for the reason stated above the payee
+  -- block: a record variable is unset for the two claim types that have no
+  -- such listing, and PL/pgSQL raises on a field of an unassigned record —
+  -- which the INSERT below would do on every medical and bereavement claim,
+  -- because it names every column for every claim type. CI found exactly
+  -- that, as `record "v_kin" is not assigned yet`.
   v_qual        record;
-  v_kin         record;
+  v_kin_number  text;
+  v_kin_listed  date;
   v_confirmed   integer := 0;
   v_client_outstanding bigint := 0;
   v_client_loan_count  integer := 0;
@@ -255,7 +262,9 @@ begin
     select r.condolence_eligible into v_eligible
     from public.beneficiary_relationships r where r.key = v_claim.deceased_relationship;
 
-    select * into v_kin from public.condolence_next_of_kin_status(p_claim_id);
+    select k.beneficiary_number, k.registered_on
+      into v_kin_number, v_kin_listed
+    from public.condolence_next_of_kin_status(p_claim_id) k;
   end if;
 
   if v_claim.claim_type in ('family_condolence', 'member_bereavement') then
@@ -373,7 +382,7 @@ begin
     case when v_claim.claim_type = 'medical' and v_policy.medical_benefit_annual_cap is not null
       then greatest(v_policy.medical_benefit_annual_cap - v_consumed, 0) end,
     v_claim.deceased_relationship, v_eligible,
-    v_claim.deceased_beneficiary_id, v_kin.beneficiary_number, v_kin.registered_on,
+    v_claim.deceased_beneficiary_id, v_kin_number, v_kin_listed,
     case when v_claim.claim_type in ('family_condolence', 'member_bereavement')
       then v_policy.death_confirmations_required end,
     case when v_claim.claim_type in ('family_condolence', 'member_bereavement')

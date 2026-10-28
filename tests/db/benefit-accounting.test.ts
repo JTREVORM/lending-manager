@@ -12,6 +12,8 @@ import {
   clearEvidenceBucket,
   makeBenefitMember,
   makeVerifiedBeneficiary,
+  makeListedNextOfKin,
+  recordDeathConfirmations,
   requiredKindsFor,
   type BenefitMember,
 } from '../helpers/benefits';
@@ -162,6 +164,14 @@ async function approvedBereavementClaim(payeeName: string): Promise<{
     );
   }
 
+  // Rule 12, from the policy update: a death-related claim needs the policy's
+  // recorded number of confirmations from other group members. The fixture
+  // enrols three and records one each, because a confirmation names a real
+  // membership rather than a typed name.
+  await recordDeathConfirmations(claimId, fx.policyId, fx.secretary, {
+    branchId: member.branchId,
+  });
+
   const assessed = await asUserCommitted(fx.manager, [
     { sql: `select public.assess_benefit_claim($1, null) as amount`, params: [claimId] },
   ]);
@@ -275,66 +285,70 @@ describeDb('the posting', () => {
       bereavement: await accountBalance('5230'),
     };
 
-    // Condolence, which needs an eligible relationship — the fixture decides
-    // for this test only, because the migration leaves every row NULL.
-    await query(
-      `update public.beneficiary_relationships
-          set condolence_eligible = true where key = 'parent'`,
+    // Condolence. The policy update answered rule 11, so `parent` is an
+    // eligible family relationship permanently and the fixture no longer
+    // toggles the column — it is NOT NULL now, and a test that reset it to
+    // NULL would not be restoring anything.
+    //
+    // What the claim does need is the other half of rule 11: the deceased
+    // listed as next of kin **before** the death, and rule 12's three
+    // confirmations.
+    const member = await fx.nextMember();
+    const listedKin = await makeListedNextOfKin(
+      member.membershipId,
+      fx.secretary,
+      fx.manager,
+      { relationship: 'parent', listedOn: '2024-11-20' },
     );
 
-    try {
-      const member = await fx.nextMember();
-      const opened = await asUserCommitted(fx.secretary, [
-        {
-          sql: `select public.open_benefit_claim(
-                         $1, 'family_condolence', '2025-04-02'::date,
-                         null, null, null, null, 'Grace Akello', 'parent', null) as id`,
-          params: [member.membershipId],
-        },
-      ]);
-      const condolenceClaim = (opened.rows[0] as { id: string }).id;
+    const opened = await asUserCommitted(fx.secretary, [
+      {
+        sql: `select public.open_benefit_claim(
+                       $1, 'family_condolence', '2025-04-02'::date,
+                       null, null, null, null, 'Grace Akello', 'parent', null, $2) as id`,
+        params: [member.membershipId, listedKin],
+      },
+    ]);
+    const condolenceClaim = (opened.rows[0] as { id: string }).id;
 
-      await asUserCommitted(fx.secretary, [
-        {
-          sql: `select public.submit_benefit_claim($1) as id`,
-          params: [condolenceClaim],
-        },
-      ]);
-      for (const kind of await requiredKindsFor('family_condolence')) {
-        await attachVerifiedDocument(
-          condolenceClaim,
-          member.membershipId,
-          kind,
-          fx.secretary,
-          fx.manager,
-        );
-      }
-      await asUserCommitted(fx.manager, [
-        {
-          sql: `select public.assess_benefit_claim($1, null) as amount`,
-          params: [condolenceClaim],
-        },
-      ]);
-      await asUserCommitted(fx.approver, [
-        {
-          sql: `select public.approve_benefit_claim($1, null, null) as amount`,
-          params: [condolenceClaim],
-        },
-      ]);
-      await asUserCommitted(fx.manager, [
-        {
-          sql: `select public.post_benefit_payment(
-                         $1, 'mtn_mobile_money', 'MTN-REF-0001',
-                         gen_random_uuid()) as id`,
-          params: [condolenceClaim],
-        },
-      ]);
-    } finally {
-      await query(
-        `update public.beneficiary_relationships
-            set condolence_eligible = null where key = 'parent'`,
+    await asUserCommitted(fx.secretary, [
+      {
+        sql: `select public.submit_benefit_claim($1) as id`,
+        params: [condolenceClaim],
+      },
+    ]);
+    for (const kind of await requiredKindsFor('family_condolence')) {
+      await attachVerifiedDocument(
+        condolenceClaim,
+        member.membershipId,
+        kind,
+        fx.secretary,
+        fx.manager,
       );
     }
+    await recordDeathConfirmations(condolenceClaim, fx.policyId, fx.secretary, {
+      branchId: member.branchId,
+    });
+    await asUserCommitted(fx.manager, [
+      {
+        sql: `select public.assess_benefit_claim($1, null) as amount`,
+        params: [condolenceClaim],
+      },
+    ]);
+    await asUserCommitted(fx.approver, [
+      {
+        sql: `select public.approve_benefit_claim($1, null, null) as amount`,
+        params: [condolenceClaim],
+      },
+    ]);
+    await asUserCommitted(fx.manager, [
+      {
+        sql: `select public.post_benefit_payment(
+                       $1, 'mtn_mobile_money', 'MTN-REF-0001',
+                       gen_random_uuid()) as id`,
+        params: [condolenceClaim],
+      },
+    ]);
 
     const bereavement = await approvedBereavementClaim('Paid To Next Of Kin');
     await asUserCommitted(fx.manager, [
