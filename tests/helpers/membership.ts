@@ -136,6 +136,37 @@ export async function publishTestPolicy(options: {
   readonly benefitWaitingPeriodDays?: number | null;
   readonly medicalYearBasis?: 'calendar_year' | 'enrolment_anniversary' | null;
   /**
+   * The policy update's two reshaped benefit decisions.
+   *
+   * Both **derive from the older option by default**, so every test written
+   * before the update keeps working unchanged and keeps meaning what it meant:
+   *
+   *   - passing `medicalAnnualCap` implies `medicalCapMode: 'amount'`, because
+   *     a cap amount is only meaningful under that mode. A test that wants the
+   *     other arm — the claim count as the whole limit — passes
+   *     `medicalCapMode: 'no_separate_cap'` and no amount;
+   *   - passing `benefitWaitingPeriodDays` implies
+   *     `benefitQualificationBasis: 'waiting_period_days'`. A test of the
+   *     client's own rule passes `'savings_qualifying_months'` and no days.
+   *
+   * Neither is defaulted into a *decision*: with both older options absent,
+   * both of these stay NULL and every benefit gate stays shut.
+   */
+  readonly medicalCapMode?: 'amount' | 'no_separate_cap' | null;
+  readonly benefitQualificationBasis?:
+    'waiting_period_days' | 'savings_qualifying_months' | null;
+  /**
+   * Rule 12 and rule 15, which the client answered outright.
+   *
+   * These default to the client's own figures rather than to undecided,
+   * because — unlike the nine — there is no arm of either to leave open: three
+   * confirmations and UGX 5,000 are what the client said. The TEST ONLY label
+   * on the version still says the figures are the fixture's. A test of the
+   * undecided state passes `null` explicitly.
+   */
+  readonly deathConfirmationsRequired?: number | null;
+  readonly meetingAbsenceFine?: number | null;
+  /**
    * Defaults to `active`. Pass `superseded` for a historical version a test
    * needs to point at: `membership_policy_versions_one_active` allows exactly
    * one version in force, so a fixture that wants a second version has to say
@@ -155,12 +186,15 @@ export async function publishTestPolicy(options: {
         qualifying_months_consecutive, savings_withdrawal_with_active_loan,
         interest_basis, interest_method, savings_to_loan_multiplier_bps,
         medical_benefit_annual_cap, medical_benefit_claims_per_year,
-        benefit_waiting_period_days, medical_benefit_year_basis)
+        benefit_waiting_period_days, medical_benefit_year_basis,
+        medical_benefit_cap_mode, benefit_qualification_basis,
+        death_confirmations_required, meeting_absence_fine)
      values ($1, $2, (public.business_date() - $3::int), $8,
              pg_catalog.now(), 'test fixture',
              $4, $5, 6, 500, 5, 2, 3, 500, 1, 100000, 200000, $6, $7,
              $9, $10, $11::int,
-             $12::bigint, $13::smallint, $14::smallint, $15)
+             $12::bigint, $13::smallint, $14::smallint, $15,
+             $16, $17, $18::smallint, $19::bigint)
      returning id`,
     [
       options.version,
@@ -178,6 +212,20 @@ export async function publishTestPolicy(options: {
       options.medicalClaimsPerYear ?? null,
       options.benefitWaitingPeriodDays ?? null,
       options.medicalYearBasis ?? null,
+      // Derived, so an older test's intent carries over exactly.
+      options.medicalCapMode ??
+        (options.medicalAnnualCap === undefined || options.medicalAnnualCap === null
+          ? null
+          : 'amount'),
+      options.benefitQualificationBasis ??
+        (options.benefitWaitingPeriodDays === undefined ||
+        options.benefitWaitingPeriodDays === null
+          ? null
+          : 'waiting_period_days'),
+      options.deathConfirmationsRequired === undefined
+        ? 3
+        : options.deathConfirmationsRequired,
+      options.meetingAbsenceFine === undefined ? 5000 : options.meetingAbsenceFine,
     ],
   );
   return row.id;
