@@ -189,11 +189,11 @@ begin
   membership_id := v_membership.id;
   membership_number := v_membership.membership_number;
   membership_status := v_membership.status;
-  policy_version_id := public.membership_governing_policy(v_membership.id, v_as_of);
+  policy_version_id := public.membership_governing_policy(v_membership.id, as_of);
 
   select * into v_policy
   from public.membership_policy_versions
-  where id = public.membership_governing_policy(v_membership.id, v_as_of);
+  where id = public.membership_governing_policy(v_membership.id, as_of);
 
   policy_version := v_policy.version;
   months_required := v_policy.savings_qualifying_months;
@@ -201,7 +201,7 @@ begin
   multiplier_bps := v_policy.savings_to_loan_multiplier_bps;
   max_term_months := v_policy.member_loan_max_term_months;
   required_cadence := public.member_loan_cadence_for_term(
-    public.membership_governing_policy(v_membership.id, v_as_of), p_term_months
+    public.membership_governing_policy(v_membership.id, as_of), p_term_months
   );
 
   -- --- The membership's own standing -------------------------------------
@@ -219,11 +219,11 @@ begin
   -- superseded version is authorised for nothing, and a member on a version
   -- whose lending decisions are open cannot borrow however long they have
   -- saved.
-  if not public.membership_policy_allows(public.membership_governing_policy(v_membership.id, v_as_of), 'lending') then
+  if not public.membership_policy_allows(public.membership_governing_policy(v_membership.id, as_of), 'lending') then
     v_reasons := v_reasons
       || ('Member lending is not open under policy version '
           || coalesce(v_policy.version, '(unknown)')
-          || '. ' || public.member_lending_blocked_reason(public.membership_governing_policy(v_membership.id, v_as_of)));
+          || '. ' || public.member_lending_blocked_reason(public.membership_governing_policy(v_membership.id, as_of)));
   end if;
 
   -- --- The savings account -----------------------------------------------
@@ -718,3 +718,52 @@ begin
   return v_txn_id;
 end;
 $$;
+
+create or replace view public.membership_register
+with (security_invoker = true) as
+select
+  m.id,
+  m.membership_number,
+  m.client_id,
+  c.client_number,
+  c.full_name,
+  c.phone,
+  c.village_area,
+  c.district,
+  c.status                as client_status,
+  m.branch_id,
+  b.name                  as branch_name,
+  m.status,
+  m.status_reason,
+  m.status_changed_at,
+  m.applied_on,
+  m.activated_on,
+  m.ended_on,
+  public.membership_governing_policy(m.id) as policy_version_id,
+  v.version               as policy_version,
+  -- The gates, one per activity, as the version governing this member
+  -- computes them. Not `is_financially_enabled`: that is one boolean about
+  -- five different activities, and a member screen that showed it would say
+  -- "no" about a version under which enrolment and savings are both open.
+  -- "Has it started" is deliberately absent here too — the register is a
+  -- list of members, not the gate a posting consults, and that gate is
+  -- `membership_policy_allows()`.
+  v.is_enrolment_enabled   as policy_enrolment_enabled,
+  v.is_savings_enabled     as policy_savings_enabled,
+  v.is_member_lending_enabled as policy_member_lending_enabled,
+  v.is_benefits_enabled    as policy_benefits_enabled,
+  -- One per benefit, because the policy update split the gate. A member
+  -- screen that said "benefits: no" while a condolence claim was payable
+  -- would be the single-switch mistake showing through to the counter.
+  v.is_medical_benefit_enabled     as policy_medical_benefit_enabled,
+  v.is_condolence_benefit_enabled  as policy_condolence_benefit_enabled,
+  v.is_bereavement_benefit_enabled as policy_bereavement_benefit_enabled,
+  v.is_profit_sharing_enabled as policy_profit_sharing_enabled,
+  m.notes,
+  m.created_at,
+  m.updated_at
+from public.memberships m
+join public.clients c on c.id = m.client_id
+join public.membership_policy_versions v on v.id = public.membership_governing_policy(m.id)
+left join public.branches b on b.id = m.branch_id;
+

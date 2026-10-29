@@ -1,3 +1,52 @@
+alter table public.notifications drop constraint notifications_category_valid;
+
+alter table public.notifications add constraint notifications_category_valid
+  check (category in (
+    'loan_awaiting_approval',
+    'loan_awaiting_disbursement',
+    'loan_decided',
+    'loan_disbursed',
+    'loan_cleared',
+    'payment_reversed',
+    'penalty_applied',
+    'promise_recorded',
+    'guarantor_released',
+    'collateral_realised',
+    'approval_pending',
+    'reconciliation_variance',
+    'low_float',
+    'client_blacklisted',
+    -- Polytos Phase 4. Benefits.
+    'benefit_claim_submitted',
+    'benefit_claim_information_required',
+    'benefit_claim_assessed',
+    'benefit_claim_decided',
+    'benefit_paid',
+    'benefit_payment_reversed',
+    'beneficiary_awaiting_verification',
+    -- Polytos Phase 4. Meetings.
+    'meeting_scheduled',
+    'meeting_rescheduled',
+    'meeting_cancelled',
+    'meeting_action_assigned',
+    'meeting_absence_notice_pending',
+    'meeting_fine_assessed'
+  ));
+
+alter table public.notifications drop constraint notifications_entity_type_valid;
+
+alter table public.notifications add constraint notifications_entity_type_valid
+  check (entity_type in (
+    'loan', 'payment', 'client', 'guarantor', 'collateral',
+    'transfer', 'expense', 'reconciliation', 'ledger_account',
+    -- Polytos Phase 4. Each one is a route the bell can link to, which is why
+    -- the list is closed: an unrecognised type renders a dead control.
+    'benefit_claim', 'benefit_payment', 'member_beneficiary',
+    'membership_meeting', 'meeting_action',
+    'meeting_absence_notice', 'meeting_fine'
+  ));
+
+
 -- ===========================================================================
 -- Polytos business-policy update — the registers, positions and notifications
 -- the new rules need
@@ -558,7 +607,7 @@ set search_path = ''
 as $$
 begin
   perform public.raise_notification(
-    'meeting_fine_assessed', 'information',
+    'meeting_fine_assessed', 'info',
     'A meeting absence fine has been charged',
     'Fine ' || new.fine_number || ' — UGX ' || new.amount
       || ' against membership ' || new.membership_number

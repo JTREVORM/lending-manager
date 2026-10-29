@@ -45,12 +45,14 @@ export function CondolenceClaimForm({
   membershipNumber,
   relationships,
   benefitAmount,
+  nextOfKin = [],
 }: {
   readonly membershipId: string;
   readonly memberName: string;
   readonly membershipNumber: string;
   readonly relationships: readonly BeneficiaryRelationship[];
   readonly benefitAmount: UgxAmount;
+  readonly nextOfKin?: readonly { readonly id: string; readonly beneficiaryNumber: string }[];
 }) {
   const router = useRouter();
 
@@ -108,6 +110,11 @@ export function CondolenceClaimForm({
         </dl>
 
         <div className="space-y-4">
+          <SelectField name="deceasedBeneficiaryId" label="Deceased's registered next-of-kin record"
+            placeholder="No prior listing available"
+            options={nextOfKin.map((kin) => ({ value: kin.id, label: kin.beneficiaryNumber }))}
+            error={result?.fieldErrors?.deceasedBeneficiaryId?.[0]} />
+          <p className="text-text-muted text-sm">Choose the record that listed the deceased before the death. A claim without it is recorded and held for verification.</p>
           <Field
             label="Who died"
             name="deceasedName"

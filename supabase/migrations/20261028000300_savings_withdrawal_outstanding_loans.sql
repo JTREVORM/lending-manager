@@ -480,12 +480,6 @@ begin
     raise exception 'Savings are not open under the governing policy.' using errcode = 'P0001';
   end if;
 
-  v_withdrawable := public.savings_withdrawable_amount(v_account.id);
-  if v_withdrawable is null or v_request.amount > v_withdrawable then
-    raise exception 'An outstanding loan or savings pledge now blocks this withdrawal.'
-      using errcode = 'P0001';
-  end if;
-
   -- The check that counts. The balance at request time was informative; this
   -- one is holding a lock, so a deposit withdrawn twice and two approved
   -- requests racing each other both stop here.
@@ -497,6 +491,12 @@ begin
     raise exception
       'Savings account % now holds % shillings, which is less than the % approved. The balance moved after the decision.',
       v_account.account_number, v_balance, v_request.amount
+      using errcode = 'P0001';
+  end if;
+
+  v_withdrawable := public.savings_withdrawable_amount(v_account.id);
+  if v_withdrawable is null or v_request.amount > v_withdrawable then
+    raise exception 'An outstanding loan or savings pledge now blocks this withdrawal.'
       using errcode = 'P0001';
   end if;
 

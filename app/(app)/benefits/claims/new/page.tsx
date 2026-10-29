@@ -174,7 +174,7 @@ export default async function NewBenefitClaimPage({
     typeParam === 'family_condolence'
       ? listBeneficiaryRelationships()
       : Promise.resolve([]),
-    typeParam === 'member_bereavement'
+    (typeParam === 'member_bereavement' || typeParam === 'family_condolence')
       ? listBeneficiariesForMembership(membership.id)
       : Promise.resolve([]),
   ]);
@@ -211,6 +211,7 @@ export default async function NewBenefitClaimPage({
           membershipNumber={membership.membershipNumber}
           relationships={relationships}
           benefitAmount={policy.familyCondolenceBenefit}
+          nextOfKin={beneficiaries.filter((b) => b.status === 'active')}
         />
       ) : null}
 

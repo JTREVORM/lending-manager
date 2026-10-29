@@ -1,3 +1,4 @@
+import { MeetingPolicyWork } from '@/components/policy-update/meeting-policy-work';
 import { CalendarDays } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
@@ -85,6 +86,9 @@ export default async function MeetingPage({
 
   return (
     <div className="min-w-0 space-y-6">
+      <MeetingPolicyWork meetingId={meeting.id} members={expected}
+        canRecord={canManage && meeting.status === 'scheduled' && Date.parse(meeting.scheduledAt) > Date.now()} canReview={contextCan(context, 'meetings:excuse_review')}
+        canAssess={contextCan(context, 'fines:assess') && meeting.status === 'held' && Date.parse(meeting.scheduledAt) <= Date.now()} />
       <PageHeader
         eyebrow="Membership Meetings"
         icon={CalendarDays}

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { asAnon, asUser, asUserCommitted, createTestUser, deleteTestUsers, type TestUser } from '../helpers/auth-fixtures';
 import { makeBenefitMember, type BenefitMember } from '../helpers/benefits';
-import { closePool, hasDatabase, query, queryOne } from '../helpers/db';
+import { closePool, hasDatabase, queryOne } from '../helpers/db';
 import { forcePolicyStatus, publishTestPolicy } from '../helpers/membership';
 
 let owner: TestUser;

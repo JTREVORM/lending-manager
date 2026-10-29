@@ -1,3 +1,4 @@
+import { DeathVerification } from '@/components/policy-update/death-verification';
 import { HeartHandshake } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
@@ -125,6 +126,7 @@ export default async function BenefitClaimPage({
         </Alert>
       ) : null}
 
+      {claim.claimType !== 'medical' ? <DeathVerification claimId={claim.id} membershipId={claim.membershipId} canRecord={canClaim && ['draft', 'submitted', 'under_verification', 'information_required'].includes(claim.status)} /> : null}
       <ClaimFactsPanel
         claim={claim}
         minimumAdmissionDays={policy?.medicalBenefitMinAdmissionDays ?? null}

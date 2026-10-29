@@ -255,6 +255,9 @@ create unique index membership_policy_assignment_once_per_transition
   on public.membership_policy_assignments (transition_id, membership_id)
   where transition_id is not null;
 
+create unique index membership_policy_assignment_one_effective_day
+  on public.membership_policy_assignments (membership_id, effective_from);
+
 create index membership_policy_assignment_lookup_idx
   on public.membership_policy_assignments
      (membership_id, effective_from desc, created_at desc);
@@ -473,6 +476,7 @@ begin
     exists (
       select 1 from public.membership_terms_acceptances ta
       where ta.membership_id = mm.id and ta.policy_version_id = p_to_version_id
+        and ta.verification_status = 'verified'
     ),
     exists (
       select 1 from public.membership_policy_assignments pa
@@ -484,6 +488,7 @@ begin
       when not exists (
         select 1 from public.membership_terms_acceptances ta
         where ta.membership_id = mm.id and ta.policy_version_id = p_to_version_id
+        and ta.verification_status = 'verified'
       ) then 'No acceptance of these terms on record. The transition will refuse until the member accepts.'
       else null
     end
@@ -519,6 +524,7 @@ declare
   v_label  text;
   v_id     uuid;
   v_counts record;
+  v_existing public.membership_policy_transitions;
 begin
   v_actor := public.current_profile_id();
   v_label := public.audit_actor_label();
@@ -570,16 +576,27 @@ begin
       using errcode = 'P0001';
   end if;
 
+  if p_effective_on < public.business_date() then
+    raise exception 'A transition cannot retrospectively rewrite governing terms.'
+      using errcode = 'P0001';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('policy_transition_target:' || p_to_version_id::text));
+
   -- Resuming rather than starting again. Requirement 14: an interrupted batch
   -- is continued, and calling this function twice returns the same batch
   -- rather than opening a second one that would race the first.
-  select id into v_id
+  select * into v_existing
   from public.membership_policy_transitions
   where to_version_id = p_to_version_id
     and status in ('previewed', 'in_progress');
 
-  if v_id is not null then
-    return v_id;
+  if found then
+    if v_existing.effective_on is distinct from p_effective_on then
+      raise exception 'The live batch uses a different effective date. Resume or close it explicitly.'
+        using errcode = 'P0001';
+    end if;
+    return v_existing.id;
   end if;
 
   select
@@ -786,6 +803,11 @@ begin
       using errcode = 'P0001';
   end if;
 
+  if v_transition.effective_on < (v_acceptance.accepted_at at time zone 'Africa/Kampala')::date then
+    raise exception 'Governing terms cannot predate the member''s verified acceptance.'
+      using errcode = 'P0001';
+  end if;
+
   insert into public.membership_policy_assignments (
     membership_id, policy_version_id, policy_version, effective_from,
     previous_version_id, transition_id, acceptance_id,
@@ -842,3 +864,108 @@ revoke all on function public.preview_membership_policy_transition(uuid, date) f
 revoke all on function public.begin_membership_policy_transition(uuid, date, text) from public, anon;
 revoke all on function public.complete_membership_policy_transition(uuid) from public, anon;
 revoke all on function public.transition_membership_to_policy(uuid, uuid) from public, anon;
+
+-- Verified consent never rewrites the original enrollment policy.
+create or replace function public.accept_membership_policy_version(
+  p_membership_id uuid,
+  p_policy_version_id uuid,
+  p_consent_method text,
+  p_signature_name text,
+  p_signature_path text default null,
+  p_witness_profile_id uuid default null,
+  p_challenge_id uuid default null,
+  p_accepted_place text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_membership public.memberships%rowtype;
+  v_target     public.membership_policy_versions%rowtype;
+  v_current    public.membership_policy_versions%rowtype;
+  v_client     public.clients%rowtype;
+  v_acceptance uuid;
+begin
+  if auth.uid() is not null
+     and not public.user_has_permission('membership:manage_policies') then
+    raise exception
+      'Moving a member onto new terms requires the membership:manage_policies capability.'
+      using errcode = 'P0001';
+  end if;
+
+  select * into v_membership
+  from public.memberships
+  where id = p_membership_id
+  for update;
+
+  if not found then
+    raise exception 'No such membership.' using errcode = 'P0001';
+  end if;
+
+  if not public.user_can_see_branch(v_membership.branch_id) then
+    raise exception 'You cannot record that branch''s policy acceptances.'
+      using errcode = '42501';
+  end if;
+
+  if v_membership.status not in ('pending', 'active', 'suspended') then
+    raise exception
+      'Membership % has ended. Its terms are history and are not re-accepted.',
+      v_membership.membership_number using errcode = 'P0001';
+  end if;
+
+  select * into v_target
+  from public.membership_policy_versions
+  where id = p_policy_version_id;
+
+  if not found then
+    raise exception 'No such membership policy version.' using errcode = 'P0001';
+  end if;
+
+  if p_policy_version_id = v_membership.policy_version_id then
+    raise exception
+      'Membership % is already held to version %.',
+      v_membership.membership_number, v_target.version using errcode = 'P0001';
+  end if;
+
+  if not public.membership_policy_allows(p_policy_version_id, 'enrolment') then
+    raise exception
+      'Policy version % is not approved and in force, so nobody can be moved onto it.',
+      v_target.version using errcode = 'P0001';
+  end if;
+
+  select * into v_current
+  from public.membership_policy_versions
+  where id = public.membership_governing_policy(v_membership.id);
+
+  if v_target.effective_from < v_current.effective_from then
+    raise exception
+      'Policy version % took effect before version %, which membership % is already held to.',
+      v_target.version, v_current.version, v_membership.membership_number
+      using errcode = 'P0001';
+  end if;
+
+  select * into v_client from public.clients where id = v_membership.client_id;
+
+  -- The evidence. Handed to the same guard the enrolment acceptance goes
+  -- through, which verifies it and sets `verification_status` itself — so a
+  -- caller cannot assert consent here any more than they can there. If it
+  -- cannot be verified the guard raises, and the member stays on the terms
+  -- they already hold.
+  insert into public.membership_terms_acceptances
+    (membership_id, policy_version_id, accepted_at, signature_name,
+     consent_method, signature_path, witness_profile_id, challenge_id,
+     member_profile_id, accepted_place)
+  values
+    (p_membership_id, p_policy_version_id, pg_catalog.now(), p_signature_name,
+     p_consent_method, p_signature_path, p_witness_profile_id, p_challenge_id,
+     case when p_consent_method = 'member_portal' then v_client.profile_id end,
+     nullif(pg_catalog.btrim(coalesce(p_accepted_place, '')), ''))
+  returning id into v_acceptance;
+
+  -- Consent and changing governing terms are distinct operations. The dated
+  -- assignment is written only by transition_membership_to_policy.
+  return v_acceptance;
+end;
+$$;

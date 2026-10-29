@@ -1,3 +1,4 @@
+import { MemberPolicyPosition } from '@/components/policy-update/member-position';
 import { BadgeCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -149,6 +150,7 @@ export default async function MembershipDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
+      <MemberPolicyPosition membershipId={membership.id} />
       <PageHeader
         eyebrow="Member Register"
         icon={BadgeCheck}

@@ -242,7 +242,10 @@ begin
   -- would price the claim against a version they are no longer on.
   select * into v_policy
   from public.membership_policy_versions
-  where id = public.membership_governing_policy(p_membership_id);
+  where id = public.membership_governing_policy(p_membership_id,
+    case when p_claim_type = 'medical'
+      then (p_admission_at at time zone 'Africa/Kampala')::date
+      else p_event_date end);
 
   -- A next-of-kin record cited at intake has to belong to this member. Not a
   -- judgement about eligibility — that is the assessment's — but a record of
@@ -340,3 +343,200 @@ grant execute on function public.open_benefit_claim(
 
 revoke all on function public.condolence_next_of_kin_status(uuid) from public, anon;
 revoke all on function public.open_benefit_claim(uuid, text, date, text, timestamptz, timestamptz, bigint, text, text, uuid, uuid) from public, anon;
+
+-- New claims freeze the terms governing their event, preserving enrollment history.
+create or replace function public.benefit_claims_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_membership public.memberships;
+  v_version text;
+  v_tz text := 'Africa/Kampala';
+begin
+  if tg_op = 'INSERT' then
+    select * into v_membership
+    from public.memberships where id = new.membership_id;
+
+    if not found then
+      raise exception 'No such membership.' using errcode = 'P0001';
+    end if;
+
+    -- `pending` is refused: a membership that has not been activated has paid
+    -- no fee and saved nothing, so there is no programme to claim against.
+    -- `deceased` is permitted — it is the state a bereavement claim is made
+    -- in — and `suspended` is permitted at submission so the claim can be
+    -- *recorded*, with the assessment refusing it for the reason the client
+    -- has not settled what suspension costs a member.
+    if v_membership.status not in ('active', 'suspended', 'deceased') then
+      raise exception
+        'Membership % is %. A benefit may be claimed against an active, suspended or deceased membership.',
+        v_membership.membership_number, v_membership.status
+        using errcode = 'P0001';
+    end if;
+
+    new.client_id := v_membership.client_id;
+    new.branch_id := v_membership.branch_id;
+
+    -- The claim is judged under the member's own version, whatever was sent.
+    new.policy_version_id := public.membership_governing_policy(v_membership.id,
+      case when new.claim_type = 'medical'
+        then (new.admission_at at time zone v_tz)::date else new.event_date end);
+
+    select v.version into v_version
+    from public.membership_policy_versions v
+    where v.id = public.membership_governing_policy(v_membership.id,
+      case when new.claim_type = 'medical'
+        then (new.admission_at at time zone v_tz)::date else new.event_date end);
+
+    if v_version is null then
+      raise exception 'The membership''s policy version is missing.'
+        using errcode = 'P0001';
+    end if;
+
+    new.policy_version := v_version;
+
+    new.created_by := coalesce(public.current_profile_id(), new.created_by);
+    new.created_by_label := public.audit_actor_label();
+
+    -- A claim starts as a draft. Everything downstream is reached by the
+    -- function that performs that act, so an insert claiming to be already
+    -- assessed, approved or paid is overruled rather than argued with.
+    new.status := 'draft';
+    new.submitted_at := null;
+    new.submitted_by := null;
+    new.submitted_by_label := null;
+    new.verified_at := null;
+    new.verified_by := null;
+    new.verified_by_label := null;
+    new.assessed_at := null;
+    new.assessed_by := null;
+    new.assessed_by_label := null;
+    new.assessed_amount := null;
+    new.assessment_note := null;
+    new.decided_at := null;
+    new.decided_by := null;
+    new.decided_by_label := null;
+    new.decision_note := null;
+    new.approved_amount := null;
+    new.rejected_reason := null;
+    new.cancelled_reason := null;
+    new.information_required_note := null;
+    new.payment_id := null;
+
+    if new.claim_type = 'medical' then
+      -- Derived from the two instants, never supplied. All three readings,
+      -- because the client has not said which one "longer than one day"
+      -- means.
+      --
+      -- A claim still in the ward — no discharge yet — gets NULL for all
+      -- three, which `assess_benefit_claim` refuses: an admission that has
+      -- not ended has no length.
+      if new.discharge_at is null then
+        new.admission_nights := null;
+        new.admission_inclusive_days := null;
+        new.admission_elapsed_days := null;
+      else
+        new.admission_nights :=
+          ((new.discharge_at at time zone v_tz)::date
+            - (new.admission_at at time zone v_tz)::date);
+        new.admission_inclusive_days := new.admission_nights + 1;
+        new.admission_elapsed_days :=
+          pg_catalog.floor(
+            pg_catalog.date_part('epoch', new.discharge_at - new.admission_at)
+            / 86400.0
+          )::integer;
+      end if;
+
+      -- The admission date is the event, for every date-based rule.
+      new.event_date := (new.admission_at at time zone v_tz)::date;
+    end if;
+
+    return new;
+  end if;
+
+  -- --- UPDATE ------------------------------------------------------------
+
+  if new.status is distinct from old.status
+     and not public.benefit_claim_transition_allowed(old.status, new.status) then
+    raise exception
+      'A benefit claim cannot go from % to %. See benefit_claim_transition_allowed for what can follow %.',
+      old.status, new.status, old.status
+      using errcode = 'P0001';
+  end if;
+
+  -- Identity never changes.
+  if new.id is distinct from old.id
+     or new.claim_number is distinct from old.claim_number
+     or new.claim_type is distinct from old.claim_type
+     or new.membership_id is distinct from old.membership_id
+     or new.client_id is distinct from old.client_id
+     or new.created_by_label is distinct from old.created_by_label then
+    raise exception
+      'A benefit claim''s identity does not change. Cancel it and open another.'
+      using errcode = 'P0001';
+  end if;
+
+  -- The facts freeze at submission. A draft may be corrected freely — that is
+  -- what a draft is for — and from `submitted` onwards the claim asserts
+  -- them, so changing one would change what the assessment underneath it was
+  -- an assessment of.
+  if old.status <> 'draft' then
+    if new.policy_version_id is distinct from old.policy_version_id
+       or new.policy_version is distinct from old.policy_version
+       or new.event_date is distinct from old.event_date
+       or new.provider_name is distinct from old.provider_name
+       or new.admission_at is distinct from old.admission_at
+       or new.discharge_at is distinct from old.discharge_at
+       or new.bill_amount is distinct from old.bill_amount
+       or new.admission_nights is distinct from old.admission_nights
+       or new.admission_inclusive_days is distinct from old.admission_inclusive_days
+       or new.admission_elapsed_days is distinct from old.admission_elapsed_days
+       or new.deceased_name is distinct from old.deceased_name
+       or new.deceased_relationship is distinct from old.deceased_relationship
+       or new.claimed_amount is distinct from old.claimed_amount then
+      raise exception
+        'Claim % has been submitted, so the facts it asserts are fixed. Reject it with a reason and open a corrected claim — an assessment of changed facts is an assessment of something else.',
+        old.claim_number using errcode = 'P0001';
+    end if;
+
+    -- The beneficiary a bereavement claim names may be *added* while the
+    -- claim is still being verified — the next of kin is often registered
+    -- after the claim is opened — but it may never be swapped once named, and
+    -- never once the claim has been assessed. The recipient the business
+    -- decides on must not move under the decision.
+    if new.beneficiary_id is distinct from old.beneficiary_id
+       and (old.beneficiary_id is not null
+            or old.status in ('assessed', 'approved', 'paid', 'reversed')) then
+      raise exception
+        'Claim % already names a beneficiary, or has been assessed. The recipient of an authorised payment does not change — reject the claim and open another.',
+        old.claim_number using errcode = 'P0001';
+    end if;
+  end if;
+
+  -- An assessment, once made, is not edited. A reassessment goes back through
+  -- `assess_benefit_claim`, which may only run from a pre-assessment state —
+  -- so correcting one means the approver sending it back, on the record.
+  if old.assessed_at is not null
+     and new.status in ('assessed', 'approved', 'paid', 'reversed')
+     and (new.assessed_at is distinct from old.assessed_at
+          or new.assessed_by is distinct from old.assessed_by
+          or new.assessed_by_label is distinct from old.assessed_by_label
+          or new.assessed_amount is distinct from old.assessed_amount) then
+    raise exception
+      'Claim %''s assessment is on the record. An approver may send it back for reassessment; nobody edits it in place.',
+      old.claim_number using errcode = 'P0001';
+  end if;
+
+  -- The payment is the ledger's, not the claim's.
+  if old.payment_id is not null and new.payment_id is distinct from old.payment_id then
+    raise exception
+      'Claim % is already paid. A payment is reversed, never repointed.',
+      old.claim_number using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;

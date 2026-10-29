@@ -1,3 +1,4 @@
+import { LoanCollections } from '@/components/policy-update/loan-collections';
 import { Banknote } from 'lucide-react';
 
 import Link from 'next/link';
@@ -235,6 +236,7 @@ export default async function LoanDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
+      {canSeePayments ? <LoanCollections loanId={loan.id} canCarry={contextCan(context, 'payments:create') && loan.status === 'active'} /> : null}
       <PageHeader
         eyebrow="Lending Portfolio"
         icon={Banknote}

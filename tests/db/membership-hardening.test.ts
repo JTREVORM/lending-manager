@@ -627,7 +627,7 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
     expect(result.ok).toBe(false);
   });
 
-  it('records the acceptance and moves the member when the mechanism is used', async () => {
+  it('preserves the original terms and moves governing policy only through a verified transition', async () => {
     // Effective today, which is after the version the member is on. Terms
     // move forward; the test below asserts the other direction is refused.
     const target = await makeVersion('9.7', 0, 'draft', [
@@ -656,7 +656,20 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
         `select policy_version_id from public.memberships where id = $1`,
         [fx.membershipId],
       );
-      expect(moved.policy_version_id).toBe(target);
+      expect(moved.policy_version_id).toBe(fx.inForceVersionId);
+
+      const batch = await queryOne<{ id: string }>(
+        `select public.begin_membership_policy_transition(
+          $1, public.business_date(), 'Verified transition regression') as id`, [target]);
+      const assignment = await queryOne<{ id: string }>(
+        'select public.transition_membership_to_policy($1, $2) as id',
+        [batch.id, fx.membershipId]);
+      const governing = await queryOne<{ id: string }>(
+        'select public.membership_governing_policy($1) as id', [fx.membershipId]);
+      expect(governing.id).toBe(target);
+      const original = await queryOne<{ id: string }>(
+        'select policy_version_id as id from public.memberships where id = $1', [fx.membershipId]);
+      expect(original.id).toBe(fx.inForceVersionId);
 
       const acceptances = await query<{ policy_version: string }>(
         `select policy_version from public.membership_terms_acceptances
@@ -667,12 +680,19 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
 
       const audited = await query<{ action: string }>(
         `select action from public.audit_log
-          where entity_id = $1 and action = 'membership.policy_reaccepted'`,
-        [fx.membershipId],
+          where entity_id = $1 and action = 'membership_policy_assignments.recorded'`,
+        [assignment.id],
       );
       expect(audited.length).toBe(1);
     } finally {
-      // Put the member back where the rest of the file expects them.
+      await query('alter table public.membership_policy_assignments disable trigger membership_policy_assignments_no_delete');
+      try {
+        await query('delete from public.membership_policy_assignments where membership_id = $1', [fx.membershipId]);
+      } finally {
+        await query('alter table public.membership_policy_assignments enable trigger membership_policy_assignments_no_delete');
+      }
+      await query('delete from public.membership_policy_transitions where to_version_id = $1', [target]);
+      // The original policy was preserved throughout.
       await query(
         `alter table public.memberships disable trigger memberships_guard_transition`,
       );

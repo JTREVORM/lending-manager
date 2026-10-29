@@ -20,6 +20,19 @@
 /* ------------------------------------------------------------------ */
 
 export const NOTIFICATION_CATEGORIES = [
+  'benefit_claim_submitted',
+  'benefit_claim_information_required',
+  'benefit_claim_assessed',
+  'benefit_claim_decided',
+  'benefit_paid',
+  'benefit_payment_reversed',
+  'beneficiary_awaiting_verification',
+  'meeting_scheduled',
+  'meeting_rescheduled',
+  'meeting_cancelled',
+  'meeting_action_assigned',
+  'meeting_absence_notice_pending',
+  'meeting_fine_assessed',
   'loan_awaiting_approval',
   'loan_awaiting_disbursement',
   'loan_decided',
@@ -48,6 +61,19 @@ export function isNotificationCategory(value: unknown): value is NotificationCat
 export const NOTIFICATION_CATEGORY_LABELS: Readonly<
   Record<NotificationCategory, string>
 > = {
+  benefit_claim_submitted: 'Claim submitted',
+  benefit_claim_information_required: 'Claim information needed',
+  benefit_claim_assessed: 'Claim assessed',
+  benefit_claim_decided: 'Claim decided',
+  benefit_paid: 'Benefit paid',
+  benefit_payment_reversed: 'Benefit payment reversed',
+  beneficiary_awaiting_verification: 'Next of kin verification',
+  meeting_scheduled: 'Meeting scheduled',
+  meeting_rescheduled: 'Meeting rescheduled',
+  meeting_cancelled: 'Meeting cancelled',
+  meeting_action_assigned: 'Meeting action assigned',
+  meeting_absence_notice_pending: 'Absence notice awaiting review',
+  meeting_fine_assessed: 'Meeting fine assessed',
   loan_awaiting_approval: 'Awaiting approval',
   loan_awaiting_disbursement: 'Awaiting disbursement',
   loan_decided: 'Application decided',
@@ -72,6 +98,11 @@ export const NOTIFICATION_CATEGORY_LABELS: Readonly<
  * so the server filters on the real column rather than on a label.
  */
 export const NOTIFICATION_GROUPS = [
+  {
+    value: 'membership',
+    label: 'Membership programme',
+    categories: ['benefit_claim_submitted', 'benefit_claim_information_required', 'benefit_claim_assessed', 'benefit_claim_decided', 'benefit_paid', 'benefit_payment_reversed', 'beneficiary_awaiting_verification', 'meeting_scheduled', 'meeting_rescheduled', 'meeting_cancelled', 'meeting_action_assigned', 'meeting_absence_notice_pending', 'meeting_fine_assessed'],
+  },
   {
     value: 'decisions',
     label: 'Needs a decision',
@@ -187,6 +218,13 @@ export const NOTIFICATION_SEVERITY_RANK: Readonly<Record<NotificationSeverity, n
 /* ------------------------------------------------------------------ */
 
 export const NOTIFICATION_ENTITY_TYPES = [
+  'benefit_claim',
+  'benefit_payment',
+  'member_beneficiary',
+  'membership_meeting',
+  'meeting_action',
+  'meeting_absence_notice',
+  'meeting_fine',
   'loan',
   'payment',
   'client',
@@ -230,6 +268,10 @@ export function notificationHref(
     readonly expenses: string;
     readonly reconciliation: string;
     readonly finance: string;
+    readonly benefitClaims?: string;
+    readonly benefitPayments?: string;
+    readonly beneficiaries?: string;
+    readonly meetings?: string;
   },
 ): string | null {
   if (entityId === null) {
@@ -238,6 +280,20 @@ export function notificationHref(
   }
 
   switch (entityType) {
+    case 'benefit_claim':
+      return routes.benefitClaims ? `${routes.benefitClaims}/${entityId}` : null;
+    case 'benefit_payment':
+      return routes.benefitPayments ?? null;
+    case 'member_beneficiary':
+      return routes.beneficiaries ? `${routes.beneficiaries}/${entityId}` : null;
+    case 'membership_meeting':
+      return routes.meetings ? `${routes.meetings}/${entityId}` : null;
+    case 'meeting_action':
+      return routes.meetings ? `${routes.meetings}/actions/${entityId}` : null;
+    case 'meeting_absence_notice':
+      return routes.meetings ? `${routes.meetings}/notices/${entityId}` : null;
+    case 'meeting_fine':
+      return routes.meetings ? `${routes.meetings}/fines/${entityId}` : null;
     case 'loan':
     case 'collateral':
       return `${routes.loans}/${entityId}`;

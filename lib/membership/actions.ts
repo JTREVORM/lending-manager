@@ -420,7 +420,7 @@ export async function recordConsentAction(
 
   return {
     ok: true,
-    message: 'Acceptance recorded. The member is now held to this version.',
+    message: 'Verified acceptance recorded. A controlled policy transition is a separate step.',
     membershipId: input.membershipId,
   };
 }

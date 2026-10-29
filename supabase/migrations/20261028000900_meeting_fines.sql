@@ -375,6 +375,7 @@ begin
     -- Fineable when all of: the meeting happened, the member was absent, no
     -- accepted excuse, and no fine already charged.
     v_meeting.status = 'held'
+      and v_meeting.scheduled_at <= pg_catalog.now()
       and a.attendance in ('absent', 'apology')
       and coalesce(n.review_status, 'none') not in ('approved', 'pending')
       and not exists (
@@ -382,6 +383,8 @@ begin
         where f.meeting_id = p_meeting_id and f.membership_id = a.membership_id
       ),
     case
+      when v_meeting.scheduled_at > pg_catalog.now()
+        then 'The meeting has not started. No absence fine can be assessed yet.'
       when v_meeting.status = 'cancelled'
         then 'The meeting was cancelled. Nobody is absent from a meeting that did not happen.'
       when v_meeting.status <> 'held'

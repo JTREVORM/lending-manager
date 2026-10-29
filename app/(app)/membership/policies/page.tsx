@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { BadgeCheck } from 'lucide-react';
 
 import { MembershipPolicyPanel } from '@/components/membership/membership-policy-panel';
@@ -45,7 +46,7 @@ export default async function MembershipPoliciesPage() {
   const current = policies.find((policy) => policy.status === 'active') ?? policies[0];
   const others = policies.filter((policy) => policy.id !== current?.id);
 
-  const canManage = contextCan(context, 'membership:manage_policies');
+  const canManage = contextCan(context, 'membership_policy:manage');
 
   return (
     <div className="min-w-0 space-y-6">
@@ -58,11 +59,9 @@ export default async function MembershipPoliciesPage() {
       />
 
       {canManage ? (
-        <Alert tone="info" title="This screen is read-only">
-          You hold the capability to publish and approve a policy version. The screen that
-          does it is built in the next phase of the programme; until then a version is
-          published by migration, so that the figures a member is held to are reviewed
-          before they are in force.
+        <Alert tone="info" title="Policy timing and controlled transitions">
+          <Link className="underline" href="/membership/policies/transitions">Open policy transition management</Link>
+          {' '}to preview qualification changes, record authorized draft timing and manage verified member transitions.
         </Alert>
       ) : null}
 
