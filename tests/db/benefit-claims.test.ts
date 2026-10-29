@@ -1221,10 +1221,12 @@ describeDb('benefit receipt retry identity', () => {
     const member = await fx.nextMember();
     const claimId = await openMedicalClaim(member, 400_000);
     expect((await driveToAssessed(claimId, member, 'medical')).ok).toBe(true);
-    const approved = await asUserCommitted(fx.approver, [{
-      sql: 'select public.approve_benefit_claim($1, null, null)',
-      params: [claimId],
-    }]);
+    const approved = await asUserCommitted(fx.approver, [
+      {
+        sql: 'select public.approve_benefit_claim($1, null, null)',
+        params: [claimId],
+      },
+    ]);
     expect(approved.ok, approved.message).toBe(true);
     const key = 'fec3e3c8-bc88-4cbb-b681-42ee2b6e8043';
     const request = {
@@ -1236,13 +1238,15 @@ describeDb('benefit receipt retry identity', () => {
     expect(first.ok, first.message).toBe(true);
     expect(retry.ok, retry.message).toBe(true);
     expect(retry.rows[0]).toEqual(first.rows[0]);
-    const changed = await asUser(fx.owner,
+    const changed = await asUser(
+      fx.owner,
       "select public.post_benefit_payment($1, 'bank', 'BANK-RETRY', $2::uuid)",
       [claimId, key],
     );
     expect(changed.ok).toBe(false);
     expect(changed.code).toBe('42501');
-    const differentClaim = await asUser(fx.owner,
+    const differentClaim = await asUser(
+      fx.owner,
       "select public.post_benefit_payment(gen_random_uuid(), 'cash', null, $1::uuid)",
       [key],
     );

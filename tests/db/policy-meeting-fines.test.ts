@@ -410,4 +410,46 @@ describe.skipIf(!hasDatabase)('policy meeting fine safety', () => {
     );
     expect(reconciliation.savings).toBe(reconciliation.ledger);
   });
+  it('carries unpaid collections concurrently once without altering the contract or ledger', async () => {
+    const actors = await createLoanScenario();
+    const loanId = await createDraftLoan(actors.clientId);
+    await approveLoan(loanId, actors);
+    await disburseApprovedLoan(loanId, actors);
+    const snapshotSql = `select
+      (select to_jsonb(l)::text from public.loans l where id=$1) as loan,
+      (select jsonb_agg(to_jsonb(i) order by i.installment_number)::text
+        from public.loan_installments i where loan_id=$1) as installments,
+      (select jsonb_agg(to_jsonb(s) order by s.loan_id)::text
+        from public.loan_schedules s where loan_id=$1) as schedules,
+      (select count(*)::text from public.journal_entries) as journals,
+      (select sum(debit)::text from public.journal_lines) as debits,
+      (select sum(credit)::text from public.journal_lines) as credits`;
+    const before = await queryOne(snapshotSql, [loanId]);
+    const carry = () => asUserCommitted(actors.secretary, [
+      { sql: "select set_config('app.business_now', (public.business_now() + interval '35 days')::text, true)" },
+      { sql: 'select public.carry_forward_unpaid_installments($1, public.business_date(), $2) as carried', params: [loanId, 'Concurrent monthly collection test'] },
+    ]);
+    const results = await Promise.all([carry(), carry()]);
+    expect(results.every((result) => result.ok)).toBe(true);
+    const counts = results.map((result) => Number((result.rows.at(-1) as { carried: number }).carried));
+    expect(counts.filter((count) => count > 0)).toHaveLength(1);
+    expect(counts.filter((count) => count === 0)).toHaveLength(1);
+    expect(await queryOne(snapshotSql, [loanId])).toEqual(before);
+    const moved = await queryOne<{ count: string; original: boolean }>(
+      `select count(*)::text,
+        bool_and(c.original_due_date=i.due_date) as original
+       from public.loan_installment_carry_forwards c
+       join public.loan_installments i on i.id=c.installment_id
+       where c.loan_id=$1`, [loanId],
+    );
+    expect(Number(moved.count)).toBeGreaterThan(0);
+    expect(moved.original).toBe(true);
+    const future = await asUser(actors.secretary,
+      'select public.carry_forward_unpaid_installments($1, public.business_date()+1, $2)',
+      [loanId, 'Premature future collection'],
+    );
+    expect(future.ok).toBe(false);
+    expect(future.message).toContain('future installment');
+  });
+
 });

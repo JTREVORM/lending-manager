@@ -971,18 +971,14 @@ end;
 $$;
 
 
--- Preserve reversal amounts, allocations and penalty arithmetic; share the
--- policy safety lock before reopening a cleared debt.
-create or replace function public.reverse_payment(
-  p_payment_id uuid,
-  p_reason text
-)
-returns uuid
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $$
+-- Preserve reversal amounts, allocations, penalty arithmetic and the ledger
+-- contra journal; share the policy safety lock before reopening cleared debt.
+CREATE OR REPLACE FUNCTION public.reverse_payment(p_payment_id uuid, p_reason text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
 declare
   v_payment public.loan_payments;
   v_loan    public.loans;
@@ -1022,7 +1018,7 @@ begin
   -- payment posting cannot interleave with the reopening below.
   select * into v_loan from public.loans where id = v_payment.loan_id for update;
 
-  -- Serialize decisions that can reopen debt against withdrawal or bereavement payment.
+  -- Coordinate reopening debt with withdrawal and bereavement payment checks.
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtext('policy_client_financial:' || v_loan.client_id::text)
   );
@@ -1103,6 +1099,13 @@ begin
   -- about the reversal alone.
   perform public.ensure_penalty_applied(v_payment.loan_id);
 
+
+  -- --- Phase 10: the ledger ----------------------------------------------
+  --
+  -- The contra entry. Posted after `ensure_penalty_applied` above, so that a
+  -- penalty the reversal re-exposes is already materialised and this
+  -- transaction either records both or neither.
+  perform public.post_reversal_journal(p_payment_id);
   return p_payment_id;
 end;
-$$;
+$function$;
