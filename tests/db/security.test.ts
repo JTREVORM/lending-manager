@@ -108,6 +108,7 @@ describeDb('row level security', () => {
       'benefit_claim_portal_view:SELECT',
       'benefit_claim_register:SELECT',
       'benefit_claims:SELECT',
+      'benefit_death_confirmations:SELECT',
       'benefit_document_kinds:SELECT',
       'benefit_payment_register:SELECT',
       'benefit_payments:SELECT',
@@ -190,6 +191,7 @@ describeDb('row level security', () => {
       'loan_collateral_register:SELECT',
       // Phase 7. Three derived views, SELECT only, each `security_invoker` so
       // it is read under the caller's own policies.
+      'loan_collection_schedule:SELECT',
       'loan_delinquency:SELECT',
       // Phase 13. The evidence filed with an application: read with
       // `loans:view`, written and removed with `loans:documents`.
@@ -205,6 +207,7 @@ describeDb('row level security', () => {
       'loan_guarantors:SELECT',
       'loan_guarantors:UPDATE',
       'loan_identity_snapshots:SELECT',
+      'loan_installment_carry_forwards:SELECT',
       'loan_installment_coverage:SELECT',
       // Phase 5. SELECT and nothing else: the collection schedule is written
       // only by generate_loan_schedule, which runs as the table owner, so no
@@ -259,10 +262,15 @@ describeDb('row level security', () => {
       // two views. Both tables are written by `approve_loan` and the release
       // trigger, both SECURITY DEFINER, so the privilege a session would need
       // to forge a snapshot or a pledge simply does not exist.
+      'meeting_absence_notice_register:SELECT',
+      'meeting_absence_notices:SELECT',
       'meeting_action_items:SELECT',
       'meeting_attendance:SELECT',
       'meeting_attendance_corrections:SELECT',
       'meeting_attendance_register:SELECT',
+      'meeting_fine_payments:SELECT',
+      'meeting_fine_register:SELECT',
+      'meeting_fines:SELECT',
       'member_beneficiaries:SELECT',
       'member_beneficiary_identities:SELECT',
       'member_beneficiary_register:SELECT',
@@ -305,6 +313,8 @@ describeDb('row level security', () => {
       'membership_meeting_register:SELECT',
       'membership_meetings:SELECT',
       'membership_meetings:UPDATE',
+      'membership_policy_assignments:SELECT',
+      'membership_policy_transitions:SELECT',
       'membership_policy_versions:INSERT',
       'membership_policy_versions:SELECT',
       'membership_policy_versions:UPDATE',
@@ -395,6 +405,7 @@ describeDb('row level security', () => {
       'benefit_claim_documents:DELETE',
       'benefit_claim_documents:SELECT',
       'benefit_claims:SELECT',
+      'benefit_death_confirmations:SELECT',
       'benefit_document_kinds:SELECT',
       'benefit_payments:SELECT',
       'branches:SELECT',
@@ -462,6 +473,7 @@ describeDb('row level security', () => {
       // Phase 5. SELECT and nothing else: the collection schedule is written
       // only by generate_loan_schedule, which runs as the table owner, so no
       // write privilege exists for a session to misuse.
+      'loan_installment_carry_forwards:SELECT',
       'loan_installments:SELECT',
       // Phase 6. The payment ledger, likewise: post_payment and
       // reverse_payment are the only writers.
@@ -491,9 +503,12 @@ describeDb('row level security', () => {
       'loans:UPDATE',
       // Polytos Phase 3. One SELECT policy each, and no write policy
       // anywhere: nothing a session does writes either table.
+      'meeting_absence_notices:SELECT',
       'meeting_action_items:SELECT',
       'meeting_attendance:SELECT',
       'meeting_attendance_corrections:SELECT',
+      'meeting_fine_payments:SELECT',
+      'meeting_fines:SELECT',
       'member_beneficiaries:SELECT',
       'member_beneficiary_identities:SELECT',
       'member_loan_eligibility_snapshots:SELECT',
@@ -509,6 +524,8 @@ describeDb('row level security', () => {
       'membership_fee_receipts:SELECT',
       'membership_meetings:SELECT',
       'membership_meetings:UPDATE',
+      'membership_policy_assignments:SELECT',
+      'membership_policy_transitions:SELECT',
       'membership_policy_versions:INSERT',
       'membership_policy_versions:SELECT',
       'membership_policy_versions:UPDATE',
@@ -892,6 +909,7 @@ describeDb('views', () => {
         // penalty eligibility are computed on every read from the schedule,
         // the ledger and the business date, so no process has to run and no
         // column can go stale.
+        'loan_collection_schedule',
         'loan_delinquency',
         'loan_guarantor_evidence',
         'loan_guarantor_register',
@@ -919,7 +937,9 @@ describeDb('views', () => {
         // savings support, and member loans with their frozen eligibility
         // evidence beside them — each the one read a dashboard or a panel
         // makes, rather than a function call per member.
+        'meeting_absence_notice_register',
         'meeting_attendance_register',
+        'meeting_fine_register',
         'member_beneficiary_register',
         'member_loan_eligibility',
         'member_loan_register',
@@ -996,7 +1016,7 @@ describeDb('views', () => {
     // and the member-loan register. And six from Polytos Phase 4: the claim
     // register and the portal's read of it, the beneficiary register, the
     // payment register, the meeting register and the attendance register.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(45);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(48);
   });
 });
 
@@ -1059,6 +1079,8 @@ describeDb('privileged functions', () => {
       // states, because the policies do not run for a definer function and
       // that is the whole privilege-escalation risk one carries.
       'assess_benefit_claim',
+      'assess_meeting_fine',
+      'assess_meeting_fines',
       'assess_member_loan_eligibility',
       'attach_benefit_document',
       'audit_actor_label',
@@ -1118,13 +1140,17 @@ describeDb('privileged functions', () => {
       'audit_user_role_change',
       'backfill_ledger_history',
       'begin_benefit_verification',
+      'begin_membership_policy_transition',
+      'benefit_blocked_reason',
       'benefit_claim_documents_delete_guard',
       'benefit_claim_documents_guard',
       'benefit_claim_eligibility',
       'benefit_claims_assign_number',
       'benefit_claims_guard',
+      'benefit_death_confirmations_guard',
       'benefit_expense_account',
       'benefit_expense_by_type',
+      'benefit_payment_blocked_reason',
       'benefit_payments_assign_number',
       'benefit_payments_guard',
       'benefit_summary',
@@ -1141,16 +1167,22 @@ describeDb('privileged functions', () => {
       // session may write, and the two trigger functions enforce the
       // product's own bounds and supply a default. None is granted to
       // `authenticated`.
+      'cancel_meeting_fine',
       'cancel_membership_meeting',
       'cancel_savings_withdrawal',
       'capture_loan_product_snapshot',
+      'carry_forward_unpaid_installments',
       'client_guarantors_guard_detach',
       'client_has_live_loan',
+      'client_has_outstanding_loan',
+      'client_outstanding_loans',
       'client_remarks_stamp_author',
       'clients_assign_client_number',
       'clients_guard_privileged_columns',
       'clients_stamp_branch',
       'clients_stamp_provenance',
+      'complete_membership_policy_transition',
+      'condolence_next_of_kin_status',
       'confirm_password_change',
       'consume_rate_limit',
       'current_profile_id',
@@ -1159,6 +1191,7 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      'death_confirmation_count',
       'decide_savings_withdrawal',
       'disburse_loan',
       'enrol_member',
@@ -1244,8 +1277,17 @@ describeDb('privileged functions', () => {
       // so neither needs to run as the owner — which is the same reason
       // `calculate_loan_breakdown` is not here.
       'medical_benefit_consumed',
+      'meeting_absence_excused',
+      'meeting_absence_notices_guard',
+      'meeting_fine_candidates',
+      'meeting_fine_payments_assign_number',
+      'meeting_fine_payments_guard',
+      'meeting_fine_summary',
+      'meeting_fines_assign_number',
+      'meeting_fines_guard',
       'member_beneficiaries_assign_number',
       'member_beneficiaries_guard',
+      'member_benefit_position',
       'member_lending_blocked_reason',
       'member_loan_eligibility_of',
       'member_loan_pledges_guard',
@@ -1285,14 +1327,18 @@ describeDb('privileged functions', () => {
       // beside them because it reports the business as a whole, where there
       // is no row for a policy to filter, so it asks for
       // `savings:view_reports` in so many words.
+      'member_savings_position',
       'membership_cards_assign_number',
       'membership_cards_guard',
       'membership_fee_is_posted',
       'membership_fee_receipts_assign_number',
       'membership_fee_receipts_guard',
+      'membership_governing_policy',
       'membership_meetings_assign_number',
       'membership_meetings_guard',
       'membership_policy_allows',
+      'membership_policy_terms_guard',
+      'membership_policy_transitions_assign_number',
       'membership_policy_versions_guard',
       // Polytos Phase 4. The tenth undecided rule — whether the medical
       // benefit year runs from January or from the member's own anniversary —
@@ -1300,6 +1346,7 @@ describeDb('privileged functions', () => {
       // other nine are. A trigger of its own rather than 140 lines copied into
       // the Phase 4 migration, where the copy would be the one that drifted.
       'membership_policy_year_basis_guard',
+      'membership_savings_qualified',
       'membership_terms_acceptances_guard',
       'membership_terms_are_accepted',
       'memberships_assign_number',
@@ -1307,6 +1354,7 @@ describeDb('privileged functions', () => {
       'memberships_record_status',
       'memberships_stamp_provenance',
       'next_reference',
+      'notify_absence_notice_pending',
       'notify_beneficiary_awaiting_verification',
       'notify_benefit_claim_transition',
       'notify_client_blacklisted',
@@ -1315,6 +1363,7 @@ describeDb('privileged functions', () => {
       'notify_loan_transition',
       'notify_low_float',
       'notify_meeting_action_assigned',
+      'notify_meeting_fine_assessed',
       'notify_meeting_moved',
       'notify_meeting_scheduled',
       'notify_payment_reversed',
@@ -1328,12 +1377,14 @@ describeDb('privileged functions', () => {
       'post_disbursement_journal',
       'post_expense_journal',
       'post_journal',
+      'post_meeting_fine_payment',
       'post_payment',
       'post_repayment_journal',
       'post_reversal_journal',
       'post_savings_deposit',
       'post_savings_withdrawal',
       'post_transfer_journal',
+      'preview_membership_policy_transition',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
@@ -1343,7 +1394,9 @@ describeDb('privileged functions', () => {
       // could address one to any capability it liked.
       'raise_notification',
       'record_audit_event',
+      'record_death_confirmation',
       'record_expense',
+      'record_meeting_absence_notice',
       'record_meeting_minutes',
       'record_membership_fee',
       'record_other_income',
@@ -1366,6 +1419,7 @@ describeDb('privileged functions', () => {
       'reschedule_membership_meeting',
       'reverse_benefit_payment',
       'reverse_expense',
+      'reverse_meeting_fine_payment',
       'reverse_membership_fee',
       'reverse_other_income',
       'reverse_payment',
@@ -1375,7 +1429,9 @@ describeDb('privileged functions', () => {
       // numbering. SECURITY DEFINER so it can read `reference_sequences`,
       // which stays default-deny to every session; it re-checks
       // `settings:view` inside, because the grant alone decides nothing.
+      'review_meeting_absence_notice',
       'revoke_member_beneficiary',
+      'savings_account_governing_policy',
       'savings_accounts_assign_number',
       'savings_accounts_guard',
       'savings_accounts_stamp_provenance',
@@ -1383,6 +1439,7 @@ describeDb('privileged functions', () => {
       // has already named, and both are what the policy's live-loan rule is
       // written against — so they must give the same answer to every caller.
       'savings_pledged_amount',
+      'savings_qualification_under_policy',
       'savings_summary',
       'savings_transactions_assign_number',
       'savings_withdrawable_amount',
@@ -1392,6 +1449,7 @@ describeDb('privileged functions', () => {
       'settings_reference_sequences',
       'submit_benefit_claim',
       'submit_reconciliation',
+      'transition_membership_to_policy',
       'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
@@ -1511,6 +1569,8 @@ describeDb('privileged functions', () => {
       // branch rule before it reads anything, and an invisible client and a
       // nonexistent one give it the same answer.
       'assess_benefit_claim',
+      'assess_meeting_fine',
+      'assess_meeting_fines',
       'assess_member_loan_eligibility',
       // Phase 7. The business clock and the timezone it is read in. Granted
       // because every screen needs to know what "today" means to the
@@ -1519,11 +1579,14 @@ describeDb('privileged functions', () => {
       // direct owner connection, which no application path has.
       'attach_benefit_document',
       'begin_benefit_verification',
+      'begin_membership_policy_transition',
       'benefit_amount_for_claim',
+      'benefit_blocked_reason',
       'benefit_claim_eligibility',
       'benefit_claim_transition_allowed',
       'benefit_expense_account',
       'benefit_expense_by_type',
+      'benefit_payment_blocked_reason',
       'benefit_policy_year_bounds',
       'benefit_summary',
       'benefits_blocked_reason',
@@ -1546,9 +1609,15 @@ describeDb('privileged functions', () => {
       // capability on the session before it writes anything — which is why
       // they are reachable from a session at all. Their refusals are
       // asserted in tests/db/savings.test.ts and rls-savings.test.ts.
+      'cancel_meeting_fine',
       'cancel_membership_meeting',
       'cancel_savings_withdrawal',
+      'carry_forward_unpaid_installments',
       'client_has_live_loan',
+      'client_has_outstanding_loan',
+      'client_outstanding_loans',
+      'complete_membership_policy_transition',
+      'condolence_next_of_kin_status',
       'consume_rate_limit',
       'current_profile_id',
       // Phase 18. The whole session in one round trip: the caller's active
@@ -1570,6 +1639,7 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      'death_confirmation_count',
       'decide_savings_withdrawal',
       'disburse_loan',
       // Phase 13. The existing clients who could back an application, each
@@ -1587,6 +1657,7 @@ describeDb('privileged functions', () => {
       'issue_membership_card',
       'issue_membership_consent_code',
       'ledger_account_balance',
+      'loan_collection_period_total',
       'loan_outstanding',
       // Phase 7, all three SECURITY INVOKER for the same reason. The as-of
       // balance is a read-only historical figure: no mutation accepts a date,
@@ -1619,6 +1690,10 @@ describeDb('privileged functions', () => {
       // calls it so that staff see the authoritative figures rather than the
       // browser's.
       'medical_benefit_consumed',
+      'meeting_absence_excused',
+      'meeting_fine_candidates',
+      'meeting_fine_summary',
+      'member_benefit_position',
       'member_lending_blocked_reason',
       'member_loan_cadence_for_term',
       'member_loan_interest',
@@ -1627,9 +1702,12 @@ describeDb('privileged functions', () => {
       // the session before it reads anything.
       'member_loan_summary',
       'member_primary_beneficiary',
+      'member_savings_position',
       'member_savings_qualification',
       'membership_fee_is_posted',
+      'membership_governing_policy',
       'membership_policy_allows',
+      'membership_savings_qualified',
       'membership_terms_are_accepted',
       // Polytos Phase 3. The calendar-monthly collection date rule, granted
       // for the same reason: pure, immutable, and the one place the rule is
@@ -1644,6 +1722,7 @@ describeDb('privileged functions', () => {
       // capability inside, because SECURITY DEFINER means the grant alone
       // decides nothing.
       'post_benefit_payment',
+      'post_meeting_fine_payment',
       'post_payment',
       // Phase 11. The four money-movement writers and their decisions.
       // Granted for the same reason `post_payment` is: the application
@@ -1654,7 +1733,10 @@ describeDb('privileged functions', () => {
       // callers should reach them.
       'post_savings_deposit',
       'post_savings_withdrawal',
+      'preview_membership_policy_transition',
+      'record_death_confirmation',
       'record_expense',
+      'record_meeting_absence_notice',
       'record_meeting_minutes',
       'record_membership_fee',
       'record_other_income',
@@ -1674,6 +1756,7 @@ describeDb('privileged functions', () => {
       'reschedule_membership_meeting',
       'reverse_benefit_payment',
       'reverse_expense',
+      'reverse_meeting_fine_payment',
       'reverse_membership_fee',
       'reverse_other_income',
       'reverse_payment',
@@ -1686,8 +1769,11 @@ describeDb('privileged functions', () => {
       // Polytos Phase 3. Each answers one figure about an account the caller
       // has already named, and both are what the policy's live-loan rule is
       // written against — so they must give the same answer to every caller.
+      'review_meeting_absence_notice',
       'revoke_member_beneficiary',
+      'savings_account_governing_policy',
       'savings_pledged_amount',
+      'savings_qualification_under_policy',
       'savings_statement',
       'savings_summary',
       'savings_withdrawable_amount',
@@ -1704,6 +1790,7 @@ describeDb('privileged functions', () => {
       'storage_path_membership_id',
       'submit_benefit_claim',
       'submit_reconciliation',
+      'transition_membership_to_policy',
       'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',

@@ -49,6 +49,7 @@ describeDb('tables', () => {
     'benefit_assessment_snapshots',
     'benefit_claim_documents',
     'benefit_claims',
+    'benefit_death_confirmations',
     'benefit_document_kinds',
     'benefit_payments',
     // Phase 10: the branch network and the double-entry ledger.
@@ -95,6 +96,7 @@ describeDb('tables', () => {
     'loan_identity_snapshots',
     // Phase 5: the collection plan — one generation record per loan, and the
     // scheduled collections that allocate the contractual breakdown.
+    'loan_installment_carry_forwards',
     'loan_installments',
     'loan_payments',
     // Phase 7: the one-time expiry penalty. Arrears are *not* here — they are
@@ -132,9 +134,12 @@ describeDb('tables', () => {
     // it was corrected. Nothing anywhere reads either to decide anything —
     // the client's documents do not make attendance a condition of savings,
     // a loan, a benefit or a profit share, so the schema does not either.
+    'meeting_absence_notices',
     'meeting_action_items',
     'meeting_attendance',
     'meeting_attendance_corrections',
+    'meeting_fine_payments',
+    'meeting_fines',
     'member_beneficiaries',
     // Polytos Phase 4: the payment instruction itself, split off because Row
     // Level Security is row-level — a single table could only grant or deny
@@ -150,6 +155,8 @@ describeDb('tables', () => {
     'membership_fee_receipts',
     // Polytos Phase 4: monthly membership meetings.
     'membership_meetings',
+    'membership_policy_assignments',
+    'membership_policy_transitions',
     'membership_policy_versions',
     'membership_status_history',
     'membership_terms_acceptances',
@@ -339,6 +346,7 @@ describeDb('foreign keys', () => {
       'benefit_assessment_snapshots.beneficiary_id -> member_beneficiaries (r)',
       'benefit_assessment_snapshots.claim_id -> benefit_claims (r)',
       'benefit_assessment_snapshots.client_id -> clients (r)',
+      'benefit_assessment_snapshots.deceased_beneficiary_id -> member_beneficiaries (r)',
       'benefit_assessment_snapshots.membership_id -> memberships (r)',
       'benefit_assessment_snapshots.policy_version_id -> membership_policy_versions (r)',
       'benefit_claim_documents.beneficiary_id -> member_beneficiaries (r)',
@@ -353,12 +361,17 @@ describeDb('foreign keys', () => {
       'benefit_claims.branch_id -> branches (r)',
       'benefit_claims.client_id -> clients (r)',
       'benefit_claims.created_by -> profiles (n)',
+      'benefit_claims.deceased_beneficiary_id -> member_beneficiaries (r)',
       'benefit_claims.deceased_relationship -> beneficiary_relationships (r)',
       'benefit_claims.decided_by -> profiles (n)',
       'benefit_claims.membership_id -> memberships (r)',
       'benefit_claims.policy_version_id -> membership_policy_versions (r)',
       'benefit_claims.submitted_by -> profiles (n)',
       'benefit_claims.verified_by -> profiles (n)',
+      'benefit_death_confirmations.claim_id -> benefit_claims (r)',
+      'benefit_death_confirmations.confirming_membership_id -> memberships (r)',
+      'benefit_death_confirmations.recorded_by -> profiles (n)',
+      'benefit_death_confirmations.subject_membership_id -> memberships (r)',
       'benefit_payments.branch_id -> branches (r)',
       'benefit_payments.cash_account_id -> ledger_accounts (r)',
       'benefit_payments.claim_id -> benefit_claims (r)',
@@ -476,6 +489,9 @@ describeDb('foreign keys', () => {
       // 20261005000200 refuses the delete outright, referenced or not.
       // `r` on `generated_by`, not `n`: the schedule names who released the
       // money, and that attribution is evidence rather than provenance.
+      'loan_installment_carry_forwards.carried_by -> profiles (n)',
+      'loan_installment_carry_forwards.installment_id -> loan_installments (r)',
+      'loan_installment_carry_forwards.loan_id -> loans (r)',
       'loan_installments.loan_id -> loans (c)',
       'loan_installments.loan_period_id -> loan_periods (c)',
       // Phase 6. `r` restricts everywhere on the ledger, with no `c` and no
@@ -558,6 +574,12 @@ describeDb('foreign keys', () => {
       // Phase 2 documents follow, and for the same reason: the record of what
       // the business lent against must not be able to vanish because somebody
       // removed a row somewhere else.
+      'meeting_absence_notices.branch_id -> branches (r)',
+      'meeting_absence_notices.client_id -> clients (r)',
+      'meeting_absence_notices.meeting_id -> membership_meetings (r)',
+      'meeting_absence_notices.membership_id -> memberships (r)',
+      'meeting_absence_notices.reported_by -> profiles (n)',
+      'meeting_absence_notices.reviewed_by -> profiles (n)',
       'meeting_action_items.assigned_to -> profiles (r)',
       'meeting_action_items.completed_by -> profiles (n)',
       'meeting_action_items.created_by -> profiles (n)',
@@ -570,6 +592,24 @@ describeDb('foreign keys', () => {
       'meeting_attendance_corrections.corrected_by -> profiles (n)',
       'meeting_attendance_corrections.meeting_id -> membership_meetings (r)',
       'meeting_attendance_corrections.membership_id -> memberships (r)',
+      'meeting_fine_payments.branch_id -> branches (r)',
+      'meeting_fine_payments.cash_account_id -> ledger_accounts (r)',
+      'meeting_fine_payments.client_id -> clients (r)',
+      'meeting_fine_payments.fine_id -> meeting_fines (r)',
+      'meeting_fine_payments.income_account_id -> ledger_accounts (r)',
+      'meeting_fine_payments.journal_entry_id -> journal_entries (r)',
+      'meeting_fine_payments.membership_id -> memberships (r)',
+      'meeting_fine_payments.received_by -> profiles (n)',
+      'meeting_fine_payments.reversal_entry_id -> journal_entries (r)',
+      'meeting_fine_payments.reversed_by -> profiles (n)',
+      'meeting_fines.assessed_by -> profiles (n)',
+      'meeting_fines.branch_id -> branches (r)',
+      'meeting_fines.cancelled_by -> profiles (n)',
+      'meeting_fines.client_id -> clients (r)',
+      'meeting_fines.meeting_id -> membership_meetings (r)',
+      'meeting_fines.membership_id -> memberships (r)',
+      'meeting_fines.notice_id -> meeting_absence_notices (r)',
+      'meeting_fines.policy_version_id -> membership_policy_versions (r)',
       'member_beneficiaries.branch_id -> branches (r)',
       'member_beneficiaries.client_id -> clients (r)',
       'member_beneficiaries.membership_id -> memberships (r)',
@@ -613,6 +653,15 @@ describeDb('foreign keys', () => {
       'membership_meetings.branch_id -> branches (r)',
       'membership_meetings.created_by -> profiles (n)',
       'membership_meetings.minutes_finalised_by -> profiles (n)',
+      'membership_policy_assignments.acceptance_id -> membership_terms_acceptances (r)',
+      'membership_policy_assignments.assigned_by -> profiles (n)',
+      'membership_policy_assignments.membership_id -> memberships (r)',
+      'membership_policy_assignments.policy_version_id -> membership_policy_versions (r)',
+      'membership_policy_assignments.previous_version_id -> membership_policy_versions (r)',
+      'membership_policy_assignments.transition_id -> membership_policy_transitions (r)',
+      'membership_policy_transitions.from_version_id -> membership_policy_versions (r)',
+      'membership_policy_transitions.requested_by -> profiles (n)',
+      'membership_policy_transitions.to_version_id -> membership_policy_versions (r)',
       'membership_policy_versions.approved_by -> profiles (n)',
       'membership_policy_versions.created_by -> profiles (n)',
       'membership_status_history.changed_by -> profiles (r)',

@@ -711,7 +711,7 @@ begin
   end if;
 
   select * into v_transition
-  from public.membership_policy_transitions where id = p_transition_id;
+  from public.membership_policy_transitions where id = p_transition_id for update;
 
   if not found then
     raise exception 'No such policy transition.' using errcode = 'P0001';
@@ -779,7 +779,7 @@ begin
   where membership_id = p_membership_id
     and policy_version_id = v_transition.to_version_id;
 
-  if not found then
+  if not found or v_acceptance.verification_status <> 'verified' then
     raise exception
       'Membership % has not accepted the terms of policy version %. A member is not moved onto terms they have not agreed to.',
       v_membership.membership_number, v_transition.to_version

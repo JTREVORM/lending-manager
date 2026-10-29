@@ -52,7 +52,12 @@ jobs:
         run: npm run lint
 
       - name: Format
-        run: npm run format:check
+        run: |
+          if ! npm run format:check; then
+            npm run format
+            git diff -- .
+            exit 1
+          fi
 
       - name: Unit and integration tests
         run: npm run test:run

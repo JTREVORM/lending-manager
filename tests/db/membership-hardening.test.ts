@@ -134,6 +134,20 @@ async function makeVersion(
   status: 'draft' | 'active' | 'superseded',
   decided: readonly (keyof typeof DECIDED)[] = [],
 ): Promise<string> {
+  const compatibilityColumns: string[] = [];
+  const compatibilityValues: string[] = [];
+  if (decided.includes('medical_benefit_annual_cap')) {
+    compatibilityColumns.push('medical_benefit_cap_mode');
+    compatibilityValues.push("'amount'");
+  }
+  if (decided.includes('benefit_waiting_period_days')) {
+    compatibilityColumns.push('benefit_qualification_basis', 'death_confirmations_required');
+    compatibilityValues.push("'waiting_period_days'", '0');
+  }
+  if (decided.includes('medical_benefit_claims_per_year')) {
+    compatibilityColumns.push('medical_benefit_year_basis');
+    compatibilityValues.push("'calendar_year'");
+  }
   const extraColumns = decided.length > 0 ? `, ${decided.join(', ')}` : '';
   const extraValues =
     decided.length > 0 ? `, ${decided.map((rule) => DECIDED[rule]).join(', ')}` : '';
@@ -145,8 +159,8 @@ async function makeVersion(
 
   const row = await queryOne<{ id: string }>(
     `insert into public.membership_policy_versions
-       (${CONFIRMED_COLUMNS}${extraColumns}${approval})
-     values ($1, $2, ${effective}, $4, ${CONFIRMED_VALUES}${extraValues}${approvalValues})
+       (${CONFIRMED_COLUMNS}${extraColumns}${compatibilityColumns.length ? ', ' + compatibilityColumns.join(', ') : ''}${approval})
+     values ($1, $2, ${effective}, $4, ${CONFIRMED_VALUES}${extraValues}${compatibilityValues.length ? ', ' + compatibilityValues.join(', ') : ''}${approvalValues})
      returning id`,
     [version, `Hardening fixture ${version}`, effectiveFrom, status],
   );

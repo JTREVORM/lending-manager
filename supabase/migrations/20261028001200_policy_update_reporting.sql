@@ -216,18 +216,17 @@ begin
   into ledger_income
   from public.meeting_fine_payments p
   join public.meeting_fines f on f.id = p.fine_id
-  join public.journal_lines jl on jl.entry_id = p.journal_entry_id
+  join public.journal_lines jl
+    on jl.entry_id = p.journal_entry_id
+    or jl.entry_id = p.reversal_entry_id
   where jl.account_id = p.income_account_id
     and f.meeting_date between v_from and v_to
     and (p_branch_id is null or p.branch_id = p_branch_id)
     and public.user_can_see_branch(p.branch_id);
 
-  -- Two independent paths to one number. The fines say what was collected;
-  -- the General Ledger says what was earned. A reversed payment is still in
-  -- `amount_collected`'s history but has been debited back out of 4400, so
-  -- the comparison nets the reversals.
-  reconciles := (amount_collected = ledger_income - amount_reversed + amount_reversed)
-                and (amount_collected = ledger_income);
+  -- The fine balance is net of reversed collections. Read both the receipt
+  -- and its reversal journal so the General Ledger reports the same net.
+  reconciles := (amount_collected = ledger_income);
 
   return next;
 end;

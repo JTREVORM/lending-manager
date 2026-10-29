@@ -80,6 +80,9 @@ comment on column public.benefit_assessment_snapshots.deceased_listed_on is
 comment on column public.benefit_assessment_snapshots.outstanding_loan_principal is
   'Rule 14. What every unfinished loan of the client owed at the moment of assessment — member loans and ordinary loans alike. Zero on a bereavement snapshot by constraint, because the benefit is not released while anything is outstanding.';
 
+-- Historical assessments predate these evidence columns and remain byte for
+-- byte intact. NOT VALID preserves them while enforcing the two new evidence
+-- requirements on every future INSERT/UPDATE; the snapshots remain immutable.
 alter table public.benefit_assessment_snapshots
   add constraint benefit_snapshot_qualification_basis_valid
     check (
@@ -114,7 +117,7 @@ alter table public.benefit_assessment_snapshots
       or (death_confirmations_required is not null
           and death_confirmations_recorded is not null
           and death_confirmations_recorded >= death_confirmations_required)
-    ),
+    ) not valid,
   -- Rule 11, as a stored fact: the deceased was listed, and listed first.
   add constraint benefit_snapshot_condolence_next_of_kin
     check (
@@ -122,7 +125,7 @@ alter table public.benefit_assessment_snapshots
       or (deceased_beneficiary_id is not null
           and deceased_listed_on is not null
           and deceased_listed_on <= event_date)
-    ),
+    ) not valid,
   -- Rule 14, as a stored fact, across every loan.
   add constraint benefit_snapshot_bereavement_no_outstanding_loan
     check (

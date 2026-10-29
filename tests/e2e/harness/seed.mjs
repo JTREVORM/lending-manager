@@ -1132,9 +1132,10 @@ async function seedMembershipAndSavings() {
       interest_basis, interest_method, savings_to_loan_multiplier_bps,
       medical_benefit_annual_cap, medical_benefit_claims_per_year,
       benefit_waiting_period_days, medical_benefit_year_basis,
+      medical_benefit_cap_mode, benefit_qualification_basis, death_confirmations_required,
       notes)
    values
-     ('2.0', 'Polytos membership terms (harness)',
+     ('998.2', 'Polytos membership terms (harness)',
       (public.business_date() - 400), 'active',
       now(), 'Harness', 'HARNESS-2026-01',
       5000, 50000, 6,
@@ -1143,6 +1144,7 @@ async function seedMembershipAndSavings() {
       false, 'allowed',
       'per_month', 'reducing_balance_monthly', $1::int,
       $2::bigint, $3::int, $4::int, $5,
+      'amount', 'waiting_period_days', 3,
       'Published by the browser-test harness. Illustrative figures. The '
         || 'interest basis, the interest method and the savings multiplier '
         || 'are the harness''s own illustrative answers and are NOT decisions '

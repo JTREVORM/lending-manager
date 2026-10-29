@@ -13,6 +13,8 @@ import {
   makeBenefitMember,
   makeVerifiedBeneficiary,
   requiredKindsFor,
+  recordDeathConfirmations,
+  makeListedNextOfKin,
   type BenefitMember,
 } from '../helpers/benefits';
 import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
@@ -120,6 +122,10 @@ async function driveToAssessed(
       fx.secretary,
       fx.manager,
     );
+  }
+
+  if (claimType === 'family_condolence' || claimType === 'member_bereavement') {
+    await recordDeathConfirmations(claimId, fx.policyId, fx.secretary);
   }
 
   const assessed = await asUserCommitted(fx.manager, [
@@ -1085,7 +1091,7 @@ describeDb('the bereavement safeguards', () => {
     const result = await driveToAssessed(claimId, member, 'member_bereavement');
 
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('bereavement_loan_offset_undecided');
+    expect(result.message).toContain('bereavement_loan_outstanding');
     expect(result.message).toContain('Nothing has been netted');
 
     // And the savings pledge, if any, is untouched — nothing about filing a
@@ -1100,7 +1106,7 @@ describeDb('the bereavement safeguards', () => {
 });
 
 describeDb('the condolence relationship rule', () => {
-  it('holds a claim while nobody has defined an eligible family member', async () => {
+  it('holds a family claim without a next-of-kin listing', async () => {
     const member = await fx.nextMember();
 
     const opened = await asUserCommitted(fx.secretary, [
@@ -1117,67 +1123,45 @@ describeDb('the condolence relationship rule', () => {
     const result = await driveToAssessed(claimId, member, 'family_condolence');
 
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('relationship_eligibility_undecided');
-    expect(result.message).toContain('Parent');
+    expect(result.message).toContain('next_of_kin_not_listed');
   });
 
-  it('pays once a relationship is marked eligible, and refuses one marked not', async () => {
-    // The *fixture* decides, for this test only, and puts it back afterwards.
-    // `condolence_eligible` is NULL on every row in the migration, because a
-    // default there would be the invented eligibility rule the brief forbids.
-    await query(
-      `update public.beneficiary_relationships
-          set condolence_eligible = true where key = 'parent'`,
+  it('accepts a listed family member and holds a non-family relationship', async () => {
+    const eligible = await fx.nextMember();
+    const kin = await makeListedNextOfKin(
+      eligible.membershipId, fx.secretary, fx.manager,
+      { relationship: 'cousin', listedOn: '2025-03-01' },
     );
-    await query(
-      `update public.beneficiary_relationships
-          set condolence_eligible = false where key = 'cousin'`,
+    const eligibleClaim = await asUserCommitted(fx.secretary, [
+      {
+        sql: `select public.open_benefit_claim(
+          $1, 'family_condolence', '2025-04-02'::date,
+          null, null, null, null, 'Grace Akello', 'cousin', null, $2) as id`,
+        params: [eligible.membershipId, kin],
+      },
+    ]);
+    expect(eligibleClaim.ok).toBe(true);
+    const result = await driveToAssessed(
+      (eligibleClaim.rows[0] as { id: string }).id, eligible, 'family_condolence',
     );
+    expect(result.message ?? 'ok').toBe('ok');
+    expect(result.amount).toBe(100_000);
 
-    try {
-      const eligible = await fx.nextMember();
-      const eligibleClaim = await asUserCommitted(fx.secretary, [
-        {
-          sql: `select public.open_benefit_claim(
-                         $1, 'family_condolence', '2025-04-02'::date,
-                         null, null, null, null,
-                         'Grace Akello', 'parent', null) as id`,
-          params: [eligible.membershipId],
-        },
-      ]);
-
-      const result = await driveToAssessed(
-        (eligibleClaim.rows[0] as { id: string }).id,
-        eligible,
-        'family_condolence',
-      );
-      expect(result.message ?? 'ok').toBe('ok');
-      expect(result.amount).toBe(100_000);
-
-      const notEligible = await fx.nextMember();
-      const refusedClaim = await asUserCommitted(fx.secretary, [
-        {
-          sql: `select public.open_benefit_claim(
-                         $1, 'family_condolence', '2025-04-05'::date,
-                         null, null, null, null,
-                         'Distant Cousin', 'cousin', null) as id`,
-          params: [notEligible.membershipId],
-        },
-      ]);
-
-      const refused = await driveToAssessed(
-        (refusedClaim.rows[0] as { id: string }).id,
-        notEligible,
-        'family_condolence',
-      );
-      expect(refused.ok).toBe(false);
-      expect(refused.message).toContain('relationship_not_eligible');
-    } finally {
-      await query(
-        `update public.beneficiary_relationships
-            set condolence_eligible = null where key in ('parent', 'cousin')`,
-      );
-    }
+    const notEligible = await fx.nextMember();
+    const refusedClaim = await asUserCommitted(fx.secretary, [
+      {
+        sql: `select public.open_benefit_claim(
+          $1, 'family_condolence', '2025-04-05'::date,
+          null, null, null, null, 'A Friend', 'other', null) as id`,
+        params: [notEligible.membershipId],
+      },
+    ]);
+    expect(refusedClaim.ok).toBe(true);
+    const refused = await driveToAssessed(
+      (refusedClaim.rows[0] as { id: string }).id, notEligible, 'family_condolence',
+    );
+    expect(refused.ok).toBe(false);
+    expect(refused.message).toContain('relationship_not_eligible');
   });
 });
 

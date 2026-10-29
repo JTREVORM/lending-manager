@@ -96,7 +96,8 @@ create policy loan_carry_forwards_select
       (select public.user_has_permission('payments:view'))
       and exists (
         select 1 from public.loans l
-        where l.id = loan_id and public.user_can_see_branch(l.branch_id)
+        where l.id = loan_id and (l.branch_id is null or (select public.current_user_branch_id()) is null
+            or l.branch_id = (select public.current_user_branch_id()))
       )
     )
     -- The borrower's own. "October's instalment is on November's list" is
@@ -130,7 +131,8 @@ create policy benefit_death_confirmations_select
     (select public.user_has_permission('benefits:view'))
     and exists (
       select 1 from public.benefit_claims bc
-      where bc.id = claim_id and public.user_can_see_branch(bc.branch_id)
+      where bc.id = claim_id and (bc.branch_id is null or (select public.current_user_branch_id()) is null
+            or bc.branch_id = (select public.current_user_branch_id()))
     )
   );
 
@@ -153,7 +155,8 @@ create policy meeting_absence_notices_select
   using (
     (
       (select public.user_has_permission('meetings:view'))
-      and public.user_can_see_branch(branch_id)
+      and (branch_id is null or (select public.current_user_branch_id()) is null
+            or branch_id = (select public.current_user_branch_id()))
     )
     or exists (
       select 1 from public.clients c
@@ -181,7 +184,8 @@ create policy meeting_fines_select
   using (
     (
       (select public.user_has_permission('fines:view'))
-      and public.user_can_see_branch(branch_id)
+      and (branch_id is null or (select public.current_user_branch_id()) is null
+            or branch_id = (select public.current_user_branch_id()))
     )
     or exists (
       select 1 from public.clients c
@@ -205,7 +209,8 @@ create policy meeting_fine_payments_select
   using (
     (
       (select public.user_has_permission('fines:view'))
-      and public.user_can_see_branch(branch_id)
+      and (branch_id is null or (select public.current_user_branch_id()) is null
+            or branch_id = (select public.current_user_branch_id()))
     )
     or exists (
       select 1 from public.clients c

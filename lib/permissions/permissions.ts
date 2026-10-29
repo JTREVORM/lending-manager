@@ -56,6 +56,13 @@ import { ROLE_KEYS, type RoleKey } from './roles';
  * cheaper to extend than to audit.
  */
 export const PERMISSIONS = [
+  // Policy implementation: mirrored by the explicit database grants.
+  'membership_policy:manage',
+  'meetings:excuse_review',
+  'fines:view',
+  'fines:assess',
+  'fines:collect',
+  'fines:reverse',
   // --- Application shell ---------------------------------------------------
   /** Reach the authenticated staff shell and its dashboard. */
   'dashboard:view',
@@ -579,6 +586,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
   client: ['portal:view', 'account:view', 'account:update'],
 
   secretary_treasurer: [
+    'fines:view',
+    'fines:collect',
     'dashboard:view',
     'account:view',
     'account:update',
@@ -698,6 +707,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
   ],
 
   manager: [
+    'meetings:excuse_review',
+    'fines:view',
+    'fines:assess',
+    'fines:collect',
     'dashboard:view',
     'account:view',
     'account:update',
@@ -844,6 +857,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
   ],
 
   owner_admin: [
+    'membership_policy:manage',
+    'meetings:excuse_review',
+    'fines:view',
+    'fines:assess',
+    'fines:collect',
+    'fines:reverse',
     'dashboard:view',
     'account:view',
     'account:update',

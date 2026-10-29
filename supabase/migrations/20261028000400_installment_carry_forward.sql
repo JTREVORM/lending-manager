@@ -354,3 +354,5 @@ grant execute on function public.loan_collection_period_total(uuid, date) to aut
 
 revoke all on table public.loan_installment_carry_forwards from anon, authenticated;
 revoke all on function public.carry_forward_unpaid_installments(uuid, date, text) from public, anon;
+
+revoke all on function public.loan_collection_period_total(uuid, date) from public, anon;

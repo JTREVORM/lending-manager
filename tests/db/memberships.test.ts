@@ -628,12 +628,13 @@ describeDb('the financial gate', () => {
             interest_basis, interest_method, savings_to_loan_multiplier_bps,
             qualifying_months_consecutive, savings_withdrawal_with_active_loan,
             profit_distribution_basis, medical_benefit_annual_cap,
-            medical_benefit_claims_per_year, benefit_waiting_period_days)
+            medical_benefit_claims_per_year, benefit_waiting_period_days,
+            medical_benefit_cap_mode, benefit_qualification_basis)
          values ('9.1', 'Fully decided', current_date + 10, 'draft',
                  pg_catalog.now(), 'test',
                  5000, 50000, 6, 500, 5, 2, 3, 500, 1, 100000, 200000,
                  'per_month', 'flat', 20000, true, 'blocked',
-                 'pro_rata_savings', 500000, 2, 90)`,
+                 'pro_rata_savings', 500000, 2, 90, 'amount', 'waiting_period_days')`,
       );
 
       // Not in force, so still not enabled — being complete is necessary and

@@ -126,6 +126,15 @@ comment on column public.membership_policy_versions.death_confirmations_required
 comment on column public.membership_policy_versions.benefit_qualification_basis is
   'Polytos policy update. How the qualifying period before a first benefit claim is measured: "waiting_period_days" (the Phase 4 rule, benefit_waiting_period_days from activated_on) or "savings_qualifying_months" (the client''s rule — the authoritative member_savings_qualification as of the claim''s event date). NULL means nobody has recorded which. Six qualifying monthly contributions is not 180 days, which is why this is a basis rather than a number.';
 
+-- Preserve already recorded legacy decisions without inventing new amounts.
+-- These are the old columns expressed in the new vocabulary. This executes
+-- before the new terms guard exists, and changes no financial record.
+update public.membership_policy_versions
+   set medical_benefit_cap_mode = case
+         when medical_benefit_annual_cap is not null then 'amount' end,
+       benefit_qualification_basis = case
+         when benefit_waiting_period_days is not null then 'waiting_period_days' end;
+
 alter table public.membership_policy_versions
   add constraint membership_policy_medical_cap_mode_valid
     check (

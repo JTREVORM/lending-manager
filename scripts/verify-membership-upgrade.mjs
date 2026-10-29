@@ -79,7 +79,7 @@ const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
  * that writes a new expense account and a new journal source type is a phase
  * that could, in principle, move a trial balance.
  */
-const PHASE_PREFIXES = ['20261019', '20261020', '20261021', '20261022'];
+const PHASE_PREFIXES = ['20261019', '20261020', '20261021', '20261022', '20261028'];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
