@@ -70,6 +70,9 @@ try {
     await db.query(readFileSync(join(root, 'supabase/migrations', migration), 'utf8'));
   }
 
+  // The historical browser seed stores local sign-in hashes; no hosted auth is involved.
+  await db.query('alter table auth.users add column if not exists encrypted_password text');
+
   const historicalSeed = execFileSync('git', ['show', baseCommit + ':tests/e2e/harness/seed.mjs'], { cwd: root, encoding: 'utf8' })
     .replace("new URL('../../../package.json', import.meta.url)", "new URL('../package.json', import.meta.url)");
   const seedPath = join(work, 'policy-upgrade-production-seed.mjs');

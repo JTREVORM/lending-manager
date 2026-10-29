@@ -195,7 +195,7 @@ begin
     or exists (select 1 from public.clients c where c.id = v_claim.client_id
       and c.profile_id = public.current_profile_id())
   ) then
-    return;
+    raise exception 'You cannot read that claim.' using errcode = '42501';
   end if;
 
   select * into v_membership

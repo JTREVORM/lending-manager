@@ -236,7 +236,6 @@ export default async function LoanDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      {canSeePayments ? <LoanCollections loanId={loan.id} canCarry={contextCan(context, 'payments:create') && loan.status === 'active'} /> : null}
       <PageHeader
         eyebrow="Lending Portfolio"
         icon={Banknote}
@@ -282,6 +281,7 @@ export default async function LoanDetailPage({
           </>
         }
       />
+      {canSeePayments ? <LoanCollections loanId={loan.id} canCarry={contextCan(context, 'payments:create') && loan.status === 'active'} /> : null}
 
       {breakdownProblem !== null ? (
         <Alert tone="danger">

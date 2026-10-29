@@ -451,6 +451,12 @@ export function admissionVerdict(
  * and the loan interaction open.
  */
 export const BENEFIT_ELIGIBILITY_CODES = [
+  'savings_months_not_qualified',
+  'death_confirmations_undecided',
+  'death_confirmations_insufficient',
+  'next_of_kin_not_listed',
+  'next_of_kin_listed_after_event',
+  'bereavement_loan_outstanding',
   'policy_not_open',
   'membership_not_claimable',
   'membership_suspended_undecided',
@@ -483,6 +489,7 @@ export type BenefitEligibilityCode = (typeof BENEFIT_ELIGIBILITY_CODES)[number];
  * down.
  */
 export const UNDECIDED_BENEFIT_ELIGIBILITY_CODES: readonly BenefitEligibilityCode[] = [
+  'death_confirmations_undecided',
   'policy_not_open',
   'membership_suspended_undecided',
   'admission_measure_undecided',
@@ -499,6 +506,12 @@ export function isUndecidedEligibilityCode(code: string): boolean {
 export const BENEFIT_ELIGIBILITY_CODE_LABELS: Readonly<
   Record<BenefitEligibilityCode, string>
 > = {
+  savings_months_not_qualified: 'Required savings months have not been completed',
+  death_confirmations_undecided: 'The death-confirmation requirement is not recorded',
+  death_confirmations_insufficient: 'More group member confirmations are required',
+  next_of_kin_not_listed: 'The deceased was not listed as next of kin',
+  next_of_kin_listed_after_event: 'The next-of-kin listing was recorded after the death',
+  bereavement_loan_outstanding: 'Outstanding loans must be cleared before bereavement support',
   policy_not_open: 'Benefit payments are not open yet',
   membership_not_claimable: 'This membership cannot claim',
   membership_suspended_undecided: 'What a suspension costs a member is undecided',

@@ -344,7 +344,14 @@ async function backdateDemonstrationMemberships(client: pg.Client): Promise<void
  * The label carries TEST ONLY because the label is what a reader sees on the
  * form; a flag they cannot see would be a decision made invisibly.
  */
-async function openCondolenceVocabulary(_client: pg.Client): Promise<void> {
+async function openCondolenceVocabulary(client: pg.Client): Promise<void> {
+  const result = await client.query<{ count: string }>(
+    'select count(*)::text from public.beneficiary_relationships where key = any($1::text[]) and condolence_eligible',
+    [DEMO_CONDOLENCE_ELIGIBLE],
+  );
+  if (result.rows[0]?.count !== String(DEMO_CONDOLENCE_ELIGIBLE.length)) {
+    throw new Error('Apply the policy family-eligibility migration before seeding this demonstration.');
+  }
   console.log('  vocabulary      official family relationships preserved; no demo overrides');
 }
 

@@ -150,9 +150,6 @@ export default async function MembershipDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <MemberPolicyPosition membershipId={membership.id}
-        canSavings={contextCan(context, 'savings:view') || contextCan(context, 'member_loans:view_eligibility')}
-        canBenefits={contextCan(context, 'benefits:view')} />
       <PageHeader
         eyebrow="Member Register"
         icon={BadgeCheck}
@@ -161,6 +158,9 @@ export default async function MembershipDetailPage({
         status={<MembershipStatusBadge status={membership.status} />}
         description={<span className="font-mono">{membership.membershipNumber}</span>}
       />
+      <MemberPolicyPosition membershipId={membership.id}
+        canSavings={contextCan(context, 'savings:view') || contextCan(context, 'member_loans:view_eligibility')}
+        canBenefits={contextCan(context, 'benefits:view')} />
 
       {membership.status === 'suspended' || membership.status === 'withdrawn' ? (
         <Alert tone={membership.status === 'suspended' ? 'warning' : 'info'}>

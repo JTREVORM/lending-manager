@@ -1,3 +1,5 @@
+import { createDraftLoan, createLoanScenario, approveLoan, disburseApprovedLoan } from '../helpers/loan-fixtures';
+import { enrolMember } from '../helpers/membership';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -195,4 +197,78 @@ describe.skipIf(!hasDatabase)('policy meeting fine safety', () => {
     expect((await asAnon('select public.loan_collection_period_total(gen_random_uuid(), current_date)')).ok).toBe(false);
     expect((await asUser(borrower, 'select * from public.meeting_fine_candidates($1)', [meetingId])).ok).toBe(false);
   });
+  it('blocks savings for an approved ordinary loan with no member-loan pledge', async () => {
+    const actors = await createLoanScenario();
+    const loanId = await createDraftLoan(actors.clientId);
+    await approveLoan(loanId, actors);
+    const member = await enrolMember(actors.clientId, actors.manager.profileId, { initialDeposit: 1000000 });
+    expect(member.savingsAccountId).toBeTruthy();
+    const pledge = await queryOne<{ count: string }>(
+      'select count(*)::text from public.member_loan_savings_pledges where loan_id = $1', [loanId]);
+    expect(pledge.count).toBe('0');
+    const result = await asUser(actors.secretary,
+      `select public.request_savings_withdrawal($1, 1000, 'Ordinary loan restriction test')`,
+      [member.savingsAccountId]);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('outstanding loan');
+  });
+
+  it('rechecks ordinary loans after withdrawal approval without moving savings or ledger money', async () => {
+    const actors = await createLoanScenario();
+    const member = await enrolMember(actors.clientId, actors.manager.profileId, { initialDeposit: 1000000 });
+    const requested = await asUserCommitted(actors.secretary, [{
+      sql: `select public.request_savings_withdrawal($1, 1000, 'Payment-time restriction test') as id`,
+      params: [member.savingsAccountId],
+    }]);
+    expect(requested.ok, requested.message).toBe(true);
+    const requestId = (requested.rows[0] as { id: string }).id;
+    const decision = await asUserCommitted(actors.manager, [{
+      sql: 'select public.decide_savings_withdrawal($1, true, null)', params: [requestId],
+    }]);
+    expect(decision.ok, decision.message).toBe(true);
+    const loanId = await createDraftLoan(actors.clientId);
+    await approveLoan(loanId, actors);
+    const before = await queryOne(
+      `select (select count(*)::text from public.journal_entries) as journals,
+        (select coalesce(sum(signed_amount),0)::text from public.savings_transactions where savings_account_id=$1) as savings`,
+      [member.savingsAccountId]);
+    const payment = await asUser(actors.manager,
+      `select public.post_savings_withdrawal($1, 'cash', null, gen_random_uuid())`, [requestId]);
+    expect(payment.ok).toBe(false);
+    expect(payment.message).toContain('outstanding loan');
+    expect(await queryOne(
+      `select (select count(*)::text from public.journal_entries) as journals,
+        (select coalesce(sum(signed_amount),0)::text from public.savings_transactions where savings_account_id=$1) as savings`,
+      [member.savingsAccountId])).toEqual(before);
+  });
+
+  it('opens withdrawal after full ordinary-loan clearance and preserves liability 2100', async () => {
+    const actors = await createLoanScenario();
+    const loanId = await createDraftLoan(actors.clientId);
+    await approveLoan(loanId, actors);
+    const member = await enrolMember(actors.clientId, actors.manager.profileId, { initialDeposit: 1000000 });
+    await disburseApprovedLoan(loanId, actors);
+    const repaid = await asUserCommitted(actors.secretary, [{
+      sql: `select public.post_payment($1, public.loan_total_outstanding($1),
+        'cash', null, gen_random_uuid(), 'Full clearance regression') as id`,
+      params: [loanId],
+    }]);
+    expect(repaid.ok, repaid.message).toBe(true);
+    const loan = await queryOne<{ status: string }>('select status from public.loans where id=$1', [loanId]);
+    expect(loan.status).toBe('cleared');
+    const amount = await queryOne<{ savings: string }>(
+      'select coalesce(sum(signed_amount),0)::text as savings from public.savings_transactions where savings_account_id=$1',
+      [member.savingsAccountId]);
+    expect(amount.savings).toBe('1000000');
+    const requested = await asUserCommitted(actors.secretary, [{
+      sql: `select public.request_savings_withdrawal($1, 1000, 'Loan fully cleared') as id`,
+      params: [member.savingsAccountId],
+    }]);
+    expect(requested.ok, requested.message).toBe(true);
+    const reconciliation = await queryOne<{ savings: string; ledger: string }>(
+      `select (select coalesce(sum(signed_amount),0)::text from public.savings_transactions) as savings,
+        (select balance::text from public.ledger_account_balances where code='2100') as ledger`);
+    expect(reconciliation.savings).toBe(reconciliation.ledger);
+  });
+
 });

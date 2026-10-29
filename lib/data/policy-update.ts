@@ -31,3 +31,13 @@ export async function getLoanCollections(loanId: string) {
   if (result.error) throw mapDatabaseError(result.error);
   return result.data ?? [];
 }
+
+export async function getPolicyBusinessNow(): Promise<number> {
+  const db = await createSupabaseServerClient();
+  const result = await db.rpc('business_now');
+  if (result.error) throw mapDatabaseError(result.error);
+  if (typeof result.data !== 'string' || !Number.isFinite(Date.parse(result.data))) {
+    throw new Error('The business clock could not be read.');
+  }
+  return Date.parse(result.data);
+}

@@ -224,7 +224,7 @@ test.describe('a claim says where it has got to', () => {
     ).toBeVisible();
   });
 
-  test('names the decision a held claim is waiting on', async ({ page }) => {
+  test('names the missing evidence holding a family claim', async ({ page }) => {
     await page.goto(`/benefits/claims/${fixtures.benefitClaims.held}`);
 
     // The assertion this suite exists for. Not "not available", not a
@@ -232,14 +232,14 @@ test.describe('a claim says where it has got to', () => {
     // the refusals a member can be told.
     await expect(
       page
-        .getByText(/Who counts as family is undecided/i)
+        .getByText(/The deceased was not listed as next of kin/i)
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
 
     await expect(
       page
-        .getByText(/not been decided by the client/i)
+        .getByText(/names no such record/i)
         .filter({ visible: true })
         .first(),
     ).toBeVisible();

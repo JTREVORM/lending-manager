@@ -237,6 +237,10 @@ begin
     raise exception 'No such membership.' using errcode = 'P0001';
   end if;
 
+  if not public.user_can_see_branch(v_membership.branch_id) then
+    raise exception 'You cannot open that branch''s claims.' using errcode = '42501';
+  end if;
+
   -- The **governing** version. A member who has been moved onto new terms
   -- claims under those terms, and reading the frozen enrolment column here
   -- would price the claim against a version they are no longer on.
