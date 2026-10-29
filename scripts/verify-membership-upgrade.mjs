@@ -750,3 +750,9 @@ log(
   'verified: six existing borrowers enrolled, non-members retained, ' +
     'loan book untouched, full financial fixed point on runs 2 and 3, liability reconciled',
 );
+
+// Also protect existing membership money and benefit history across this update.
+execFileSync(process.execPath, [join(PROJECT_ROOT, 'scripts', 'verify-policy-upgrade.mjs')], {
+  env: process.env,
+  stdio: 'inherit',
+});

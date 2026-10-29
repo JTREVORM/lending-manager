@@ -132,6 +132,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -170,6 +172,15 @@ jobs:
 
       - name: Upgrade and existing-borrower demo integration
         run: node scripts/verify-membership-upgrade.mjs
+
+      - name: Upload policy financial reconciliation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-policy-financial-reconciliation
+          path: work/policy-upgrade-financial-report.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   # --------------------------------------------------------------------------
   # Browser suite: the production build driven by Playwright against the

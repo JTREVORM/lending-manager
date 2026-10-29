@@ -376,6 +376,9 @@ begin
     -- accepted excuse, and no fine already charged.
     v_meeting.status = 'held'
       and v_meeting.scheduled_at <= pg_catalog.now()
+      and pv.approved_at is not null and pv.status <> 'draft'
+      and pv.effective_from <= v_meeting.meeting_date
+      and coalesce(pv.meeting_absence_fine, 0) > 0
       and a.attendance in ('absent', 'apology')
       and coalesce(n.review_status, 'none') not in ('approved', 'pending')
       and not exists (
@@ -389,6 +392,10 @@ begin
         then 'The meeting was cancelled. Nobody is absent from a meeting that did not happen.'
       when v_meeting.status <> 'held'
         then 'The meeting is ' || v_meeting.status || '. A fine follows a meeting that took place.'
+      when pv.approved_at is null or pv.status = 'draft'
+           or pv.effective_from is null or pv.effective_from > v_meeting.meeting_date
+           or coalesce(pv.meeting_absence_fine, 0) <= 0
+        then 'The governing policy did not authorize an absence charge for this meeting.'
       when a.attendance = 'present'
         then 'Present.'
       when a.attendance = 'represented'
@@ -408,6 +415,8 @@ begin
   from public.meeting_attendance a
   join public.memberships m on m.id = a.membership_id
   join public.clients c on c.id = m.client_id
+  join public.membership_policy_versions pv
+    on pv.id = public.membership_governing_policy(m.id, v_meeting.meeting_date)
   left join public.meeting_absence_notices n
     on n.meeting_id = p_meeting_id and n.membership_id = a.membership_id
   where a.meeting_id = p_meeting_id

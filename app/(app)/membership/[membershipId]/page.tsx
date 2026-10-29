@@ -150,7 +150,9 @@ export default async function MembershipDetailPage({
 
   return (
     <div className="min-w-0 space-y-6">
-      <MemberPolicyPosition membershipId={membership.id} />
+      <MemberPolicyPosition membershipId={membership.id}
+        canSavings={contextCan(context, 'savings:view') || contextCan(context, 'member_loans:view_eligibility')}
+        canBenefits={contextCan(context, 'benefits:view')} />
       <PageHeader
         eyebrow="Member Register"
         icon={BadgeCheck}

@@ -238,6 +238,7 @@ export type Database = {
       };
       benefit_claims: {
         Row: {
+          deceased_beneficiary_id: string | null;
           id: string;
           claim_number: string;
           claim_type: string;
@@ -285,6 +286,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          deceased_beneficiary_id?: string | null;
           id?: string;
           claim_number: string;
           claim_type: string;
@@ -332,6 +334,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          deceased_beneficiary_id?: string | null;
           id?: string;
           claim_number?: string;
           claim_type?: string;
@@ -451,6 +454,18 @@ export type Database = {
       };
       benefit_assessment_snapshots: {
         Row: {
+          qualification_basis: string | null;
+          savings_qualifying_months: number | null;
+          savings_months_required: number | null;
+          savings_qualified: boolean | null;
+          medical_cap_mode: string | null;
+          death_confirmations_required: number | null;
+          death_confirmations_recorded: number | null;
+          deceased_beneficiary_id: string | null;
+          deceased_beneficiary_number: string | null;
+          deceased_listed_on: string | null;
+          outstanding_loan_principal: number | null;
+          outstanding_loan_count: number | null;
           claim_id: string;
           claim_number: string;
           claim_type: string;
@@ -500,6 +515,18 @@ export type Database = {
           captured_at: string;
         };
         Insert: {
+          qualification_basis?: string | null;
+          savings_qualifying_months?: number | null;
+          savings_months_required?: number | null;
+          savings_qualified?: boolean | null;
+          medical_cap_mode?: string | null;
+          death_confirmations_required?: number | null;
+          death_confirmations_recorded?: number | null;
+          deceased_beneficiary_id?: string | null;
+          deceased_beneficiary_number?: string | null;
+          deceased_listed_on?: string | null;
+          outstanding_loan_principal?: number | null;
+          outstanding_loan_count?: number | null;
           claim_id: string;
           claim_number: string;
           claim_type: string;
@@ -549,6 +576,18 @@ export type Database = {
           captured_at?: string;
         };
         Update: {
+          qualification_basis?: string | null;
+          savings_qualifying_months?: number | null;
+          savings_months_required?: number | null;
+          savings_qualified?: boolean | null;
+          medical_cap_mode?: string | null;
+          death_confirmations_required?: number | null;
+          death_confirmations_recorded?: number | null;
+          deceased_beneficiary_id?: string | null;
+          deceased_beneficiary_number?: string | null;
+          deceased_listed_on?: string | null;
+          outstanding_loan_principal?: number | null;
+          outstanding_loan_count?: number | null;
           claim_id?: string;
           claim_number?: string;
           claim_type?: string;
@@ -3703,6 +3742,14 @@ export type Database = {
        */
       membership_policy_versions: {
         Row: {
+          medical_benefit_cap_mode: string | null;
+          benefit_qualification_basis: string | null;
+          medical_benefit_year_basis: string | null;
+          death_confirmations_required: number | null;
+          meeting_absence_fine: number | null;
+          is_medical_benefit_enabled: boolean;
+          is_condolence_benefit_enabled: boolean;
+          is_bereavement_benefit_enabled: boolean;
           id: string;
           version: string;
           title: string;
@@ -3744,6 +3791,14 @@ export type Database = {
           is_financially_enabled: boolean;
         };
         Insert: {
+          medical_benefit_cap_mode?: string | null;
+          benefit_qualification_basis?: string | null;
+          medical_benefit_year_basis?: string | null;
+          death_confirmations_required?: number | null;
+          meeting_absence_fine?: number | null;
+          is_medical_benefit_enabled?: never;
+          is_condolence_benefit_enabled?: never;
+          is_bereavement_benefit_enabled?: never;
           id?: string;
           version: string;
           title: string;
@@ -3785,6 +3840,14 @@ export type Database = {
           is_financially_enabled?: never;
         };
         Update: {
+          medical_benefit_cap_mode?: string | null;
+          benefit_qualification_basis?: string | null;
+          medical_benefit_year_basis?: string | null;
+          death_confirmations_required?: number | null;
+          meeting_absence_fine?: number | null;
+          is_medical_benefit_enabled?: never;
+          is_condolence_benefit_enabled?: never;
+          is_bereavement_benefit_enabled?: never;
           id?: string;
           version?: string;
           title?: string;

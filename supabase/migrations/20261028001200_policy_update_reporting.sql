@@ -335,14 +335,15 @@ begin
   end if;
 
   if auth.uid() is not null
-     and not public.user_has_permission('membership:view')
+     and not public.user_has_permission('savings:view')
+     and not public.user_has_permission('member_loans:view_eligibility')
      and not exists (
        select 1 from public.clients c
        where c.id = v_membership.client_id
          and c.profile_id is not null
          and c.profile_id = public.current_profile_id()
      ) then
-    raise exception 'Reading a member''s savings position requires membership:view.'
+    raise exception 'Reading a member''s savings position requires savings:view or member_loans:view_eligibility.'
       using errcode = '42501';
   end if;
 
@@ -481,7 +482,6 @@ begin
 
   if auth.uid() is not null
      and not public.user_has_permission('benefits:view')
-     and not public.user_has_permission('membership:view')
      and not exists (
        select 1 from public.clients c
        where c.id = v_membership.client_id

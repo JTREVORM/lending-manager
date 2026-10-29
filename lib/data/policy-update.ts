@@ -3,11 +3,11 @@ import 'server-only';
 import { mapDatabaseError } from '@/lib/db-errors';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export async function getMemberPolicyPosition(membershipId: string) {
+export async function getMemberPolicyPosition(membershipId: string, canSavings = true, canBenefits = true) {
   const db = await createSupabaseServerClient();
   const [savings, benefits] = await Promise.all([
-    db.rpc('member_savings_position', { p_membership_id: membershipId }),
-    db.rpc('member_benefit_position', { p_membership_id: membershipId }),
+    canSavings ? db.rpc('member_savings_position', { p_membership_id: membershipId }) : Promise.resolve({ data: [], error: null }),
+    canBenefits ? db.rpc('member_benefit_position', { p_membership_id: membershipId }) : Promise.resolve({ data: [], error: null }),
   ]);
   if (savings.error) throw mapDatabaseError(savings.error);
   if (benefits.error) throw mapDatabaseError(benefits.error);

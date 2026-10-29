@@ -18,7 +18,7 @@ export async function MeetingPolicyWork({ meetingId, members, canRecord, canRevi
   return <section aria-label="Absence notices and fines" className="space-y-4">
     <Card>
       <h2 className="text-text font-semibold">Advance absence notifications</h2>
-      <p>Record a member's notice before the meeting starts. Another officer reviews the reason. Pending notices hold the fine.</p>
+      <p>Record a member&rsquo;s notice before the meeting starts. Another officer reviews the reason. Pending notices hold the fine.</p>
       {canRecord ? <div className="mt-4"><OperationForm operation="record_notice" values={{ meetingId }}
         label="Record advance absence notice" fields={[
           { name: 'membershipId', label: 'Member reporting absence', required: true, options: members.map((m) => ({ value: m.membershipId, label: `${m.membershipNumber} — ${m.memberName}` })) },

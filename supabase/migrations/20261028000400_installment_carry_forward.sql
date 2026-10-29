@@ -259,6 +259,10 @@ begin
   );
 
   v_as_of := coalesce(p_as_of, public.business_date());
+  if v_as_of > public.business_date() then
+    raise exception 'A future installment cannot be recorded as unpaid.'
+      using errcode = 'P0001';
+  end if;
   v_month := pg_catalog.date_trunc('month', v_as_of)::date;
   v_target := (v_month + interval '1 month')::date;
   v_reason := coalesce(
@@ -291,7 +295,7 @@ begin
       p_loan_id, v_loan.loan_number, v_row.installment_id, v_row.installment_number,
       v_row.original_due_date, v_row.collection_period, v_target,
       v_row.remaining_amount, v_row.remaining_principal, v_row.remaining_interest,
-      v_reason, v_actor, v_label, v_as_of
+      v_reason, v_actor, v_label, public.business_date()
     )
     on conflict (installment_id, carried_to_period) do nothing;
 

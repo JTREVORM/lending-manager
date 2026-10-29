@@ -3,8 +3,8 @@ import { DateValue } from '@/components/ui/data-value';
 import { getMemberPolicyPosition } from '@/lib/data/policy-update';
 import { PolicyAmount } from './amount';
 
-export async function MemberPolicyPosition({ membershipId }: { readonly membershipId: string }) {
-  const { savings, benefits } = await getMemberPolicyPosition(membershipId);
+export async function MemberPolicyPosition({ membershipId, canSavings, canBenefits }: { readonly membershipId: string; readonly canSavings: boolean; readonly canBenefits: boolean }) {
+  const { savings, benefits } = await getMemberPolicyPosition(membershipId, canSavings, canBenefits);
   return <section aria-label="Current membership policy position" className="grid min-w-0 gap-4 lg:grid-cols-2">
     {savings ? <Card>
       <h2 className="text-text font-semibold">Savings and borrowing position</h2>

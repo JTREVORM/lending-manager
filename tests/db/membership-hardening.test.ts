@@ -1,3 +1,4 @@
+import { makeBenefitMember } from '../helpers/benefits';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -628,6 +629,9 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
   });
 
   it('preserves the original terms and moves governing policy only through a verified transition', async () => {
+    const transitionMember = await makeBenefitMember(fx.inForceVersionId, {
+      witnessProfileId: fx.manager.profileId,
+    });
     // Effective today, which is after the version the member is on. Terms
     // move forward; the test below asserts the other direction is refused.
     const target = await makeVersion('9.7', 0, 'draft', [
@@ -648,13 +652,13 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
         `select public.accept_membership_policy_version(
                   $1, $2, 'witnessed_in_branch', 'Hardening Member',
                   null, $3, null, 'Kampala') as id`,
-        [fx.membershipId, target, fx.manager.profileId],
+        [transitionMember.membershipId, target, fx.manager.profileId],
       );
       expect(accepted.id).toBeTruthy();
 
       const moved = await queryOne<{ policy_version_id: string }>(
         `select policy_version_id from public.memberships where id = $1`,
-        [fx.membershipId],
+        [transitionMember.membershipId],
       );
       expect(moved.policy_version_id).toBe(fx.inForceVersionId);
 
@@ -663,18 +667,18 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
           $1, public.business_date(), 'Verified transition regression') as id`, [target]);
       const assignment = await queryOne<{ id: string }>(
         'select public.transition_membership_to_policy($1, $2) as id',
-        [batch.id, fx.membershipId]);
+        [batch.id, transitionMember.membershipId]);
       const governing = await queryOne<{ id: string }>(
-        'select public.membership_governing_policy($1) as id', [fx.membershipId]);
+        'select public.membership_governing_policy($1) as id', [transitionMember.membershipId]);
       expect(governing.id).toBe(target);
       const original = await queryOne<{ id: string }>(
-        'select policy_version_id as id from public.memberships where id = $1', [fx.membershipId]);
+        'select policy_version_id as id from public.memberships where id = $1', [transitionMember.membershipId]);
       expect(original.id).toBe(fx.inForceVersionId);
 
       const acceptances = await query<{ policy_version: string }>(
         `select policy_version from public.membership_terms_acceptances
           where membership_id = $1 order by accepted_at`,
-        [fx.membershipId],
+        [transitionMember.membershipId],
       );
       expect(acceptances.map((row) => row.policy_version)).toContain('9.7');
 
@@ -687,7 +691,7 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
     } finally {
       await query('alter table public.membership_policy_assignments disable trigger membership_policy_assignments_no_delete');
       try {
-        await query('delete from public.membership_policy_assignments where membership_id = $1', [fx.membershipId]);
+        await query('delete from public.membership_policy_assignments where membership_id = $1', [transitionMember.membershipId]);
       } finally {
         await query('alter table public.membership_policy_assignments enable trigger membership_policy_assignments_no_delete');
       }
@@ -699,7 +703,7 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
       try {
         await query(
           `update public.memberships set policy_version_id = $2 where id = $1`,
-          [fx.membershipId, fx.inForceVersionId],
+          [transitionMember.membershipId, fx.inForceVersionId],
         );
       } finally {
         await query(
@@ -715,7 +719,7 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
       try {
         await query(
           `delete from public.membership_terms_acceptances where membership_id = $1`,
-          [fx.membershipId],
+          [transitionMember.membershipId],
         );
       } finally {
         await query(

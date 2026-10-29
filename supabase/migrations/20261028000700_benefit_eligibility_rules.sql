@@ -190,6 +190,14 @@ begin
     return;
   end if;
 
+  if auth.uid() is not null and not (
+    (public.user_has_permission('benefits:view') and public.user_can_see_branch(v_claim.branch_id))
+    or exists (select 1 from public.clients c where c.id = v_claim.client_id
+      and c.profile_id = public.current_profile_id())
+  ) then
+    return;
+  end if;
+
   select * into v_membership
   from public.memberships where id = v_claim.membership_id;
 
