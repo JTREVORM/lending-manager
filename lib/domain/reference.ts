@@ -132,7 +132,7 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
     prefix: 'PT',
     padding: 4,
   },
-  meeting_fine: { scope: 'meeting_fine', prefix: 'MF', padding: 5 },
+  meeting_fine: { scope: 'meeting_fine', prefix: 'MFN', padding: 5 },
   meeting_fine_payment: {
     scope: 'meeting_fine_payment',
     prefix: 'FP',

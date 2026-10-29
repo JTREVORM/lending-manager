@@ -44,7 +44,7 @@ describeDb('the permission matrix matches the application', () => {
       ({ role, permission }) => `${role}:${permission}`,
     );
 
-    expect(fromDatabase).toEqual(fromCode);
+    expect(fromDatabase.sort()).toEqual(fromCode.sort());
   });
 
   it('references only roles that exist', async () => {

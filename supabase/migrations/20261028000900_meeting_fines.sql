@@ -132,7 +132,7 @@ on conflict (code) do nothing;
 -- ---------------------------------------------------------------------------
 
 insert into public.reference_formats (scope, prefix, padding, description)
-values ('meeting_fine', 'MF', 5,
+values ('meeting_fine', 'MFN', 5,
         'A fine for unexcused absence from a membership meeting.')
 on conflict (scope) do nothing;
 

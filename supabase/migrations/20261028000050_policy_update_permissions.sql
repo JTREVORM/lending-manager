@@ -86,3 +86,55 @@ values
   ('owner_admin', 'fines:collect'),
   ('owner_admin', 'fines:reverse')
 on conflict (role_key, permission_key) do nothing;
+
+-- Preserve references when the sequence grows beyond its minimum padding.
+-- PostgreSQL lpad truncates when the requested width is shorter than the input.
+create or replace function public.next_reference(p_scope text)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_prefix     text;
+  v_padding    smallint;
+  v_timezone   text;
+  v_year       smallint;
+  v_next_value bigint;
+begin
+  select f.prefix, f.padding
+    into v_prefix, v_padding
+  from public.reference_formats f
+  where f.scope = p_scope;
+
+  if v_prefix is null then
+    raise exception 'Unknown reference scope: %', p_scope
+      using errcode = 'P0001';
+  end if;
+
+  -- The business timezone, from the single place it is configured.
+  select c.timezone
+    into v_timezone
+  from public.company_settings c
+  where c.id = 1;
+
+  v_timezone := coalesce(nullif(pg_catalog.btrim(v_timezone), ''), 'Africa/Kampala');
+
+  v_year := (pg_catalog.date_part('year', pg_catalog.timezone(v_timezone, pg_catalog.now()))::int % 100)::smallint;
+
+  -- One atomic statement. The row lock on (scope, period_year) serialises
+  -- concurrent callers, so no two can receive the same value.
+  insert into public.reference_sequences as s (scope, period_year, last_value, updated_at)
+  values (p_scope, v_year, 1, pg_catalog.now())
+  on conflict (scope, period_year) do update
+    set last_value = s.last_value + 1,
+        updated_at = pg_catalog.now()
+  returning s.last_value into v_next_value;
+
+  return v_prefix
+      || pg_catalog.lpad(v_year::text, 2, '0')
+      || pg_catalog.lpad(v_next_value::text,
+           greatest(v_padding::int, char_length(v_next_value::text)), '0');
+end;
+$$;

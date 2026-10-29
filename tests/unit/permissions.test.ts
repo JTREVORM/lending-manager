@@ -179,6 +179,12 @@ describe('permission matrix', () => {
  */
 describe('authorization matrix', () => {
   const MATRIX: Readonly<Record<Permission, readonly RoleKey[]>> = {
+    'membership_policy:manage': ['owner_admin'],
+    'meetings:excuse_review': ['manager', 'owner_admin'],
+    'fines:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'fines:assess': ['manager', 'owner_admin'],
+    'fines:collect': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'fines:reverse': ['owner_admin'],
     'dashboard:view': ['secretary_treasurer', 'manager', 'owner_admin'],
     'account:view': ['client', 'secretary_treasurer', 'manager', 'owner_admin'],
     'account:update': ['client', 'secretary_treasurer', 'manager', 'owner_admin'],
