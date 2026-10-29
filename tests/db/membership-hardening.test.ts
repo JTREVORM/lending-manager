@@ -664,15 +664,22 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
 
       const batch = await queryOne<{ id: string }>(
         `select public.begin_membership_policy_transition(
-          $1, public.business_date(), 'Verified transition regression') as id`, [target]);
+          $1, public.business_date(), 'Verified transition regression') as id`,
+        [target],
+      );
       const assignment = await queryOne<{ id: string }>(
         'select public.transition_membership_to_policy($1, $2) as id',
-        [batch.id, transitionMember.membershipId]);
+        [batch.id, transitionMember.membershipId],
+      );
       const governing = await queryOne<{ id: string }>(
-        'select public.membership_governing_policy($1) as id', [transitionMember.membershipId]);
+        'select public.membership_governing_policy($1) as id',
+        [transitionMember.membershipId],
+      );
       expect(governing.id).toBe(target);
       const original = await queryOne<{ id: string }>(
-        'select policy_version_id as id from public.memberships where id = $1', [transitionMember.membershipId]);
+        'select policy_version_id as id from public.memberships where id = $1',
+        [transitionMember.membershipId],
+      );
       expect(original.id).toBe(fx.inForceVersionId);
 
       const acceptances = await query<{ policy_version: string }>(
@@ -689,13 +696,23 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
       );
       expect(audited.length).toBe(1);
     } finally {
-      await query('alter table public.membership_policy_assignments disable trigger membership_policy_assignments_no_delete');
+      await query(
+        'alter table public.membership_policy_assignments disable trigger membership_policy_assignments_no_delete',
+      );
       try {
-        await query('delete from public.membership_policy_assignments where membership_id = $1', [transitionMember.membershipId]);
+        await query(
+          'delete from public.membership_policy_assignments where membership_id = $1',
+          [transitionMember.membershipId],
+        );
       } finally {
-        await query('alter table public.membership_policy_assignments enable trigger membership_policy_assignments_no_delete');
+        await query(
+          'alter table public.membership_policy_assignments enable trigger membership_policy_assignments_no_delete',
+        );
       }
-      await query('delete from public.membership_policy_transitions where to_version_id = $1', [target]);
+      await query(
+        'delete from public.membership_policy_transitions where to_version_id = $1',
+        [target],
+      );
       // The original policy was preserved throughout.
       await query(
         `alter table public.memberships disable trigger memberships_guard_transition`,

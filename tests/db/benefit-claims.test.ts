@@ -1215,3 +1215,43 @@ describeDb('who may do what', () => {
     expect(attempt.message).toContain('benefits:claim');
   });
 });
+
+describeDb('benefit receipt retry identity', () => {
+  it('replays the same payment once and refuses a key reused for another request', async () => {
+    const member = await fx.nextMember();
+    const claimId = await openMedicalClaim(member, 400_000);
+    expect((await driveToAssessed(claimId, member, 'medical')).ok).toBe(true);
+    const approved = await asUserCommitted(fx.approver, [{
+      sql: 'select public.approve_benefit_claim($1, null, null)',
+      params: [claimId],
+    }]);
+    expect(approved.ok, approved.message).toBe(true);
+    const key = 'fec3e3c8-bc88-4cbb-b681-42ee2b6e8043';
+    const request = {
+      sql: "select public.post_benefit_payment($1, 'cash', null, $2::uuid) as id",
+      params: [claimId, key],
+    };
+    const first = await asUserCommitted(fx.owner, [request]);
+    const retry = await asUserCommitted(fx.owner, [request]);
+    expect(first.ok, first.message).toBe(true);
+    expect(retry.ok, retry.message).toBe(true);
+    expect(retry.rows[0]).toEqual(first.rows[0]);
+    const changed = await asUser(fx.owner,
+      "select public.post_benefit_payment($1, 'bank', 'BANK-RETRY', $2::uuid)",
+      [claimId, key],
+    );
+    expect(changed.ok).toBe(false);
+    expect(changed.code).toBe('42501');
+    const differentClaim = await asUser(fx.owner,
+      "select public.post_benefit_payment(gen_random_uuid(), 'cash', null, $1::uuid)",
+      [key],
+    );
+    expect(differentClaim.ok).toBe(false);
+    expect(differentClaim.code).toBe('42501');
+    const count = await queryOne<{ count: string }>(
+      'select count(*)::text from public.benefit_payments where idempotency_key=$1',
+      [key],
+    );
+    expect(count.count).toBe('1');
+  });
+});

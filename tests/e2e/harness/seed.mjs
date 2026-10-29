@@ -1133,7 +1133,7 @@ async function seedMembershipAndSavings() {
       medical_benefit_annual_cap, medical_benefit_claims_per_year,
       benefit_waiting_period_days, medical_benefit_year_basis,
       medical_benefit_cap_mode, benefit_qualification_basis, death_confirmations_required,
-      notes)
+      meeting_absence_fine, notes)
    values
      ('998.2', 'Polytos membership terms (harness)',
       (public.business_date() - 400), 'active',
@@ -1145,7 +1145,7 @@ async function seedMembershipAndSavings() {
       'per_month', 'reducing_balance_monthly', $1::int,
       $2::bigint, $3::int, $4::int, $5,
       'amount', 'waiting_period_days', 3,
-      'Published by the browser-test harness. Illustrative figures. The '
+      5000, 'Published by the browser-test harness. Illustrative figures. The '
         || 'interest basis, the interest method and the savings multiplier '
         || 'are the harness''s own illustrative answers and are NOT decisions '
         || 'of the business; the monthly collection anchor is left open, which '
@@ -2083,6 +2083,29 @@ async function seedMembershipAndSavings() {
       );
     })();
 
+    // Separate synthetic unpaid charge: browser receipts never alter attendance
+    // or money asserted by the earlier benefit and meeting scenarios.
+    const fineToCollect = await (async () => {
+      const [meeting] = await asUser(
+        secretary,
+        `select public.schedule_membership_meeting(
+          $1, 'special', 'Fine receipt browser fixture', 'Kalerwe',
+          public.business_now() - interval '1 day', null) as id`,
+        [meetingBranch.id],
+      );
+      await asUser(
+        secretary,
+        `select public.mark_meeting_attendance($1, $2, 'absent', 'not_stated', null, null)`,
+        [meeting.id, memberApplying.membershipId],
+      );
+      const [fine] = await asUser(
+        manager,
+        'select public.assess_meeting_fine($1, $2) as id',
+        [meeting.id, memberApplying.membershipId],
+      );
+      return fine.id;
+    })();
+
     // The benefit payments and the General Ledger must agree, to the shilling.
     // There is no second ledger: `post_benefit_payment` writes one journal
     // entry through `post_journal`, like every other movement in this system.
@@ -2115,6 +2138,7 @@ async function seedMembershipAndSavings() {
         verified: verifiedBeneficiary.id,
         pending: pendingBeneficiary.id,
       },
+      fines: { unpaid: fineToCollect },
       benefitClaims: {
         paid: paidClaim.id,
         paidNumber: paidClaim.claim_number,

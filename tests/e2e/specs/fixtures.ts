@@ -160,6 +160,7 @@ export interface Fixtures {
    *   meetings.upcoming       next month's, so "when is the next one" has an
    *                           answer
    */
+  readonly fines: { readonly unpaid: string };
   readonly beneficiaries: {
     readonly verified: string;
     readonly pending: string;

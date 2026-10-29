@@ -122,8 +122,16 @@ export const DEMO_ACTIVATION_DAYS_AGO = 220;
 
 /** The relationships this demonstration treats as eligible for condolence. */
 export const DEMO_CONDOLENCE_ELIGIBLE: readonly string[] = [
-  'spouse', 'child', 'parent', 'sibling', 'grandparent', 'grandchild',
-  'uncle_aunt', 'nephew_niece', 'cousin', 'other_relative',
+  'spouse',
+  'child',
+  'parent',
+  'sibling',
+  'grandparent',
+  'grandchild',
+  'uncle_aunt',
+  'nephew_niece',
+  'cousin',
+  'other_relative',
 ];
 
 export interface BenefitActors {
@@ -350,9 +358,13 @@ async function openCondolenceVocabulary(client: pg.Client): Promise<void> {
     [DEMO_CONDOLENCE_ELIGIBLE],
   );
   if (result.rows[0]?.count !== String(DEMO_CONDOLENCE_ELIGIBLE.length)) {
-    throw new Error('Apply the policy family-eligibility migration before seeding this demonstration.');
+    throw new Error(
+      'Apply the policy family-eligibility migration before seeding this demonstration.',
+    );
   }
-  console.log('  vocabulary      official family relationships preserved; no demo overrides');
+  console.log(
+    '  vocabulary      official family relationships preserved; no demo overrides',
+  );
 }
 
 /**
@@ -1004,8 +1016,10 @@ async function seedClaim(
   }
 
   let deceasedKinId: string | null = null;
-  if (scenario.claimType === 'family_condolence'
-      && (scenario.outcome === 'paid' || scenario.outcome === 'reversed')) {
+  if (
+    scenario.claimType === 'family_condolence' &&
+    (scenario.outcome === 'paid' || scenario.outcome === 'reversed')
+  ) {
     await asStaff(client, actors.recorder, async () => {
       const registered = await client.query<{ id: string }>(
         `select public.register_member_beneficiary(
@@ -1015,10 +1029,12 @@ async function seedClaim(
       );
       deceasedKinId = registered.rows[0]!.id;
     });
-    await client.query(`update public.member_beneficiaries
+    await client.query(
+      `update public.member_beneficiaries
       set created_at = ((public.business_date() - $2::int - 30) + time '09:00')
         at time zone 'Africa/Kampala' where id = $1`,
-      [deceasedKinId, scenario.eventDaysAgo]);
+      [deceasedKinId, scenario.eventDaysAgo],
+    );
     tally.beneficiariesRegistered += 1;
   }
 
@@ -1154,10 +1170,12 @@ async function seedClaim(
     }
     for (const confirmer of confirmers.rows) {
       await asStaff(client, actors.recorder, async () => {
-        await client.query(`select public.record_death_confirmation(
+        await client.query(
+          `select public.record_death_confirmation(
           $1, $2, 'DEMONSTRATION: the group member confirms this synthetic death.',
           'witnessed_by_staff', null, null, 'DEMONSTRATION group member')`,
-          [claimId, confirmer.id]);
+          [claimId, confirmer.id],
+        );
       });
     }
   }

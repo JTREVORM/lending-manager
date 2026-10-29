@@ -281,7 +281,12 @@ export default async function LoanDetailPage({
           </>
         }
       />
-      {canSeePayments ? <LoanCollections loanId={loan.id} canCarry={contextCan(context, 'payments:create') && loan.status === 'active'} /> : null}
+      {canSeePayments ? (
+        <LoanCollections
+          loanId={loan.id}
+          canCarry={contextCan(context, 'payments:create') && loan.status === 'active'}
+        />
+      ) : null}
 
       {breakdownProblem !== null ? (
         <Alert tone="danger">

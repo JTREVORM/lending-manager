@@ -101,7 +101,21 @@ export const NOTIFICATION_GROUPS = [
   {
     value: 'membership',
     label: 'Membership programme',
-    categories: ['benefit_claim_submitted', 'benefit_claim_information_required', 'benefit_claim_assessed', 'benefit_claim_decided', 'benefit_paid', 'benefit_payment_reversed', 'beneficiary_awaiting_verification', 'meeting_scheduled', 'meeting_rescheduled', 'meeting_cancelled', 'meeting_action_assigned', 'meeting_absence_notice_pending', 'meeting_fine_assessed'],
+    categories: [
+      'benefit_claim_submitted',
+      'benefit_claim_information_required',
+      'benefit_claim_assessed',
+      'benefit_claim_decided',
+      'benefit_paid',
+      'benefit_payment_reversed',
+      'beneficiary_awaiting_verification',
+      'meeting_scheduled',
+      'meeting_rescheduled',
+      'meeting_cancelled',
+      'meeting_action_assigned',
+      'meeting_absence_notice_pending',
+      'meeting_fine_assessed',
+    ],
   },
   {
     value: 'decisions',

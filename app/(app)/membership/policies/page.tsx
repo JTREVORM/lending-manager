@@ -60,8 +60,11 @@ export default async function MembershipPoliciesPage() {
 
       {canManage ? (
         <Alert tone="info" title="Policy timing and controlled transitions">
-          <Link className="underline" href="/membership/policies/transitions">Open policy transition management</Link>
-          {' '}to preview qualification changes, record authorized draft timing and manage verified member transitions.
+          <Link className="underline" href="/membership/policies/transitions">
+            Open policy transition management
+          </Link>{' '}
+          to preview qualification changes, record authorized draft timing and manage
+          verified member transitions.
         </Alert>
       ) : null}
 
@@ -105,7 +108,13 @@ export default async function MembershipPoliciesPage() {
                         {MEMBERSHIP_POLICY_STATUS_LABELS[policy.status]}
                       </Badge>
                       <span>
-                        {policy.effectiveFrom === null ? 'Activation date awaiting authorization' : <>Effective from <DateValue value={policy.effectiveFrom} /></>}
+                        {policy.effectiveFrom === null ? (
+                          'Activation date awaiting authorization'
+                        ) : (
+                          <>
+                            Effective from <DateValue value={policy.effectiveFrom} />
+                          </>
+                        )}
                       </span>
                     </span>
                   }

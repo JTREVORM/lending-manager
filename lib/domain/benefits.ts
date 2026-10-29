@@ -511,7 +511,8 @@ export const BENEFIT_ELIGIBILITY_CODE_LABELS: Readonly<
   death_confirmations_insufficient: 'More group member confirmations are required',
   next_of_kin_not_listed: 'The deceased was not listed as next of kin',
   next_of_kin_listed_after_event: 'The next-of-kin listing was recorded after the death',
-  bereavement_loan_outstanding: 'Outstanding loans must be cleared before bereavement support',
+  bereavement_loan_outstanding:
+    'Outstanding loans must be cleared before bereavement support',
   policy_not_open: 'Benefit payments are not open yet',
   membership_not_claimable: 'This membership cannot claim',
   membership_suspended_undecided: 'What a suspension costs a member is undecided',

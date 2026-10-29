@@ -752,7 +752,11 @@ log(
 );
 
 // Also protect existing membership money and benefit history across this update.
-execFileSync(process.execPath, [join(PROJECT_ROOT, 'scripts', 'verify-policy-upgrade.mjs')], {
-  env: process.env,
-  stdio: 'inherit',
-});
+execFileSync(
+  process.execPath,
+  [join(PROJECT_ROOT, 'scripts', 'verify-policy-upgrade.mjs')],
+  {
+    env: process.env,
+    stdio: 'inherit',
+  },
+);

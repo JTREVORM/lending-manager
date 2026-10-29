@@ -126,7 +126,18 @@ export default async function BenefitClaimPage({
         </Alert>
       ) : null}
 
-      {claim.claimType !== 'medical' ? <DeathVerification claimId={claim.id} membershipId={claim.membershipId} canRecord={canClaim && ['draft', 'submitted', 'under_verification', 'information_required'].includes(claim.status)} /> : null}
+      {claim.claimType !== 'medical' ? (
+        <DeathVerification
+          claimId={claim.id}
+          membershipId={claim.membershipId}
+          canRecord={
+            canClaim &&
+            ['draft', 'submitted', 'under_verification', 'information_required'].includes(
+              claim.status,
+            )
+          }
+        />
+      ) : null}
       <ClaimFactsPanel
         claim={claim}
         minimumAdmissionDays={policy?.medicalBenefitMinAdmissionDays ?? null}

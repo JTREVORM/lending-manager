@@ -158,9 +158,14 @@ export default async function MembershipDetailPage({
         status={<MembershipStatusBadge status={membership.status} />}
         description={<span className="font-mono">{membership.membershipNumber}</span>}
       />
-      <MemberPolicyPosition membershipId={membership.id}
-        canSavings={contextCan(context, 'savings:view') || contextCan(context, 'member_loans:view_eligibility')}
-        canBenefits={contextCan(context, 'benefits:view')} />
+      <MemberPolicyPosition
+        membershipId={membership.id}
+        canSavings={
+          contextCan(context, 'savings:view') ||
+          contextCan(context, 'member_loans:view_eligibility')
+        }
+        canBenefits={contextCan(context, 'benefits:view')}
+      />
 
       {membership.status === 'suspended' || membership.status === 'withdrawn' ? (
         <Alert tone={membership.status === 'suspended' ? 'warning' : 'info'}>

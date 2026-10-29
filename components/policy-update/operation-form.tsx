@@ -17,29 +17,58 @@ export interface OperationField {
   readonly hint?: string;
 }
 
-export function OperationForm({ operation, values, fields = [], label, disabled = false }: {
+export function OperationForm({
+  operation,
+  values,
+  fields = [],
+  label,
+  disabled = false,
+}: {
   readonly operation: PolicyOperation['operation'];
   readonly values: Readonly<Record<string, string>>;
   readonly fields?: readonly OperationField[];
   readonly label: string;
   readonly disabled?: boolean;
 }) {
-  const [result, submit, pending] = useActionState<PolicyActionResult | undefined, FormData>(policyUpdateAction, undefined);
+  const [result, submit, pending] = useActionState<
+    PolicyActionResult | undefined,
+    FormData
+  >(policyUpdateAction, undefined);
   return (
     <form action={submit} className="min-w-0 space-y-3">
       <input type="hidden" name="operation" value={operation} />
-      {Object.entries(values).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-      {fields.map((field) => field.options ? (
-        <SelectField key={field.name} name={field.name} label={field.label}
-          required={field.required} placeholder="Choose…"
-          options={[...field.options]} error={result?.fieldErrors?.[field.name]?.[0]} />
-      ) : (
-        <Field key={field.name} name={field.name} label={field.label}
-          type={field.type ?? 'text'} required={field.required}
-          hint={field.hint} error={result?.fieldErrors?.[field.name]?.[0]} />
+      {Object.entries(values).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
       ))}
-      {result ? <Alert tone={result.ok ? 'success' : 'danger'}>{result.message}</Alert> : null}
-      <Button type="submit" disabled={pending || disabled}>{pending ? 'Recording…' : label}</Button>
+      {fields.map((field) =>
+        field.options ? (
+          <SelectField
+            key={field.name}
+            name={field.name}
+            label={field.label}
+            required={field.required}
+            placeholder="Choose…"
+            options={[...field.options]}
+            error={result?.fieldErrors?.[field.name]?.[0]}
+          />
+        ) : (
+          <Field
+            key={field.name}
+            name={field.name}
+            label={field.label}
+            type={field.type ?? 'text'}
+            required={field.required}
+            hint={field.hint}
+            error={result?.fieldErrors?.[field.name]?.[0]}
+          />
+        ),
+      )}
+      {result ? (
+        <Alert tone={result.ok ? 'success' : 'danger'}>{result.message}</Alert>
+      ) : null}
+      <Button type="submit" disabled={pending || disabled}>
+        {pending ? 'Recording…' : label}
+      </Button>
     </form>
   );
 }

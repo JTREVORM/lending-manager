@@ -174,7 +174,7 @@ export default async function NewBenefitClaimPage({
     typeParam === 'family_condolence'
       ? listBeneficiaryRelationships()
       : Promise.resolve([]),
-    (typeParam === 'member_bereavement' || typeParam === 'family_condolence')
+    typeParam === 'member_bereavement' || typeParam === 'family_condolence'
       ? listBeneficiariesForMembership(membership.id)
       : Promise.resolve([]),
   ]);

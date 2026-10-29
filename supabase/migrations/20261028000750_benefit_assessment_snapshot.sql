@@ -555,6 +555,17 @@ begin
   from public.benefit_payments where idempotency_key = p_idempotency_key;
 
   if v_payment_id is not null then
+    if not exists (
+      select 1 from public.benefit_payments bp
+      where bp.id = v_payment_id and bp.claim_id = p_claim_id
+        and bp.payment_method = p_payment_method
+        and coalesce(bp.external_reference, '') =
+          pg_catalog.upper(pg_catalog.btrim(coalesce(p_external_reference, '')))
+        and public.user_can_see_branch(bp.branch_id)
+    ) then
+      raise exception 'That receipt key belongs to another payment request.'
+        using errcode = '42501';
+    end if;
     return v_payment_id;
   end if;
 
@@ -569,6 +580,15 @@ begin
       'Claim % is %. Only an approved claim is paid.',
       v_claim.claim_number, v_claim.status using errcode = 'P0001';
   end if;
+
+  if not public.user_can_see_branch(v_claim.branch_id) then
+    raise exception 'You cannot pay that branch''s claim.' using errcode = '42501';
+  end if;
+
+  -- Serialize decisions that can reopen debt against withdrawal or bereavement payment.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('policy_client_financial:' || v_claim.client_id::text)
+  );
 
   -- The conditions that can change between approval and payment, re-asked at
   -- the moment the money moves: this benefit's gate, and rule 14's loan.

@@ -335,7 +335,8 @@ export const UNDECIDED_POLICY_RULE_LABELS: Readonly<Record<UndecidedPolicyRule, 
 
 /** The shape the gate reads. A subset of the full policy version. */
 export type MedicalCapMode = 'amount' | 'no_separate_cap';
-export type BenefitQualificationBasis = 'waiting_period_days' | 'savings_qualifying_months';
+export type BenefitQualificationBasis =
+  'waiting_period_days' | 'savings_qualifying_months';
 
 export interface PolicyDecisionState {
   readonly medicalBenefitCapMode?: MedicalCapMode | null;
@@ -483,7 +484,9 @@ export function isActivityReady(
     policy.status === 'active' &&
     policy.approvedAt !== null &&
     activityOutstandingDecisions(policy, activity).length === 0 &&
-    (activity !== 'benefits' || (policy.medicalBenefitYearBasis !== null && policy.deathConfirmationsRequired !== null))
+    (activity !== 'benefits' ||
+      (policy.medicalBenefitYearBasis !== null &&
+        policy.deathConfirmationsRequired !== null))
   );
 }
 
@@ -504,7 +507,11 @@ export function activityBlockedReason(
     return 'The version has not been approved.';
   }
 
-  if (activity === 'benefits' && (policy.medicalBenefitYearBasis === null || policy.deathConfirmationsRequired === null)) {
+  if (
+    activity === 'benefits' &&
+    (policy.medicalBenefitYearBasis === null ||
+      policy.deathConfirmationsRequired === null)
+  ) {
     return 'The medical benefit year or death-confirmation requirement is not recorded.';
   }
 
@@ -617,11 +624,17 @@ export function isMembershipNumber(value: unknown): value is string {
 }
 
 /** Undefined supports legacy callers; an explicit null remains undecided. */
-function policyRuleIsOutstanding(policy: PolicyDecisionState, rule: UndecidedPolicyRule): boolean {
+function policyRuleIsOutstanding(
+  policy: PolicyDecisionState,
+  rule: UndecidedPolicyRule,
+): boolean {
   if (rule === 'medicalBenefitAnnualCap' && policy.medicalBenefitCapMode !== undefined) {
     return policy.medicalBenefitCapMode === null;
   }
-  if (rule === 'benefitWaitingPeriodDays' && policy.benefitQualificationBasis !== undefined) {
+  if (
+    rule === 'benefitWaitingPeriodDays' &&
+    policy.benefitQualificationBasis !== undefined
+  ) {
     return policy.benefitQualificationBasis === null;
   }
   return policy[rule] === null;
@@ -633,12 +646,19 @@ export function isBenefitPolicyReady(
   benefit: 'medical' | 'family_condolence' | 'member_bereavement',
 ): boolean {
   if (policy.status !== 'active' || policy.approvedAt === null) return false;
-  const qualification = policy.benefitQualificationBasis === undefined
-    ? policy.benefitWaitingPeriodDays !== null
-    : policy.benefitQualificationBasis !== null;
+  const qualification =
+    policy.benefitQualificationBasis === undefined
+      ? policy.benefitWaitingPeriodDays !== null
+      : policy.benefitQualificationBasis !== null;
   if (!qualification) return false;
   if (benefit !== 'medical') return policy.deathConfirmationsRequired != null;
-  const cap = policy.medicalBenefitCapMode === undefined
-    ? policy.medicalBenefitAnnualCap !== null : policy.medicalBenefitCapMode !== null;
-  return cap && policy.medicalBenefitClaimsPerYear !== null && policy.medicalBenefitYearBasis != null;
+  const cap =
+    policy.medicalBenefitCapMode === undefined
+      ? policy.medicalBenefitAnnualCap !== null
+      : policy.medicalBenefitCapMode !== null;
+  return (
+    cap &&
+    policy.medicalBenefitClaimsPerYear !== null &&
+    policy.medicalBenefitYearBasis != null
+  );
 }

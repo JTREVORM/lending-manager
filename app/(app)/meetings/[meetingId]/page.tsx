@@ -96,9 +96,21 @@ export default async function MeetingPage({
         back={{ href: ROUTES.meetings, label: 'Meetings' }}
         status={<MeetingStatusBadge status={meeting.status} />}
       />
-      <MeetingPolicyWork meetingId={meeting.id} members={expected}
-        canRecord={canManage && meeting.status === 'scheduled' && Date.parse(meeting.scheduledAt) > policyNow} canReview={contextCan(context, 'meetings:excuse_review')}
-        canAssess={contextCan(context, 'fines:assess') && meeting.status === 'held' && Date.parse(meeting.scheduledAt) <= policyNow} />
+      <MeetingPolicyWork
+        meetingId={meeting.id}
+        members={expected}
+        canRecord={
+          canManage &&
+          meeting.status === 'scheduled' &&
+          Date.parse(meeting.scheduledAt) > policyNow
+        }
+        canReview={contextCan(context, 'meetings:excuse_review')}
+        canAssess={
+          contextCan(context, 'fines:assess') &&
+          meeting.status === 'held' &&
+          Date.parse(meeting.scheduledAt) <= policyNow
+        }
+      />
 
       {query.scheduled === '1' ? (
         <Alert tone="success" title="Meeting scheduled">

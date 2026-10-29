@@ -455,6 +455,11 @@ begin
     raise exception 'You cannot pay that branch''s withdrawal.' using errcode = '42501';
   end if;
 
+  -- Serialize decisions that can reopen debt against withdrawal or bereavement payment.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('policy_client_financial:' || v_request.client_id::text)
+  );
+
   perform public.lock_savings_capacity(v_request.savings_account_id);
 
   -- The account lock. Everything below reads the balance, so it is taken
@@ -627,6 +632,11 @@ begin
     raise exception 'Loan % names no product, so it has no terms to approve.',
       v_loan.loan_number using errcode = 'P0001';
   end if;
+
+  -- Serialize decisions that can reopen debt against withdrawal or bereavement payment.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('policy_client_financial:' || v_loan.client_id::text)
+  );
 
   -- --- Polytos Phase 3: the capacity lock, before validation -------------
   --
@@ -957,5 +967,142 @@ begin
   end if;
 
   return p_loan_id;
+end;
+$$;
+
+
+-- Preserve reversal amounts, allocations and penalty arithmetic; share the
+-- policy safety lock before reopening a cleared debt.
+create or replace function public.reverse_payment(
+  p_payment_id uuid,
+  p_reason text
+)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_payment public.loan_payments;
+  v_loan    public.loans;
+  v_before  bigint;
+  v_after   bigint;
+begin
+  if p_reason is null or pg_catalog.btrim(p_reason) = '' then
+    raise exception 'Reversing a payment requires a reason.' using errcode = 'P0001';
+  end if;
+
+  -- Serialises two reversal attempts on one payment. The row lock below would
+  -- do it too; the advisory lock makes the ordering explicit and keeps the
+  -- "already reversed" message the one the loser sees.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('payment_reverse:' || p_payment_id::text)
+  );
+
+  select * into v_payment from public.loan_payments where id = p_payment_id for update;
+
+  if not found then
+    raise exception 'No such payment.' using errcode = 'P0001';
+  end if;
+
+  if v_payment.status = 'reversed' then
+    raise exception
+      'Payment % was already reversed on %.',
+      v_payment.payment_number, v_payment.reversed_at
+      using errcode = 'P0001';
+  end if;
+
+  if auth.uid() is not null and not public.user_has_permission('payments:reverse') then
+    raise exception 'Reversing a payment requires the payments:reverse capability.'
+      using errcode = 'P0001';
+  end if;
+
+  -- The loan is locked before the payment's status changes, so a concurrent
+  -- payment posting cannot interleave with the reopening below.
+  select * into v_loan from public.loans where id = v_payment.loan_id for update;
+
+  -- Serialize decisions that can reopen debt against withdrawal or bereavement payment.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('policy_client_financial:' || v_loan.client_id::text)
+  );
+
+  -- The live balance, taken now. Deliberately **not**
+  -- `v_payment.outstanding_after`: that is what the receipt said at the
+  -- counter, frozen, and it is only the current balance if nothing has
+  -- happened since. Reversing the first of two payments would compare against
+  -- a figure two payments out of date — which is exactly the confusion
+  -- ADR-029 exists to prevent, and the first draft of this function walked
+  -- into it.
+  -- Phase 7: the **total** obligation, penalty included. A payment may have
+  -- been allocated partly to a penalty, in which case the contractual figure
+  -- alone would not rise by the payment's amount and the reconciliation below
+  -- would refuse a correct reversal.
+  v_before := public.loan_total_outstanding(v_payment.loan_id);
+
+  -- The reversal itself. `reversed_at` and `reversed_by` are stamped by the
+  -- guard trigger from the session, not by this function and not by its
+  -- caller.
+  update public.loan_payments
+     set status = 'reversed',
+         reversed_at = public.business_now(),
+         reversed_by = public.current_profile_id(),
+         reversal_reason = pg_catalog.btrim(p_reason)
+   where id = p_payment_id;
+
+  -- --- Reopen, if the money is owed again ---------------------------------
+  v_after := public.loan_total_outstanding(v_payment.loan_id);
+
+  if v_after < 0 then
+    raise exception
+      'Reversal reconciliation failed: the loan would owe % shillings.', v_after
+      using errcode = 'P0001';
+  end if;
+
+  -- A cleared loan that owes money again must say so. The transition guard
+  -- re-derives the balance before permitting it, so this cannot reopen a loan
+  -- that is still settled.
+  if v_loan.status = 'cleared' and v_after > 0 then
+    update public.loans set status = 'active' where id = v_payment.loan_id;
+  end if;
+
+  -- The balance must have risen by exactly the reversed amount, from whatever
+  -- it was immediately before. Nothing else about the loan may have moved, and
+  -- payments recorded after this one are unaffected.
+  if v_after <> v_before + v_payment.amount then
+    raise exception
+      'Reversal reconciliation failed: the balance moved from % to %, not to %.',
+      v_before, v_after, v_before + v_payment.amount
+      using errcode = 'P0001';
+  end if;
+
+  -- The allocations are still there, untouched, and still attached to the
+  -- payment. Asserted because their survival is the whole audit value of
+  -- reversing rather than deleting.
+  if not exists (
+    select 1 from public.payment_allocations where payment_id = p_payment_id
+  ) then
+    raise exception
+      'Reversal reconciliation failed: the payment''s allocations are missing.'
+      using errcode = 'P0001';
+  end if;
+
+  -- --- Phase 7: a reversal can make a penalty due -------------------------
+  --
+  -- A loan that was settled during its grace period, and so never incurred a
+  -- penalty, is a loan whose exemption rested on money that has now been
+  -- withdrawn. The basis is recomputed from the effective ledger — in which
+  -- the reversed payment no longer counts — so if the loan did owe money at
+  -- the grace deadline after all, and that deadline has passed, the charge
+  -- applies now.
+  --
+  -- The alternative would be to exempt a loan because it *temporarily looked*
+  -- cleared, which is an exemption anybody could manufacture. Note the
+  -- ordering: this runs after the reconciliation above, because materialising
+  -- a penalty legitimately moves the total outstanding and the assertion is
+  -- about the reversal alone.
+  perform public.ensure_penalty_applied(v_payment.loan_id);
+
+  return p_payment_id;
 end;
 $$;
