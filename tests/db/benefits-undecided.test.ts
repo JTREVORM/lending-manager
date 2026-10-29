@@ -161,9 +161,13 @@ describeDb('the policy gate, with every benefit rule undecided', () => {
     expect(assessed.ok).toBe(false);
     expect(assessed.message).toContain('policy_not_open');
     // The three decisions, in the words a person would use.
-    expect(assessed.message).toContain('whether the medical benefit has a shilling ceiling for the year');
+    expect(assessed.message).toContain(
+      'whether the medical benefit has a shilling ceiling for the year',
+    );
     expect(assessed.message).toContain('claims a member may make');
-    expect(assessed.message).toContain('how the qualifying period before a first claim is measured');
+    expect(assessed.message).toContain(
+      'how the qualifying period before a first claim is measured',
+    );
   });
 
   it('says exactly what is missing, rather than "not available"', async () => {
@@ -176,7 +180,9 @@ describeDb('the policy gate, with every benefit rule undecided', () => {
     expect(reason.message ?? 'ok').toBe('ok');
     const text = (reason.rows[0] as { reason: string }).reason;
     expect(text).toContain('Some benefit payments wait on');
-    expect(text).toContain('whether the medical benefit has a shilling ceiling for the year');
+    expect(text).toContain(
+      'whether the medical benefit has a shilling ceiling for the year',
+    );
     expect(text).toContain('how many medical claims a member may make in a year');
     expect(text).toContain('how the qualifying period before a first claim is measured');
   });
@@ -221,7 +227,9 @@ describeDb('the policy gate, with every benefit rule undecided', () => {
     expect(paid.ok).toBe(false);
     // The policy gate is re-asked at the moment the money moves, which is the
     // last point at which asking can still prevent anything.
-    expect(paid.message).toContain('whether the medical benefit has a shilling ceiling for the year');
+    expect(paid.message).toContain(
+      'whether the medical benefit has a shilling ceiling for the year',
+    );
   });
 });
 

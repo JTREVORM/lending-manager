@@ -488,6 +488,7 @@ const CONFIGURATION_ENTITIES = new Set([
   'repayment_frequency',
   'business_settings',
   'role_permission',
+  'membership_policy',
 ]);
 
 /**

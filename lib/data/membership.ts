@@ -115,7 +115,7 @@ export interface MembershipPolicy {
   readonly id: string;
   readonly version: string;
   readonly title: string;
-  readonly effectiveFrom: string;
+  readonly effectiveFrom: string | null;
   readonly status: MembershipPolicyStatus;
 
   readonly registrationFee: UgxAmount;
@@ -436,7 +436,7 @@ interface PolicyRow {
   id: string;
   version: string;
   title: string;
-  effective_from: string;
+  effective_from: string | null;
   status: string;
   registration_fee: number | string;
   monthly_savings_minimum: number | string;

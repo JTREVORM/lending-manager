@@ -1132,6 +1132,7 @@ describeDb('privileged functions', () => {
       'audit_payment_allocated',
       'audit_payment_change',
       'audit_penalty_applied',
+      'audit_policy_update_event',
       'audit_profile_change',
       'audit_savings_account_change',
       'audit_savings_transaction',
@@ -1174,8 +1175,6 @@ describeDb('privileged functions', () => {
       'carry_forward_unpaid_installments',
       'client_guarantors_guard_detach',
       'client_has_live_loan',
-      'client_has_outstanding_loan',
-      'client_outstanding_loans',
       'client_remarks_stamp_author',
       'clients_assign_client_number',
       'clients_guard_privileged_columns',
@@ -1277,7 +1276,6 @@ describeDb('privileged functions', () => {
       // so neither needs to run as the owner — which is the same reason
       // `calculate_loan_breakdown` is not here.
       'medical_benefit_consumed',
-      'meeting_absence_excused',
       'meeting_absence_notices_guard',
       'meeting_fine_candidates',
       'meeting_fine_payments_assign_number',
@@ -1346,7 +1344,6 @@ describeDb('privileged functions', () => {
       // other nine are. A trigger of its own rather than 140 lines copied into
       // the Phase 4 migration, where the copy would be the one that drifted.
       'membership_policy_year_basis_guard',
-      'membership_savings_qualified',
       'membership_terms_acceptances_guard',
       'membership_terms_are_accepted',
       'memberships_assign_number',
@@ -1395,6 +1392,7 @@ describeDb('privileged functions', () => {
       'raise_notification',
       'record_audit_event',
       'record_death_confirmation',
+      'record_draft_policy_timing',
       'record_expense',
       'record_meeting_absence_notice',
       'record_meeting_minutes',
@@ -1439,7 +1437,6 @@ describeDb('privileged functions', () => {
       // has already named, and both are what the policy's live-loan rule is
       // written against — so they must give the same answer to every caller.
       'savings_pledged_amount',
-      'savings_qualification_under_policy',
       'savings_summary',
       'savings_transactions_assign_number',
       'savings_withdrawable_amount',
@@ -1735,6 +1732,7 @@ describeDb('privileged functions', () => {
       'post_savings_withdrawal',
       'preview_membership_policy_transition',
       'record_death_confirmation',
+      'record_draft_policy_timing',
       'record_expense',
       'record_meeting_absence_notice',
       'record_meeting_minutes',

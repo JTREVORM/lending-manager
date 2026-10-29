@@ -200,6 +200,7 @@ set search_path = ''
 as $$
 declare
   v_fine      public.meeting_fines;
+  v_existing  public.meeting_fine_payments;
   v_actor     uuid;
   v_label     text;
   v_reference text;
@@ -232,11 +233,22 @@ begin
     pg_catalog.hashtext('meeting_fine_payment_key:' || p_idempotency_key::text)
   );
 
-  select id into v_payment_id
+  select * into v_existing
   from public.meeting_fine_payments where idempotency_key = p_idempotency_key;
 
-  if v_payment_id is not null then
-    return v_payment_id;
+  if found then
+    if not public.user_can_see_branch(v_existing.branch_id) then
+      raise exception 'You cannot read that branch''s fine payments.' using errcode = '42501';
+    end if;
+    if v_existing.fine_id is distinct from p_fine_id
+       or v_existing.amount is distinct from p_amount
+       or v_existing.payment_method is distinct from p_payment_method
+       or v_existing.external_reference is distinct from
+          nullif(upper(btrim(coalesce(p_external_reference, ''))), '') then
+      raise exception 'This idempotency key belongs to a different payment request.'
+        using errcode = 'P0001';
+    end if;
+    return v_existing.id;
   end if;
 
   select * into v_fine from public.meeting_fines where id = p_fine_id for update;

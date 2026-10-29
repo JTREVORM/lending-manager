@@ -1129,7 +1129,9 @@ describeDb('the condolence relationship rule', () => {
   it('accepts a listed family member and holds a non-family relationship', async () => {
     const eligible = await fx.nextMember();
     const kin = await makeListedNextOfKin(
-      eligible.membershipId, fx.secretary, fx.manager,
+      eligible.membershipId,
+      fx.secretary,
+      fx.manager,
       { relationship: 'cousin', listedOn: '2025-03-01' },
     );
     const eligibleClaim = await asUserCommitted(fx.secretary, [
@@ -1142,7 +1144,9 @@ describeDb('the condolence relationship rule', () => {
     ]);
     expect(eligibleClaim.ok).toBe(true);
     const result = await driveToAssessed(
-      (eligibleClaim.rows[0] as { id: string }).id, eligible, 'family_condolence',
+      (eligibleClaim.rows[0] as { id: string }).id,
+      eligible,
+      'family_condolence',
     );
     expect(result.message ?? 'ok').toBe('ok');
     expect(result.amount).toBe(100_000);
@@ -1158,7 +1162,9 @@ describeDb('the condolence relationship rule', () => {
     ]);
     expect(refusedClaim.ok).toBe(true);
     const refused = await driveToAssessed(
-      (refusedClaim.rows[0] as { id: string }).id, notEligible, 'family_condolence',
+      (refusedClaim.rows[0] as { id: string }).id,
+      notEligible,
+      'family_condolence',
     );
     expect(refused.ok).toBe(false);
     expect(refused.message).toContain('relationship_not_eligible');

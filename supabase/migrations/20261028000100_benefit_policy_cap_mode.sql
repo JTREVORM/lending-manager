@@ -436,7 +436,7 @@ begin
     return false;
   end if;
 
-  if v.effective_from > public.business_date() then
+  if v.effective_from is null or v.effective_from > public.business_date() then
     return false;
   end if;
 
@@ -500,7 +500,7 @@ begin
       'Policy version %s has not been approved.', v.version);
   end if;
 
-  if v.effective_from > public.business_date() then
+  if v.effective_from is null or v.effective_from > public.business_date() then
     return pg_catalog.format(
       'Policy version %s takes effect on %s.', v.version, v.effective_from);
   end if;
@@ -588,7 +588,7 @@ begin
       'Policy version %s has not been approved.', v.version);
   end if;
 
-  if v.effective_from > public.business_date() then
+  if v.effective_from is null or v.effective_from > public.business_date() then
     return pg_catalog.format(
       'Policy version %s takes effect on %s.', v.version, v.effective_from);
   end if;

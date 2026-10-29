@@ -141,7 +141,10 @@ async function makeVersion(
     compatibilityValues.push("'amount'");
   }
   if (decided.includes('benefit_waiting_period_days')) {
-    compatibilityColumns.push('benefit_qualification_basis', 'death_confirmations_required');
+    compatibilityColumns.push(
+      'benefit_qualification_basis',
+      'death_confirmations_required',
+    );
     compatibilityValues.push("'waiting_period_days'", '0');
   }
   if (decided.includes('medical_benefit_claims_per_year')) {

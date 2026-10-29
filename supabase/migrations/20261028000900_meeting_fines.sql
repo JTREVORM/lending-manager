@@ -349,6 +349,14 @@ begin
   if not found then
     return;
   end if;
+  if auth.uid() is not null and (
+    not public.user_can_see_branch(v_meeting.branch_id)
+    or not (public.user_has_permission('fines:view')
+            or public.user_has_permission('fines:assess'))
+  ) then
+    raise exception 'You cannot read that meeting''s fine candidates.'
+      using errcode = '42501';
+  end if;
 
   return query
   select
@@ -368,7 +376,7 @@ begin
     -- accepted excuse, and no fine already charged.
     v_meeting.status = 'held'
       and a.attendance in ('absent', 'apology')
-      and coalesce(n.review_status, 'none') <> 'approved'
+      and coalesce(n.review_status, 'none') not in ('approved', 'pending')
       and not exists (
         select 1 from public.meeting_fines f
         where f.meeting_id = p_meeting_id and f.membership_id = a.membership_id
@@ -490,6 +498,22 @@ begin
   from public.membership_policy_versions
   where id = public.membership_governing_policy(
     p_membership_id, v_meeting.meeting_date);
+
+  if v_policy.status = 'draft' or v_policy.approved_at is null
+     or v_policy.effective_from is null
+     or v_policy.effective_from > v_meeting.meeting_date then
+    raise exception 'The governing policy did not authorize a fine on the meeting date.'
+      using errcode = 'P0001';
+  end if;
+
+  if v_actor is not null and exists (
+    select 1 from public.meeting_attendance a
+    where a.meeting_id = p_meeting_id and a.membership_id = p_membership_id
+      and a.marked_by = v_actor
+  ) then
+    raise exception 'The person who marked the register cannot assess its fine.'
+      using errcode = 'P0001';
+  end if;
 
   if v_policy.meeting_absence_fine is null then
     raise exception

@@ -280,6 +280,12 @@ begin
   end if;
 
   if auth.uid() is not null
+     and not public.user_can_see_branch(v_membership.branch_id) then
+    raise exception 'You cannot read that branch''s member position.'
+      using errcode = '42501';
+  end if;
+
+  if auth.uid() is not null
      and not public.user_has_permission('membership:view')
      and not exists (
        select 1 from public.clients c
@@ -416,6 +422,12 @@ begin
 
   if not found then
     return;
+  end if;
+
+  if auth.uid() is not null
+     and not public.user_can_see_branch(v_membership.branch_id) then
+    raise exception 'You cannot read that branch''s member position.'
+      using errcode = '42501';
   end if;
 
   if auth.uid() is not null
@@ -589,3 +601,61 @@ revoke all on function public.member_savings_position(uuid) from public, anon;
 revoke all on function public.member_benefit_position(uuid, date) from public, anon;
 revoke all on function public.notify_absence_notice_pending() from public, anon, authenticated;
 revoke all on function public.notify_meeting_fine_assessed() from public, anon, authenticated;
+
+-- One audit hook for the new policy records. Names, statements, reasons,
+-- telephone numbers and document paths are intentionally not copied.
+create or replace function public.audit_policy_update_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_row jsonb := to_jsonb(new);
+begin
+  insert into public.audit_log (
+    actor_profile_id, actor_auth_user_id, actor_label,
+    action, entity_type, entity_id, new_values
+  ) values (
+    public.current_profile_id(), auth.uid(), public.audit_actor_label(),
+    tg_table_name || case when tg_op = 'INSERT' then '.recorded' else '.changed' end,
+    tg_table_name, new.id::text,
+    jsonb_strip_nulls(jsonb_build_object(
+      'status', coalesce(v_row->>'status', v_row->>'review_status'),
+      'membership_id', v_row->>'membership_id',
+      'policy_version_id', v_row->>'policy_version_id',
+      'meeting_id', v_row->>'meeting_id',
+      'claim_id', v_row->>'claim_id',
+      'amount', v_row->'amount',
+      'amount_paid', v_row->'amount_paid',
+      'transition_id', v_row->>'transition_id',
+      'journal_entry_id', v_row->>'journal_entry_id',
+      'reversal_entry_id', v_row->>'reversal_entry_id'
+    ))
+  );
+  return null;
+end;
+$$;
+revoke all on function public.audit_policy_update_event() from public, anon, authenticated;
+
+create trigger audit_policy_transition
+  after insert or update on public.membership_policy_transitions
+  for each row execute function public.audit_policy_update_event();
+create trigger audit_policy_assignment
+  after insert on public.membership_policy_assignments
+  for each row execute function public.audit_policy_update_event();
+create trigger audit_installment_carry_forward
+  after insert on public.loan_installment_carry_forwards
+  for each row execute function public.audit_policy_update_event();
+create trigger audit_death_confirmation
+  after insert on public.benefit_death_confirmations
+  for each row execute function public.audit_policy_update_event();
+create trigger audit_absence_notice
+  after insert or update on public.meeting_absence_notices
+  for each row execute function public.audit_policy_update_event();
+create trigger audit_meeting_fine
+  after insert or update on public.meeting_fines
+  for each row execute function public.audit_policy_update_event();
+create trigger audit_meeting_fine_payment
+  after insert or update on public.meeting_fine_payments
+  for each row execute function public.audit_policy_update_event();

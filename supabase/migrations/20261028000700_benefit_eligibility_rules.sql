@@ -102,7 +102,7 @@ returns table (
 )
 language plpgsql
 stable
-security definer
+security invoker
 set search_path = ''
 as $$
 declare

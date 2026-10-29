@@ -83,12 +83,15 @@
 --
 -- ## Effective date
 --
--- 1 December 2026, a month after version 1.0's. `membership_policy_versions_
--- effective_from_unique` means two versions cannot share a day, and
--- `membership_policy_allows` refuses a version whose date has not arrived —
--- so even an approved 2.0 authorises nothing until the first of December.
--- The transition's own `effective_on` is separate again, and may be later.
+-- The client has not authorized an activation date. A draft may therefore
+-- have no effective_from; a non-draft must have one. Recording an authorized
+-- date is a separate audited decision and does not approve or activate it.
 -- ===========================================================================
+
+alter table public.membership_policy_versions
+  alter column effective_from drop not null,
+  add constraint membership_policy_non_draft_has_effective_date
+    check (status = 'draft' or effective_from is not null);
 
 insert into public.membership_policy_versions (
   version, title, effective_from, status,
@@ -137,7 +140,7 @@ insert into public.membership_policy_versions (
 values (
   '2.0',
   'Polytos membership programme — official policy, management decisions of October 2026',
-  date '2026-12-01',
+  null,
   'draft',
 
   5000,
@@ -185,3 +188,55 @@ on conflict (version) do nothing;
 
 comment on table public.membership_policy_versions is
   'Polytos Phase 1. An immutable, effective-dated set of membership programme terms. Version 1.0 is the client''s founding document as a draft; version 2.0 is their October 2026 decisions, also as a draft, with the medical annual-ceiling rule and the profit-distribution basis deliberately unrecorded. Contractual columns freeze the moment a version is approved or anybody is enrolled under it; changing a term is publishing a new version and moving members onto it with their acceptance.';
+
+-- Record only a date already authorized by the business. This function does
+-- not approve a policy, change its status or assign a member to it.
+create or replace function public.record_draft_policy_timing(
+  p_policy_id uuid, p_effective_from date, p_authorization_reference text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_policy public.membership_policy_versions;
+begin
+  if auth.uid() is not null
+     and not public.user_has_permission('membership_policy:manage') then
+    raise exception 'Recording policy timing requires membership_policy:manage.'
+      using errcode = '42501';
+  end if;
+  if p_effective_from is null or p_effective_from < public.business_date() then
+    raise exception 'Choose an authorized date today or later.' using errcode = 'P0001';
+  end if;
+  if p_authorization_reference is null
+     or char_length(btrim(p_authorization_reference)) not between 3 and 200 then
+    raise exception 'Record the business authorization reference for this date.'
+      using errcode = 'P0001';
+  end if;
+  select * into v_policy from public.membership_policy_versions
+  where id = p_policy_id for update;
+  if not found or v_policy.status <> 'draft' or v_policy.approved_at is not null then
+    raise exception 'Only an unapproved draft can have its timing recorded.'
+      using errcode = 'P0001';
+  end if;
+  update public.membership_policy_versions set effective_from = p_effective_from
+  where id = p_policy_id;
+  insert into public.audit_log (
+    actor_profile_id, actor_auth_user_id, actor_label,
+    action, entity_type, entity_id, old_values, new_values
+  ) values (
+    public.current_profile_id(), auth.uid(), public.audit_actor_label(),
+    'membership_policy.timing_recorded', 'membership_policy_version', p_policy_id::text,
+    jsonb_build_object('effective_from', v_policy.effective_from),
+    jsonb_build_object('effective_from', p_effective_from,
+      'authorization_reference', btrim(p_authorization_reference))
+  );
+  return p_policy_id;
+end;
+$$;
+revoke all on function public.record_draft_policy_timing(uuid, date, text)
+  from public, anon, authenticated;
+grant execute on function public.record_draft_policy_timing(uuid, date, text)
+  to authenticated;

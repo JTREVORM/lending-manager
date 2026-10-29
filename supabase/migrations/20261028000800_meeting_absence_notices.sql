@@ -403,7 +403,7 @@ create or replace function public.meeting_absence_excused(
 returns boolean
 language sql
 stable
-security definer
+security invoker
 set search_path = ''
 as $$
   select exists (

@@ -163,7 +163,16 @@ as $$
   from public.benefit_claims c
   join public.member_beneficiaries b on b.id = c.deceased_beneficiary_id
   join public.beneficiary_relationships r on r.key = b.relationship
-  where c.id = p_claim_id;
+  where c.id = p_claim_id
+    and (
+      auth.uid() is null
+      or (public.user_has_permission('benefits:view')
+          and public.user_can_see_branch(c.branch_id))
+      or exists (
+        select 1 from public.clients cl where cl.id = c.client_id
+          and cl.profile_id = public.current_profile_id()
+      )
+    );
 $$;
 
 comment on function public.condolence_next_of_kin_status(uuid) is

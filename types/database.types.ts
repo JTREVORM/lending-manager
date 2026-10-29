@@ -3706,7 +3706,7 @@ export type Database = {
           id: string;
           version: string;
           title: string;
-          effective_from: string;
+          effective_from: string | null;
           status: string;
           registration_fee: number;
           monthly_savings_minimum: number;
@@ -3747,7 +3747,7 @@ export type Database = {
           id?: string;
           version: string;
           title: string;
-          effective_from: string;
+          effective_from?: string | null;
           status?: string;
           registration_fee: number;
           monthly_savings_minimum: number;
@@ -3788,7 +3788,7 @@ export type Database = {
           id?: string;
           version?: string;
           title?: string;
-          effective_from?: string;
+          effective_from?: string | null;
           status?: string;
           registration_fee?: number;
           monthly_savings_minimum?: number;
@@ -7414,6 +7414,14 @@ export type Database = {
       };
 
       /** Phase 11. Dr the expense category, Cr the account it was paid from. */
+      record_draft_policy_timing: {
+        Args: {
+          p_policy_id: string;
+          p_effective_from: string;
+          p_authorization_reference: string;
+        };
+        Returns: string;
+      };
       record_expense: {
         Args: {
           p_expense_account_id: string;

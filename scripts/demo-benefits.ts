@@ -121,7 +121,10 @@ export const DEMO_YEAR_BASIS = 'calendar_year';
 export const DEMO_ACTIVATION_DAYS_AGO = 220;
 
 /** The relationships this demonstration treats as eligible for condolence. */
-export const DEMO_CONDOLENCE_ELIGIBLE: readonly string[] = ['spouse', 'child', 'parent'];
+export const DEMO_CONDOLENCE_ELIGIBLE: readonly string[] = [
+  'spouse', 'child', 'parent', 'sibling', 'grandparent', 'grandchild',
+  'uncle_aunt', 'nephew_niece', 'cousin', 'other_relative',
+];
 
 export interface BenefitActors {
   /** Holds `beneficiaries:manage` and `benefits:claim`. The Secretary. */
@@ -241,6 +244,7 @@ export async function ensureBenefitPolicy(client: pg.Client): Promise<string> {
         family_condolence_benefit, member_bereavement_benefit,
         medical_benefit_annual_cap, medical_benefit_claims_per_year,
         benefit_waiting_period_days, medical_benefit_year_basis,
+        medical_benefit_cap_mode, benefit_qualification_basis, death_confirmations_required,
         qualifying_months_consecutive, savings_withdrawal_with_active_loan,
         notes)
      values
@@ -252,6 +256,7 @@ export async function ensureBenefitPolicy(client: pg.Client): Promise<string> {
         500, 5, 2, 3,
         500, 1, 100000, 200000,
         $2::bigint, $3::int, $4::int, $5,
+        'amount', 'waiting_period_days', 3,
         false, 'above_pledged',
         'Published by scripts/demo-benefits.ts so a benefit claim can be '
           || 'demonstrated end to end on an isolated database. The annual cap, the '
@@ -339,20 +344,8 @@ async function backdateDemonstrationMemberships(client: pg.Client): Promise<void
  * The label carries TEST ONLY because the label is what a reader sees on the
  * form; a flag they cannot see would be a decision made invisibly.
  */
-async function openCondolenceVocabulary(client: pg.Client): Promise<void> {
-  await client.query(
-    `update public.beneficiary_relationships
-        set condolence_eligible = true,
-            label = label || ' (TEST ONLY: treated as eligible)'
-      where key = any ($1::text[])
-        and condolence_eligible is null`,
-    [DEMO_CONDOLENCE_ELIGIBLE],
-  );
-
-  console.log(
-    '  vocabulary      TEST ONLY: spouse, child and parent treated as eligible for ' +
-      'condolence; every other relationship still undecided',
-  );
+async function openCondolenceVocabulary(_client: pg.Client): Promise<void> {
+  console.log('  vocabulary      official family relationships preserved; no demo overrides');
 }
 
 /**
@@ -847,7 +840,7 @@ const CLAIMS: readonly ClaimScenario[] = [
   {
     key: 'D-condolence',
     letter: 'D',
-    label: 'a condolence claim held because nobody has defined an eligible relative',
+    label: 'a family claim held because the deceased was not listed as next of kin',
     claimType: 'family_condolence',
     outcome: 'held',
     deceasedName: 'DEMO Alice Mugisha',
@@ -1003,6 +996,25 @@ async function seedClaim(
     );
   }
 
+  let deceasedKinId: string | null = null;
+  if (scenario.claimType === 'family_condolence'
+      && (scenario.outcome === 'paid' || scenario.outcome === 'reversed')) {
+    await asStaff(client, actors.recorder, async () => {
+      const registered = await client.query<{ id: string }>(
+        `select public.register_member_beneficiary(
+          $1, $2, $3, '+256700000399', null, 'Kalerwe', 'Kampala',
+          null, null, false, null) as id`,
+        [member.membershipId, scenario.deceasedName, scenario.deceasedRelationship],
+      );
+      deceasedKinId = registered.rows[0]!.id;
+    });
+    await client.query(`update public.member_beneficiaries
+      set created_at = ((public.business_date() - $2::int - 30) + time '09:00')
+        at time zone 'Africa/Kampala' where id = $1`,
+      [deceasedKinId, scenario.eventDaysAgo]);
+    tally.beneficiariesRegistered += 1;
+  }
+
   let claimId: string | null = null;
 
   await asStaff(client, actors.recorder, async () => {
@@ -1024,7 +1036,7 @@ async function seedClaim(
         : scenario.claimType === 'family_condolence'
           ? `select public.open_benefit_claim(
                       $1, 'family_condolence', (public.business_date() - $2::int),
-                      null, null, null, null, $3, $4, null) as id`
+                      null, null, null, null, $3, $4, null, $5::uuid) as id`
           : `select public.open_benefit_claim(
                       $1, 'member_bereavement', (public.business_date() - $2::int),
                       null, null, null, null, $3, null,
@@ -1049,6 +1061,7 @@ async function seedClaim(
               scenario.eventDaysAgo,
               scenario.deceasedName,
               scenario.deceasedRelationship,
+              deceasedKinId,
             ]
           : [member.membershipId, scenario.eventDaysAgo, scenario.deceasedName],
     );
@@ -1120,6 +1133,26 @@ async function seedClaim(
         'DEMONSTRATION: checked against the document in the folder.',
       ]);
     });
+  }
+
+  if (scenario.claimType !== 'medical') {
+    const confirmers = await client.query<{ id: string }>(
+      `select id from public.memberships
+        where notes like 'DEMONSTRATION SCENARIO %' and status = 'active'
+          and id <> $1 order by membership_number limit 3`,
+      [member.membershipId],
+    );
+    if (confirmers.rows.length !== 3) {
+      throw new Error('The benefit demo needs three other active demonstration members.');
+    }
+    for (const confirmer of confirmers.rows) {
+      await asStaff(client, actors.recorder, async () => {
+        await client.query(`select public.record_death_confirmation(
+          $1, $2, 'DEMONSTRATION: the group member confirms this synthetic death.',
+          'witnessed_by_staff', null, null, 'DEMONSTRATION group member')`,
+          [claimId, confirmer.id]);
+      });
+    }
   }
 
   // --- Assess ------------------------------------------------------------

@@ -341,8 +341,16 @@ security definer
 set search_path = ''
 as $$
   select pg_catalog.count(*)::integer
-  from public.benefit_death_confirmations
-  where claim_id = p_claim_id;
+  from public.benefit_death_confirmations d
+  join public.benefit_claims bc on bc.id = d.claim_id
+  join public.clients c on c.id = bc.client_id
+  where d.claim_id = p_claim_id
+    and (
+      auth.uid() is null
+      or (public.user_has_permission('benefits:view')
+          and public.user_can_see_branch(bc.branch_id))
+      or c.profile_id = public.current_profile_id()
+    );
 $$;
 
 comment on function public.death_confirmation_count(uuid) is

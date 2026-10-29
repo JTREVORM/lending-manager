@@ -106,7 +106,7 @@ export default async function MembershipPoliciesPage() {
                         {MEMBERSHIP_POLICY_STATUS_LABELS[policy.status]}
                       </Badge>
                       <span>
-                        Effective from <DateValue value={policy.effectiveFrom} />
+                        {policy.effectiveFrom === null ? 'Activation date awaiting authorization' : <>Effective from <DateValue value={policy.effectiveFrom} /></>}
                       </span>
                     </span>
                   }
