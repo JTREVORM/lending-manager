@@ -11,13 +11,19 @@ The branch now contains `supabase/migrations/20261030115530_polytos_readiness.sq
 2.119.0), `public.polytos_readiness()`, its typed declaration and the
 replacement `/api/health` probe. The function is STABLE SQL, explicitly
 SECURITY INVOKER, with an empty search_path, no arguments and a body consisting
-only of SELECT true. Default PUBLIC execution is revoked; only anon and
+only of SELECT true. Default PUBLIC and service_role execution is revoked; only anon and
 authenticated receive explicit execution grants in addition to the owner.
 
 The route requires HTTP 200 and the exact JSON boolean true. It preserves the
 four-second timeout, no-store request/response behavior, four-field response
 and HTTP 503 on failure. Redirects are refused. Upstream exception text and
 bodies are not logged.
+
+The first full PostgreSQL run caught the inherited default service_role grant.
+The migration now revokes PUBLIC, anon, authenticated and service_role defaults
+before granting only the two intended API roles. The strict grant assertion
+was retained. Role names in the catalogue test are cast to text arrays for
+consistent driver decoding.
 
 **Executed targeted evidence:** the 28 health regression tests produced
 16 failures against the original route and 28 passes against the replacement.

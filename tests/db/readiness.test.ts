@@ -47,7 +47,7 @@ describeDb('no-data readiness RPC', () => {
 
   it('grants execution only to the two public API roles and the owner', async () => {
     const row = await queryOne<{ grantees: string[]; public_execute: boolean }>(
-      `select array_agg(r.rolname order by r.rolname)
+      `select array_agg(r.rolname::text order by r.rolname)
                 filter (where a.grantee <> p.proowner) as grantees,
               bool_or(a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_execute
        from pg_proc p

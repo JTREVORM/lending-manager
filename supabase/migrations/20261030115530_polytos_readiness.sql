@@ -12,7 +12,7 @@ as $$
 $$;
 
 -- Do not inherit PostgreSQL's default EXECUTE grant to every role.
-revoke all on function public.polytos_readiness() from public;
+revoke all on function public.polytos_readiness() from public, anon, authenticated, service_role;
 grant execute on function public.polytos_readiness() to anon, authenticated;
 
 comment on function public.polytos_readiness() is

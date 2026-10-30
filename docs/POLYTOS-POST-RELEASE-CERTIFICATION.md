@@ -34,7 +34,7 @@ The certification branch implements `public.polytos_readiness()` through
 `supabase/migrations/20261030115530_polytos_readiness.sql` and calls it from
 `/api/health`. It is an argument-free SQL SECURITY INVOKER function returning
 only true, with an empty search_path, explicit anon/authenticated execution
-and revoked PUBLIC execution. It reads no financial or membership table.
+and revoked PUBLIC/default service_role execution. It reads no financial or membership table.
 No other function, table grant, policy or financial rule is changed.
 
 Twenty-eight new route regressions were run in the disposable sandbox:
