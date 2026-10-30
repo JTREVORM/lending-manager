@@ -69,7 +69,6 @@ describe('getPublicEnv', () => {
     expect(() => getPublicEnv()).toThrow(/expose it to every browser/);
   });
 
-
   it.each([
     'not-an-api-key',
     'sb_publishable_',
@@ -80,7 +79,7 @@ describe('getPublicEnv', () => {
       btoa(JSON.stringify({ role: 'service_role' })).replace(/=+$/, ''),
       'test_signature',
     ].join('.'),
-  ])('refuses an invalid or privileged public key without echoing it', (key) => {
+  ])('rejects unsafe public keys without echoing them', (key) => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abcdefgh.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = key;
     const result = inspectPublicEnv();
