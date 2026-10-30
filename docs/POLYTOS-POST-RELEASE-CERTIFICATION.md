@@ -130,6 +130,12 @@ Runtime error/fatal count queries for the new deployment, from its READY time
 through the inspection, returned no matching groups. This bounded log result
 does not establish that every runtime path was exercised.
 
+A follow-up production GET at **18:47:15 EAT** returned the same HTTP 200,
+four-field healthy response and no-store header. The direct Supabase RPC
+again returned HTTP 200 with JSON boolean true at **18:47:13 EAT**. The
+production alias still resolved to the same READY merge deployment; no
+additional deployment was requested.
+
 ## Hosted authentication and authorization
 
 Executed against the new production alias:
@@ -139,6 +145,55 @@ Executed against the new production alias:
   `/savings`, `/benefits`, and `/finance/ledger`: **HTTP 307** to
   the login page, with private/no-store response headers.
 - No session cookie was created by these anonymous GET requests.
+
+### Hosted account availability review
+
+A read-only follow-up on 30 October 2026 inspected LENDING MANAGER only.
+At **18:46:52 EAT**, the hosted catalog contained four non-deleted Auth users:
+all four had confirmed email identities, a configured password, and a linked
+profile. Two had a previous sign-in timestamp. These are inventory facts,
+not newly executed sign-in or session evidence. No account identifiers,
+password hashes, recovery tokens, or session tokens were exported.
+
+There are six active application profiles, four linked to hosted Auth users.
+The linked roles are owner_admin (one), manager (one), and
+secretary_treasurer (two). No linked client-role account or non-NULL branch
+assignment was observed in this inventory. Two linked profiles require a
+password change. These observations do not identify an approved test account
+or supply its password; first-login password changes were not attempted.
+
+The public hosted Auth settings endpoint returned **HTTP 200** at
+**18:47:12 EAT** using an enabled publishable key. It reports email enabled;
+anonymous users, phone, and the listed OAuth providers disabled; signup
+enabled; and email autoconfirm disabled, so email confirmation is required.
+The configured SMS-provider label does not establish a working phone flow:
+phone authentication is disabled. Server-only Auth settings, including
+session timeout/renewal configuration, were not available through this public
+response and are not certified by it. No Auth setting was changed.
+
+Repository inspection covered `README.md`, `docs/AUTHENTICATION.md`,
+`docs/PRODUCTION.md`, `docs/DELIVERY.md`, `docs/SECURITY.md`,
+`docs/INCIDENT-RUNBOOK.md`, `docs/LAUNCH-CHECKLIST.md`,
+`docs/FULL-SYSTEM-DEMO-VALIDATION-REPORT.md`, the POLYTOS demo integration
+documentation, `scripts/bootstrap-owner.ts`, `scripts/seed-demo.ts`, and
+the E2E fixture, setup, and Auth-shim files at the deployed source revision.
+
+The account documentation describes first-Owner provisioning and a temporary
+password supplied or generated for one-time handoff to the operator. It does
+not identify an approved hosted test-account list or a verified secure
+credential location. The local E2E fixtures belong to the disposable
+PostgreSQL/Auth-shim stack; their passwords were not tried against hosted
+Auth. The hosted demo seeder intentionally leaves newly created demo staff
+profiles without an Auth login; its direct Auth-row creation is restricted
+to local targets. Demo profile existence therefore supplies no hosted login
+credential or approval.
+
+The project owner confirmed that no verified secure source for approved
+hosted test-account credentials has been provided. None was identified in
+the reviewed sources. **Hosted authentication and session tests remain
+BLOCKED.** The mandatory test list below remains outstanding in full.
+No account creation, reset, password change, signup, token issuance, or
+provisioning/seeding script was performed during this inspection.
 
 The following mandatory tests are **BLOCKED** because access to approved
 existing hosted test accounts was unavailable:
@@ -155,6 +210,10 @@ or isolated-harness accounts were used against production. Anonymous route
 checks and database catalog checks do not substitute for these tests.
 
 ## Database permissions and security
+
+The follow-up recheck again found the same 80 public tables with RLS,
+zero anonymously executable public SECURITY DEFINER functions, and zero
+public definers missing the empty search path.
 
 Read-only catalog inspection found:
 
@@ -190,6 +249,14 @@ the reviewed source in PR #16. No new critical exploit was established by
 these checks; this is not a substitute for blocked hosted user tests.
 
 ## Read-only financial reconciliation
+
+A follow-up **REPEATABLE READ, READ ONLY** snapshot at **18:49:47 EAT**
+again matched all 31 certified table counts and fingerprints. It reconfirmed
+35 loans, 470 payments, savings/GL 2100 of UGX 1,010,000, principal/GL 1200
+of UGX 8,738,693, and journal debits/credits of UGX 89,649,530. Unbalanced
+journals, posted-allocation mismatches, negative loan components, and
+negative savings balances were all zero. Policy 2.0 remained draft,
+unapproved, undated, unassigned, and disabled. No demo record was altered.
 
 The main production comparison used one **REPEATABLE READ, READ ONLY**
 transaction at **18:13:23 EAT**. All amounts are integer UGX.
