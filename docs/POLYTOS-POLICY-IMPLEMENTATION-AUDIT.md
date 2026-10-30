@@ -69,20 +69,29 @@ unapproved. Fixed death benefits have separate gates from medical eligibility.
 Server actions validate discriminated requests, enforce exact capabilities and
 rate limits, use the signed-in Supabase client and invalidate affected routes.
 Money is integer UGX. Receipt keys cannot be reused for a different request.
-Fine row locks prevent overcollection. Client financial locks coordinate loan
+Fine row locks prevent overcollection. Fine/notice guards freeze copied identity,
+branch and assessment evidence, and event timestamps use the business clock.
+Client financial locks coordinate loan
 approval/reopening with withdrawal and bereavement payment checks.
 
 ## Verified checkpoint
 
-[Run 40880347360](https://github.com/JTREVORM/lending-manager/actions/runs/40880347360),
-commit `d58e6fc0bf8657caf48d14454610542b09804692`:
+[Run 40882089737](https://github.com/JTREVORM/lending-manager/actions/runs/40882089737),
+commit `e3f673aed2b4b6890709a99c81d008d3cdc48564`:
 
-- PostgreSQL: **1,776 passed**.
+- PostgreSQL: **1,781 passed**.
 - Savings demo: **18 passed**; borrower reuse: **15 passed**;
   member-loan demo: **24 passed**; benefit demo: **25 passed**.
 - Financial upgrade and borrower reuse verifier: passed.
-- TypeScript and lint: passed. Formatting corrections have subsequently been
-  applied. Full checks and browser results still require final verification.
+- TypeScript and lint: passed. Browser: 846 passed, four failed. The four
+  failures were an outdated evidence label, two ambiguous qualification locators
+  and a required-field label locator. The follow-up corrects these assertions
+  and applies the formatter's exact changes; no security or financial assertion
+  was relaxed.
+
+The final CI run, exact check results and screenshot artifacts are identified in
+this delivery's accompanying completion report. This checkpoint is retained as
+traceable evidence, not a claim that a failed run passed.
 
 The new upgrade verifier seeds the actual production-base browser data in a fixed
 loopback database, applies all seventeen policy migrations and compares exact
