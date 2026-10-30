@@ -9,10 +9,10 @@ export function assertTestDatabaseUrl(
 ): void {
   const prefix = target === 'database' ? 'PGLOCAL' : 'E2E_PG';
   const database =
-    process.env[prefix + '_DB'] ||
+    process.env[prefix + '_DB'] ??
     (target === 'database' ? 'lending_test' : 'lending_e2e');
-  const user = process.env[prefix + '_USER'] || 'lending';
-  const port = process.env[prefix + '_PORT'] || '5433';
+  const user = process.env[prefix + '_USER'] ?? 'lending';
+  const port = process.env[prefix + '_PORT'] ?? '5433';
   const failure = 'Refusing to run: DATABASE_URL must name the isolated test database.';
   let url: URL;
   try {
@@ -49,7 +49,7 @@ export function assertTestBrowserUrl(value: string): void {
   if (
     url.protocol !== 'http:' ||
     !['localhost', '127.0.0.1'].includes(url.hostname) ||
-    url.port !== (process.env.E2E_APP_PORT || '3000') ||
+    url.port !== (process.env.E2E_APP_PORT ?? '3000') ||
     url.pathname !== '/' ||
     url.username !== '' ||
     url.password !== '' ||

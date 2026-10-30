@@ -44,6 +44,12 @@ for (const path of routes) {
     };
     if (path === '/api/health') {
       const health = await response.json();
+      check.health = {
+        status: health.status,
+        dataApi: health.dataApi,
+        environment: health.environment,
+        version: health.version,
+      };
       check.passed =
         response.status === 200 &&
         health.status === 'ok' &&
