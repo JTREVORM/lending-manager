@@ -20,10 +20,10 @@ import { logger } from '@/lib/logger';
  *
  * ## Why the probe needs no privilege
  *
- * It asks PostgREST for its own root with the publishable key. PostgREST
- * answers there only once it has connected to PostgreSQL and built its schema
- * cache, and returns 503 when it cannot — which is exactly the question a
- * readiness probe asks. The response body is discarded.
+ * It calls polytos_readiness with the publishable key. The SECURITY INVOKER
+ * function returns only true and reads no tables. Unlike the REST root,
+ * this endpoint is explicitly available to anon and authenticated callers.
+ * Readiness requires HTTP 200 and the exact boolean, not just an open port.
  *
  * The first version of this used the privileged client to count a row. That
  * worked, and it was the wrong instrument: it put the key that bypasses Row
@@ -48,24 +48,28 @@ export async function GET() {
 
   try {
     const env = getPublicEnv();
-    const response = await fetch(`${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`, {
-      method: 'HEAD',
-      headers: { apikey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
+    const response = await fetch(
+      `${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/polytos_readiness`,
+      {
+        method: 'GET',
+        redirect: 'error',
+        headers: { apikey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      },
+    );
 
-    if (response.ok) dataApi = 'ok';
+    if (response.status === 200 && (await response.json()) === true) dataApi = 'ok';
     else {
       // Recorded for the operator, never returned to the caller.
-      logger.warn('The health probe reached the data API but it refused.', {
+      logger.warn('The health probe received an unexpected data API response.', {
         status: response.status,
       });
     }
-  } catch (error) {
-    logger.warn('The health probe could not reach the data API.', {
-      reason: error instanceof Error ? error.message : 'unknown',
-    });
+  } catch {
+    // Do not log upstream bodies or exception messages: either could contain
+    // credentials, private URLs or request details.
+    logger.warn('The health probe could not verify the data API.');
   }
 
   const healthy = dataApi === 'ok';

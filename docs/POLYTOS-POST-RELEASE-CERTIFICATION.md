@@ -23,8 +23,40 @@ controlled result.
 See the [connectivity remediation plan](POLYTOS-CONNECTIVITY-REMEDIATION.md)
 for the executed request matrix, configuration metadata, proposed no-data
 probe repair, conditional key replacement procedure and mandatory runtime
-gates. No probe code, migration, credential or deployment was changed in this
-follow-up. Real login, refresh and financial runtime verification remain pending.
+gates. The subsequent branch implementation now adds the no-data RPC and replacement
+probe, with the evidence below. No production migration, credential or deployment
+was changed. Real hosted login, refresh and financial runtime verification remain
+pending.
+
+## Readiness implementation evidence
+
+The certification branch implements `public.polytos_readiness()` through
+`supabase/migrations/20261030115530_polytos_readiness.sql` and calls it from
+`/api/health`. It is an argument-free SQL SECURITY INVOKER function returning
+only true, with an empty search_path, explicit anon/authenticated execution
+and revoked PUBLIC execution. It reads no financial or membership table.
+No other function, table grant, policy or financial rule is changed.
+
+Twenty-eight new route regressions were run in the disposable sandbox:
+16 fail against the old route; all 28 pass against the replacement. The
+replacement requires HTTP 200 and exact boolean true, refuses redirects,
+preserves the four-second timeout, no-store behavior and four response fields,
+and returns 503 for every failure. Neither upstream bodies nor exception
+messages are logged.
+
+Database regressions exercise both roles under read-only transactions, exact
+security metadata, an unrelated role's denial, unchanged existing security
+definitions and continued denial of anonymous financial/membership reads.
+The full existing PostgreSQL, application and Playwright suites remain
+mandatory; their actual outcomes, exact tested commit, skipped counts and
+artifacts are recorded in the linked PR #16 verification record. Playwright
+adds a direct no-data RPC request through real PostgREST plus anonymous and
+signed-in health requests; its hosted Auth limitation remains unchanged.
+
+Production sign-off remains blocked: this migration has not been applied and
+the replacement probe has not been deployed. See the remediation plan for the
+separate authorized database and Vercel release order and the pending real
+authentication/session/permission/reconciliation gates.
 
 ## Released baseline and architecture
 
@@ -37,7 +69,8 @@ follow-up. Real login, refresh and financial runtime verification remain pending
   metadata, not proof of healthy database connectivity.
 - Supabase access was restricted to LENDING MANAGER,
   `fszgwemtgyrbhngajpzm`. Primary was not accessed.
-- Source has 158 migrations; hosted history has all 158 plus nine historical
+- Released source has 158 migrations; this branch adds one readiness migration.
+  Hosted history has all released 158 plus nine historical
   timestamp variants. All 17 policy migrations
   `20261028000050` through `20261028001300` are present. Migration-history
   presence does not independently prove every hosted function is byte-identical.
@@ -200,9 +233,10 @@ not been verified equal to the active key. Credential replacement alone is
 not a demonstrated remedy.
 
 The [remediation plan](POLYTOS-CONNECTIVITY-REMEDIATION.md) supersedes the earlier
-recommendation to supply a replacement key. It proposes a narrowly scoped
-no-data readiness RPC and an authorized source/configuration release, followed
-by real runtime checks. It does not implement or authorize a migration.
+recommendation to supply a replacement key. The branch now implements the narrowly scoped
+no-data readiness RPC and replacement probe. The plan specifies a separately
+authorized migration and source/configuration release, followed by real runtime
+checks. No production migration is authorized or applied by this implementation.
 Do not use the privileged key, broaden financial grants or mark arbitrary
 authorization failures healthy. Production remains 503 and certification blocked.
 

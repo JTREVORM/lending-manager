@@ -2,7 +2,43 @@
 
 Investigation: 30 October 2026, 14:02-14:07 Africa/Kampala (11:02-11:07 UTC).
 Scope: Supabase LENDING MANAGER `fszgwemtgyrbhngajpzm` only.
-Status: **blocked; no production correction or deployment performed**.
+Status: **branch implementation complete; production release blocked**.
+No production migration, credential change or deployment has been performed.
+
+## Implemented remediation and verification record
+
+The branch now contains `supabase/migrations/20261030115530_polytos_readiness.sql` (created with Supabase CLI
+2.119.0), `public.polytos_readiness()`, its typed declaration and the
+replacement `/api/health` probe. The function is STABLE SQL, explicitly
+SECURITY INVOKER, with an empty search_path, no arguments and a body consisting
+only of SELECT true. Default PUBLIC execution is revoked; only anon and
+authenticated receive explicit execution grants in addition to the owner.
+
+The route requires HTTP 200 and the exact JSON boolean true. It preserves the
+four-second timeout, no-store request/response behavior, four-field response
+and HTTP 503 on failure. Redirects are refused. Upstream exception text and
+bodies are not logged.
+
+**Executed targeted evidence:** the 28 health regression tests produced
+16 failures against the original route and 28 passes against the replacement.
+They cover publishable and legacy-anon key shapes, gateway status failures,
+malformed/incorrect JSON, redirects, configuration errors, connection failure,
+response-body failure, timeout and sanitized output/logging. Keys are synthetic.
+
+The database suite additionally verifies both intended roles in read-only
+transactions, the exact function body/security/grants, denial for an unrelated
+role, continued denial of anonymous financial/membership reads, and unchanged
+existing relation, policy and function security metadata when the migration is
+applied. Playwright exercises the RPC through real PostgREST and the public
+health endpoint on the disposable stack. The existing public health tests are
+retained.
+
+The final full application, PostgreSQL and Playwright outcomes, exact tested
+commit, run links and artifact IDs are recorded in the
+[PR #16 verification record](https://github.com/JTREVORM/lending-manager/pull/16).
+That record distinguishes passing, skipped, failed and superseded runs.
+This document's implemented status refers to branch source only, not a hosted
+RPC, production health, hosted login or runtime sign-off.
 
 ## Finding and correction to the initial certification
 
@@ -82,16 +118,11 @@ of the stored values was possible. The secret-key value was never requested.
 
 ## Remediation sequence, for separate authorization
 
-1. **Repair the probe contract first.** Keep the privileged key out of health.
-   Prepare and test a minimal, no-data readiness RPC, for example
-   `public.polytos_readiness()`, returning only boolean true under
-   SECURITY INVOKER with an empty search_path, no table access and explicit
-   execute grants only to anon/authenticated. Revoke default PUBLIC execute.
-   The health route would GET `/rest/v1/rpc/polytos_readiness` with the
-   publishable apikey and require HTTP 200 plus the exact expected boolean.
-   Retain timeout, no-store, sanitized output and 503 for failures.
-   This is a proposed design, **not an implemented or applied migration**.
-   It requires review, isolated tests and separate migration authorization.
+1. **Review and authorize the implemented probe contract.** Keep the
+   privileged key out of health. Review the exact migration and source
+   described above together with their isolated test evidence.
+   The migration is implemented in the branch but **not applied to production**.
+   It requires separate production migration authorization.
    Do not depend on the untracked hosted __gate_probe view, add privileges
    to financial tables, accept arbitrary 401/403 responses as healthy, or
    add a secret-key fallback.
@@ -116,11 +147,19 @@ of the stored values was possible. The secret-key value was never requested.
    silently changing Preview configuration. Preview production-data access
    remains a separate unresolved finding.
 4. **Release only after explicit authorization of the reviewed source revision,
-   any readiness migration and deployment.** Keep PR #16 unmerged unless
+   readiness migration and deployment.** Keep PR #16 unmerged unless
    merging is separately authorized. A configuration-only redeploy of the
    current release will still contain the defective root probe; the probe
    repair must be included in the approved source revision.
-5. **Vercel procedure after authorization:** open the verified lending-manager
+5. **Database procedure after authorization:** confirm LENDING MANAGER and
+   the existing migration inventory; apply only the reviewed readiness
+   migration above using the approved migration process. Do not blindly
+   push or repair historical migration variants. Verify SECURITY INVOKER,
+   the empty search_path and exact grants, then wait for/verify the PostgREST
+   schema cache and require HTTP 200 with boolean true from the RPC using the
+   public key. Do not deploy the new probe before the RPC is available.
+
+6. **Vercel procedure after authorization:** open the verified lending-manager
    project, save any approved Production-only variable correction, then
    create a fresh Production build of the exact approved Git revision.
    For an environment-only change to an already-correct source revision,
@@ -131,7 +170,7 @@ of the stored values was possible. The secret-key value was never requested.
    NEXT_PUBLIC variables are build-time inputs, so updating a variable or
    promoting an old artifact alone does not update its embedded values.
    No CLI command was executed and no deployment was requested here.
-6. **Rollback preparation:** record the prior deployment ID and configuration
+7. **Rollback preparation:** record the prior deployment ID and configuration
    change before release. Rolling back an artifact built with an old key is
    unsafe if that key was subsequently revoked. Do not revoke any working
    key during this investigation.
@@ -170,5 +209,6 @@ All items below remain pending. Auth settings HTTP 200 is not a login test.
   every mandatory applicable runtime gate passes.
 
 No production credential, schema, financial record or policy state was changed.
-The PR remains draft and unmerged. The complete prior automated suite passed
-on code revision 45802059a792; this follow-up changes documentation only.
+The PR remains draft and unmerged. Production is still the original release;
+the implemented RPC and health replacement require the separate release steps
+above. Policy 2.0 remains inactive. No business or financial rule is changed.

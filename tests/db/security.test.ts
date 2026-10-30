@@ -1370,6 +1370,8 @@ describeDb('privileged functions', () => {
       'notify_transfer_pending',
       'open_benefit_claim',
       'open_savings_account',
+      // Constant no-data readiness, also callable by anon; no session data.
+      'polytos_readiness',
       'post_benefit_payment',
       'post_disbursement_journal',
       'post_expense_journal',
@@ -1485,10 +1487,9 @@ describeDb('privileged functions', () => {
     }
   });
 
-  it('leaves no function at all executable by an anonymous visitor', async () => {
-    // Stated as an absolute rather than an allowlist: an exception always
-    // needs justifying, and the justification is easier to demand when the
-    // expected answer is "none" rather than "those two are harmless".
+  it('allows anonymous execution only of the constant no-data readiness probe', async () => {
+    // The sole exception reads no tables, takes no arguments and runs as the
+    // caller. tests/db/readiness.test.ts verifies its body and exact grants.
     const rows = await query<{ proname: string }>(
       `select p.proname
          from pg_proc p
@@ -1499,7 +1500,7 @@ describeDb('privileged functions', () => {
         order by p.proname`,
     );
 
-    expect(rows.map((row) => row.proname)).toEqual([]);
+    expect(rows.map((row) => row.proname)).toEqual(['polytos_readiness']);
   });
 
   it('grants authenticated only the session-scoped helpers', async () => {
