@@ -19,6 +19,30 @@ import { z } from 'zod';
 import { APP_ENVIRONMENTS, type AppEnvironment } from '@/config/app';
 import { ConfigurationError } from '@/lib/errors';
 
+/**
+ * Public configuration may carry publishable keys or legacy anon JWTs only.
+ * This checks key type, not authenticity; Supabase still verifies the key.
+ */
+function isPublicSupabaseKey(value: string): boolean {
+  if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(value)) return true;
+  const parts = value.split('.');
+  if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) {
+    return false;
+  }
+  try {
+    const payload = parts[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const claims: unknown = JSON.parse(atob(payload));
+    return (
+      claims !== null &&
+      typeof claims === 'object' &&
+      'role' in claims &&
+      claims.role === 'anon'
+    );
+  } catch {
+    return false;
+  }
+}
+
 const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z
     .string({ error: 'NEXT_PUBLIC_SUPABASE_URL is required.' })
@@ -34,6 +58,10 @@ const publicEnvSchema = z.object({
     .refine((value) => !value.startsWith('sb_secret_'), {
       message:
         'A secret key (sb_secret_...) was supplied as the publishable key. This would expose it to every browser. Use the publishable key instead.',
+    })
+    .refine(isPublicSupabaseKey, {
+      message:
+        'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be a publishable key or a legacy anon key. Privileged keys and malformed values are not allowed.',
     }),
 
   NEXT_PUBLIC_APP_ENV: z.enum(APP_ENVIRONMENTS).default('development'),
