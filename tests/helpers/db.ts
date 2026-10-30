@@ -1,13 +1,14 @@
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 
+import { assertTestDatabaseUrl } from './test-targets';
+
 /**
  * Connection helper for the database test suite.
  *
  * These tests need a real PostgreSQL database with every migration applied.
- * Two ways to get one:
+ * Use the isolated local cluster, never hosted or shared databases:
  *
  *   npm run db:local:setup     throwaway local cluster (no Docker needed)
- *   supabase start             the full Supabase stack (needs Docker)
  *
  * Then export the connection string:
  *
@@ -32,7 +33,8 @@ let pool: Pool | undefined;
 
 function getPool(): Pool {
   if (pool === undefined) {
-    if (!hasDatabase) throw new Error(skipReason);
+    if (!hasDatabase || DATABASE_URL === undefined) throw new Error(skipReason);
+    assertTestDatabaseUrl(DATABASE_URL);
     pool = new Pool({ connectionString: DATABASE_URL, max: 12 });
   }
   return pool;

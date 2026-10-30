@@ -1,0 +1,434 @@
+{
+  "certificationDate": "2026-10-30",
+  "timezone": "Africa/Kampala",
+  "productionCommit": "84eafacd9d943bb62ae95ae86706f08738d1dde7",
+  "project": "fszgwemtgyrbhngajpzm",
+  "connection": "LENDING MANAGER",
+  "decision": "blocked",
+  "blocker": "Public /api/health returns 503; matching Supabase HEAD /rest/v1/ returns 401 UNAUTHORIZED_INVALID_API_KEY_TYPE.",
+  "snapshotMethod": "Sorted JSONB table contents with MD5 consistency fingerprints, inside repeatable-read read-only transactions. No raw rows exported.",
+  "comparison": [
+    {
+      "table": "clients",
+      "beforeCount": "28",
+      "afterCount": "28",
+      "beforeFingerprint": "67804fbb1da0211ae52f8a0e6b2d0743",
+      "afterFingerprint": "67804fbb1da0211ae52f8a0e6b2d0743",
+      "unchanged": true
+    },
+    {
+      "table": "client_identities",
+      "beforeCount": "28",
+      "afterCount": "28",
+      "beforeFingerprint": "cc567a69b1198683212fe440eb69357a",
+      "afterFingerprint": "cc567a69b1198683212fe440eb69357a",
+      "unchanged": true
+    },
+    {
+      "table": "memberships",
+      "beforeCount": "6",
+      "afterCount": "6",
+      "beforeFingerprint": "364533611ba3d9e0476df5b437db6570",
+      "afterFingerprint": "364533611ba3d9e0476df5b437db6570",
+      "unchanged": true
+    },
+    {
+      "table": "membership_terms_acceptances",
+      "beforeCount": "5",
+      "afterCount": "5",
+      "beforeFingerprint": "e25186f6791e479a7053182d3fa62ff4",
+      "afterFingerprint": "e25186f6791e479a7053182d3fa62ff4",
+      "unchanged": true
+    },
+    {
+      "table": "membership_fee_receipts",
+      "beforeCount": "6",
+      "afterCount": "6",
+      "beforeFingerprint": "9cd220474ac11af2a9c5ab9b7081e84f",
+      "afterFingerprint": "9cd220474ac11af2a9c5ab9b7081e84f",
+      "unchanged": true
+    },
+    {
+      "table": "membership_cards",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "savings_accounts",
+      "beforeCount": "5",
+      "afterCount": "5",
+      "beforeFingerprint": "843096dcf5de050ce48e6fd3c6234430",
+      "afterFingerprint": "843096dcf5de050ce48e6fd3c6234430",
+      "unchanged": true
+    },
+    {
+      "table": "savings_transactions",
+      "beforeCount": "26",
+      "afterCount": "26",
+      "beforeFingerprint": "76eff9048a6b715ce0013fc304db88f9",
+      "afterFingerprint": "76eff9048a6b715ce0013fc304db88f9",
+      "unchanged": true
+    },
+    {
+      "table": "savings_withdrawal_requests",
+      "beforeCount": "1",
+      "afterCount": "1",
+      "beforeFingerprint": "5e7327a8c64f12437fc6e524ef9ed4e9",
+      "afterFingerprint": "5e7327a8c64f12437fc6e524ef9ed4e9",
+      "unchanged": true
+    },
+    {
+      "table": "loans",
+      "beforeCount": "35",
+      "afterCount": "35",
+      "beforeFingerprint": "07fb378593139ba82d33b7ae02ac64e7",
+      "afterFingerprint": "07fb378593139ba82d33b7ae02ac64e7",
+      "unchanged": true
+    },
+    {
+      "table": "loan_periods",
+      "beforeCount": "44",
+      "afterCount": "44",
+      "beforeFingerprint": "b68ccb225dd6d682f3bebb99baa3b824",
+      "afterFingerprint": "b68ccb225dd6d682f3bebb99baa3b824",
+      "unchanged": true
+    },
+    {
+      "table": "loan_schedules",
+      "beforeCount": "26",
+      "afterCount": "26",
+      "beforeFingerprint": "735003cc04c0bd11eb1206e029da4e18",
+      "afterFingerprint": "735003cc04c0bd11eb1206e029da4e18",
+      "unchanged": true
+    },
+    {
+      "table": "loan_installments",
+      "beforeCount": "719",
+      "afterCount": "719",
+      "beforeFingerprint": "45d7886450438fdbd236340f0243d0eb",
+      "afterFingerprint": "45d7886450438fdbd236340f0243d0eb",
+      "unchanged": true
+    },
+    {
+      "table": "loan_payments",
+      "beforeCount": "470",
+      "afterCount": "470",
+      "beforeFingerprint": "1ab1682e21171219348c060c131fa2dc",
+      "afterFingerprint": "1ab1682e21171219348c060c131fa2dc",
+      "unchanged": true
+    },
+    {
+      "table": "payment_allocations",
+      "beforeCount": "522",
+      "afterCount": "522",
+      "beforeFingerprint": "248892bad50a813ba228ee2e74388bfe",
+      "afterFingerprint": "248892bad50a813ba228ee2e74388bfe",
+      "unchanged": true
+    },
+    {
+      "table": "loan_penalties",
+      "beforeCount": "5",
+      "afterCount": "5",
+      "beforeFingerprint": "17308f2ca82ee9faa4bf110714f96837",
+      "afterFingerprint": "17308f2ca82ee9faa4bf110714f96837",
+      "unchanged": true
+    },
+    {
+      "table": "member_loan_eligibility_snapshots",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "member_loan_savings_pledges",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "member_beneficiaries",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "benefit_claims",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "benefit_claim_documents",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "benefit_assessment_snapshots",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "benefit_payments",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "journal_entries",
+      "beforeCount": "597",
+      "afterCount": "597",
+      "beforeFingerprint": "87e66c114ca6f3d83177fbb291a5f516",
+      "afterFingerprint": "87e66c114ca6f3d83177fbb291a5f516",
+      "unchanged": true
+    },
+    {
+      "table": "journal_lines",
+      "beforeCount": "1667",
+      "afterCount": "1667",
+      "beforeFingerprint": "17c597208c13a070261bdc83fddf18c8",
+      "afterFingerprint": "17c597208c13a070261bdc83fddf18c8",
+      "unchanged": true
+    },
+    {
+      "table": "reference_sequences",
+      "beforeCount": "13",
+      "afterCount": "13",
+      "beforeFingerprint": "4ff18e88f11d6fafd7086d7af9b56a64",
+      "afterFingerprint": "4ff18e88f11d6fafd7086d7af9b56a64",
+      "unchanged": true
+    },
+    {
+      "table": "audit_log",
+      "beforeCount": "1668",
+      "afterCount": "1668",
+      "beforeFingerprint": "4dc73a220d67b2bedb1c244890618a17",
+      "afterFingerprint": "4dc73a220d67b2bedb1c244890618a17",
+      "unchanged": true
+    },
+    {
+      "table": "membership_policy_versions",
+      "beforeCount": "3",
+      "afterCount": "3",
+      "beforeFingerprint": "f4fa36592b1f6ce25b44af2d85331cf1",
+      "afterFingerprint": "f4fa36592b1f6ce25b44af2d85331cf1",
+      "unchanged": true
+    },
+    {
+      "table": "membership_policy_assignments",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "meeting_fines",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    },
+    {
+      "table": "meeting_fine_payments",
+      "beforeCount": "0",
+      "afterCount": "0",
+      "beforeFingerprint": "d751713988987e9331980363e24189ce",
+      "afterFingerprint": "d751713988987e9331980363e24189ce",
+      "unchanged": true
+    }
+  ],
+  "accountReconciliation": {
+    "accounts": [
+      {
+        "code": "1010-BR2601",
+        "balance": "4044918"
+      },
+      {
+        "code": "1020-BR2601",
+        "balance": "3178067"
+      },
+      {
+        "code": "1030-BR2601",
+        "balance": "1936545"
+      },
+      {
+        "code": "1040-BR2601",
+        "balance": "3213000"
+      },
+      {
+        "code": "1200",
+        "balance": "8738693"
+      },
+      {
+        "code": "2000",
+        "balance": "0"
+      },
+      {
+        "code": "2100",
+        "balance": "1010000"
+      },
+      {
+        "code": "3000",
+        "balance": "21449163"
+      },
+      {
+        "code": "4000",
+        "balance": "0"
+      },
+      {
+        "code": "4100",
+        "balance": "4484123"
+      },
+      {
+        "code": "4200",
+        "balance": "41437"
+      },
+      {
+        "code": "4300",
+        "balance": "0"
+      },
+      {
+        "code": "4310",
+        "balance": "0"
+      },
+      {
+        "code": "4320",
+        "balance": "0"
+      },
+      {
+        "code": "4330",
+        "balance": "0"
+      },
+      {
+        "code": "4340",
+        "balance": "30000"
+      },
+      {
+        "code": "4400",
+        "balance": "0"
+      },
+      {
+        "code": "4900",
+        "balance": "0"
+      },
+      {
+        "code": "5000",
+        "balance": "0"
+      },
+      {
+        "code": "5010",
+        "balance": "2500000"
+      },
+      {
+        "code": "5020",
+        "balance": "0"
+      },
+      {
+        "code": "5030",
+        "balance": "420000"
+      },
+      {
+        "code": "5040",
+        "balance": "458000"
+      },
+      {
+        "code": "5050",
+        "balance": "370000"
+      },
+      {
+        "code": "5060",
+        "balance": "500000"
+      },
+      {
+        "code": "5070",
+        "balance": "125000"
+      },
+      {
+        "code": "5080",
+        "balance": "25000"
+      },
+      {
+        "code": "5090",
+        "balance": "145000"
+      },
+      {
+        "code": "5100",
+        "balance": "95000"
+      },
+      {
+        "code": "5200",
+        "balance": "0"
+      },
+      {
+        "code": "5210",
+        "balance": "0"
+      },
+      {
+        "code": "5220",
+        "balance": "0"
+      },
+      {
+        "code": "5230",
+        "balance": "0"
+      },
+      {
+        "code": "5900",
+        "balance": "1250000"
+      },
+      {
+        "code": "5950",
+        "balance": "15500"
+      }
+    ],
+    "loan_totals": {
+      "interest": "6442500",
+      "collected": "22286867",
+      "principal": "35450000",
+      "outstanding": "11156222",
+      "penalty_remaining": "819152",
+      "interest_remaining": "1598377",
+      "principal_remaining": "8738693"
+    },
+    "payment_status": [
+      {
+        "status": "posted",
+        "receipts": 469,
+        "historical_amount": "22286867"
+      },
+      {
+        "status": "reversed",
+        "receipts": 1,
+        "historical_amount": "130000"
+      }
+    ],
+    "journal_integrity": 0
+  },
+  "observations": {
+    "productionFinancialWrites": 0,
+    "productionMigrationsApplied": 0,
+    "deploymentsCreated": 0,
+    "policyActivated": false,
+    "policyEffectiveDateAssigned": false,
+    "recordsDeleted": 0
+  }
+}

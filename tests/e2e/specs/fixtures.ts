@@ -3,6 +3,8 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { assertTestDatabaseUrl } from '../../helpers/test-targets';
+
 /**
  * What every spec shares: the seeded accounts, the seeded loans, and a way to
  * sign in as one of four people.
@@ -252,6 +254,8 @@ export async function resetRateLimits(): Promise<void> {
       'E2E_DATABASE_URL is not set; source tests/e2e/harness/stack.sh env.',
     );
   }
+
+  assertTestDatabaseUrl(url, 'browser');
 
   const require = createRequire(join(process.cwd(), 'package.json'));
   const { Client } = require('pg') as {

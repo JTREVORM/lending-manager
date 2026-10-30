@@ -1,6 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 
+import {
+  assertTestBrowserUrl,
+  assertTestDatabaseUrl,
+} from './tests/helpers/test-targets';
+
 /**
  * The browser tests.
  *
@@ -35,6 +40,10 @@ import { existsSync } from 'node:fs';
  */
 
 const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3000';
+assertTestBrowserUrl(baseURL);
+if (process.env.E2E_DATABASE_URL) {
+  assertTestDatabaseUrl(process.env.E2E_DATABASE_URL, 'browser');
+}
 
 /**
  * The browser binary.
@@ -101,6 +110,17 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         ...browser,
         viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      name: 'tablet',
+      dependencies: ['setup'],
+      testMatch: /(?:policy-update|certification-responsive)\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        ...browser,
+        viewport: { width: 768, height: 1024 },
+        hasTouch: true,
       },
     },
     {

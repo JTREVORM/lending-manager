@@ -6635,6 +6635,10 @@ export type Database = {
     };
 
     Functions: {
+      polytos_readiness: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
       audit_policy_update_event: {
         Args: Record<PropertyKey, never>;
         Returns: unknown;

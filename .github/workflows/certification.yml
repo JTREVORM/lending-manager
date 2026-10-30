@@ -1,0 +1,33 @@
+name: Production read-only certification
+
+on:
+  push:
+    branches: ['certification/polytos-post-release-2026-10-30']
+    paths:
+      - 'scripts/certify-production-readonly.mjs'
+      - '.github/workflows/certification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-smoke:
+    name: Public GET checks (no authentication or writes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check public liveness and anonymous route protection
+        run: node scripts/certify-production-readonly.mjs
+      - name: Preserve sanitized results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-readonly-certification
+          path: work/production-readonly-certification.json
+          if-no-files-found: error
+          retention-days: 30
