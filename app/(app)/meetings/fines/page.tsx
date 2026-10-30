@@ -101,9 +101,15 @@ export default async function MeetingFinesPage() {
                 <TableHead width="name">Member</TableHead>
                 <TableHead width="date">Meeting date</TableHead>
                 <TableHead width="status">Status</TableHead>
-                <TableHead width="money" align="numeric">Charged</TableHead>
-                <TableHead width="money" align="numeric">Collected</TableHead>
-                <TableHead width="money" align="numeric">Outstanding</TableHead>
+                <TableHead width="money" align="numeric">
+                  Charged
+                </TableHead>
+                <TableHead width="money" align="numeric">
+                  Collected
+                </TableHead>
+                <TableHead width="money" align="numeric">
+                  Outstanding
+                </TableHead>
               </TableRow>
             </thead>
             <tbody>
@@ -117,7 +123,9 @@ export default async function MeetingFinesPage() {
                       {f.fine_number}
                     </Link>
                   </TableCell>
-                  <TableCell width="name" wrap="wrap">{f.member_name}</TableCell>
+                  <TableCell width="name" wrap="wrap">
+                    {f.member_name}
+                  </TableCell>
                   <TableCell width="date">
                     <DateValue value={f.meeting_date} />
                   </TableCell>

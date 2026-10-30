@@ -36,7 +36,10 @@ export type MarkNotificationsReadInput = z.infer<typeof markNotificationsReadSch
 /** The notifications page's filter. */
 export const notificationSearchSchema = z.object({
   group: z
-    .union([z.literal(''), z.enum(['membership', 'decisions', 'collections', 'lending', 'money'])])
+    .union([
+      z.literal(''),
+      z.enum(['membership', 'decisions', 'collections', 'lending', 'money']),
+    ])
     .transform((value) => (value === '' ? null : value))
     .nullable()
     .optional()

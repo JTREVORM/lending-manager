@@ -186,7 +186,9 @@ export default async function PolicyTransitionsPage({
                   <TableRow>
                     <TableHead width="name-wide">Member</TableHead>
                     <TableHead width="ref">Current policy</TableHead>
-                    <TableHead width="money" align="numeric">Savings balance</TableHead>
+                    <TableHead width="money" align="numeric">
+                      Savings balance
+                    </TableHead>
                     <TableHead width="status">Qualified before</TableHead>
                     <TableHead width="status">Qualified after</TableHead>
                     <TableHead width="status-wide">Verified acceptance</TableHead>
@@ -207,9 +209,15 @@ export default async function PolicyTransitionsPage({
                       <TableCell width="money" align="numeric">
                         <PolicyAmount value={m.savings_balance} />
                       </TableCell>
-                      <TableCell width="status">{m.qualifies_before ? 'Yes' : 'No'}</TableCell>
-                      <TableCell width="status">{m.qualifies_after ? 'Yes' : 'No'}</TableCell>
-                      <TableCell width="status-wide">{m.has_acceptance ? 'Recorded' : 'Required'}</TableCell>
+                      <TableCell width="status">
+                        {m.qualifies_before ? 'Yes' : 'No'}
+                      </TableCell>
+                      <TableCell width="status">
+                        {m.qualifies_after ? 'Yes' : 'No'}
+                      </TableCell>
+                      <TableCell width="status-wide">
+                        {m.has_acceptance ? 'Recorded' : 'Required'}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </tbody>

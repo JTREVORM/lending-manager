@@ -28,14 +28,20 @@ export async function LoanCollections({
               <TableHead width="count">Installment</TableHead>
               <TableHead width="date">Contractual due date</TableHead>
               <TableHead width="date">Collection month</TableHead>
-              <TableHead width="money" align="numeric">Unpaid</TableHead>
-              <TableHead width="count" align="numeric">Days overdue</TableHead>
+              <TableHead width="money" align="numeric">
+                Unpaid
+              </TableHead>
+              <TableHead width="count" align="numeric">
+                Days overdue
+              </TableHead>
             </TableRow>
           </thead>
           <tbody>
             {rows.map((row) => (
               <TableRow key={row.installment_id}>
-                <TableCell header width="count">{row.installment_number}</TableCell>
+                <TableCell header width="count">
+                  {row.installment_number}
+                </TableCell>
                 <TableCell width="date">
                   <DateValue value={row.original_due_date} />
                 </TableCell>
@@ -45,7 +51,9 @@ export async function LoanCollections({
                 <TableCell width="money" align="numeric">
                   <PolicyAmount value={row.remaining_amount} />
                 </TableCell>
-                <TableCell width="count" align="numeric">{row.days_past_due}</TableCell>
+                <TableCell width="count" align="numeric">
+                  {row.days_past_due}
+                </TableCell>
               </TableRow>
             ))}
           </tbody>
