@@ -359,8 +359,8 @@ describe('the three readings of an admission', () => {
 });
 
 describe('the eligibility codes', () => {
-  it('names seventeen, each with a heading a screen can show', () => {
-    expect(BENEFIT_ELIGIBILITY_CODES).toHaveLength(17);
+  it('names all twenty-three codes, each with a heading a screen can show', () => {
+    expect(BENEFIT_ELIGIBILITY_CODES).toHaveLength(23);
 
     for (const code of BENEFIT_ELIGIBILITY_CODES) {
       expect(BENEFIT_ELIGIBILITY_CODE_LABELS[code].length).toBeGreaterThan(0);
@@ -374,6 +374,7 @@ describe('the eligibility codes', () => {
     // and showing it as a refusal would tell somebody they had been turned
     // down when they have not.
     expect(UNDECIDED_BENEFIT_ELIGIBILITY_CODES).toEqual([
+      'death_confirmations_undecided',
       'policy_not_open',
       'membership_suspended_undecided',
       'admission_measure_undecided',

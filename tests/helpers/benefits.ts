@@ -302,3 +302,88 @@ export async function requiredKindsFor(claimType: string): Promise<readonly stri
 
   return rows.map((row) => row.key);
 }
+
+/**
+ * Three other group members, confirming a death.
+ *
+ * Rule 12. A death-related claim needs the policy's recorded number of
+ * confirmations, each naming a **real membership** rather than a typed name —
+ * so the fixture has to enrol the confirmers, which is why this takes a
+ * policy and not a list of names.
+ *
+ * The members it creates are ordinary ones: active, enrolled through
+ * `enrol_member`, and never the membership the claim is about. The function
+ * refuses to confirm with the deceased's own membership, so a fixture cannot
+ * accidentally satisfy the rule with one member three times.
+ */
+export async function recordDeathConfirmations(
+  claimId: string,
+  policyId: string,
+  recorder: Pick<TestUser, 'authUserId'>,
+  options: {
+    readonly count?: number;
+    readonly branchId?: string;
+  } = {},
+): Promise<readonly string[]> {
+  const ids: string[] = [];
+
+  for (let index = 0; index < (options.count ?? 3); index += 1) {
+    const confirmer = await makeBenefitMember(policyId, {
+      branchId: options.branchId,
+    });
+
+    const recorded = await asUserCommitted(recorder, [
+      {
+        sql: `select public.record_death_confirmation(
+                       $1, $2,
+                       'I knew the deceased and can confirm the death took place.',
+                       'witnessed_by_staff', null, null, 'Fellow member') as id`,
+        params: [claimId, confirmer.membershipId],
+      },
+    ]);
+
+    if (!recorded.ok) {
+      throw new Error(`fixture could not record a confirmation: ${recorded.message}`);
+    }
+
+    ids.push((recorded.rows[0] as { id: string }).id);
+  }
+
+  return ids;
+}
+
+/**
+ * A next-of-kin record registered **before** a date.
+ *
+ * Rule 11's second half: the condolence benefit covers a family member who was
+ * listed as next of kin, and a record created after the death does not
+ * establish that they were listed before it. `created_at` is back-dated with
+ * the same documented owner-level exemption `makeBenefitMember` uses to
+ * back-date an activation — it moves a clock rather than a rule, and the
+ * product reaches the same state on a different day.
+ */
+export async function makeListedNextOfKin(
+  membershipId: string,
+  recorder: Pick<TestUser, 'authUserId'>,
+  verifier: Pick<TestUser, 'authUserId'>,
+  options: {
+    readonly relationship?: string;
+    readonly listedOn?: string;
+    readonly primary?: boolean;
+  } = {},
+): Promise<string> {
+  const id = await makeVerifiedBeneficiary(membershipId, recorder, verifier, {
+    relationship: options.relationship ?? 'sibling',
+  });
+
+  if (options.listedOn !== undefined) {
+    await query(
+      `update public.member_beneficiaries
+          set created_at = ($1::date + time '09:00') at time zone 'Africa/Kampala'
+        where id = $2`,
+      [options.listedOn, id],
+    );
+  }
+
+  return id;
+}

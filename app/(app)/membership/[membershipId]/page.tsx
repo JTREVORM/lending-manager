@@ -1,3 +1,4 @@
+import { MemberPolicyPosition } from '@/components/policy-update/member-position';
 import { BadgeCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -156,6 +157,14 @@ export default async function MembershipDetailPage({
         title={membership.fullName}
         status={<MembershipStatusBadge status={membership.status} />}
         description={<span className="font-mono">{membership.membershipNumber}</span>}
+      />
+      <MemberPolicyPosition
+        membershipId={membership.id}
+        canSavings={
+          contextCan(context, 'savings:view') ||
+          contextCan(context, 'member_loans:view_eligibility')
+        }
+        canBenefits={contextCan(context, 'benefits:view')}
       />
 
       {membership.status === 'suspended' || membership.status === 'withdrawn' ? (

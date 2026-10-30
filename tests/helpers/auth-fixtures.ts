@@ -282,6 +282,28 @@ export async function deleteTestUsers(): Promise<void> {
       table: 'meeting_attendance_corrections',
       trigger: 'attendance_corrections_no_delete',
     },
+    // Polytos policy update. Four append-only tables and two with a
+    // collection guard, all refusing DELETE the way the Phase 4 ones do.
+    {
+      table: 'membership_policy_assignments',
+      trigger: 'membership_policy_assignments_no_delete',
+    },
+    {
+      table: 'loan_installment_carry_forwards',
+      trigger: 'loan_installment_carry_forwards_no_delete',
+    },
+    {
+      table: 'benefit_death_confirmations',
+      trigger: 'benefit_death_confirmations_no_delete',
+    },
+    { table: 'meeting_absence_notices', trigger: 'meeting_absence_notices_no_delete' },
+    { table: 'meeting_absence_notices', trigger: 'meeting_absence_notices_guard' },
+    { table: 'meeting_absence_notices', trigger: 'notify_absence_notice_pending' },
+    { table: 'meeting_fines', trigger: 'meeting_fines_no_delete' },
+    { table: 'meeting_fines', trigger: 'meeting_fines_guard' },
+    { table: 'meeting_fines', trigger: 'notify_meeting_fine_assessed' },
+    { table: 'meeting_fine_payments', trigger: 'meeting_fine_payments_no_delete' },
+    { table: 'meeting_fine_payments', trigger: 'meeting_fine_payments_guard' },
   ];
 
   for (const { table, trigger } of GUARDS) {
@@ -328,6 +350,24 @@ export async function deleteTestUsers(): Promise<void> {
     // claim names the payment, and the snapshot and the documents name the
     // claim. The beneficiary identity goes before the record it hangs off,
     // and both go before the memberships further down.
+    // Polytos policy update, and before everything Phase 4 clears: a meeting
+    // fine names the meeting, the membership and the absence notice, a fine
+    // payment names the fine and its journal entry, and a death confirmation
+    // names the claim — each with RESTRICT. The fine payments go before the
+    // journals further down for the same reason a benefit payment does.
+    await query(
+      `update public.meeting_fines
+          set status = 'outstanding', amount_paid = 0
+        where amount_paid > 0`,
+    );
+    await query(`delete from public.meeting_fine_payments`);
+    await query(`delete from public.meeting_fines`);
+    await query(`delete from public.meeting_absence_notices`);
+    await query(`delete from public.benefit_death_confirmations`);
+    await query(`delete from public.loan_installment_carry_forwards`);
+    await query(`delete from public.membership_policy_assignments`);
+    await query(`delete from public.membership_policy_transitions`);
+
     await query(`delete from public.meeting_attendance_corrections`);
     await query(`delete from public.meeting_attendance`);
     await query(`delete from public.meeting_action_items`);

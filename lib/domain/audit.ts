@@ -35,6 +35,14 @@ export function auditActions(): readonly string[] {
 
 /** The entity types the trail records, for the entity filter. */
 export const AUDIT_ENTITY_TYPES = [
+  'membership_policy_version',
+  'membership_policy_transitions',
+  'membership_policy_assignments',
+  'loan_installment_carry_forwards',
+  'benefit_death_confirmations',
+  'meeting_absence_notices',
+  'meeting_fines',
+  'meeting_fine_payments',
   'profile',
   'user_role',
   'business_settings',
@@ -55,6 +63,18 @@ export const AUDIT_ENTITY_TYPES = [
 
 /** Human wording for the action vocabulary, so the trail reads as sentences. */
 export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
+  'membership_policy.timing_recorded': 'Recorded authorized draft policy timing',
+  'membership_policy_transitions.recorded': 'Opened a policy transition batch',
+  'membership_policy_transitions.changed': 'Changed a policy transition batch',
+  'membership_policy_assignments.recorded': 'Assigned dated membership terms',
+  'loan_installment_carry_forwards.recorded': 'Carried unpaid collection amounts',
+  'benefit_death_confirmations.recorded': 'Recorded a group death confirmation',
+  'meeting_absence_notices.recorded': 'Recorded an advance absence notice',
+  'meeting_absence_notices.changed': 'Reviewed an advance absence notice',
+  'meeting_fines.recorded': 'Assessed a meeting absence fine',
+  'meeting_fines.changed': 'Changed meeting fine collection or cancellation',
+  'meeting_fine_payments.recorded': 'Received a meeting fine payment',
+  'meeting_fine_payments.changed': 'Changed a meeting fine receipt status',
   'user.created': 'Created a user',
   'user.updated': 'Updated a user',
   'user.status_changed': 'Changed an account status',

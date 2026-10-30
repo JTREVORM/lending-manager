@@ -1,3 +1,5 @@
+import { getPolicyBusinessNow } from '@/lib/data/policy-update';
+import { MeetingPolicyWork } from '@/components/policy-update/meeting-policy-work';
 import { CalendarDays } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
@@ -70,7 +72,7 @@ export default async function MeetingPage({
   // comes back; this decides what the form says about it.
   const canSeeStaffDirectory = contextCan(context, 'users:view');
 
-  const [attendance, expected, corrections, actions, assignees, { branding }] =
+  const [attendance, expected, corrections, actions, assignees, { branding }, policyNow] =
     await Promise.all([
       listMeetingAttendance(meeting.id),
       listExpectedMembers(meeting.branchId),
@@ -78,6 +80,7 @@ export default async function MeetingPage({
       listMeetingActions(meeting.id),
       canManage ? listMeetingAssignees() : Promise.resolve([]),
       getCompanyBranding(),
+      getPolicyBusinessNow(),
     ]);
 
   const today = businessToday(new Date(), branding.timezone);
@@ -92,6 +95,21 @@ export default async function MeetingPage({
         description={`${meeting.meetingNumber} · ${meeting.branchName}`}
         back={{ href: ROUTES.meetings, label: 'Meetings' }}
         status={<MeetingStatusBadge status={meeting.status} />}
+      />
+      <MeetingPolicyWork
+        meetingId={meeting.id}
+        members={expected}
+        canRecord={
+          canManage &&
+          meeting.status === 'scheduled' &&
+          Date.parse(meeting.scheduledAt) > policyNow
+        }
+        canReview={contextCan(context, 'meetings:excuse_review')}
+        canAssess={
+          contextCan(context, 'fines:assess') &&
+          meeting.status === 'held' &&
+          Date.parse(meeting.scheduledAt) <= policyNow
+        }
       />
 
       {query.scheduled === '1' ? (

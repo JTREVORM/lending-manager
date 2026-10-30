@@ -1,3 +1,4 @@
+import { LoanCollections } from '@/components/policy-update/loan-collections';
 import { Banknote } from 'lucide-react';
 
 import Link from 'next/link';
@@ -280,6 +281,12 @@ export default async function LoanDetailPage({
           </>
         }
       />
+      {canSeePayments ? (
+        <LoanCollections
+          loanId={loan.id}
+          canCarry={contextCan(context, 'payments:create') && loan.status === 'active'}
+        />
+      ) : null}
 
       {breakdownProblem !== null ? (
         <Alert tone="danger">

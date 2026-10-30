@@ -902,7 +902,7 @@ describeDb('minutes and actions', () => {
 });
 
 describeDb('what the meeting module must not do', () => {
-  it('has no column making attendance a condition of anything', async () => {
+  it('keeps attendance consequences confined to the meeting fine', async () => {
     // The brief is explicit: the client's documents do not establish that
     // missing a meeting suspends a membership, disqualifies savings, blocks a
     // loan, blocks a benefit or reduces a profit share. So no table anywhere
@@ -918,6 +918,10 @@ describeDb('what the meeting module must not do', () => {
           -- job is to report attendance, and counting them here would make
           -- this assertion fail for doing the thing it is for.
           and t.table_type = 'BASE TABLE'
+          and (c.table_name, c.column_name) not in (
+            ('membership_policy_versions', 'meeting_absence_fine'),
+            ('meeting_fines', 'attendance_at_assessment'),
+            ('meeting_fines', 'absence_reason_at_assessment'))
           and c.table_name not in (
             'meeting_attendance', 'meeting_attendance_corrections')
           and (

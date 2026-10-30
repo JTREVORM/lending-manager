@@ -79,7 +79,7 @@ const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
  * that writes a new expense account and a new journal source type is a phase
  * that could, in principle, move a trial balance.
  */
-const PHASE_PREFIXES = ['20261019', '20261020', '20261021', '20261022'];
+const PHASE_PREFIXES = ['20261019', '20261020', '20261021', '20261022', '20261028'];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
@@ -488,6 +488,7 @@ const CONFIGURATION_ENTITIES = new Set([
   'repayment_frequency',
   'business_settings',
   'role_permission',
+  'membership_policy',
 ]);
 
 /**
@@ -748,4 +749,14 @@ await bridgeDb.end();
 log(
   'verified: six existing borrowers enrolled, non-members retained, ' +
     'loan book untouched, full financial fixed point on runs 2 and 3, liability reconciled',
+);
+
+// Also protect existing membership money and benefit history across this update.
+execFileSync(
+  process.execPath,
+  [join(PROJECT_ROOT, 'scripts', 'verify-policy-upgrade.mjs')],
+  {
+    env: process.env,
+    stdio: 'inherit',
+  },
 );

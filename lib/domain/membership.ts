@@ -334,7 +334,15 @@ export const UNDECIDED_POLICY_RULE_LABELS: Readonly<Record<UndecidedPolicyRule, 
   } as const;
 
 /** The shape the gate reads. A subset of the full policy version. */
+export type MedicalCapMode = 'amount' | 'no_separate_cap';
+export type BenefitQualificationBasis =
+  'waiting_period_days' | 'savings_qualifying_months';
+
 export interface PolicyDecisionState {
+  readonly medicalBenefitCapMode?: MedicalCapMode | null;
+  readonly benefitQualificationBasis?: BenefitQualificationBasis | null;
+  readonly medicalBenefitYearBasis?: 'calendar_year' | 'enrolment_anniversary' | null;
+  readonly deathConfirmationsRequired?: number | null;
   readonly status: MembershipPolicyStatus;
   readonly approvedAt: string | null;
   readonly interestBasis: MemberInterestBasis | null;
@@ -360,7 +368,7 @@ export interface PolicyDecisionState {
 export function outstandingPolicyDecisions(
   policy: PolicyDecisionState,
 ): readonly UndecidedPolicyRule[] {
-  return UNDECIDED_POLICY_RULES.filter((rule) => policy[rule] === null);
+  return UNDECIDED_POLICY_RULES.filter((rule) => policyRuleIsOutstanding(policy, rule));
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +462,7 @@ export function activityOutstandingDecisions(
 ): readonly UndecidedPolicyRule[] {
   const needed = MEMBERSHIP_ACTIVITY_RULES[activity];
   return UNDECIDED_POLICY_RULES.filter(
-    (rule) => needed.includes(rule) && policy[rule] === null,
+    (rule) => needed.includes(rule) && policyRuleIsOutstanding(policy, rule),
   );
 }
 
@@ -475,7 +483,10 @@ export function isActivityReady(
   return (
     policy.status === 'active' &&
     policy.approvedAt !== null &&
-    activityOutstandingDecisions(policy, activity).length === 0
+    activityOutstandingDecisions(policy, activity).length === 0 &&
+    (activity !== 'benefits' ||
+      (policy.medicalBenefitYearBasis !== null &&
+        policy.deathConfirmationsRequired !== null))
   );
 }
 
@@ -494,6 +505,14 @@ export function activityBlockedReason(
 
   if (policy.approvedAt === null) {
     return 'The version has not been approved.';
+  }
+
+  if (
+    activity === 'benefits' &&
+    (policy.medicalBenefitYearBasis === null ||
+      policy.deathConfirmationsRequired === null)
+  ) {
+    return 'The medical benefit year or death-confirmation requirement is not recorded.';
   }
 
   const outstanding = activityOutstandingDecisions(policy, activity);
@@ -602,4 +621,44 @@ export const MEMBERSHIP_NUMBER_PATTERN = /^MB\d{5,}$/;
 
 export function isMembershipNumber(value: unknown): value is string {
   return typeof value === 'string' && MEMBERSHIP_NUMBER_PATTERN.test(value);
+}
+
+/** Undefined supports legacy callers; an explicit null remains undecided. */
+function policyRuleIsOutstanding(
+  policy: PolicyDecisionState,
+  rule: UndecidedPolicyRule,
+): boolean {
+  if (rule === 'medicalBenefitAnnualCap' && policy.medicalBenefitCapMode !== undefined) {
+    return policy.medicalBenefitCapMode === null;
+  }
+  if (
+    rule === 'benefitWaitingPeriodDays' &&
+    policy.benefitQualificationBasis !== undefined
+  ) {
+    return policy.benefitQualificationBasis === null;
+  }
+  return policy[rule] === null;
+}
+
+/** Benefit-specific readiness, matching the three PostgreSQL gates. */
+export function isBenefitPolicyReady(
+  policy: PolicyDecisionState,
+  benefit: 'medical' | 'family_condolence' | 'member_bereavement',
+): boolean {
+  if (policy.status !== 'active' || policy.approvedAt === null) return false;
+  const qualification =
+    policy.benefitQualificationBasis === undefined
+      ? policy.benefitWaitingPeriodDays !== null
+      : policy.benefitQualificationBasis !== null;
+  if (!qualification) return false;
+  if (benefit !== 'medical') return policy.deathConfirmationsRequired != null;
+  const cap =
+    policy.medicalBenefitCapMode === undefined
+      ? policy.medicalBenefitAnnualCap !== null
+      : policy.medicalBenefitCapMode !== null;
+  return (
+    cap &&
+    policy.medicalBenefitClaimsPerYear !== null &&
+    policy.medicalBenefitYearBasis != null
+  );
 }

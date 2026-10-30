@@ -587,6 +587,7 @@ describeDb('payment row level security', () => {
         'loan_application_profile',
         'loan_balances',
         'loan_collateral_register',
+        'loan_collection_schedule',
         'loan_delinquency',
         'loan_guarantor_evidence',
         'loan_guarantor_register',
@@ -615,7 +616,9 @@ describeDb('payment row level security', () => {
         // savings support, and member loans with their frozen eligibility
         // evidence beside them — each the one read a dashboard or a panel
         // makes, rather than a function call per member.
+        'meeting_absence_notice_register',
         'meeting_attendance_register',
+        'meeting_fine_register',
         'member_beneficiary_register',
         'member_loan_eligibility',
         'member_loan_register',

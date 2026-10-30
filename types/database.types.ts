@@ -238,6 +238,7 @@ export type Database = {
       };
       benefit_claims: {
         Row: {
+          deceased_beneficiary_id: string | null;
           id: string;
           claim_number: string;
           claim_type: string;
@@ -285,6 +286,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          deceased_beneficiary_id?: string | null;
           id?: string;
           claim_number: string;
           claim_type: string;
@@ -332,6 +334,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          deceased_beneficiary_id?: string | null;
           id?: string;
           claim_number?: string;
           claim_type?: string;
@@ -451,6 +454,18 @@ export type Database = {
       };
       benefit_assessment_snapshots: {
         Row: {
+          qualification_basis: string | null;
+          savings_qualifying_months: number | null;
+          savings_months_required: number | null;
+          savings_qualified: boolean | null;
+          medical_cap_mode: string | null;
+          death_confirmations_required: number | null;
+          death_confirmations_recorded: number | null;
+          deceased_beneficiary_id: string | null;
+          deceased_beneficiary_number: string | null;
+          deceased_listed_on: string | null;
+          outstanding_loan_principal: number | null;
+          outstanding_loan_count: number | null;
           claim_id: string;
           claim_number: string;
           claim_type: string;
@@ -500,6 +515,18 @@ export type Database = {
           captured_at: string;
         };
         Insert: {
+          qualification_basis?: string | null;
+          savings_qualifying_months?: number | null;
+          savings_months_required?: number | null;
+          savings_qualified?: boolean | null;
+          medical_cap_mode?: string | null;
+          death_confirmations_required?: number | null;
+          death_confirmations_recorded?: number | null;
+          deceased_beneficiary_id?: string | null;
+          deceased_beneficiary_number?: string | null;
+          deceased_listed_on?: string | null;
+          outstanding_loan_principal?: number | null;
+          outstanding_loan_count?: number | null;
           claim_id: string;
           claim_number: string;
           claim_type: string;
@@ -549,6 +576,18 @@ export type Database = {
           captured_at?: string;
         };
         Update: {
+          qualification_basis?: string | null;
+          savings_qualifying_months?: number | null;
+          savings_months_required?: number | null;
+          savings_qualified?: boolean | null;
+          medical_cap_mode?: string | null;
+          death_confirmations_required?: number | null;
+          death_confirmations_recorded?: number | null;
+          deceased_beneficiary_id?: string | null;
+          deceased_beneficiary_number?: string | null;
+          deceased_listed_on?: string | null;
+          outstanding_loan_principal?: number | null;
+          outstanding_loan_count?: number | null;
           claim_id?: string;
           claim_number?: string;
           claim_type?: string;
@@ -3703,10 +3742,18 @@ export type Database = {
        */
       membership_policy_versions: {
         Row: {
+          medical_benefit_cap_mode: string | null;
+          benefit_qualification_basis: string | null;
+          medical_benefit_year_basis: string | null;
+          death_confirmations_required: number | null;
+          meeting_absence_fine: number | null;
+          is_medical_benefit_enabled: boolean;
+          is_condolence_benefit_enabled: boolean;
+          is_bereavement_benefit_enabled: boolean;
           id: string;
           version: string;
           title: string;
-          effective_from: string;
+          effective_from: string | null;
           status: string;
           registration_fee: number;
           monthly_savings_minimum: number;
@@ -3744,10 +3791,18 @@ export type Database = {
           is_financially_enabled: boolean;
         };
         Insert: {
+          medical_benefit_cap_mode?: string | null;
+          benefit_qualification_basis?: string | null;
+          medical_benefit_year_basis?: string | null;
+          death_confirmations_required?: number | null;
+          meeting_absence_fine?: number | null;
+          is_medical_benefit_enabled?: never;
+          is_condolence_benefit_enabled?: never;
+          is_bereavement_benefit_enabled?: never;
           id?: string;
           version: string;
           title: string;
-          effective_from: string;
+          effective_from?: string | null;
           status?: string;
           registration_fee: number;
           monthly_savings_minimum: number;
@@ -3785,10 +3840,18 @@ export type Database = {
           is_financially_enabled?: never;
         };
         Update: {
+          medical_benefit_cap_mode?: string | null;
+          benefit_qualification_basis?: string | null;
+          medical_benefit_year_basis?: string | null;
+          death_confirmations_required?: number | null;
+          meeting_absence_fine?: number | null;
+          is_medical_benefit_enabled?: never;
+          is_condolence_benefit_enabled?: never;
+          is_bereavement_benefit_enabled?: never;
           id?: string;
           version?: string;
           title?: string;
-          effective_from?: string;
+          effective_from?: string | null;
           status?: string;
           registration_fee?: number;
           monthly_savings_minimum?: number;
@@ -4492,6 +4555,487 @@ export type Database = {
           attempts?: never;
           created_at?: never;
           updated_at?: never;
+        };
+        Relationships: [];
+      };
+
+      // --- Polytos business-policy update ------------------------------------
+      //
+      // Seven tables. Three of them — a governing policy assignment, a
+      // collection carry-forward and a death confirmation — are append-only in
+      // the database: UPDATE is refused by trigger and the privilege is not
+      // granted. They still carry an `Update` shape here, as `audit_log` and
+      // `loan_recovery_actions` do, because supabase-js requires one on every
+      // table in the schema map and omitting it collapses the whole map to
+      // `never`. The shape describes a statement the database will reject,
+      // which is a limitation of the client's typing rather than a claim about
+      // what is allowed.
+
+      membership_policy_transitions: {
+        Row: {
+          id: string;
+          transition_number: string;
+          from_version_id: string | null;
+          to_version_id: string;
+          to_version: string;
+          effective_on: string;
+          status: string;
+          previewed_memberships: number;
+          previewed_accounts: number;
+          previewed_qualified_before: number;
+          previewed_qualified_after: number;
+          transitioned_count: number;
+          note: string | null;
+          requested_by: string | null;
+          requested_by_label: string;
+          started_at: string;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          transition_number: string;
+          from_version_id?: string | null;
+          to_version_id: string;
+          to_version: string;
+          effective_on: string;
+          status?: string;
+          previewed_memberships?: number;
+          previewed_accounts?: number;
+          previewed_qualified_before?: number;
+          previewed_qualified_after?: number;
+          transitioned_count?: number;
+          note?: string | null;
+          requested_by?: string | null;
+          requested_by_label: string;
+          started_at?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          transition_number?: string;
+          from_version_id?: string | null;
+          to_version_id?: string;
+          to_version?: string;
+          effective_on?: string;
+          status?: string;
+          previewed_memberships?: number;
+          previewed_accounts?: number;
+          previewed_qualified_before?: number;
+          previewed_qualified_after?: number;
+          transitioned_count?: number;
+          note?: string | null;
+          requested_by?: string | null;
+          requested_by_label?: string;
+          started_at?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      membership_policy_assignments: {
+        Row: {
+          id: string;
+          membership_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          effective_from: string;
+          previous_version_id: string | null;
+          transition_id: string | null;
+          acceptance_id: string | null;
+          reason: string;
+          assigned_by: string | null;
+          assigned_by_label: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          membership_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          effective_from: string;
+          previous_version_id?: string | null;
+          transition_id?: string | null;
+          acceptance_id?: string | null;
+          reason: string;
+          assigned_by?: string | null;
+          assigned_by_label: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          membership_id?: string;
+          policy_version_id?: string;
+          policy_version?: string;
+          effective_from?: string;
+          previous_version_id?: string | null;
+          transition_id?: string | null;
+          acceptance_id?: string | null;
+          reason?: string;
+          assigned_by?: string | null;
+          assigned_by_label?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      loan_installment_carry_forwards: {
+        Row: {
+          id: string;
+          loan_id: string;
+          loan_number: string;
+          installment_id: string;
+          installment_number: number;
+          original_due_date: string;
+          carried_from_period: string;
+          carried_to_period: string;
+          amount_outstanding: number;
+          principal_outstanding: number;
+          interest_outstanding: number;
+          reason: string;
+          carried_by: string | null;
+          carried_by_label: string;
+          business_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          loan_id: string;
+          loan_number: string;
+          installment_id: string;
+          installment_number: number;
+          original_due_date: string;
+          carried_from_period: string;
+          carried_to_period: string;
+          amount_outstanding: number;
+          principal_outstanding: number;
+          interest_outstanding: number;
+          reason: string;
+          carried_by?: string | null;
+          carried_by_label: string;
+          business_date: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          loan_id?: string;
+          loan_number?: string;
+          installment_id?: string;
+          installment_number?: number;
+          original_due_date?: string;
+          carried_from_period?: string;
+          carried_to_period?: string;
+          amount_outstanding?: number;
+          principal_outstanding?: number;
+          interest_outstanding?: number;
+          reason?: string;
+          carried_by?: string | null;
+          carried_by_label?: string;
+          business_date?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      benefit_death_confirmations: {
+        Row: {
+          id: string;
+          claim_id: string;
+          claim_number: string;
+          subject_membership_id: string;
+          confirming_membership_id: string;
+          confirming_membership_number: string;
+          statement: string;
+          relationship_note: string | null;
+          confirmation_method: string;
+          signature_name: string | null;
+          evidence_path: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          recorded_at: string;
+          business_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          claim_id: string;
+          claim_number: string;
+          subject_membership_id: string;
+          confirming_membership_id: string;
+          confirming_membership_number: string;
+          statement: string;
+          relationship_note?: string | null;
+          confirmation_method: string;
+          signature_name?: string | null;
+          evidence_path?: string | null;
+          recorded_by?: string | null;
+          recorded_by_label: string;
+          recorded_at?: string;
+          business_date: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          claim_id?: string;
+          claim_number?: string;
+          subject_membership_id?: string;
+          confirming_membership_id?: string;
+          confirming_membership_number?: string;
+          statement?: string;
+          relationship_note?: string | null;
+          confirmation_method?: string;
+          signature_name?: string | null;
+          evidence_path?: string | null;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          recorded_at?: string;
+          business_date?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      meeting_absence_notices: {
+        Row: {
+          id: string;
+          meeting_id: string;
+          meeting_number: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          branch_id: string;
+          reason_kind: string;
+          reason: string;
+          reported_via: string;
+          reported_at: string;
+          reported_by: string | null;
+          reported_by_label: string;
+          review_status: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          reviewed_by_label: string | null;
+          review_note: string | null;
+          business_date: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          meeting_id: string;
+          meeting_number: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          branch_id: string;
+          reason_kind: string;
+          reason: string;
+          reported_via: string;
+          reported_at?: string;
+          reported_by?: string | null;
+          reported_by_label: string;
+          review_status?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          reviewed_by_label?: string | null;
+          review_note?: string | null;
+          business_date: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          meeting_id?: string;
+          meeting_number?: string;
+          membership_id?: string;
+          membership_number?: string;
+          client_id?: string;
+          branch_id?: string;
+          reason_kind?: string;
+          reason?: string;
+          reported_via?: string;
+          reported_at?: string;
+          reported_by?: string | null;
+          reported_by_label?: string;
+          review_status?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          reviewed_by_label?: string | null;
+          review_note?: string | null;
+          business_date?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      meeting_fines: {
+        Row: {
+          id: string;
+          fine_number: string;
+          meeting_id: string;
+          meeting_number: string;
+          meeting_date: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          amount: number;
+          amount_paid: number;
+          status: string;
+          attendance_at_assessment: string;
+          absence_reason_at_assessment: string | null;
+          notice_id: string | null;
+          assessed_on: string;
+          assessed_by: string | null;
+          assessed_by_label: string;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          cancelled_by_label: string | null;
+          cancellation_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          fine_number: string;
+          meeting_id: string;
+          meeting_number: string;
+          meeting_date: string;
+          membership_id: string;
+          membership_number: string;
+          client_id: string;
+          branch_id: string;
+          policy_version_id: string;
+          policy_version: string;
+          amount: number;
+          amount_paid?: number;
+          status?: string;
+          attendance_at_assessment: string;
+          absence_reason_at_assessment?: string | null;
+          notice_id?: string | null;
+          assessed_on: string;
+          assessed_by?: string | null;
+          assessed_by_label: string;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_by_label?: string | null;
+          cancellation_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          fine_number?: string;
+          meeting_id?: string;
+          meeting_number?: string;
+          meeting_date?: string;
+          membership_id?: string;
+          membership_number?: string;
+          client_id?: string;
+          branch_id?: string;
+          policy_version_id?: string;
+          policy_version?: string;
+          amount?: number;
+          amount_paid?: number;
+          status?: string;
+          attendance_at_assessment?: string;
+          absence_reason_at_assessment?: string | null;
+          notice_id?: string | null;
+          assessed_on?: string;
+          assessed_by?: string | null;
+          assessed_by_label?: string;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_by_label?: string | null;
+          cancellation_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      meeting_fine_payments: {
+        Row: {
+          id: string;
+          payment_number: string;
+          fine_id: string;
+          fine_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          amount: number;
+          payment_method: string;
+          cash_account_id: string;
+          income_account_id: string;
+          external_reference: string | null;
+          idempotency_key: string;
+          value_date: string;
+          journal_entry_id: string;
+          status: string;
+          received_by: string | null;
+          received_by_label: string;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversed_by_label: string | null;
+          reversal_reason: string | null;
+          reversal_entry_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          payment_number: string;
+          fine_id: string;
+          fine_number: string;
+          membership_id: string;
+          client_id: string;
+          branch_id: string;
+          amount: number;
+          payment_method: string;
+          cash_account_id: string;
+          income_account_id: string;
+          external_reference?: string | null;
+          idempotency_key: string;
+          value_date: string;
+          journal_entry_id: string;
+          status?: string;
+          received_by?: string | null;
+          received_by_label: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversal_reason?: string | null;
+          reversal_entry_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          payment_number?: string;
+          fine_id?: string;
+          fine_number?: string;
+          membership_id?: string;
+          client_id?: string;
+          branch_id?: string;
+          amount?: number;
+          payment_method?: string;
+          cash_account_id?: string;
+          income_account_id?: string;
+          external_reference?: string | null;
+          idempotency_key?: string;
+          value_date?: string;
+          journal_entry_id?: string;
+          status?: string;
+          received_by?: string | null;
+          received_by_label?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversal_reason?: string | null;
+          reversal_entry_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -5985,9 +6529,116 @@ export type Database = {
         };
         Relationships: [];
       };
+
+      // --- Polytos business-policy update ------------------------------------
+      //
+      // `loan_collection_schedule` carries **both** of an instalment's dates:
+      // `original_due_date`, which arrears are measured from, and
+      // `collection_period`, which is the month it is being chased in. Reading
+      // one as the other is the mistake the carry-forward design exists to
+      // prevent, so both are typed and neither is named `due_date`.
+
+      loan_collection_schedule: {
+        Row: {
+          loan_id: string | null;
+          loan_number: string | null;
+          client_id: string | null;
+          branch_id: string | null;
+          loan_status: string | null;
+          installment_id: string | null;
+          installment_number: number | null;
+          original_due_date: string | null;
+          expected_amount: number | null;
+          scheduled_principal: number | null;
+          scheduled_interest: number | null;
+          allocated_amount: number | null;
+          remaining_amount: number | null;
+          remaining_principal: number | null;
+          remaining_interest: number | null;
+          collection_period: string | null;
+          carry_forward_count: number | null;
+          days_past_due: number | null;
+        };
+        Relationships: [];
+      };
+      meeting_fine_register: {
+        Row: {
+          id: string | null;
+          fine_number: string | null;
+          meeting_id: string | null;
+          meeting_number: string | null;
+          meeting_date: string | null;
+          meeting_title: string | null;
+          meeting_type: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          member_name: string | null;
+          client_number: string | null;
+          client_id: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          policy_version: string | null;
+          amount: number | null;
+          amount_paid: number | null;
+          amount_outstanding: number | null;
+          status: string | null;
+          attendance_at_assessment: string | null;
+          absence_reason_at_assessment: string | null;
+          notice_id: string | null;
+          notice_status: string | null;
+          notice_reason: string | null;
+          notice_review_note: string | null;
+          assessed_on: string | null;
+          assessed_by_label: string | null;
+          cancelled_at: string | null;
+          cancelled_by_label: string | null;
+          cancellation_reason: string | null;
+          latest_payment_number: string | null;
+          payment_count: number | null;
+          reversed_payment_count: number | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [];
+      };
+      meeting_absence_notice_register: {
+        Row: {
+          id: string | null;
+          meeting_id: string | null;
+          meeting_number: string | null;
+          meeting_title: string | null;
+          scheduled_at: string | null;
+          meeting_date: string | null;
+          meeting_status: string | null;
+          membership_id: string | null;
+          membership_number: string | null;
+          member_name: string | null;
+          client_id: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          reason_kind: string | null;
+          reason: string | null;
+          reported_via: string | null;
+          reported_at: string | null;
+          reported_by_label: string | null;
+          hours_before_meeting: number | null;
+          review_status: string | null;
+          reviewed_at: string | null;
+          reviewed_by_label: string | null;
+          review_note: string | null;
+          register_attendance: string | null;
+          fine_charged: boolean | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
     };
 
     Functions: {
+      audit_policy_update_event: {
+        Args: Record<PropertyKey, never>;
+        Returns: unknown;
+      };
       // --- Polytos Phase 4: benefits -----------------------------------------
       //
       // Four, and the two that are SECURITY DEFINER each check a capability
@@ -6830,6 +7481,14 @@ export type Database = {
       };
 
       /** Phase 11. Dr the expense category, Cr the account it was paid from. */
+      record_draft_policy_timing: {
+        Args: {
+          p_policy_id: string;
+          p_effective_from: string;
+          p_authorization_reference: string;
+        };
+        Returns: string;
+      };
       record_expense: {
         Args: {
           p_expense_account_id: string;
@@ -7494,6 +8153,314 @@ export type Database = {
       client_has_live_loan: {
         Args: { p_client_id: string };
         Returns: boolean;
+      };
+
+      // --- Polytos business-policy update ------------------------------------
+      //
+      // The guards, numbering helpers and notification hooks this update added
+      // are deliberately absent: they are called by the database and not over
+      // the API, like every other trigger function in the schema.
+      //
+      // `savings_qualification_under_policy` is present because it is granted
+      // to `authenticated` — the transition preview asks it what a target
+      // version would say about an account, which is a legitimate read.
+
+      assess_meeting_fine: {
+        Args: { p_meeting_id: string; p_membership_id: string };
+        Returns: string | null;
+      };
+
+      assess_meeting_fines: {
+        Args: { p_meeting_id: string };
+        Returns: number | null;
+      };
+
+      begin_membership_policy_transition: {
+        Args: { p_to_version_id: string; p_effective_on: string; p_note?: string };
+        Returns: string | null;
+      };
+
+      benefit_blocked_reason: {
+        Args: { p_version_id: string; p_benefit: string };
+        Returns: string | null;
+      };
+
+      benefit_payment_blocked_reason: {
+        Args: { p_claim_id: string };
+        Returns: string | null;
+      };
+
+      cancel_meeting_fine: {
+        Args: { p_fine_id: string; p_reason: string };
+        Returns: string | null;
+      };
+
+      carry_forward_unpaid_installments: {
+        Args: { p_loan_id: string; p_as_of?: string; p_reason?: string };
+        Returns: number | null;
+      };
+
+      client_has_outstanding_loan: {
+        Args: { p_client_id: string };
+        Returns: boolean | null;
+      };
+
+      client_outstanding_loans: {
+        Args: { p_client_id: string };
+        Returns: {
+          loan_id: string | null;
+          loan_number: string | null;
+          status: string | null;
+          is_member_loan: boolean | null;
+          principal: number | null;
+          contractual_outstanding: number | null;
+          penalty_outstanding: number | null;
+        }[];
+      };
+
+      complete_membership_policy_transition: {
+        Args: { p_transition_id: string };
+        Returns: number | null;
+      };
+
+      condolence_next_of_kin_status: {
+        Args: { p_claim_id: string };
+        Returns: {
+          beneficiary_id: string | null;
+          beneficiary_number: string | null;
+          relationship: string | null;
+          relationship_label: string | null;
+          relationship_eligible: boolean | null;
+          registered_on: string | null;
+          listed_before_event: boolean | null;
+          beneficiary_status: string | null;
+          verification_status: string | null;
+        }[];
+      };
+
+      death_confirmation_count: {
+        Args: { p_claim_id: string };
+        Returns: number | null;
+      };
+
+      loan_collection_period_total: {
+        Args: { p_loan_id: string; p_period: string };
+        Returns: number | null;
+      };
+
+      meeting_absence_excused: {
+        Args: { p_meeting_id: string; p_membership_id: string };
+        Returns: boolean | null;
+      };
+
+      meeting_fine_candidates: {
+        Args: { p_meeting_id: string };
+        Returns: {
+          membership_id: string | null;
+          membership_number: string | null;
+          member_name: string | null;
+          attendance: string | null;
+          absence_reason: string | null;
+          notice_id: string | null;
+          notice_status: string | null;
+          excused: boolean | null;
+          already_fined: boolean | null;
+          fineable: boolean | null;
+          reason: string | null;
+        }[];
+      };
+
+      meeting_fine_summary: {
+        Args: { p_branch_id?: string; p_from?: string; p_to?: string };
+        Returns: {
+          fines_assessed: number | null;
+          amount_assessed: number | null;
+          fines_outstanding: number | null;
+          amount_outstanding: number | null;
+          fines_paid: number | null;
+          amount_collected: number | null;
+          fines_cancelled: number | null;
+          amount_cancelled: number | null;
+          payments_reversed: number | null;
+          amount_reversed: number | null;
+          ledger_income: number | null;
+          reconciles: boolean | null;
+        }[];
+      };
+
+      member_benefit_position: {
+        Args: { p_membership_id: string; p_as_of?: string };
+        Returns: {
+          membership_id: string | null;
+          policy_version_id: string | null;
+          policy_version: string | null;
+          confirmed_member: boolean | null;
+          qualification_basis: string | null;
+          savings_qualified: boolean | null;
+          savings_months: number | null;
+          savings_months_required: number | null;
+          benefit_year_from: string | null;
+          benefit_year_to: string | null;
+          medical_claims_used: number | null;
+          medical_claims_allowed: number | null;
+          medical_claims_left: number | null;
+          medical_cap_mode: string | null;
+          medical_annual_cap: number | null;
+          medical_amount_used: number | null;
+          medical_enabled: boolean | null;
+          condolence_enabled: boolean | null;
+          bereavement_enabled: boolean | null;
+          medical_blocked_reason: string | null;
+          condolence_blocked_reason: string | null;
+          bereavement_blocked_reason: string | null;
+          outstanding_loan_count: number | null;
+          outstanding_loan_total: number | null;
+          death_confirmations_required: number | null;
+        }[];
+      };
+
+      member_savings_position: {
+        Args: { p_membership_id: string };
+        Returns: {
+          membership_id: string | null;
+          policy_version_id: string | null;
+          policy_version: string | null;
+          monthly_minimum: number | null;
+          months_required: number | null;
+          must_be_consecutive: boolean | null;
+          qualifying_months: number | null;
+          qualifies: boolean | null;
+          qualification_reason: string | null;
+          savings_balance: number | null;
+          pledged_savings: number | null;
+          savings_multiplier_bps: number | null;
+          loan_ceiling: number | null;
+          outstanding_loan_count: number | null;
+          outstanding_loan_total: number | null;
+          withdrawal_rule: string | null;
+          withdrawal_blocked: boolean | null;
+          withdrawal_block_reason: string | null;
+        }[];
+      };
+
+      membership_governing_policy: {
+        Args: { p_membership_id: string; p_as_of?: string };
+        Returns: string | null;
+      };
+
+      membership_savings_qualified: {
+        Args: { p_membership_id: string; p_as_of?: string };
+        Returns: {
+          qualifies: boolean | null;
+          qualifying_months: number | null;
+          months_required: number | null;
+          must_be_consecutive: boolean | null;
+          monthly_minimum: number | null;
+          accounts_considered: number | null;
+          blocked_reason: string | null;
+        }[];
+      };
+
+      post_meeting_fine_payment: {
+        Args: {
+          p_fine_id: string;
+          p_amount: number;
+          p_payment_method: string;
+          p_external_reference: string;
+          p_idempotency_key: string;
+        };
+        Returns: string | null;
+      };
+
+      preview_membership_policy_transition: {
+        Args: { p_to_version_id: string; p_effective_on?: string };
+        Returns: {
+          membership_id: string | null;
+          membership_number: string | null;
+          member_name: string | null;
+          branch_name: string | null;
+          membership_status: string | null;
+          current_version_id: string | null;
+          current_version: string | null;
+          savings_account_count: number | null;
+          savings_balance: number | null;
+          qualifies_before: boolean | null;
+          qualifies_after: boolean | null;
+          qualifying_months_before: number | null;
+          qualifying_months_after: number | null;
+          has_acceptance: boolean | null;
+          already_transitioned: boolean | null;
+          advisory: string | null;
+        }[];
+      };
+
+      record_death_confirmation: {
+        Args: {
+          p_claim_id: string;
+          p_confirming_membership_id: string;
+          p_statement: string;
+          p_confirmation_method: string;
+          p_signature_name?: string;
+          p_evidence_path?: string;
+          p_relationship_note?: string;
+        };
+        Returns: string | null;
+      };
+
+      record_meeting_absence_notice: {
+        Args: {
+          p_meeting_id: string;
+          p_membership_id: string;
+          p_reason_kind: string;
+          p_reason: string;
+          p_reported_via?: string;
+        };
+        Returns: string | null;
+      };
+
+      reverse_meeting_fine_payment: {
+        Args: { p_payment_id: string; p_reason: string };
+        Returns: string | null;
+      };
+
+      review_meeting_absence_notice: {
+        Args: { p_notice_id: string; p_approved: boolean; p_note?: string };
+        Returns: string | null;
+      };
+
+      savings_account_governing_policy: {
+        Args: { p_savings_account_id: string; p_as_of?: string };
+        Returns: string | null;
+      };
+
+      savings_qualification_under_policy: {
+        Args: {
+          p_savings_account_id: string;
+          p_policy_version_id: string;
+          p_as_of?: string;
+          p_month_minimum_from_history?: boolean;
+        };
+        Returns: {
+          savings_account_id: string | null;
+          as_of: string | null;
+          monthly_minimum: number | null;
+          months_required: number | null;
+          must_be_consecutive: boolean | null;
+          qualifying_months: number | null;
+          longest_consecutive_months: number | null;
+          months_recorded: number | null;
+          months_short: number | null;
+          total_contributed: number | null;
+          total_withdrawn: number | null;
+          balance: number | null;
+          qualifies: boolean | null;
+          blocked_reason: string | null;
+        }[];
+      };
+
+      transition_membership_to_policy: {
+        Args: { p_transition_id: string; p_membership_id: string };
+        Returns: string | null;
       };
     };
 

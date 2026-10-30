@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 
 import { ServiceWorkerProvider } from '@/components/pwa/service-worker-provider';
 import { APP_DESCRIPTION, APP_NAME, APP_SHORT_NAME } from '@/config/app';
@@ -66,37 +66,21 @@ export const viewport: Viewport = {
 };
 
 /**
- * Inter — the reference project's typeface, from the same source.
+ * The same Inter typeface is packaged locally to keep builds independent of
+ * Google Fonts responses and Next's Google-font URL parser.
  *
- * The reference links the Google Fonts stylesheet
- * `css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap` from its
- * root route. This is that exact font at those exact weights, fetched from
- * Google Fonts at build time and then **self-hosted** by Next alongside the
- * application.
- *
- * Self-hosting rather than linking is the one place this file improves on the
- * reference instead of copying it, and it is not a substitution — the font
- * binaries are the same ones the reference's link resolves to:
- *
- *   - no third-party request on load, so no render-blocking round trip to
- *     `fonts.googleapis.com` before the first paint, which on a 3G phone at a
- *     counter is the difference between fast and not;
- *   - no IP address handed to Google by every member of staff on every visit;
- *   - `display: 'swap'`, as the reference's URL asks for, so text is legible
- *     in the fallback face immediately rather than invisible while the font
- *     arrives.
- *
- * All seven weights, not a subset: the design sets page titles in `font-black`
- * (900) and the sidebar's version chip in `font-extrabold` (800), and a
- * missing weight is silently faked by the browser as a smeared synthetic bold.
- *
- * Exposed as a CSS variable so `--font-sans` in `globals.css` — which is what
- * `body` and every `font-sans` utility resolve to — names it rather than a
- * class having to be threaded through the tree.
+ * Source: fontsource/font-files, fonts/variable/inter/files/
+ * inter-latin-wght-normal.woff2 at 2ffd3aa25908df6ed1c864de40ce53e2ae1076d1.
+ * Upstream Git blob: d15208de03cd1ad7c5199f0a0ce915fe841e4722.
+ * The Latin subset retains the existing preload scope and download budget.
+ * The unmodified font's SIL Open Font License is in app/fonts/OFL.txt.
+ * The CSS variable, supported weights, swap behavior and fallback chain stay
+ * consistent with the existing application typography.
  */
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700', '800', '900'],
+const inter = localFont({
+  src: './fonts/InterVariable.woff2',
+  weight: '300 900',
+  style: 'normal',
   display: 'swap',
   variable: '--font-inter',
   // The reference's own fallback chain, so the swapped-in face before Inter

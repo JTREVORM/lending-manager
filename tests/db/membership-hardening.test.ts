@@ -1,3 +1,4 @@
+import { makeBenefitMember } from '../helpers/benefits';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -134,6 +135,23 @@ async function makeVersion(
   status: 'draft' | 'active' | 'superseded',
   decided: readonly (keyof typeof DECIDED)[] = [],
 ): Promise<string> {
+  const compatibilityColumns: string[] = [];
+  const compatibilityValues: string[] = [];
+  if (decided.includes('medical_benefit_annual_cap')) {
+    compatibilityColumns.push('medical_benefit_cap_mode');
+    compatibilityValues.push("'amount'");
+  }
+  if (decided.includes('benefit_waiting_period_days')) {
+    compatibilityColumns.push(
+      'benefit_qualification_basis',
+      'death_confirmations_required',
+    );
+    compatibilityValues.push("'waiting_period_days'", '0');
+  }
+  if (decided.includes('medical_benefit_claims_per_year')) {
+    compatibilityColumns.push('medical_benefit_year_basis');
+    compatibilityValues.push("'calendar_year'");
+  }
   const extraColumns = decided.length > 0 ? `, ${decided.join(', ')}` : '';
   const extraValues =
     decided.length > 0 ? `, ${decided.map((rule) => DECIDED[rule]).join(', ')}` : '';
@@ -145,8 +163,8 @@ async function makeVersion(
 
   const row = await queryOne<{ id: string }>(
     `insert into public.membership_policy_versions
-       (${CONFIRMED_COLUMNS}${extraColumns}${approval})
-     values ($1, $2, ${effective}, $4, ${CONFIRMED_VALUES}${extraValues}${approvalValues})
+       (${CONFIRMED_COLUMNS}${extraColumns}${compatibilityColumns.length ? ', ' + compatibilityColumns.join(', ') : ''}${approval})
+     values ($1, $2, ${effective}, $4, ${CONFIRMED_VALUES}${extraValues}${compatibilityValues.length ? ', ' + compatibilityValues.join(', ') : ''}${approvalValues})
      returning id`,
     [version, `Hardening fixture ${version}`, effectiveFrom, status],
   );
@@ -610,7 +628,10 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
     expect(result.ok).toBe(false);
   });
 
-  it('records the acceptance and moves the member when the mechanism is used', async () => {
+  it('preserves the original terms and moves governing policy only through a verified transition', async () => {
+    const transitionMember = await makeBenefitMember(fx.inForceVersionId, {
+      witnessProfileId: fx.manager.profileId,
+    });
     // Effective today, which is after the version the member is on. Terms
     // move forward; the test below asserts the other direction is refused.
     const target = await makeVersion('9.7', 0, 'draft', [
@@ -631,38 +652,75 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
         `select public.accept_membership_policy_version(
                   $1, $2, 'witnessed_in_branch', 'Hardening Member',
                   null, $3, null, 'Kampala') as id`,
-        [fx.membershipId, target, fx.manager.profileId],
+        [transitionMember.membershipId, target, fx.manager.profileId],
       );
       expect(accepted.id).toBeTruthy();
 
       const moved = await queryOne<{ policy_version_id: string }>(
         `select policy_version_id from public.memberships where id = $1`,
-        [fx.membershipId],
+        [transitionMember.membershipId],
       );
-      expect(moved.policy_version_id).toBe(target);
+      expect(moved.policy_version_id).toBe(fx.inForceVersionId);
+
+      const batch = await queryOne<{ id: string }>(
+        `select public.begin_membership_policy_transition(
+          $1, public.business_date(), 'Verified transition regression') as id`,
+        [target],
+      );
+      const assignment = await queryOne<{ id: string }>(
+        'select public.transition_membership_to_policy($1, $2) as id',
+        [batch.id, transitionMember.membershipId],
+      );
+      const governing = await queryOne<{ id: string }>(
+        'select public.membership_governing_policy($1) as id',
+        [transitionMember.membershipId],
+      );
+      expect(governing.id).toBe(target);
+      const original = await queryOne<{ id: string }>(
+        'select policy_version_id as id from public.memberships where id = $1',
+        [transitionMember.membershipId],
+      );
+      expect(original.id).toBe(fx.inForceVersionId);
 
       const acceptances = await query<{ policy_version: string }>(
         `select policy_version from public.membership_terms_acceptances
           where membership_id = $1 order by accepted_at`,
-        [fx.membershipId],
+        [transitionMember.membershipId],
       );
       expect(acceptances.map((row) => row.policy_version)).toContain('9.7');
 
       const audited = await query<{ action: string }>(
         `select action from public.audit_log
-          where entity_id = $1 and action = 'membership.policy_reaccepted'`,
-        [fx.membershipId],
+          where entity_id = $1 and action = 'membership_policy_assignments.recorded'`,
+        [assignment.id],
       );
       expect(audited.length).toBe(1);
     } finally {
-      // Put the member back where the rest of the file expects them.
+      await query(
+        'alter table public.membership_policy_assignments disable trigger membership_policy_assignments_no_delete',
+      );
+      try {
+        await query(
+          'delete from public.membership_policy_assignments where membership_id = $1',
+          [transitionMember.membershipId],
+        );
+      } finally {
+        await query(
+          'alter table public.membership_policy_assignments enable trigger membership_policy_assignments_no_delete',
+        );
+      }
+      await query(
+        'delete from public.membership_policy_transitions where to_version_id = $1',
+        [target],
+      );
+      // The original policy was preserved throughout.
       await query(
         `alter table public.memberships disable trigger memberships_guard_transition`,
       );
       try {
         await query(
           `update public.memberships set policy_version_id = $2 where id = $1`,
-          [fx.membershipId, fx.inForceVersionId],
+          [transitionMember.membershipId, fx.inForceVersionId],
         );
       } finally {
         await query(
@@ -678,7 +736,7 @@ describeDb('moving a member onto new terms is a re-acceptance, not an update', (
       try {
         await query(
           `delete from public.membership_terms_acceptances where membership_id = $1`,
-          [fx.membershipId],
+          [transitionMember.membershipId],
         );
       } finally {
         await query(

@@ -57,6 +57,10 @@ const LINK_ROUTES = {
   expenses: ROUTES.expenses,
   reconciliation: ROUTES.reconciliation,
   finance: ROUTES.finance,
+  benefitClaims: ROUTES.benefitClaims,
+  benefitPayments: ROUTES.benefitPayments,
+  beneficiaries: ROUTES.beneficiaries,
+  meetings: ROUTES.meetings,
 } as const;
 
 export function NotificationList({

@@ -38,6 +38,9 @@ import { businessReferenceYear } from './datetime';
 
 /** Entity kinds that carry a reference number. */
 export const REFERENCE_SCOPES = [
+  'membership_policy_transition',
+  'meeting_fine',
+  'meeting_fine_payment',
   'client',
   'loan',
   'payment',
@@ -85,6 +88,9 @@ export type ReferenceScope = (typeof REFERENCE_SCOPES)[number];
  * rather than as a thing the business does.
  */
 export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = {
+  membership_policy_transition: 'Policy transitions',
+  meeting_fine: 'Meeting fines',
+  meeting_fine_payment: 'Fine payments',
   client: 'Clients',
   loan: 'Loans',
   payment: 'Payments',
@@ -121,6 +127,17 @@ export interface ReferenceFormat {
 export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   Record<ReferenceScope, ReferenceFormat>
 > = {
+  membership_policy_transition: {
+    scope: 'membership_policy_transition',
+    prefix: 'PT',
+    padding: 4,
+  },
+  meeting_fine: { scope: 'meeting_fine', prefix: 'MFN', padding: 5 },
+  meeting_fine_payment: {
+    scope: 'meeting_fine_payment',
+    prefix: 'FP',
+    padding: 5,
+  },
   client: { scope: 'client', prefix: 'CL', padding: 3 },
   loan: { scope: 'loan', prefix: 'LN', padding: 4 },
   payment: { scope: 'payment', prefix: 'PAY', padding: 4 },

@@ -151,7 +151,13 @@ export function MembershipPolicyPanel({ policy }: { readonly policy: MembershipP
                 {MEMBERSHIP_POLICY_STATUS_LABELS[policy.status]}
               </Badge>
               <span>
-                Effective from <DateValue value={policy.effectiveFrom} />
+                {policy.effectiveFrom === null ? (
+                  'Activation date awaiting authorization'
+                ) : (
+                  <>
+                    Effective from <DateValue value={policy.effectiveFrom} />
+                  </>
+                )}
               </span>
             </span>
           }
@@ -269,7 +275,9 @@ export function MembershipPolicyPanel({ policy }: { readonly policy: MembershipP
             {policy.medicalBenefitMinAdmissionDays === 1 ? 'day' : 'days'}
           </Row>
           <Row label="Medical support, annual limit">
-            {policy.medicalBenefitAnnualCap === null ? (
+            {policy.medicalBenefitCapMode === 'no_separate_cap' ? (
+              'No separate cap, by recorded decision'
+            ) : policy.medicalBenefitAnnualCap === null ? (
               <NotDecided />
             ) : (
               <Money amount={policy.medicalBenefitAnnualCap} />
@@ -285,7 +293,9 @@ export function MembershipPolicyPanel({ policy }: { readonly policy: MembershipP
             <Money amount={policy.memberBereavementBenefit} />
           </Row>
           <Row label="Waiting period before a first claim">
-            {policy.benefitWaitingPeriodDays === null ? (
+            {policy.benefitQualificationBasis === 'savings_qualifying_months' ? (
+              `${policy.savingsQualifyingMonths} qualifying savings months`
+            ) : policy.benefitWaitingPeriodDays === null ? (
               <NotDecided />
             ) : (
               `${String(policy.benefitWaitingPeriodDays)} days`

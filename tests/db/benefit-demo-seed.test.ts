@@ -294,27 +294,13 @@ describeDb('the TEST ONLY policy says so where a reader looks', () => {
     expect(policy.bereavement).toBe('200000');
   });
 
-  it('marks the relationships it treats as eligible, in the label', async () => {
-    const rows = await query<{
-      key: string;
-      label: string;
-      eligible: boolean | null;
-    }>(
-      `select key, label, condolence_eligible as eligible
-         from public.beneficiary_relationships order by sort_order`,
+  it('uses the official family vocabulary without demo overrides', async () => {
+    const rows = await query<{ key: string; eligible: boolean }>(
+      `select key, condolence_eligible as eligible
+         from public.beneficiary_relationships order by key`,
     );
-
     for (const row of rows) {
-      if (DEMO_CONDOLENCE_ELIGIBLE.includes(row.key)) {
-        expect(row.eligible, row.key).toBe(true);
-        // A flag a reader cannot see would be a decision made invisibly.
-        expect(row.label, row.key).toContain('TEST ONLY');
-      } else {
-        // Every other relationship stays undecided, which is what makes the
-        // held condolence claim below a real demonstration rather than a
-        // contrivance.
-        expect(row.eligible, row.key).toBeNull();
-      }
+      expect(row.eligible, row.key).toBe(DEMO_CONDOLENCE_ELIGIBLE.includes(row.key));
     }
   });
 });
@@ -444,7 +430,7 @@ describeDb('the ten claim scenarios land where they are meant to', () => {
     // rather than a default taken.
     expect(codes).toContain('medical_cap_exceeded');
     expect(codes).toContain('admission_measure_undecided');
-    expect(codes).toContain('relationship_eligibility_undecided');
+    expect(codes).toContain('next_of_kin_not_listed');
     expect(codes).toContain('membership_suspended_undecided');
   });
 

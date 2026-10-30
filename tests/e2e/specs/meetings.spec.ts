@@ -140,14 +140,14 @@ test.describe('a meeting that happened', () => {
         .first(),
     ).toBeVisible();
 
-    // Nothing in this system attaches a consequence to absence, because the
-    // client has not decided there is one. So no screen may imply a penalty.
+    // The authorized fine has its own reviewed workflow. Attendance must
+    // still not imply suspension or lost savings/benefit eligibility.
     //
     // Scoped to `main`, which is the page rather than the shell: the
     // navigation rail carries a "Penalties" report — a real feature of the
     // loan book — and an unscoped assertion would be testing the rail
     // instead of this screen.
-    for (const word of [/penalt/i, /fine/i, /sanction/i, /warning/i]) {
+    for (const word of [/attendance.*suspend/i, /attendance.*disqualif/i, /sanction/i]) {
       await expect(page.locator('main').getByText(word), String(word)).toHaveCount(0);
     }
   });

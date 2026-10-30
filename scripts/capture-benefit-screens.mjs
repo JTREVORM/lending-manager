@@ -71,6 +71,10 @@ const VIEWPORTS = [
  * explain a decision nobody has made.
  */
 const SCREENS = [
+  { name: 'policy-transitions', path: '/membership/policies/transitions' },
+  { name: 'policy-fines-register', path: '/meetings/fines' },
+  { name: 'policy-fine-receipts', path: `/meetings/fines/${fixtures.fines.unpaid}` },
+  { name: 'policy-loan-collections', path: `/loans/${fixtures.memberLoans.active}` },
   { name: 'benefits-dashboard', path: '/benefits' },
   { name: 'benefit-claim-register', path: '/benefits/claims' },
   { name: 'benefit-claim-register-assessed', path: '/benefits/claims?status=assessed' },

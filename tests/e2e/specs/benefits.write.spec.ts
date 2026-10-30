@@ -106,17 +106,18 @@ test.describe('approving and paying a benefit', () => {
 });
 
 // ===========================================================================
-test.describe('a held claim cannot be approved past its undecided rule', () => {
+test.describe('a held claim cannot be approved without its required evidence', () => {
   test.use({ storageState: stateFile('owner') });
 
   test('offers no approval, because nothing has been assessed', async ({ page }) => {
     await page.goto(`/benefits/claims/${fixtures.benefitClaims.held}`);
     await expectNoErrorBoundary(page);
 
-    // The claim is complete and checked and still cannot be assessed, so
-    // there is nothing to approve. The screen says which decision it waits
-    // on rather than offering a control that would refuse.
-    await expect(page.getByText(/Who counts as family is undecided/i)).toBeVisible();
+    // The claim has checked documents but lacks its required prior next-of-kin
+    // listing. There is no assessment to approve; the screen names that evidence.
+    await expect(
+      page.getByText(/The deceased was not listed as next of kin/i),
+    ).toBeVisible();
     await expect(
       page.getByRole('button', { name: /^Approve the assessed amount/ }),
     ).toHaveCount(0);

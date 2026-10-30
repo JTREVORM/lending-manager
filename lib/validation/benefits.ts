@@ -301,6 +301,7 @@ export type MedicalClaimInput = z.infer<typeof medicalClaimSchema>;
  */
 export const condolenceClaimSchema = z.object({
   membershipId: uuidSchema,
+  deceasedBeneficiaryId: optionalField(uuidSchema),
   deceasedName: fullNameSchema,
   deceasedRelationship: z
     .string()

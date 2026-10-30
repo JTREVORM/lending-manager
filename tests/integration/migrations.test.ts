@@ -389,6 +389,22 @@ describe('column type discipline', () => {
      * a table that simply forgot it.
      */
     const NO_UPDATED_AT = new Set([
+      // Polytos policy update. Three more append-only tables, for the reason
+      // every one above is: UPDATE is refused by trigger and the privilege is
+      // not granted, so an `updated_at` would be a timestamp that can never
+      // advance.
+      //
+      //   - a governing-policy assignment is the record that terms changed on
+      //     a date. If it could be edited, "what governed this member in
+      //     November" would be answerable differently in December, which is
+      //     the one thing the whole transition design exists to prevent;
+      //   - a carry-forward says an unpaid instalment moved onto a later
+      //     month's list. Editing one would rewrite a collection history;
+      //   - a death confirmation is another member's statement. It is closed
+      //     entirely once the claim is approved.
+      'membership_policy_assignments',
+      'loan_installment_carry_forwards',
+      'benefit_death_confirmations',
       'audit_log',
       'user_roles',
       'role_permissions',
@@ -732,6 +748,18 @@ describe('types stay in step with the schema', () => {
 
     // Trigger functions are not callable over the API and are not generated.
     const TRIGGER_FUNCTIONS = new Set([
+      // Polytos business-policy update. Four guards, three numbering helpers
+      // and two notification hooks, all called by the database.
+      'membership_policy_terms_guard',
+      'membership_policy_transitions_assign_number',
+      'benefit_death_confirmations_guard',
+      'meeting_absence_notices_guard',
+      'meeting_fines_guard',
+      'meeting_fines_assign_number',
+      'meeting_fine_payments_guard',
+      'meeting_fine_payments_assign_number',
+      'notify_absence_notice_pending',
+      'notify_meeting_fine_assessed',
       'set_updated_at',
       'reject_mutation',
       'profiles_guard_privileged_columns',

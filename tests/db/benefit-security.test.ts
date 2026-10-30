@@ -16,6 +16,7 @@ import {
   makeVerifiedBeneficiary,
   putEvidenceObject,
   requiredKindsFor,
+  recordDeathConfirmations,
   type BenefitMember,
 } from '../helpers/benefits';
 import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
@@ -592,6 +593,7 @@ describeDb('the sensitive-data boundary on payments', () => {
       await asUserCommitted(fx.secretary, [
         { sql: `select public.submit_benefit_claim($1) as id`, params: [claimId] },
       ]);
+      await recordDeathConfirmations(claimId, fx.policyId, fx.secretary);
       for (const kind of await requiredKindsFor('member_bereavement')) {
         await attachVerifiedDocument(
           claimId,

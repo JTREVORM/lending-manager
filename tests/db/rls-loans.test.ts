@@ -531,6 +531,7 @@ describeDb('loan row level security', () => {
         'loan_collateral:SELECT',
         'loan_collateral:UPDATE',
         'loan_collateral_register:SELECT',
+        'loan_collection_schedule:SELECT',
         'loan_delinquency:SELECT',
         // Phase 13. The evidence filed with an application. Writable, unlike
         // every snapshot above it, because a document is part of the draft a
@@ -548,6 +549,7 @@ describeDb('loan row level security', () => {
         'loan_guarantors:SELECT',
         'loan_guarantors:UPDATE',
         'loan_identity_snapshots:SELECT',
+        'loan_installment_carry_forwards:SELECT',
         'loan_installment_coverage:SELECT',
         'loan_installments:SELECT',
         'loan_obligations:SELECT',
@@ -677,6 +679,7 @@ describeDb('loan row level security', () => {
         // Phase 5 adds two more loan tables to this prefix, and Phase 6 a
         // third. SELECT only: none of them has a write policy or a write
         // grant, because only the trusted functions write them.
+        'loan_installment_carry_forwards:SELECT',
         'loan_installments:SELECT',
         'loan_payments:SELECT',
         // Phase 7 adds a fourth, on the same terms.

@@ -361,6 +361,7 @@ async function openClaim(payload: {
   readonly deceasedName?: string | null;
   readonly deceasedRelationship?: string | null;
   readonly beneficiaryId?: string | null;
+  readonly deceasedBeneficiaryId?: string | null;
 }): Promise<BenefitActionResult> {
   const supabase = await createSupabaseServerClient();
 
@@ -375,6 +376,7 @@ async function openClaim(payload: {
     p_deceased_name: payload.deceasedName ?? null,
     p_deceased_relationship: payload.deceasedRelationship ?? null,
     p_beneficiary_id: payload.beneficiaryId ?? null,
+    p_deceased_beneficiary_id: payload.deceasedBeneficiaryId ?? null,
   });
 
   if (error !== null) {
@@ -464,6 +466,7 @@ export async function openCondolenceClaimAction(
 
   const parsed = parseSafely(condolenceClaimSchema, {
     membershipId: formData.get('membershipId'),
+    deceasedBeneficiaryId: formData.get('deceasedBeneficiaryId'),
     deceasedName: formData.get('deceasedName'),
     deceasedRelationship: formData.get('deceasedRelationship'),
     dateOfDeath: formData.get('dateOfDeath'),
@@ -480,6 +483,7 @@ export async function openCondolenceClaimAction(
   return openClaim({
     membershipId: parsed.data.membershipId,
     claimType: 'family_condolence',
+    deceasedBeneficiaryId: parsed.data.deceasedBeneficiaryId,
     eventDate: parsed.data.dateOfDeath,
     deceasedName: parsed.data.deceasedName,
     deceasedRelationship: parsed.data.deceasedRelationship,

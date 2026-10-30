@@ -10,6 +10,8 @@ import { fromDatabaseBps, toBps, type BasisPoints } from '@/lib/domain/rate';
 import {
   isMembershipPolicyStatus,
   isMembershipStatus,
+  type MedicalCapMode,
+  type BenefitQualificationBasis,
   type MemberInterestBasis,
   type MemberInterestMethod,
   type MembershipPolicyStatus,
@@ -112,10 +114,14 @@ export interface MembershipStatusEvent {
  * `docs/POLYTOS-MEMBERSHIP-POLICY-DECISIONS.md`.
  */
 export interface MembershipPolicy {
+  readonly medicalBenefitCapMode?: MedicalCapMode | null;
+  readonly benefitQualificationBasis?: BenefitQualificationBasis | null;
+  readonly medicalBenefitYearBasis?: 'calendar_year' | 'enrolment_anniversary' | null;
+  readonly deathConfirmationsRequired?: number | null;
   readonly id: string;
   readonly version: string;
   readonly title: string;
-  readonly effectiveFrom: string;
+  readonly effectiveFrom: string | null;
   readonly status: MembershipPolicyStatus;
 
   readonly registrationFee: UgxAmount;
@@ -417,6 +423,7 @@ export async function listMembershipHistory(
 }
 
 const POLICY_COLUMNS =
+  'medical_benefit_cap_mode, benefit_qualification_basis, medical_benefit_year_basis, death_confirmations_required, ' +
   'id, version, title, effective_from, status, registration_fee, ' +
   'monthly_savings_minimum, savings_qualifying_months, ' +
   'member_loan_interest_rate_bps, member_loan_max_term_months, ' +
@@ -433,10 +440,14 @@ const POLICY_COLUMNS =
   'is_financially_enabled, notes';
 
 interface PolicyRow {
+  medical_benefit_cap_mode: MedicalCapMode | null;
+  benefit_qualification_basis: BenefitQualificationBasis | null;
+  medical_benefit_year_basis: 'calendar_year' | 'enrolment_anniversary' | null;
+  death_confirmations_required: number | null;
   id: string;
   version: string;
   title: string;
-  effective_from: string;
+  effective_from: string | null;
   status: string;
   registration_fee: number | string;
   monthly_savings_minimum: number | string;
@@ -490,6 +501,10 @@ function toPolicy(row: PolicyRow): MembershipPolicy {
     id: row.id,
     version: row.version,
     title: row.title,
+    medicalBenefitCapMode: row.medical_benefit_cap_mode,
+    benefitQualificationBasis: row.benefit_qualification_basis,
+    medicalBenefitYearBasis: row.medical_benefit_year_basis,
+    deathConfirmationsRequired: row.death_confirmations_required,
     effectiveFrom: row.effective_from,
     status: isMembershipPolicyStatus(row.status) ? row.status : 'draft',
 
