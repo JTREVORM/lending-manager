@@ -116,6 +116,14 @@ The verifier also preserves original policy terms/approvals and historical audit
 Legacy immutable snapshots remain unchanged: two new mandatory evidence CHECKs
 are NOT VALID for historical rows while enforcing future inserts and updates.
 
+## Build reproducibility
+
+The production-build check exposed a Next.js Google Fonts URL parser failure.
+Inter is now packaged as an unmodified local WOFF2 from its upstream project,
+with the SIL Open Font License and source blob recorded beside the layout.
+The family, 300–900 weights, CSS variable, swap behavior and fallback chain are
+preserved. Builds no longer need a Google Fonts request.
+
 ## Verification and release procedure
 
 Use an isolated local PostgreSQL cluster; never Supabase Primary or hosted
