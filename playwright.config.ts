@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 
-import { assertTestBrowserUrl, assertTestDatabaseUrl } from './tests/helpers/test-targets';
+import {
+  assertTestBrowserUrl,
+  assertTestDatabaseUrl,
+} from './tests/helpers/test-targets';
 
 /**
  * The browser tests.
