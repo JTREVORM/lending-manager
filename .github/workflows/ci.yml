@@ -77,12 +77,11 @@ jobs:
           fi
           echo "No committed secrets found."
 
-      - name: Production dependency audit
-        # Production dependencies must be clean. Dev-only advisories do not fail
-        # the build but are printed for visibility.
+      - name: Dependency audit
+        # Reject high-severity advisories in production and development tools.
         run: |
           npm audit --omit=dev --audit-level=high
-          npm audit || true
+          npm audit --audit-level=high
 
       - name: Production build
         run: npm run build

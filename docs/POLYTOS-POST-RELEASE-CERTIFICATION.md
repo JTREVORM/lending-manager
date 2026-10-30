@@ -134,7 +134,10 @@ record on PR #16. These are not claims that hosted write workflows were executed
   Deployment-fetch connector access also failed; public GET evidence was
   obtained from GitHub Actions without credentials.
 - Authoring environment startup failed and its later restart remained pending.
-  Execution evidence comes from GitHub Actions, not claimed local execution.
+  Application and database execution evidence comes from GitHub Actions.
+  A credential-free, nonpersistent Vercel Sandbox was subsequently used for
+  dependency resolution, clean-install/audit checks and 2,610 passing unit/
+  integration tests (six pre-build bundle assertions skipped); it exposed no ports.
   CI uses disposable loopback PostgreSQL and real PostgREST; the Auth service
   alone is shimmed.
 - Interim lint/format failures were corrected without weakening tests.
@@ -181,6 +184,15 @@ production URL/key pairing for this exact LENDING MANAGER project, supply an
 active publishable key, and perform a separately authorized deployment before
 repeating health and authenticated smoke checks. Do not replace it with a
 privileged key or weaken the health check.
+
+**CERT-04 — Development dependency advisories (high, fixed in the PR).**
+The full dependency audit reported high-severity advisories for dev-only
+`undici 8.11.2` and `vite 8.3.1`. Production-only audit reported zero.
+A compatible lockfile refresh resolves them to `undici 8.12.3` and
+`vite 8.3.5`, with required transitive patch updates. A clean install and full
+audit in the isolated sandbox reported zero vulnerabilities. CI now rejects
+high-severity development findings as well as production findings; the full
+regression matrix remains required for the updated lockfile.
 
 ## Security and deployment findings
 
