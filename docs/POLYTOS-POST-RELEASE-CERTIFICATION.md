@@ -11,6 +11,21 @@ Review: [PR #16](https://github.com/JTREVORM/lending-manager/pull/16), left unme
 Final check conclusions and the exact tested revision are recorded in the PR's
 verification record; do not substitute an earlier successful run for that revision.
 
+## Connectivity diagnosis follow-up
+
+**The root-route probe defect is now reproduced with known active public keys.**
+The production 503 remains unresolved, but replacing a key is not established
+as necessary. A valid publishable key reaches Auth (200) and PostgREST table
+permissions (42501), while both active public key types are rejected at the
+REST root. The original key-replacement inference below is superseded by this
+controlled result.
+
+See the [connectivity remediation plan](POLYTOS-CONNECTIVITY-REMEDIATION.md)
+for the executed request matrix, configuration metadata, proposed no-data
+probe repair, conditional key replacement procedure and mandatory runtime
+gates. No probe code, migration, credential or deployment was changed in this
+follow-up. Real login, refresh and financial runtime verification remain pending.
+
 ## Released baseline and architecture
 
 - Production/default branch: `claude/intelligent-knuth-2r8mpw`.
@@ -174,16 +189,22 @@ while legacy-anon compatibility passed. Synthetic regression keys contain no
 real credential. This finding does not
 prove a privileged key is currently deployed.
 
-**CERT-03 — Production Data API readiness failure (blocking, unresolved).**
-A syntactically acceptable build and READY deployment are insufficient.
-The production health probe reproducibly fails upstream key admission.
-Vercel metadata contains the expected variable names, but the configured
-publishable variable is stored as a sensitive, unreadable value. No environment
-value was changed or redeployed. An authorized operator must verify the
-production URL/key pairing for this exact LENDING MANAGER project, supply an
-active publishable key, and perform a separately authorized deployment before
-repeating health and authenticated smoke checks. Do not replace it with a
-privileged key or weaken the health check.
+**CERT-03 — Production readiness probe contract (blocking, unresolved).**
+The production health route calls the REST root using a public key. Follow-up
+controls reproduce its 401 key-type rejection with both active publishable
+and legacy anon keys. The same active publishable key reaches Auth settings
+(200) and table-level PostgreSQL permission checks (42501). The root probe
+therefore cannot distinguish valid low-privilege keys from broken configuration
+on this hosted project. The production variable remains unreadable and has
+not been verified equal to the active key. Credential replacement alone is
+not a demonstrated remedy.
+
+The [remediation plan](POLYTOS-CONNECTIVITY-REMEDIATION.md) supersedes the earlier
+recommendation to supply a replacement key. It proposes a narrowly scoped
+no-data readiness RPC and an authorized source/configuration release, followed
+by real runtime checks. It does not implement or authorize a migration.
+Do not use the privileged key, broaden financial grants or mark arbitrary
+authorization failures healthy. Production remains 503 and certification blocked.
 
 **CERT-04 — Development dependency advisories (high, fixed in the PR).**
 The full dependency audit reported high-severity advisories for dev-only
@@ -265,7 +286,7 @@ reported as the final fixture or as hosted production totals.
 
 ## Remaining certification gates
 
-1. Resolve CERT-03 through authorized production configuration/release work,
+1. Resolve CERT-03 through the reviewed probe repair and authorized release work,
    then obtain successful readiness and real authenticated session evidence.
 2. Require the final PR's checks/build, database and browser jobs to pass.
    Keep the public production failure visible until it is actually resolved.
