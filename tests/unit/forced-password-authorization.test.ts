@@ -3,7 +3,7 @@ const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('react', () => ({ cache: (fn: unknown) => fn }));
 vi.mock('@/lib/supabase/server', () => ({
-  createSupabaseServerClient: async () => ({ rpc }),
+  createSupabaseServerClient: () => Promise.resolve({ rpc }),
 }));
 import {
   getAuthContext,
@@ -49,9 +49,22 @@ describe('forced-password server authorization', () => {
     ).rejects.toThrow(/password change/i);
   });
   it('preserves legitimate permissions after trusted confirmation', async () => {
-    const result = await rpc();
-    result.data[0].must_change_password = false;
-    rpc.mockResolvedValue(result);
+    rpc.mockResolvedValue({
+      error: null,
+      data: [
+        {
+          outcome: 'ok',
+          auth_user_id: 'auth',
+          profile_id: 'profile',
+          full_name: 'Isolated',
+          phone: '+256700000001',
+          email: null,
+          status: 'active',
+          must_change_password: false,
+          role_keys: ['owner_admin'],
+        },
+      ],
+    });
     expect((await requirePermission('loans:view')).roles).toContain('owner_admin');
   });
 });

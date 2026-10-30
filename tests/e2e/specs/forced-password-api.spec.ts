@@ -1,12 +1,21 @@
 import { randomInt, randomUUID, createHmac, scryptSync } from 'node:crypto';
 import { Client } from 'pg';
 import { test, expect } from '@playwright/test';
+import { z } from 'zod';
 
 import { assertTestDatabaseUrl } from '../../helpers/test-targets';
 import { expectNoErrorBoundary, signOut } from './fixtures';
 
 const password = 'Isolated-Gate-Only-43!';
 const api = 'http://127.0.0.1:3001';
+const bootstrapSchema = z.array(
+  z.object({
+    outcome: z.string(),
+    profile_id: z.string().nullable(),
+    must_change_password: z.boolean().nullable(),
+    role_keys: z.array(z.string()),
+  }),
+);
 
 async function database() {
   const url = process.env.E2E_DATABASE_URL;
@@ -77,7 +86,9 @@ for (const role of ['owner_admin', 'manager', 'secretary_treasurer']) {
       const headers = { Authorization: 'Bearer ' + user.token };
       const before = await request.get(api + '/loans?select=id', { headers });
       expect(before.status()).toBe(200);
-      expect((await before.json()).length).toBeGreaterThan(0);
+      expect(
+        z.array(z.object({ id: z.string() })).parse(await before.json()).length,
+      ).toBeGreaterThan(0);
       await force(user.profileId);
       for (const path of [
         '/loans?select=id',
@@ -89,14 +100,16 @@ for (const role of ['owner_admin', 'manager', 'secretary_treasurer']) {
       ]) {
         const denied = await request.get(api + path, { headers });
         expect(denied.status(), path).toBe(403);
-        expect((await denied.json()).code).toBe('42501');
+        expect(z.object({ code: z.string() }).parse(await denied.json()).code).toBe(
+          '42501',
+        );
       }
       const bootstrap = await request.post(api + '/rpc/current_session_context', {
         headers,
         data: {},
       });
       expect(bootstrap.status()).toBe(200);
-      const [context] = await bootstrap.json();
+      const context = bootstrapSchema.parse(await bootstrap.json())[0]!;
       expect(context).toMatchObject({
         outcome: 'ok',
         profile_id: user.profileId,
@@ -120,11 +133,11 @@ for (const role of ['owner_admin', 'manager', 'secretary_treasurer']) {
       expect(write.status()).toBe(403);
       const db = await database();
       try {
-        const result = await db.query(
+        const result = await db.query<{ must_change_password: boolean }>(
           'select must_change_password from public.profiles where id=$1',
           [user.profileId],
         );
-        expect(result.rows[0].must_change_password).toBe(true);
+        expect(result.rows[0]!.must_change_password).toBe(true);
       } finally {
         await db.end();
       }
@@ -146,7 +159,7 @@ for (const status of ['inactive', 'suspended']) {
         data: {},
       });
       expect(bootstrap.status()).toBe(200);
-      const [context] = await bootstrap.json();
+      const context = bootstrapSchema.parse(await bootstrap.json())[0]!;
       expect(context).toMatchObject({
         outcome: 'no_active_profile',
         profile_id: null,

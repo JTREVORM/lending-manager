@@ -136,6 +136,14 @@ executed during this work.
   This does NOT establish hosted GoTrue session revocation semantics.
 - TypeScript typecheck, ESLint, diff whitespace and financial arithmetic scan
   executed successfully; the arithmetic scan found no hazards in 71 files.
+- The four isolated demo-seed regression projects passed 82 tests in total.
+  The isolated Supabase security advisor reported the existing
+  `company_identity` definer-view warning (ERROR classification), not a new
+  financial-data finding. This is the documented non-financial branding
+  projection; no production warning was suppressed or configuration changed.
+- The first security CI run caught strict typing errors in new test fixtures
+  and JSON handling. These were corrected without weakening lint rules or
+  changing authorization assertions; that failed run is not labelled PASS.
 - The full application/database/browser workflows are required on the exact
   security-PR head. Consult its GitHub Checks and PR execution summary for
   completed full-suite outcomes; earlier production/PR #17 passes do not
