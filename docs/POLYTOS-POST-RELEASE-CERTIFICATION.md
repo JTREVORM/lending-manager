@@ -3,13 +3,15 @@
 Certification date: 30 October 2026 (Africa/Kampala).
 
 **Decision: PARTIALLY VERIFIED. Production operational certification is blocked
-by unexecuted mandatory hosted authentication and session tests.**
+by remaining session/role tests and an unresolved forced-change authorization
+boundary review. Owner basic access has USER-REPORTED manual evidence.**
 
 PR #16 is merged and its exact merge revision is deployed to Production. Public
 health and direct Supabase readiness now pass. Read-only production finances
-match the certified baseline. No approved existing hosted test-account source
-was available during this verification; hosted login/session/role tests are
-BLOCKED, not PASS.
+match the certified baseline. The owner has now reported successful live login,
+dashboard loading, browser-refresh persistence, and normal navigation. These
+are USER-REPORTED manual results. Remaining checks are explicitly PENDING or
+BLOCKED below; no credential sharing is requested.
 
 ## Release identity and rollback
 
@@ -188,26 +190,51 @@ profiles without an Auth login; its direct Auth-row creation is restricted
 to local targets. Demo profile existence therefore supplies no hosted login
 credential or approval.
 
-The project owner confirmed that no verified secure source for approved
-hosted test-account credentials has been provided. None was identified in
-the reviewed sources. **Hosted authentication and session tests remain
-BLOCKED.** The mandatory test list below remains outstanding in full.
-No account creation, reset, password change, signup, token issuance, or
-provisioning/seeding script was performed during this inspection.
+At the earlier inventory review no approved credential source was available.
+The subsequent Owner/Admin manual report below supersedes the blanket statement
+that basic Owner access was untested. The agent has not obtained credentials
+or operated any hosted user session.
 
-The following mandatory tests are **BLOCKED** because access to approved
-existing hosted test accounts was unavailable:
+### Owner/Admin manual evidence supplied by the user
 
-- Successful hosted Supabase Auth login and verified identity/profile.
-- Persistence across authenticated navigation and browser refresh.
-- Authenticated session-cookie attributes and handling.
-- Token renewal, expiry, logout, and session invalidation.
-- Authenticated role-based and branch-based access.
-- RLS behavior using actual hosted user sessions.
+Reported on 30 October 2026 (Africa/Kampala). Exact execution times, browser
+version, elapsed session duration, and specific business workflows were not
+provided.
 
-No accounts were created, modified, reset, or deleted. No guessed credentials
-or isolated-harness accounts were used against production. Anonymous route
-checks and database catalog checks do not substitute for these tests.
+| Check                                                             | Result                                                  | Evidence provenance  |
+| ----------------------------------------------------------------- | ------------------------------------------------------- | -------------------- |
+| Login with the existing Owner/Admin account                       | PASS, as reported                                       | USER-REPORTED MANUAL |
+| Owner/Admin dashboard loads                                       | PASS, as reported                                       | USER-REPORTED MANUAL |
+| Browser refresh does not log the user out                         | PASS, as reported; short-term persistence               | USER-REPORTED MANUAL |
+| Navigation and the functionality personally checked work normally | PASS only for the unspecified checks actually performed | USER-REPORTED MANUAL |
+
+These observations are accepted as user-reported manual evidence. They are not
+independently automated hosted Auth tests and do not certify every business
+workflow, token renewal after expiry, logout invalidation, secure-cookie
+attributes, other roles, or cross-user/branch isolation.
+
+### Remaining manual and blocked coverage
+
+The practical steps, expected outcomes, safe evidence format, and ten test IDs
+are in [the Phase 5 manual checklist](POLYTOS-PHASE-5-MANUAL-CHECKLIST.md).
+
+| ID    | Remaining check                                                                                                       | Current status                                                                                    |
+| ----- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| P5-01 | Explicit own identity/profile match and named permitted detail routes                                                 | PENDING MANUAL; basic Owner login/dashboard/navigation already user-reported                      |
+| P5-02 | Logout, same-browser tabs, Back/hard-refresh and fresh protected GET denial                                           | PENDING MANUAL                                                                                    |
+| P5-03 | Fresh private-window protected-route and safe return-path checks                                                      | PENDING MANUAL; earlier independent anonymous GET results remain recorded                         |
+| P5-04 | Production cookie attributes/chunks, clearing on logout and authenticated no-store responses                          | PENDING MANUAL                                                                                    |
+| P5-05 | Renewal past the actual JWT lifetime, including concurrent-tab navigation                                             | PENDING MANUAL; lifetime/config evidence needed                                                   |
+| P5-06 | Natural inactivity/time-box expiry where configured, and global-logout refresh invalidation after existing JWT expiry | PENDING MANUAL; configuration-dependent, never assumed from browser reload                        |
+| P5-07 | Manager hosted login, permitted reads and Owner-only route/control denial                                             | BLOCKED normal flow: existing Manager requires password change                                    |
+| P5-08 | Secretary/Treasurer hosted login/session and role/identity/notification restrictions                                  | PENDING with the existing normal profile; BLOCKED normal flow for the other forced-change profile |
+| P5-09 | Borrower own-record/other-person denial and meaningful cross-branch denial                                            | BLOCKED: no Auth-linked client role, one branch and no branch-assigned linked staff               |
+| P5-10 | Hosted-user/API RLS and private-document checks; negative account-state coverage; forced-change boundary review       | PARTIALLY CHECKED at database-only level; hosted session checks and security review remain open   |
+
+The agent will not request passwords, access tokens, or session-cookie values.
+Account holders can report manual outcomes without sharing credentials. No
+independent automated hosted login was performed. No account creation, reset,
+password change, role change, or branch assignment is authorized here.
 
 ## Database permissions and security
 
@@ -245,10 +272,109 @@ Outstanding hardening/governance findings remain:
 No database grant, RLS policy, credential, environment variable, or repository
 protection setting was changed to silence these findings. The readiness fix,
 public-key validator, test-target isolation, and dependency audit changes are
-the reviewed source in PR #16. No new critical exploit was established by
-these checks; this is not a substitute for blocked hosted user tests.
+the reviewed source in PR #16. The current review identifies the forced-change data-layer authorization gap
+below. Severity and remediation disposition remain unresolved; complete
+negative-state authorization coverage cannot be certified.
+
+### Phase 5 independent read-only permission review
+
+The deployed source revision remains
+`b7f2aa700e1f9ecc54a9f5f833e440aae293a5be`. TypeScript AST parsing extracted
+the literal security-test allowlists and role matrix without executing
+repository code. The live catalog was compared with those reviewed contracts.
+
+- All **80** public tables have RLS enabled; anon has no SELECT, INSERT,
+  UPDATE, or DELETE privilege on any of these physical tables.
+- All **236** role-capability pairs exactly match
+  `lib/permissions/permissions.ts`; all **126** public table/command policy
+  entries match `tests/db/security.test.ts`.
+- Every public policy is scoped to authenticated. Predicate-shape checks
+  reproduce the source suite's capability/self/parent-delegation requirements;
+  no exception was found. Only the six documented vocabulary tables have an
+  unconditional read predicate. This is catalog/static evidence, not exhaustive
+  dynamic proof of every predicate's semantics.
+- All **275** SECURITY DEFINER names and **150** authenticated-executable
+  function names exactly match the source allowlists. Of **313** public
+  functions, the only anon-executable function is `polytos_readiness`.
+  Every function pins an empty search path, and no definer grants EXECUTE
+  to PUBLIC.
+- All **15** storage policies are authenticated-only and include bucket and
+  capability/self predicates. All **six** buckets are private and exclude SVG.
+  No object download, upload, removal, or sharing-link creation was performed.
+- All **48** expected source views are present. The existing hosted
+  `__gate_probe` is an additional 49th view. It has seven additional
+  authenticated privileges, and the same broad grants to anon, including
+  non-SELECT privileges. Its inspected definition is only `SELECT 1 AS one`,
+  its updatable mask is zero, and it has no custom trigger or rewrite rule.
+  This is unresolved schema/grant drift, not a claim of financial exposure.
+  No grant was revoked or view altered. Review disposition is still required.
+- No public/storage policy expression references user-editable
+  `user_metadata` or `raw_user_meta_data`.
+
+### Executed database-only role and RLS checks
+
+Six **REPEATABLE READ, READ ONLY** transactions used transaction-local SQL
+role/subject context and ended with ROLLBACK. Four contexts selected the
+already linked Owner, Manager, and two Secretary/Treasurer subjects internally;
+the other contexts had no subject or a non-existent unlinked subject. No user
+identifier, token, password, or raw financial row was exported. These are
+**INDEPENDENT DATABASE-ONLY** checks, not hosted Auth logins, signed-JWT
+verification, or evidence that the application's login guard was exercised.
+
+Each context ran as the non-bypass `authenticated` SQL role with RLS active
+and checked **107** capabilities: the 106 defined capabilities plus an unknown
+capability that must be denied. All **642** evaluations matched the applicable
+role union. SELECT counts covered all **76** public tables with authenticated
+SELECT grants, for **456** table/context count checks.
+
+Observed distinctions include:
+
+- Owner can read audit rows; Manager and both Secretary/Treasurer contexts
+  see zero audit rows.
+- Each Secretary/Treasurer context sees only its own profile and role row,
+  and zero client identity, guarantor identity, or loan identity snapshot rows.
+- The no-subject context returns `no_session`; the unlinked-subject context
+  returns `no_active_profile`. Both have no capabilities and no sensitive
+  rows. The seven readable vocabularies include active repayment frequencies.
+- All linked staff profiles have NULL branch scope, which the reviewed helper
+  treats as global. The single existing branch cannot demonstrate cross-branch
+  denial. No linked client role exists for a hosted borrower test.
+- Zero-row benefit/meeting/document cases do not establish exercised data
+  isolation for absent records. No mutating RPC or INSERT/UPDATE/DELETE was run.
+
+**OPEN AUTHORIZATION-BOUNDARY FINDING:** the existing Manager and one
+Secretary/Treasurer profile have `must_change_password = true`, yet
+`current_session_context()` returns `ok`, normal role capabilities remain
+available, and financial SELECTs return rows in their SQL-context checks.
+The inspected `current_profile_id()` gates on active status, not this flag.
+The application has a separate forced-change page guard; these results do not
+exercise that guard or a hosted Data API request, and no financial write was
+attempted. They do establish that the database authorization primitives do not
+enforce the forced-change restriction. Do not mark full forced-change data-layer
+isolation PASS. Explicit security review and an agreed enforcement decision
+are required before closing that case; any remediation needs separately
+reviewed work within an authorized scope. No account or production permission
+was changed during this audit.
+
+Suspended/inactive/no-role hosted session behavior, private object retrieval,
+and signed-session API isolation remain unexecuted where existing approved
+principals/data are unavailable. Production write-denial and transactional
+separation-of-duty execution evidence remains the isolated CI suite and
+matching catalog contracts; no production financial write was used as a test.
 
 ## Read-only financial reconciliation
+
+The Phase 5 preservation snapshot at **19:15:37 EAT** again found 35 loans,
+470 payments, savings = GL 2100 at UGX 1,010,000, principal = GL 1200 at
+UGX 8,738,693, debit = credit at UGX 89,649,530, and zero unbalanced journals.
+Policy 2.0 remained draft, unapproved, undated, unassigned, and disabled.
+
+Audit count is now 1,670 rather than the earlier 1,668. A bounded read-only
+query after the 18:49:47 EAT snapshot found one `auth.signed_in` and one
+`auth.signed_out` event, with no financial event in that window. This does
+not independently prove the user's browser scenarios or certify logout.
+The older all-31 fingerprint comparison below remains point-in-time historical
+evidence, not a claim that current authentication audit history is unchanged.
 
 A follow-up **REPEATABLE READ, READ ONLY** snapshot at **18:49:47 EAT**
 again matched all 31 certified table counts and fingerprints. It reconfirmed
@@ -304,6 +430,17 @@ Policy result: **PASS**. No policy activation, fines, benefit processing,
 member transition, or existing loan-schedule change was performed. Medical
 benefit ceiling and profit distribution remain management decisions.
 
+## Documentation and CI verification
+
+The report and manual checklist are documentation-only changes on draft
+[PR #17](https://github.com/JTREVORM/lending-manager/pull/17). Pinned Prettier
+3.9.9 checks, local Markdown link/heading checks, evidence-label checks, and
+restriction checks are required before the documentation commit. The repository's
+existing CI jobs run on the resulting PR head; their exact outcomes are reported
+in the PR Checks tab and release-verification response. Earlier CI passes are
+not substituted for the new documentation revision. No workflow or required
+check is bypassed, and this PR remains draft and unmerged.
+
 ## Certification decision and remaining work
 
 **PARTIALLY VERIFIED; NOT OPERATIONALLY CERTIFIED.**
@@ -311,11 +448,16 @@ benefit ceiling and profit distribution remain management decisions.
 Merge, exact deployment identity, public health/readiness, anonymous route
 protection, catalog security checks, read-only finance reconciliation, and
 Policy 2.0 preservation have execution evidence. Post-merge CI is recorded
-above. Mandatory real hosted authentication/session/role tests remain blocked.
+above. Basic Owner access now has USER-REPORTED manual evidence. The ten
+remaining checklist groups above identify PENDING MANUAL, BLOCKED, and
+partially checked database-only cases. The forced-change data-layer boundary
+finding and the existing probe-view grant drift require explicit review.
 
-Complete those tests using approved existing accounts through a secure access
-path, record the actual outcomes, and reassess final certification. Do not
-mark them PASS from local Auth-shim results.
+Complete the applicable manual session checks privately with existing accounts,
+record only sanitized observations, and resolve the blocked role/branch/client
+coverage and security-review items before final Phase 5 certification. No
+credential sharing, account change, production write test, migration, merge,
+or deployment is authorized by this checklist.
 
 This report is submitted in a separate documentation PR. That PR is not merged
 and does not authorize another production deployment. Its source branch has
