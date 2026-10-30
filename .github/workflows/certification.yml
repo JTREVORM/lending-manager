@@ -3,6 +3,9 @@ name: Production read-only certification
 on:
   push:
     branches: ['certification/polytos-post-release-2026-10-30']
+    paths:
+      - 'scripts/certify-production-readonly.mjs'
+      - '.github/workflows/certification.yml'
 
 permissions:
   contents: read

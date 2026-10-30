@@ -69,6 +69,37 @@ describe('getPublicEnv', () => {
     expect(() => getPublicEnv()).toThrow(/expose it to every browser/);
   });
 
+
+  it.each([
+    'not-an-api-key',
+    'sb_publishable_',
+    ' sb_secret_example_for_test',
+    'sb_publishable_example with spaces',
+    [
+      'eyJhbGciOiJIUzI1NiJ9',
+      btoa(JSON.stringify({ role: 'service_role' })).replace(/=+$/, ''),
+      'test_signature',
+    ].join('.'),
+  ])('refuses an invalid or privileged public key without echoing it', (key) => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abcdefgh.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = key;
+    const result = inspectPublicEnv();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.problems.join(' ')).not.toContain(key);
+    }
+  });
+
+  it('preserves support for legacy anon keys', () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abcdefgh.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = [
+      'eyJhbGciOiJIUzI1NiJ9',
+      btoa(JSON.stringify({ role: 'anon' })).replace(/=+$/, ''),
+      'test_signature',
+    ].join('.');
+    expect(inspectPublicEnv().ok).toBe(true);
+  });
+
   it('requires https, so credentials are never sent in clear text', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://abcdefgh.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_abc123';
