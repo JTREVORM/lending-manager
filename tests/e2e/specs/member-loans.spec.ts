@@ -262,7 +262,7 @@ test.describe('the eligibility assessment', () => {
     // Six of six, and the arm of the rule this policy version chose, said out
     // loud — because which arm applies is still an open question elsewhere in
     // the programme and a reader needs to know which one they are looking at.
-    await expect(page.getByText('6 of 6')).toBeVisible();
+    await expect(page.getByText('6 of 6', { exact: true })).toBeVisible();
 
     // The multiplier restated as a percentage, from the manifest. 15,000bp is
     // 150%, and the panel says so rather than printing a basis-point figure

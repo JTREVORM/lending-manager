@@ -106,7 +106,7 @@ test.describe('approving and paying a benefit', () => {
 });
 
 // ===========================================================================
-test.describe('a held claim cannot be approved past its undecided rule', () => {
+test.describe('a held claim cannot be approved without its required evidence', () => {
   test.use({ storageState: stateFile('owner') });
 
   test('offers no approval, because nothing has been assessed', async ({ page }) => {
@@ -116,7 +116,7 @@ test.describe('a held claim cannot be approved past its undecided rule', () => {
     // The claim is complete and checked and still cannot be assessed, so
     // there is nothing to approve. The screen says which decision it waits
     // on rather than offering a control that would refuse.
-    await expect(page.getByText(/Who counts as family is undecided/i)).toBeVisible();
+    await expect(page.getByText(/The deceased was not listed as next of kin/i)).toBeVisible();
     await expect(
       page.getByRole('button', { name: /^Approve the assessed amount/ }),
     ).toHaveCount(0);

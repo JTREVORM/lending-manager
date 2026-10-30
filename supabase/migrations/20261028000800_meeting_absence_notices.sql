@@ -75,7 +75,7 @@ create table public.meeting_absence_notices (
   -- told us" is not evidence and the quality of the channel is part of the
   -- decision.
   reported_via       text not null,
-  reported_at        timestamptz not null default now(),
+  reported_at        timestamptz not null default public.business_now(),
   reported_by        uuid references public.profiles(id) on delete set null,
   reported_by_label  text not null,
 
@@ -155,6 +155,11 @@ as $$
 begin
   if new.id is distinct from old.id
      or new.meeting_id is distinct from old.meeting_id
+     or new.meeting_number is distinct from old.meeting_number
+     or new.membership_number is distinct from old.membership_number
+     or new.client_id is distinct from old.client_id
+     or new.branch_id is distinct from old.branch_id
+     or new.business_date is distinct from old.business_date
      or new.membership_id is distinct from old.membership_id
      or new.reason_kind is distinct from old.reason_kind
      or new.reason is distinct from old.reason
@@ -246,7 +251,7 @@ begin
   -- The rule's own word. A notice after the meeting has begun is not advance
   -- notice, and accepting one here would make the fine cancellable after the
   -- fact by anybody who could write a row.
-  if pg_catalog.now() >= v_meeting.scheduled_at then
+  if public.business_now() >= v_meeting.scheduled_at then
     raise exception
       'Meeting % began at %. An absence must be reported in advance; a member who could not do so is remedied by cancelling the fine with a reason, not by a notice recorded afterwards.',
       v_meeting.meeting_number, v_meeting.scheduled_at using errcode = 'P0001';
@@ -376,7 +381,7 @@ begin
 
   update public.meeting_absence_notices
      set review_status = v_status,
-         reviewed_at = pg_catalog.now(),
+         reviewed_at = public.business_now(),
          reviewed_by = v_actor,
          reviewed_by_label = v_label,
          review_note = nullif(pg_catalog.btrim(coalesce(p_note, '')), '')

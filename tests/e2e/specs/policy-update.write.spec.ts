@@ -56,7 +56,7 @@ test.describe('fine receipt and contra correction', () => {
     await expectNoErrorBoundary(page);
     await expect(page.getByText('No money has been collected.')).toBeVisible();
     await page.getByLabel('Amount received (UGX)').fill('3000');
-    await page.getByLabel('Payment method', { exact: true }).selectOption('cash');
+    await page.getByLabel(/^Payment method/).selectOption('cash');
     await page.getByRole('button', { name: 'Record fine payment', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Reverse this receipt' }),

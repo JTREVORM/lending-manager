@@ -155,6 +155,12 @@ begin
   if new.id is distinct from old.id
      or new.payment_number is distinct from old.payment_number
      or new.fine_id is distinct from old.fine_id
+     or new.fine_number is distinct from old.fine_number
+     or new.membership_id is distinct from old.membership_id
+     or new.client_id is distinct from old.client_id
+     or new.branch_id is distinct from old.branch_id
+     or new.external_reference is distinct from old.external_reference
+     or new.created_at is distinct from old.created_at
      or new.amount is distinct from old.amount
      or new.payment_method is distinct from old.payment_method
      or new.cash_account_id is distinct from old.cash_account_id
@@ -443,7 +449,7 @@ begin
 
   update public.meeting_fines
      set status = 'cancelled',
-         cancelled_at = pg_catalog.now(),
+         cancelled_at = public.business_now(),
          cancelled_by = v_actor,
          cancelled_by_label = v_label,
          cancellation_reason = pg_catalog.btrim(p_reason)
@@ -546,7 +552,7 @@ begin
 
   update public.meeting_fine_payments
      set status = 'reversed',
-         reversed_at = pg_catalog.now(),
+         reversed_at = public.business_now(),
          reversed_by = v_actor,
          reversed_by_label = v_label,
          reversal_reason = pg_catalog.btrim(p_reason),

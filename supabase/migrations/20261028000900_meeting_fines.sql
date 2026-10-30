@@ -275,6 +275,14 @@ begin
   if new.id is distinct from old.id
      or new.fine_number is distinct from old.fine_number
      or new.meeting_id is distinct from old.meeting_id
+     or new.meeting_number is distinct from old.meeting_number
+     or new.meeting_date is distinct from old.meeting_date
+     or new.membership_number is distinct from old.membership_number
+     or new.client_id is distinct from old.client_id
+     or new.branch_id is distinct from old.branch_id
+     or new.policy_version is distinct from old.policy_version
+     or new.absence_reason_at_assessment is distinct from old.absence_reason_at_assessment
+     or new.notice_id is distinct from old.notice_id
      or new.membership_id is distinct from old.membership_id
      or new.amount is distinct from old.amount
      or new.policy_version_id is distinct from old.policy_version_id
@@ -375,7 +383,7 @@ begin
     -- Fineable when all of: the meeting happened, the member was absent, no
     -- accepted excuse, and no fine already charged.
     v_meeting.status = 'held'
-      and v_meeting.scheduled_at <= pg_catalog.now()
+      and v_meeting.scheduled_at <= public.business_now()
       and pv.approved_at is not null and pv.status <> 'draft'
       and pv.effective_from <= v_meeting.meeting_date
       and coalesce(pv.meeting_absence_fine, 0) > 0
@@ -386,7 +394,7 @@ begin
         where f.meeting_id = p_meeting_id and f.membership_id = a.membership_id
       ),
     case
-      when v_meeting.scheduled_at > pg_catalog.now()
+      when v_meeting.scheduled_at > public.business_now()
         then 'The meeting has not started. No absence fine can be assessed yet.'
       when v_meeting.status = 'cancelled'
         then 'The meeting was cancelled. Nobody is absent from a meeting that did not happen.'
