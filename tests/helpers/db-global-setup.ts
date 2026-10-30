@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
+import { assertTestDatabaseUrl } from './test-targets';
+
 /**
  * Rebuild the test database before the database suite runs.
  *
@@ -14,8 +16,8 @@ import { join } from 'node:path';
  * apply in order to an empty database, which is otherwise a separate manual
  * step that is easy to skip.
  *
- * Skipped when `DATABASE_URL` points somewhere other than the local throwaway
- * cluster, so this can never drop a database it did not create.
+ * Refuses any URL outside the configured local throwaway cluster before a
+ * process starts. A warning would leave the destructive tests free to run.
  *
  * ## The seed-era boundary
  *
@@ -42,13 +44,7 @@ export default function setup({ provide }: SetupContext): void {
 
   if (databaseUrl === undefined || databaseUrl === '') return;
 
-  if (!databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1')) {
-    console.warn(
-      '\n  DATABASE_URL is not local; leaving the database as it is.\n' +
-        '  The database suite expects a throwaway database it may rebuild.\n',
-    );
-    return;
-  }
+  assertTestDatabaseUrl(databaseUrl);
 
   const script = join(process.cwd(), 'scripts', 'pg-local.sh');
 
@@ -65,11 +61,8 @@ export default function setup({ provide }: SetupContext): void {
   // Read through psql rather than opening a pool: global setup runs in its
   // own process and a pool here would outlive it.
   const highest = execFileSync(
-    'bash',
-    [
-      '-c',
-      `psql "${databaseUrl}" -qtA -c "select coalesce(max(id), 0) from public.audit_log"`,
-    ],
+    'psql',
+    [databaseUrl, '-qtA', '-c', 'select coalesce(max(id), 0) from public.audit_log'],
     { encoding: 'utf8', env: { ...process.env, PATH: pgPath() } },
   ).trim();
 
