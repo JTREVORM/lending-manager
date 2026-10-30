@@ -69,8 +69,10 @@ export const viewport: Viewport = {
  * The same Inter typeface is packaged locally to keep builds independent of
  * Google Fonts responses and Next's Google-font URL parser.
  *
- * Source: https://github.com/rsms/inter/blob/master/docs/font-files/InterVariable.woff2
- * Upstream Git blob: 5a8d3e72ad7ffb62af3b146e1b1f54ab5813a212.
+ * Source: fontsource/font-files, fonts/variable/inter/files/
+ * inter-latin-wght-normal.woff2 at 2ffd3aa25908df6ed1c864de40ce53e2ae1076d1.
+ * Upstream Git blob: d15208de03cd1ad7c5199f0a0ce915fe841e4722.
+ * The Latin subset retains the existing preload scope and download budget.
  * The unmodified font's SIL Open Font License is in app/fonts/OFL.txt.
  * The CSS variable, supported weights, swap behavior and fallback chain stay
  * consistent with the existing application typography.

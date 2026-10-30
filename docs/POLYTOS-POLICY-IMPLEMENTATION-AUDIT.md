@@ -119,10 +119,12 @@ are NOT VALID for historical rows while enforcing future inserts and updates.
 ## Build reproducibility
 
 The production-build check exposed a Next.js Google Fonts URL parser failure.
-Inter is now packaged as an unmodified local WOFF2 from its upstream project,
+Inter is now packaged as an unmodified local Latin WOFF2 from Fontsource,
 with the SIL Open Font License and source blob recorded beside the layout.
 The family, 300–900 weights, CSS variable, swap behavior and fallback chain are
-preserved. Builds no longer need a Google Fonts request.
+preserved. The Latin subset keeps cold-page downloads within the unchanged
+performance budgets; the full multilingual file is not shipped. Builds no longer
+need a Google Fonts request.
 
 ## Verification and release procedure
 
