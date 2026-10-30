@@ -13,6 +13,27 @@ dashboard loading, browser-refresh persistence, and normal navigation. These
 are USER-REPORTED manual results. Remaining checks are explicitly PENDING or
 BLOCKED below; no credential sharing is requested.
 
+## Phase 5 security hardening follow-up
+
+**HIGH: forced-password business-access bypass reproduced in isolation.**
+The earlier deployed database-only finding below is now supported by real
+isolated PostgREST HTTP evidence: a synthetic forced-change JWT received
+HTTP 200 and 17 loan identifiers. No hosted JWT exploit or financial write
+was attempted. Production is unchanged and the finding remains open there.
+
+The separate security work, layered correction, executed tests, probe-view
+disposition and exact production authorization requirements are recorded in
+[the security-hardening report](POLYTOS-FORCED-PASSWORD-SECURITY.md).
+The new migration and mandatory Data API hook are proposals only. New local
+tests use synthetic accounts and are not hosted GoTrue certification.
+
+The Owner/Admin login, dashboard, refresh and navigation observations remain
+USER-REPORTED MANUAL. All unexecuted hosted session/role/branch/private-object
+checks remain PENDING or BLOCKED. Existing financial reconciliation and Policy
+2.0 observations below retain their original snapshot times; this task did not
+modify or re-certify production data.
+
+
 ## Release identity and rollback
 
 - Repository: `JTREVORM/lending-manager`.
