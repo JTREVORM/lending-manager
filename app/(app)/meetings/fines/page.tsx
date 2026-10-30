@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Scale } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { DateValue } from '@/components/ui/data-value';
 import { PageHeader } from '@/components/ui/page-header';
 import { PolicyAmount } from '@/components/policy-update/amount';
@@ -92,51 +93,50 @@ export default async function MeetingFinesPage() {
           The latest 100 charges, including cancelled charges. Open a fine for its
           receipts and corrections.
         </p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Meeting fine register</caption>
+        <div className="mt-3">
+          <DataTable caption="Meeting fine register">
             <thead>
-              <tr>
-                <th scope="col">Fine</th>
-                <th scope="col">Member</th>
-                <th scope="col">Meeting date</th>
-                <th scope="col">Status</th>
-                <th scope="col">Charged</th>
-                <th scope="col">Collected</th>
-                <th scope="col">Outstanding</th>
-              </tr>
+              <TableRow>
+                <TableHead width="ref">Fine</TableHead>
+                <TableHead width="name">Member</TableHead>
+                <TableHead width="date">Meeting date</TableHead>
+                <TableHead width="status">Status</TableHead>
+                <TableHead width="money" align="numeric">Charged</TableHead>
+                <TableHead width="money" align="numeric">Collected</TableHead>
+                <TableHead width="money" align="numeric">Outstanding</TableHead>
+              </TableRow>
             </thead>
             <tbody>
               {(register.data ?? []).map((f) => (
-                <tr key={f.id}>
-                  <th scope="row">
+                <TableRow key={f.id}>
+                  <TableCell header width="ref">
                     <Link
                       className="text-accent underline"
                       href={`/meetings/fines/${f.id}`}
                     >
                       {f.fine_number}
                     </Link>
-                  </th>
-                  <td>{f.member_name}</td>
-                  <td>
+                  </TableCell>
+                  <TableCell width="name" wrap="wrap">{f.member_name}</TableCell>
+                  <TableCell width="date">
                     <DateValue value={f.meeting_date} />
-                  </td>
-                  <td>{f.status}</td>
-                  <td>
+                  </TableCell>
+                  <TableCell width="status">{f.status}</TableCell>
+                  <TableCell width="money" align="numeric">
                     <PolicyAmount value={f.amount} />
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell width="money" align="numeric">
                     <PolicyAmount value={f.amount_paid} />
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell width="money" align="numeric">
                     <PolicyAmount
                       value={f.status === 'cancelled' ? 0 : f.amount_outstanding}
                     />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         </div>
         {register.data?.length === 0 ? (
           <p className="mt-3">No fines have been assessed.</p>

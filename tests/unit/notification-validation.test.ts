@@ -32,6 +32,10 @@ const ROUTES = {
   expenses: '/finance/expenses',
   reconciliation: '/finance/reconciliation',
   finance: '/finance',
+  benefitClaims: '/benefits/claims',
+  benefitPayments: '/benefits/payments',
+  beneficiaries: '/beneficiaries',
+  meetings: '/meetings',
 } as const;
 
 const ID = '0f8fad5b-d9cb-469f-a165-70867728950e';

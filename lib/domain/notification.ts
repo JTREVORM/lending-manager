@@ -282,10 +282,10 @@ export function notificationHref(
     readonly expenses: string;
     readonly reconciliation: string;
     readonly finance: string;
-    readonly benefitClaims?: string;
-    readonly benefitPayments?: string;
-    readonly beneficiaries?: string;
-    readonly meetings?: string;
+    readonly benefitClaims: string;
+    readonly benefitPayments: string;
+    readonly beneficiaries: string;
+    readonly meetings: string;
   },
 ): string | null {
   if (entityId === null) {
@@ -295,19 +295,19 @@ export function notificationHref(
 
   switch (entityType) {
     case 'benefit_claim':
-      return routes.benefitClaims ? `${routes.benefitClaims}/${entityId}` : null;
+      return `${routes.benefitClaims}/${entityId}`;
     case 'benefit_payment':
-      return routes.benefitPayments ?? null;
+      return routes.benefitPayments;
     case 'member_beneficiary':
-      return routes.beneficiaries ? `${routes.beneficiaries}/${entityId}` : null;
+      return `${routes.beneficiaries}/${entityId}`;
     case 'membership_meeting':
-      return routes.meetings ? `${routes.meetings}/${entityId}` : null;
+      return `${routes.meetings}/${entityId}`;
     case 'meeting_action':
-      return routes.meetings ? `${routes.meetings}/actions/${entityId}` : null;
+      return `${routes.meetings}/actions/${entityId}`;
     case 'meeting_absence_notice':
-      return routes.meetings ? `${routes.meetings}/notices/${entityId}` : null;
+      return `${routes.meetings}/notices/${entityId}`;
     case 'meeting_fine':
-      return routes.meetings ? `${routes.meetings}/fines/${entityId}` : null;
+      return `${routes.meetings}/fines/${entityId}`;
     case 'loan':
     case 'collateral':
       return `${routes.loans}/${entityId}`;

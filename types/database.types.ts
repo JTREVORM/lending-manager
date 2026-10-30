@@ -6635,6 +6635,10 @@ export type Database = {
     };
 
     Functions: {
+      audit_policy_update_event: {
+        Args: Record<PropertyKey, never>;
+        Returns: unknown;
+      };
       // --- Polytos Phase 4: benefits -----------------------------------------
       //
       // Four, and the two that are SECURITY DEFINER each check a capability

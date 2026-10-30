@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { DateValue } from '@/components/ui/data-value';
 import { PageHeader } from '@/components/ui/page-header';
 import { PolicyAmount } from '@/components/policy-update/amount';
@@ -179,43 +180,40 @@ export default async function PolicyTransitionsPage({
                 ]}
               />
             ) : null}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <caption className="sr-only">
-                  Policy transition preview and qualification impact
-                </caption>
+            <div>
+              <DataTable caption="Policy transition preview and qualification impact">
                 <thead>
-                  <tr>
-                    <th scope="col">Member</th>
-                    <th scope="col">Current policy</th>
-                    <th scope="col">Savings balance</th>
-                    <th scope="col">Qualified before</th>
-                    <th scope="col">Qualified after</th>
-                    <th scope="col">Verified acceptance</th>
-                  </tr>
+                  <TableRow>
+                    <TableHead width="name-wide">Member</TableHead>
+                    <TableHead width="ref">Current policy</TableHead>
+                    <TableHead width="money" align="numeric">Savings balance</TableHead>
+                    <TableHead width="status">Qualified before</TableHead>
+                    <TableHead width="status">Qualified after</TableHead>
+                    <TableHead width="status-wide">Verified acceptance</TableHead>
+                  </TableRow>
                 </thead>
                 <tbody>
                   {(preview.data ?? []).map((m) => (
-                    <tr key={m.membership_id}>
-                      <th scope="row">
+                    <TableRow key={m.membership_id}>
+                      <TableCell header width="name-wide" wrap="wrap">
                         <Link
                           className="text-accent underline"
                           href={`/membership/${m.membership_id}`}
                         >
                           {m.membership_number} · {m.member_name}
                         </Link>
-                      </th>
-                      <td>{m.current_version}</td>
-                      <td>
+                      </TableCell>
+                      <TableCell width="ref">{m.current_version}</TableCell>
+                      <TableCell width="money" align="numeric">
                         <PolicyAmount value={m.savings_balance} />
-                      </td>
-                      <td>{m.qualifies_before ? 'Yes' : 'No'}</td>
-                      <td>{m.qualifies_after ? 'Yes' : 'No'}</td>
-                      <td>{m.has_acceptance ? 'Recorded' : 'Required'}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell width="status">{m.qualifies_before ? 'Yes' : 'No'}</TableCell>
+                      <TableCell width="status">{m.qualifies_after ? 'Yes' : 'No'}</TableCell>
+                      <TableCell width="status-wide">{m.has_acceptance ? 'Recorded' : 'Required'}</TableCell>
+                    </TableRow>
                   ))}
                 </tbody>
-              </table>
+              </DataTable>
             </div>
             {ready
               ? (preview.data ?? [])

@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { DateValue } from '@/components/ui/data-value';
 import { getLoanCollections } from '@/lib/data/policy-update';
 import { businessToday } from '@/lib/domain/datetime';
@@ -20,38 +21,35 @@ export async function LoanCollections({
         The contractual due dates and amounts stay unchanged. Collection periods identify
         when unpaid amounts are being followed up.
       </p>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">
-            Contractual due dates, collection periods and outstanding amounts
-          </caption>
+      <div className="mt-3">
+        <DataTable caption="Contractual due dates, collection periods and outstanding amounts">
           <thead>
-            <tr>
-              <th scope="col">Installment</th>
-              <th scope="col">Contractual due date</th>
-              <th scope="col">Collection month</th>
-              <th scope="col">Unpaid</th>
-              <th scope="col">Days overdue</th>
-            </tr>
+            <TableRow>
+              <TableHead width="count">Installment</TableHead>
+              <TableHead width="date">Contractual due date</TableHead>
+              <TableHead width="date">Collection month</TableHead>
+              <TableHead width="money" align="numeric">Unpaid</TableHead>
+              <TableHead width="count" align="numeric">Days overdue</TableHead>
+            </TableRow>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.installment_id}>
-                <th scope="row">{row.installment_number}</th>
-                <td>
+              <TableRow key={row.installment_id}>
+                <TableCell header width="count">{row.installment_number}</TableCell>
+                <TableCell width="date">
                   <DateValue value={row.original_due_date} />
-                </td>
-                <td>
+                </TableCell>
+                <TableCell width="date">
                   <DateValue value={row.collection_period} />
-                </td>
-                <td>
+                </TableCell>
+                <TableCell width="money" align="numeric">
                   <PolicyAmount value={row.remaining_amount} />
-                </td>
-                <td>{row.days_past_due}</td>
-              </tr>
+                </TableCell>
+                <TableCell width="count" align="numeric">{row.days_past_due}</TableCell>
+              </TableRow>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </div>
       {canCarry ? (
         <div className="mt-4">
