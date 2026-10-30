@@ -1370,8 +1370,6 @@ describeDb('privileged functions', () => {
       'notify_transfer_pending',
       'open_benefit_claim',
       'open_savings_account',
-      // Constant no-data readiness, also callable by anon; no session data.
-      'polytos_readiness',
       'post_benefit_payment',
       'post_disbursement_journal',
       'post_expense_journal',
@@ -1719,6 +1717,8 @@ describeDb('privileged functions', () => {
       // Phase 6. The two trusted ledger paths. Each re-checks the caller's
       // capability inside, because SECURITY DEFINER means the grant alone
       // decides nothing.
+      // Constant no-data readiness, also callable by anon; no session data.
+      'polytos_readiness',
       'post_benefit_payment',
       'post_meeting_fine_payment',
       'post_payment',
