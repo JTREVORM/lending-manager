@@ -58,6 +58,22 @@ the replacement probe has not been deployed. See the remediation plan for the
 separate authorized database and Vercel release order and the pending real
 authentication/session/permission/reconciliation gates.
 
+### Completed implementation checks
+
+On implementation revision `6bf37eebd255f0299970f2b6d63f5d619c3ef6e3`,
+[CI run 41053466187](https://github.com/JTREVORM/lending-manager/actions/runs/41053466187)
+completed checks/build and PostgreSQL successfully: 2,638 unit/integration
+tests, six post-build bundle assertions, 1,791 database tests (including all
+ten readiness role/security checks) and 82 seeder tests passed. Production-only
+and full dependency audits reported zero vulnerabilities. Formatting, lint,
+typecheck, money audit and source/history/client-bundle secret scans passed.
+
+The upgrade rehearsal preserved 26 financial/identity tables, balances and
+historical approvals. Its [reconciliation artifact](https://github.com/JTREVORM/lending-manager/actions/runs/41053466187/artifacts/12975927209)
+is retained until 29 November 2026. The final revision's complete matrix,
+including Playwright and screenshot artifacts, is recorded on PR #16.
+Superseded or cancelled jobs are not counted as whole-run passes.
+
 ## Released baseline and architecture
 
 - Production/default branch: `claude/intelligent-knuth-2r8mpw`.
@@ -312,11 +328,18 @@ comparisons, not a restorable backup or a physical cash count.
   Medical ceiling mode and profit distribution remain NULL. Legacy demo
   policy 999.0 remains active; it was not replaced or deleted.
 
-The isolated upgrade fixture is a different dataset: 17 loans, 161 historical
-payments, savings/GL 2100 of 1,790,000 and journal debits/credits of 17,700,523.
-These figures match the release-run and fresh verifier logs. Older interim
-figures in the implementation audit (167 payments and 17,776,274) must not be
-reported as the final fixture or as hosted production totals.
+The isolated upgrade fixture is a different dataset. In the readiness
+implementation run it contains 17 loans, 167 historical payments, savings/GL
+2100 of 1,790,000 and journal debits/credits of 17,776,274. The before/after
+snapshots match for all 26 protected tables and every aggregate.
+
+Earlier runs recorded 161 payments and 17,700,523. The historical seed used by
+the verifier computes days since a due date with Math.round over Date.now()
+relative to UTC midnight, so the seeded collection set changes across noon UTC.
+Cross-run fixture totals are therefore not fixed acceptance values. Compare
+before and after within each run and use that run's reconciliation artifact.
+This is a pre-existing fixture limitation; its clock logic was not changed.
+Neither set of synthetic figures is a hosted production total.
 
 ## Remaining certification gates
 

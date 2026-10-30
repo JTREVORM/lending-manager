@@ -39,6 +39,15 @@ applied. Playwright exercises the RPC through real PostgREST and the public
 health endpoint on the disposable stack. The existing public health tests are
 retained.
 
+On implementation revision `6bf37eebd255`, checks/build and PostgreSQL
+passed: 2,638 unit/integration tests, six post-build bundle assertions,
+1,791 database tests (all ten readiness checks) and 82 seeder tests.
+The upgrade preserved all 26 protected tables; savings/GL 2100 reconciled
+at 1,790,000, and journal debits/credits at 17,776,274. These are synthetic
+fixture values, not hosted figures. The historical seed's current-clock
+rounding means cross-run totals can differ; within-run before/after
+preservation is the financial acceptance check.
+
 The final full application, PostgreSQL and Playwright outcomes, exact tested
 commit, run links and artifact IDs are recorded in the
 [PR #16 verification record](https://github.com/JTREVORM/lending-manager/pull/16).
