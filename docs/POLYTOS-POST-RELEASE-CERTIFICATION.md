@@ -15,6 +15,11 @@ BLOCKED below; no credential sharing is requested.
 
 ## Phase 5 security hardening follow-up
 
+The final isolated release-gate rehearsal and explicit remaining production
+blockers are recorded in [the release-gate package](POLYTOS-SECURITY-RELEASE-GATES.md).
+Real Auth recovery/renewal and the PostgreSQL 17 scoped migration are now tested;
+hosted effective-hook inspection and Vercel hold/containment are NOT certified.
+
 **HIGH: forced-password business-access bypass reproduced in isolation.**
 The earlier deployed database-only finding below is now supported by real
 isolated PostgREST HTTP evidence: a synthetic forced-change JWT received

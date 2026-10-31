@@ -283,3 +283,47 @@ jobs:
             playwright-report/
           retention-days: 7
           if-no-files-found: ignore
+
+  security-release-rehearsal:
+    name: security release rehearsal (PostgreSQL 17, real Auth)
+    runs-on: ubuntu-latest
+    env:
+      PGLOCAL_BIN: /usr/lib/postgresql/17/bin
+      E2E_POSTGREST: ${{ github.workspace }}/.e2e/postgrest
+      E2E_REAL_AUTH_BINARY: ${{ github.workspace }}/.e2e/auth
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install PostgreSQL 17
+        run: |
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/keyrings/postgresql.asc >/dev/null
+          . /etc/os-release
+          printf 'deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17 postgresql-client-17
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+      - name: Install pinned real Auth and PostgREST
+        run: |
+          mkdir -p .e2e
+          curl -fsSL https://github.com/supabase/auth/releases/download/v2.197.0/auth-v2.197.0-amd64.tar.xz -o .e2e/auth.tar.xz
+          printf '%s  %s\n' b5c2991d1df760c9b099c1c2395a94bd1c2f83ed58901934921997179dc9f7ea .e2e/auth.tar.xz | sha256sum -c -
+          tar -xJf .e2e/auth.tar.xz -C .e2e
+          curl -fsSL https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz | tar -xJ -C .e2e
+      - run: npm run db:local:setup
+      - name: Scoped migration, hook reload and interruption rehearsal
+        run: node scripts/rehearse-security-release.mjs
+      - run: npx playwright install --with-deps chromium
+      - name: Start isolated real Auth stack
+        run: bash tests/e2e/harness/stack.sh up
+      - name: Real recovery and two-tab renewal past JWT expiry
+        run: |
+          source <(bash tests/e2e/harness/stack.sh env)
+          npx playwright test tests/e2e/specs/real-auth.release.spec.ts --project=desktop
+      - name: Stop isolated stack
+        if: always()
+        run: bash tests/e2e/harness/stack.sh down || true
