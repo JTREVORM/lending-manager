@@ -80,6 +80,19 @@ PR #18's execution summary/Checks. The earlier green d9c1971 run is historical
 evidence and is not substituted for the updated head. No required check was
 removed or bypassed.
 
+Intermediate head `988170ceffa982208533fcab02d121a27600aa56` passed the new
+PostgreSQL 17/real-Auth job in both runs. Its full database job exposed 41
+failures in five existing payment suites: those fixtures expected ten
+three-day collections while the real 31 October clock produced nine before
+the exclusive 30 November boundary. The suites now explicitly use the existing
+owner-only business clock at 1 October 2026. The helper verifies that the clock
+is effective and resets it when the isolated pool closes. As disbursement is
+stamped from now(), the same suites explicitly re-anchor only fresh disposable
+loan fixtures using the existing schedule-suite pattern, before any payment.
+That rewrite is transactional, with guards re-enabled before real generation.
+No production financial formula, schedule generator, migration or expected
+monetary assertion was changed.
+
 ## Migration review and scoped executor
 
 The application migration is unchanged. File:
@@ -137,6 +150,11 @@ do not add financial routes to the recovery allowlist to fix a path mismatch.
 
 Supported hosted activation, AFTER approval and confirmation of the existing
 effective hook:
+
+If effective db-config is false, or a pre-config function overrides the proposed
+setting, STOP. Role SQL alone cannot establish activation in that configuration.
+Obtain a separately authorized, hosted-supported configuration change and
+rehearsal rather than assuming the environment fallback has been replaced.
 
 ```sql
 ALTER ROLE authenticator

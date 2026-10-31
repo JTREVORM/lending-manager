@@ -5,9 +5,10 @@ name: CI
 # unit tests over three defects that only a real browser against a real
 # database could see, which is the entire reason the end-to-end harness exists.
 #
-# Three jobs run in parallel. `checks` and `database` are fast; `browser`
+# Four jobs run in parallel. `checks` and `database` are fast; `browser`
 # stands up the Docker-free stack (real PostgreSQL + the real PostgREST binary
 # + the auth shim + the production Next build) and drives Playwright over it.
+# The security release rehearsal uses PostgreSQL 17 and a pinned real Auth server.
 
 on:
   push:

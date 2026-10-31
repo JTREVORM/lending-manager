@@ -14,7 +14,14 @@ import {
   readLedger,
   reversePayment,
 } from '../helpers/payment-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  hasDatabase,
+  query,
+  queryOne,
+  setTestBusinessClock,
+  skipReason,
+} from '../helpers/db';
 
 /**
  * The payment ledger is financial evidence.
@@ -28,6 +35,7 @@ import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/
  * It is whether somebody holding a valid token, or the secret key, can change
  * what a borrower is recorded as having paid.
  */
+const fixtureNow = new Date('2026-10-01T07:00:00Z');
 const describeDb = hasDatabase ? describe : describe.skip;
 
 if (!hasDatabase) {
@@ -44,6 +52,7 @@ describeDb('payment ledger immutability', () => {
   let originalRow: Record<string, string | null>;
 
   beforeAll(async () => {
+    await setTestBusinessClock(fixtureNow);
     await deleteTestPayments();
     await deleteTestLoans();
     await deleteTestUsers();
@@ -54,7 +63,7 @@ describeDb('payment ledger immutability', () => {
       termMonths: 1,
       frequency: 'every_3_days',
     });
-    await disburseLoan(loanId, scenario);
+    await disburseLoan(loanId, scenario, fixtureNow);
 
     paymentId = await postPayment(loanId, scenario.secretary, {
       amount: 28_000,
@@ -230,7 +239,7 @@ describeDb('payment ledger immutability', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(otherLoan, other);
+      await disburseLoan(otherLoan, other, fixtureNow);
 
       const target = await postPayment(otherLoan, other.secretary, {
         amount: 11_500,
@@ -299,7 +308,7 @@ describeDb('payment ledger immutability', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(otherLoan, other);
+      await disburseLoan(otherLoan, other, fixtureNow);
 
       const target = await postPayment(otherLoan, other.secretary, {
         amount: 28_000,
@@ -509,7 +518,7 @@ describeDb('payment ledger immutability', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(otherLoan, other);
+      await disburseLoan(otherLoan, other, fixtureNow);
       await postPayment(otherLoan, other.secretary, { amount: 115_000 });
 
       expect((await readLedger(otherLoan)).status).toBe('cleared');
@@ -531,7 +540,7 @@ describeDb('payment ledger immutability', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(otherLoan, other);
+      await disburseLoan(otherLoan, other, fixtureNow);
       const target = await postPayment(otherLoan, other.secretary, {
         amount: 115_000,
       });
