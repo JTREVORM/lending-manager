@@ -214,8 +214,19 @@ on-project alias-hold/promotion behavior remains BLOCKED, not PASS.
 
 ## Conditional release and rollback
 
+Hosted branching read: the default Supabase branch named main is bound to
+the production Git branch claude/intelligent-knuth-2r8mpw and reports
+MIGRATIONS_FAILED. No retry, repair, branch operation or configuration change
+was executed. This status does not establish the failure's cause or the current
+automatic-deployment trigger configuration. The connector does not expose that
+configuration or the failed migration job's diagnostics.
+
 1. Approve the exact new PR head and all required green CI; confirm project,
    runtime configuration, migration checksum and preservation baselines.
+   Before merging, inspect the failed Supabase branch migration job and verify
+   a separately authorized hold on automatic database migration execution.
+   A Vercel alias hold alone does not hold Supabase Git-triggered migrations.
+   Do not retry that job, bulk-push migrations or repair the historical nine.
 2. PR #18 includes PR #17's commits. Merge #18 only with expected-head
    protection after establishing the approved alias hold. Record merge SHA,
    require post-merge CI and one fresh READY production build. Do not create a
@@ -262,6 +273,10 @@ Policy 2.0 activation or unrelated migration-history repair is authorized.
 
 Remaining NO-GO blockers:
 
+- The Git-linked default Supabase branch reports MIGRATIONS_FAILED. Its failed
+  job diagnostics and effective automatic-migration configuration/hold are not
+  available through this connector. These require operator verification before
+  any merge; no historical migration repair is authorized.
 - Effective hosted PostgREST environment/pre-config/cached hook report and
   actual hosted path/reload verification are unavailable without operator access
   and the separately approved activation smoke test.
