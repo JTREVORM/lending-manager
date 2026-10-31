@@ -27,7 +27,7 @@ PORT="${PGLOCAL_PORT:-5433}"
 DB_NAME="${PGLOCAL_DB:-lending_test}"
 DB_USER="${PGLOCAL_USER:-lending}"
 
-PG_BIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)"
+PG_BIN="${PGLOCAL_BIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)}"
 if [[ -z "${PG_BIN}" ]]; then
   echo "error: no PostgreSQL server binaries found under /usr/lib/postgresql/*/bin" >&2
   echo "       install postgresql, or use 'supabase start' if Docker is available" >&2

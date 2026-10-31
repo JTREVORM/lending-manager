@@ -18,7 +18,14 @@ import {
   reversePayment,
   tryReversePayment,
 } from '../helpers/payment-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  hasDatabase,
+  query,
+  queryOne,
+  setTestBusinessClock,
+  skipReason,
+} from '../helpers/db';
 
 /**
  * Reversing payments.
@@ -35,6 +42,7 @@ import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/
  * here would still pass and the preservation assertions would fail. Both are
  * needed.
  */
+const fixtureNow = new Date('2026-10-01T07:00:00Z');
 const describeDb = hasDatabase ? describe : describe.skip;
 
 if (!hasDatabase) {
@@ -54,12 +62,13 @@ async function tenCollectionLoan(): Promise<{
     termMonths: 1,
     frequency: 'every_3_days',
   });
-  await disburseLoan(loanId, scenario);
+  await disburseLoan(loanId, scenario, fixtureNow);
   return { scenario, loanId };
 }
 
 describeDb('reversing payments', () => {
   beforeAll(async () => {
+    await setTestBusinessClock(fixtureNow);
     await deleteTestPayments();
     await deleteTestLoans();
     await deleteTestUsers();

@@ -7852,6 +7852,10 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
+      enforce_password_change: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
       /**
        * Phase 18. The Settings screen's read-only view of reference
        * numbering. SECURITY DEFINER and gated on settings:view, so the

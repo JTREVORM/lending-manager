@@ -1485,9 +1485,8 @@ describeDb('privileged functions', () => {
     }
   });
 
-  it('allows anonymous execution only of the constant no-data readiness probe', async () => {
-    // The sole exception reads no tables, takes no arguments and runs as the
-    // caller. tests/db/readiness.test.ts verifies its body and exact grants.
+  it('allows anonymous execution only of readiness and the no-result request gate', async () => {
+    // Both are invoker functions; the gate returns before any lookup for anon.
     const rows = await query<{ proname: string }>(
       `select p.proname
          from pg_proc p
@@ -1498,7 +1497,10 @@ describeDb('privileged functions', () => {
         order by p.proname`,
     );
 
-    expect(rows.map((row) => row.proname)).toEqual(['polytos_readiness']);
+    expect(rows.map((row) => row.proname)).toEqual([
+      'enforce_password_change',
+      'polytos_readiness',
+    ]);
   });
 
   it('grants authenticated only the session-scoped helpers', async () => {
@@ -1642,6 +1644,7 @@ describeDb('privileged functions', () => {
       // with the reasons they may not. SECURITY INVOKER, so a caller sees
       // exactly the clients their own policies admit. Advice only: the
       // trigger and the approval validator are the enforcement.
+      'enforce_password_change',
       'enrol_member',
       'finalise_meeting_minutes',
       'guarantor_candidates',

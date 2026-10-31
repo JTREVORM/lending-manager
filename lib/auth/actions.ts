@@ -320,6 +320,13 @@ export async function updateOwnDetailsAction(
     return { ok: false, message: 'Please sign in again.' };
   }
 
+  if (result.context.mustChangePassword) {
+    return {
+      ok: false,
+      message: 'Please change your password before editing your details.',
+    };
+  }
+
   const parsed = parseSafely(updateOwnDetailsSchema, {
     fullName: formData.get('fullName'),
     email: formData.get('email'),
