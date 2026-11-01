@@ -1,0 +1,158 @@
+{
+  "artifact": "POLYTOS stale migration-history export",
+  "project_ref": "fszgwemtgyrbhngajpzm",
+  "project_name": "lending manager",
+  "postgres_version": "PostgreSQL 17.11 on aarch64-unknown-linux-gnu",
+  "captured_at_utc": "2026-11-01T14:59:34Z",
+  "captured_by": "Supabase MCP connector (read-only SELECT)",
+  "source_table": "supabase_migrations.schema_migrations",
+  "history_rows_at_capture": 168,
+  "repo_migration_files": 159,
+  "checksum_algorithm": "sha256 of statements[1] encoded UTF-8",
+  "records": [
+    {
+      "version": "20261010104426",
+      "name": "collateral",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 15585,
+      "sha256": "98591dbae2ad3d9fc992759e6491399f71696cbae14d3f75d9b89f37a084508f",
+      "file": "sql/20261010104426_collateral.sql",
+      "canonical_version": "20261014000100",
+      "repo_file": "supabase/migrations/20261014000100_collateral.sql",
+      "repo_match": "identical"
+    },
+    {
+      "version": "20261010104529",
+      "name": "recovery_actions",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 16802,
+      "sha256": "e5753bf0571827b0b490bc0800e1b5624d3caad0f02aa6dd69ee2777c26c8ba0",
+      "file": "sql/20261010104529_recovery_actions.sql",
+      "canonical_version": "20261014000200",
+      "repo_file": "supabase/migrations/20261014000200_recovery_actions.sql",
+      "repo_match": "identical"
+    },
+    {
+      "version": "20261010104621",
+      "name": "guarantee_release",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 13877,
+      "sha256": "e3cdd816e9a7c627cf03ff7a524e61f2ccaa990ff7d0257dad464e7e0d8b66e2",
+      "file": "sql/20261010104621_guarantee_release.sql",
+      "canonical_version": "20261014000300",
+      "repo_file": "supabase/migrations/20261014000300_guarantee_release.sql",
+      "repo_match": "identical"
+    },
+    {
+      "version": "20261010104723",
+      "name": "risk_monitoring",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 15640,
+      "sha256": "ad2067ba148daec602d1fc0145b59e29cafd3de37f38a273672b49575960909b",
+      "file": "sql/20261010104723_risk_monitoring.sql",
+      "canonical_version": "20261014000400",
+      "repo_file": "supabase/migrations/20261014000400_risk_monitoring.sql",
+      "repo_match": "identical"
+    },
+    {
+      "version": "20261011060140",
+      "name": "notifications",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 19348,
+      "sha256": "0a7cc4d676b13667f3803e3c60f17864c1e26fd2676dd6d54ead9028e3ff563b",
+      "file": "sql/20261011060140_notifications.sql",
+      "canonical_version": "20261015000100",
+      "repo_file": "supabase/migrations/20261015000100_notifications.sql",
+      "repo_match": "identical_without_trailing_newline"
+    },
+    {
+      "version": "20261011060324",
+      "name": "notification_triggers",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 26613,
+      "sha256": "990cc6926e12094485a1d192a8c9561970d0c3bc3fe1578f571ed1f055d2c8d0",
+      "file": "sql/20261011060324_notification_triggers.sql",
+      "canonical_version": "20261015000200",
+      "repo_file": "supabase/migrations/20261015000200_notification_triggers.sql",
+      "repo_match": "identical_without_trailing_newline"
+    },
+    {
+      "version": "20261011061348",
+      "name": "notification_backfill",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 15845,
+      "sha256": "110fa53c76d3f4cf174721c4bc416d97a5b60b153ba1cc15101c1352b4b337ff",
+      "file": "sql/20261011061348_notification_backfill.sql",
+      "canonical_version": "20261015000300",
+      "repo_file": "supabase/migrations/20261015000300_notification_backfill.sql",
+      "repo_match": "identical_without_trailing_newline"
+    },
+    {
+      "version": "20261012062453",
+      "name": "balance_as_of",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 5167,
+      "sha256": "702864d7b3505d0ef0777e0d8555769c150aae758ff7758c703757ffafdf67dd",
+      "file": "sql/20261012062453_balance_as_of.sql",
+      "canonical_version": "20261016000100",
+      "repo_file": "supabase/migrations/20261016000100_balance_as_of.sql",
+      "repo_match": "DIVERGENT",
+      "divergence_nature": "checksums differ, but only by added SQL comment blocks and a trailing newline; the executable SQL is identical to the repository file (verified by comparing both with comments and blank lines stripped)"
+    },
+    {
+      "version": "20261012064058",
+      "name": "notify_what_still_waits",
+      "created_by": "salongohamuzadr@gmail.com",
+      "statements": 1,
+      "sql_bytes": 5538,
+      "sha256": "789049653cd3c6c7bdcbf293a105dcf9cceca2daad6790128f01b5a3b2f35006",
+      "file": "sql/20261012064058_notify_what_still_waits.sql",
+      "canonical_version": "20261016000200",
+      "repo_file": "supabase/migrations/20261016000200_notify_what_still_waits.sql",
+      "repo_match": "DIVERGENT",
+      "divergence_nature": "checksums differ, but only by added SQL comment blocks and a trailing newline; the executable SQL is identical to the repository file (verified by comparing both with comments and blank lines stripped)"
+    }
+  ],
+  "canonical_marker_rows": {
+    "note": "The nine canonical-version rows carry zero statements (sha256 of empty string e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855) and created_by null. They were inserted as repair markers and hold no SQL.",
+    "versions": [
+      "20261014000100",
+      "20261014000200",
+      "20261014000300",
+      "20261014000400",
+      "20261015000100",
+      "20261015000200",
+      "20261015000300",
+      "20261016000100",
+      "20261016000200"
+    ]
+  },
+  "schema_fingerprint_at_capture": {
+    "fp_columns": "7e42df13d874978c3996a2efc604ca48",
+    "fp_functions": "a5d2c1142da9c8f74eb637f80442b86e",
+    "fp_policies": "96bfcae6171b2c92c34fa9299a58bd6c",
+    "fp_history": "0f4a6194daf6d4b742c702ff702c23ea",
+    "public_tables": 80,
+    "public_views": 49,
+    "public_functions": 313,
+    "public_policies": 126,
+    "storage_policies": 15,
+    "public_triggers": 275,
+    "public_indexes": 372,
+    "row_counts": {
+      "profiles": 6,
+      "loans": 35,
+      "loan_payments": 470,
+      "loan_schedules": 26,
+      "audit_log": 1671
+    }
+  }
+}
