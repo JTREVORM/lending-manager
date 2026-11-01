@@ -3,6 +3,7 @@
   "regions": ["dub1"],
   "git": {
     "deploymentEnabled": {
+      "claude/intelligent-knuth-2r8mpw": false,
       "certification/polytos-post-release-2026-10-30": false,
       "security/forced-password-boundary-2026-10-30": false
     }
