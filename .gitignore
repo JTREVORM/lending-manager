@@ -106,3 +106,8 @@ CLAUDE.md
 *.scratch
 scratchpad/
 val-screenshots/
+
+# Download bundle for docs/audit/<name>. Regenerated from the tracked files by
+# the command in that directory's README; gzip output is not byte-reproducible,
+# so the .sql files and SHA256SUMS in git are the verifiable record, not this.
+/polytos-migration-history-*.tar.gz

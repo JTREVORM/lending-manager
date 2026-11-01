@@ -64,6 +64,17 @@ genuinely differ, so the recorded text is still only preserved here.
 - `sql/<version>_<name>.sql` — the nine records, each byte-exact.
 - `SHA256SUMS` — checksums of the nine files, matching `manifest.json`.
 
+## Rebuilding the download bundle
+
+The `.tar.gz` bundle of this directory is generated, not tracked (gzip output
+is not byte-reproducible, so the `.sql` files and `SHA256SUMS` committed here
+are the verifiable record). Rebuild it from the repository root with:
+
+```
+tar -czf polytos-migration-history-2026-11-01.tar.gz \
+  -C docs/audit polytos-migration-history-2026-11-01
+```
+
 ## Verifying this artifact
 
 Offline, no database and no psql:
