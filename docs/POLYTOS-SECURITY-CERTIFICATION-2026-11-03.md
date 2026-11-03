@@ -11,8 +11,8 @@ the database level and has been closed on the security branch. That fix is
 | # | Requirement | Verdict | Strongest evidence |
 |---|---|---|---|
 | 1 | Production migration and hook configuration | **PASS** | Production, SQL + hosted PostgREST logs |
-| 2 | Real Supabase Auth test environment | **PASS** | Isolated, GitHub Actions (real GoTrue) |
-| 3 | Restricted accounts denied loans/payments/ledger/reports/RPCs | **PASS (RLS) / FAIL→FIXED (definer RPCs)** | Production SQL + isolated HTTP |
+| 2 | Real Supabase Auth test environment | **PASS** | Isolated, GitHub Actions — real GoTrue v2.197.0 + real PostgREST 12.2.3, green |
+| 3 | Restricted accounts denied loans/payments/ledger/reports/RPCs | **PASS (RLS) / FAIL→FIXED (definer RPCs)** | Production SQL + isolated real-Auth HTTP, green |
 | 4 | `ledger_account_balance`, `savings_withdrawable_amount`, `assess_meeting_fines` | **FAIL in production → FIXED on branch** | Production SQL |
 | 5 | Password-change recovery remains accessible | **PASS** | Production SQL (hook allowlist exercised) + isolated HTTP/browser |
 | 6 | Normal accounts retain legitimate permissions | **PASS** | Production hosted HTTP (live Owner/Admin session) |
@@ -377,6 +377,47 @@ file alone is 25 passed, of which 12 are new. `npm run typecheck`,
 PostgreSQL 16 is this sandbox's only available server; PostgreSQL 17 and the
 real-Auth/PostgREST evidence run in CI, which is the authoritative run on the
 PR head.
+
+### CI results — all four jobs green on the PR head
+
+Workflow run **41588722855**, head **`03e72c5`**, conclusion **success**.
+
+| Job | Result |
+|---|---|
+| checks, unit/integration, build | **success** — 2,647 unit/integration tests, typecheck, lint, format, money audit, secret scan, production build, bundle assertions |
+| database (real PostgreSQL 17.11) | **success** — **1,898 tests** (1,816 + 18 + 15 + 24 + 25) |
+| security release rehearsal (PostgreSQL 17, real Auth) | **success** — **34 rehearsal checks**, then **14 Playwright tests** against real GoTrue and real PostgREST |
+| browser E2E (production build, fresh seed) | **success** — 910 passed, 48 skipped |
+
+**The rehearsal's 34 checks** ran on PostgreSQL 17.11 against the real
+PostgREST binary, and include the three that replaced the old
+bypass-reproduction assertion:
+
+* `Before activation, a guarded financial definer RPC refuses on its own`
+* `Before activation, an un-guarded definer RPC still answers, so the hook remains mandatory`
+* `Before activation, a table route answers with no rows rather than refusing`
+
+alongside, after activation,
+`Forced request denied: /loans?select=id&limit=0`,
+`… /rpc/savings_pledged_amount?…`,
+`… /rpc/membership_governing_policy?…`,
+`Normal Owner table reads preserved`,
+`Chaining preserves existing hook in real HTTP context`,
+`Role config reload overrides environment hook and enforces denial`,
+`Storage object RLS permits the normal Owner`,
+`Storage object RLS denies the forced account without a PostgREST hook`,
+`Readiness works for a forced JWT`, the four recovery-path allowances, and
+`Financial records, schedules and policy records unchanged through rehearsal`.
+
+**The 14 real-Auth Playwright tests** all passed, among them the three added
+this round, driving GoTrue-issued tokens against real PostgREST:
+
+* `real Auth JWT: the whole protected surface flips to 403 on a forced flag`
+* `real Auth JWT: a borrower reads only their own records, and none when forced`
+* `real Auth stack: an anonymous caller reaches no business route`
+
+The harness logged `Synthetic fixtures provisioned through real Auth; no
+credentials logged.`
 
 ### What the first CI run caught
 
