@@ -71,6 +71,11 @@ authenticator → session_preload_libraries=supautils, safeupdate
 No other role carries a `pgrst.*` setting, so no pre-existing hook was
 displaced — the chaining concern recorded in the release gates does not apply.
 
+**The branch and production differ by exactly one migration.** Production's
+`schema_migrations` holds **160** versions; the branch holds **161** files, and
+the set difference is the single entry `20261103000100` — the guard from §3.5,
+which is not deployed. Nothing else has drifted in either direction.
+
 **Zero drift.** Every function body the migration defines is byte-identical in
 production to the file on the branch (MD5 of `pg_proc.prosrc` against the
 migration source):
