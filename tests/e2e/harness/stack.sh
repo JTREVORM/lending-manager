@@ -146,8 +146,12 @@ start() {
   fi
 
   log "database"
+  if [[ -n "${E2E_REAL_AUTH_BINARY:-}" ]]; then
+    node "${HARNESS_DIR}/real-auth-bootstrap.mjs"
+  else
   PGLOCAL_PORT="${PG_PORT}" PGLOCAL_DB="${PG_DB}" "${PROJECT_ROOT}/scripts/pg-local.sh" setup >/dev/null 2>&1 ||
     PGLOCAL_PORT="${PG_PORT}" PGLOCAL_DB="${PG_DB}" "${PROJECT_ROOT}/scripts/pg-local.sh" migrate >/dev/null
+  fi
 
   log "auth shim schema"
   psql "postgresql://${PG_USER}@127.0.0.1:${PG_PORT}/${PG_DB}" \
@@ -182,6 +186,12 @@ start() {
     -q -c "notify pgrst, 'reload schema';" >/dev/null
 
   log "auth shim"
+  if [[ -n "${E2E_REAL_AUTH_BINARY:-}" ]]; then
+    setsid node "${HARNESS_DIR}/real-auth-serve.mjs" </dev/null > "${RUN_DIR}/real-auth.log" 2>&1 &
+    echo $! > "${RUN_DIR}/real-auth.pid"
+    await_service "real Auth" "${RUN_DIR}/real-auth.log" curl -sf -o /dev/null http://127.0.0.1:9999/health
+    export E2E_REAL_AUTH_URL="http://127.0.0.1:9999"
+  fi
   E2E_RUN_DIR="${RUN_DIR}" \
   E2E_PG_PORT="${PG_PORT}" E2E_PG_DB="${PG_DB}" E2E_PG_USER="${PG_USER}" \
   E2E_POSTGREST_PORT="${POSTGREST_PORT}" E2E_SHIM_PORT="${SHIM_PORT}" \
@@ -198,6 +208,9 @@ start() {
     { tail -20 "${RUN_DIR}/seed.log" >&2; exit 1; }
 
   log "application"
+  if [[ -n "${E2E_REAL_AUTH_BINARY:-}" ]]; then
+    node "${HARNESS_DIR}/real-auth-provision.mjs"
+  fi
   # The production build, not the dev server: the dev overlay injects scripts
   # the Content-Security-Policy is not written for, and the thing under test
   # is what ships.
@@ -239,7 +252,7 @@ start() {
 # down
 # ---------------------------------------------------------------------------
 stop() {
-  for name in next shim postgrest; do
+  for name in next shim postgrest real-auth; do
     if [[ -f "${RUN_DIR}/${name}.pid" ]]; then
       kill "$(cat "${RUN_DIR}/${name}.pid")" 2>/dev/null || true
       rm -f "${RUN_DIR}/${name}.pid"

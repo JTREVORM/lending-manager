@@ -353,6 +353,39 @@ async function handleAuth(req, res, url) {
 // ---------------------------------------------------------------------------
 // PostgREST passthrough
 // ---------------------------------------------------------------------------
+function handleRealAuth(req, res, url) {
+  if (process.env.E2E_REAL_AUTH_URL !== 'http://127.0.0.1:9999') {
+    return send(res, 500, { message: 'Real Auth rehearsal must stay on loopback' });
+  }
+  const headers = { ...req.headers };
+  delete headers.host;
+  const token = bearer(req);
+  if (token === SECRET_KEY) {
+    headers.authorization =
+      'Bearer ' +
+      signJwt({
+        role: 'service_role',
+        exp: Math.floor(Date.now() / 1000) + 300,
+      });
+  } else if (token === PUBLISHABLE_KEY) {
+    delete headers.authorization;
+  }
+  const path = url.pathname.replace('/auth/v1', '') + url.search;
+  const upstream = httpRequest(
+    new URL(path, process.env.E2E_REAL_AUTH_URL),
+    {
+      method: req.method,
+      headers,
+    },
+    (response) => {
+      res.writeHead(response.statusCode ?? 502, response.headers);
+      response.pipe(res);
+    },
+  );
+  upstream.on('error', () => send(res, 502, { message: 'Isolated Auth unavailable' }));
+  req.pipe(upstream);
+}
+
 function handleRest(req, res, url, body) {
   const token = bearer(req);
   const headers = { ...req.headers };
@@ -416,6 +449,7 @@ const server = createServer(
     }
 
     if (url.pathname.startsWith('/auth/v1')) {
+      if (process.env.E2E_REAL_AUTH_URL) return handleRealAuth(req, res, url);
       return void handleAuth(req, res, url).catch((error) => {
         send(res, 500, { message: String(error) });
       });

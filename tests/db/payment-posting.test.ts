@@ -20,7 +20,14 @@ import {
   readMinimum,
   tryPostPayment,
 } from '../helpers/payment-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  hasDatabase,
+  query,
+  queryOne,
+  setTestBusinessClock,
+  skipReason,
+} from '../helpers/db';
 
 /**
  * Recording payments against the real database.
@@ -40,6 +47,7 @@ import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/
  * collections of UGX 11,500 each (principal 10,000, interest 1,500), totalling
  * UGX 115,000. Round figures, so a wrong allocation is obvious on sight.
  */
+const fixtureNow = new Date('2026-10-01T07:00:00Z');
 const describeDb = hasDatabase ? describe : describe.skip;
 
 if (!hasDatabase) {
@@ -59,12 +67,13 @@ async function tenCollectionLoan(): Promise<{
     termMonths: 1,
     frequency: 'every_3_days',
   });
-  await disburseLoan(loanId, scenario);
+  await disburseLoan(loanId, scenario, fixtureNow);
   return { scenario, loanId };
 }
 
 describeDb('recording payments', () => {
   beforeAll(async () => {
+    await setTestBusinessClock(fixtureNow);
     await deleteTestPayments();
     await deleteTestLoans();
     await deleteTestUsers();
@@ -784,7 +793,7 @@ describeDb('recording payments', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(loanId, scenario);
+      await disburseLoan(loanId, scenario, fixtureNow);
 
       await query(
         `update public.clients

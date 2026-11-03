@@ -20,7 +20,14 @@ import {
   postPayment,
   reversePayment,
 } from '../helpers/payment-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  hasDatabase,
+  query,
+  queryOne,
+  setTestBusinessClock,
+  skipReason,
+} from '../helpers/db';
 
 /**
  * Payment Row Level Security, attacked directly.
@@ -35,6 +42,7 @@ import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/
  * and does it agree for the *right* reason, rather than because allocations
  * were silently filtered out from under the aggregate?
  */
+const fixtureNow = new Date('2026-10-01T07:00:00Z');
 const describeDb = hasDatabase ? describe : describe.skip;
 
 if (!hasDatabase) {
@@ -55,6 +63,7 @@ describeDb('payment row level security', () => {
   let reversedPayment: string;
 
   beforeAll(async () => {
+    await setTestBusinessClock(fixtureNow);
     await deleteTestPayments();
     await deleteTestLoans();
     await deleteTestUsers();
@@ -73,7 +82,7 @@ describeDb('payment row level security', () => {
       termMonths: 1,
       frequency: 'every_3_days',
     });
-    await disburseLoan(ownLoan, scenario);
+    await disburseLoan(ownLoan, scenario, fixtureNow);
 
     ownPayment = await postPayment(ownLoan, scenario.secretary, { amount: 11_500 });
     reversedPayment = await postPayment(ownLoan, scenario.secretary, {
@@ -89,7 +98,7 @@ describeDb('payment row level security', () => {
       termMonths: 1,
       frequency: 'every_3_days',
     });
-    await disburseLoan(otherLoan, otherScenario);
+    await disburseLoan(otherLoan, otherScenario, fixtureNow);
     otherPayment = await postPayment(otherLoan, otherScenario.secretary, {
       amount: 11_500,
     });
@@ -337,7 +346,7 @@ describeDb('payment row level security', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(loanId, other);
+      await disburseLoan(loanId, other, fixtureNow);
 
       const result = await asUser(
         other.secretary,
@@ -387,7 +396,7 @@ describeDb('payment row level security', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(loanId, other);
+      await disburseLoan(loanId, other, fixtureNow);
 
       const result = await asUser(
         other.manager,
@@ -428,7 +437,7 @@ describeDb('payment row level security', () => {
         termMonths: 1,
         frequency: 'every_3_days',
       });
-      await disburseLoan(loanId, other);
+      await disburseLoan(loanId, other, fixtureNow);
       const target = await postPayment(loanId, other.secretary, { amount: 11_500 });
 
       const result = await asUser(

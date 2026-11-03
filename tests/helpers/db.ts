@@ -30,12 +30,33 @@ export const skipReason =
   'DATABASE_URL is not set. Run `npm run db:local:setup` and export DATABASE_URL to run the database suite.';
 
 let pool: Pool | undefined;
+let testBusinessClock: string | undefined;
+
+/** Pin one suite before opening its pool, using the existing owner-only clock. */
+export async function setTestBusinessClock(instant: Date): Promise<void> {
+  if (pool !== undefined)
+    throw new Error('Set the fixture clock before opening the pool.');
+  testBusinessClock = instant.toISOString();
+  const row = await queryOne<{ matches: boolean }>(
+    'select public.business_now() = $1::timestamptz as matches',
+    [testBusinessClock],
+  );
+  if (!row.matches)
+    throw new Error('The isolated owner-only business clock was not applied.');
+}
 
 function getPool(): Pool {
   if (pool === undefined) {
     if (!hasDatabase || DATABASE_URL === undefined) throw new Error(skipReason);
     assertTestDatabaseUrl(DATABASE_URL);
-    pool = new Pool({ connectionString: DATABASE_URL, max: 12 });
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      max: 12,
+      options:
+        testBusinessClock === undefined
+          ? undefined
+          : `-c app.business_now=${testBusinessClock}`,
+    });
   }
   return pool;
 }
@@ -117,4 +138,5 @@ export async function closePool(): Promise<void> {
     await pool.end();
     pool = undefined;
   }
+  testBusinessClock = undefined;
 }

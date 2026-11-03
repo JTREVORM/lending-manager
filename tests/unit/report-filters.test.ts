@@ -213,9 +213,17 @@ describe('the date range', () => {
   });
 
   it('reports an unreadable date as a sentence, never as an error page', () => {
+    // `to` is today in the business timezone, not a fixed date. An empty
+    // `from` is read as today, so a hard-coded `to` in the past would make
+    // this a *reversed* range once the calendar passed it — the suite would
+    // start reporting the reversed-range sentence as a failure of this case,
+    // which is about unreadable dates. The other values here are refused
+    // before any range comparison, so the bound does not affect them.
+    const today = businessDateFor(TIMEZONE);
+
     for (const from of ['2026-13-01', 'last Tuesday', '2026-02-30', '']) {
       const resolved = resolveReportRange(
-        { period: 'custom', from, to: '2026-10-31' },
+        { period: 'custom', from, to: today },
         TIMEZONE,
       );
 

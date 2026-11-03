@@ -270,10 +270,21 @@ describeDb('rescheduling and cancelling', () => {
   it('keeps the first announced date and the reason', async () => {
     const id = await scheduleMeeting({ monthsAhead: 40 });
 
+    // Both moves stay inside the calendar month this meeting already holds,
+    // anchored to its own `meeting_date` rather than to an offset from today.
+    // `membership_meetings_one_monthly_per_branch` admits one non-cancelled
+    // monthly meeting per branch per calendar month, and a near-term day
+    // offset lands in whichever month the calendar happens to make it —
+    // sometimes a month another test in this file already occupies. Moving
+    // within its own month keeps the index key unchanged for this row, so the
+    // test exercises rescheduling rather than the uniqueness rule.
     const moved = await asUserCommitted(fx.manager, [
       {
         sql: `select public.reschedule_membership_meeting(
-                       $1, (public.business_date() + 44)::timestamp
+                       $1,
+                       (pg_catalog.date_trunc('month',
+                          (select m.meeting_date from public.membership_meetings m
+                            where m.id = $1)) + interval '9 days')::timestamp
                              at time zone 'Africa/Kampala' + interval '14 hours',
                        'The venue was unavailable.', 'The parish hall') as id`,
         params: [id],
@@ -293,7 +304,10 @@ describeDb('rescheduling and cancelling', () => {
     await asUserCommitted(fx.manager, [
       {
         sql: `select public.reschedule_membership_meeting(
-                       $1, (public.business_date() + 48)::timestamp
+                       $1,
+                       (pg_catalog.date_trunc('month',
+                          (select m.meeting_date from public.membership_meetings m
+                            where m.id = $1)) + interval '13 days')::timestamp
                              at time zone 'Africa/Kampala' + interval '14 hours',
                        'Moved again after the rain.', null) as id`,
         params: [id],

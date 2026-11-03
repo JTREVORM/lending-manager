@@ -206,17 +206,61 @@ for (const report of REPORTS) {
   });
 }
 
+/** The timezone the business keeps its books in, and reads "today" from. */
+const TIME_ZONE = 'Africa/Kampala';
+
+/**
+ * Today as the application reads it, not as the runner's clock does.
+ *
+ * `en-CA` formats as `YYYY-MM-DD`, which is the form the report's `from` and
+ * `to` parameters take.
+ */
+function businessToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/** The business date `days` before `date`, as `YYYY-MM-DD`. */
+function daysBefore(date: string, days: number): string {
+  const moved = new Date(`${date}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() - days);
+  return moved.toISOString().slice(0, 10);
+}
+
 test.describe('the collections chart', () => {
   /**
-   * A month, not the default single day.
+   * An explicit range, not a named period.
    *
    * The chart is drawn only when there is more than one day to compare — one
-   * bar is not a comparison — so the default period has no chart in it, and
-   * pointing these tests at it meant the §17 parity assertion skipped itself
-   * on every run. A test that skips when it finds nothing is a test that
-   * reports success for a chart that was never drawn.
+   * bar is not a comparison — so a period holding a single collection day has
+   * no chart in it, and pointing these tests at one meant the §17 parity
+   * assertion skipped itself. A test that skips when it finds nothing is a
+   * test that reports success for a chart that was never drawn.
+   *
+   * Every named period can become that single day, which is why none of them
+   * is used here. `today` is one day by construction, and `week`, `month` and
+   * `year` each resolve to the *whole* calendar week, month or year
+   * (`resolveDateRange`) — so on the first day of one, the window is almost
+   * entirely in the future and holds at most the day just begun. On
+   * 2026-11-01, `period=month` covered 2026-11-01 to 2026-11-30 and contained
+   * exactly one collection day, because the seed posts its payments in the
+   * days *before* today.
+   *
+   * A trailing window asked for explicitly has no such edge. The seed spreads
+   * collections across roughly the last three months, so sixty days back
+   * always covers many collection days — measured at 47 on the day this was
+   * written, against the two the chart needs. `MAX_RANGE_DAYS` is 1,827, so a
+   * 61-day inclusive range is well inside the cap and is never refused.
    */
-  const CHARTED = '/reports/collections?period=month';
+  const CHARTED_RANGE_DAYS = 60;
+  const chartedTo = businessToday();
+  const CHARTED =
+    `/reports/collections?period=custom` +
+    `&from=${daysBefore(chartedTo, CHARTED_RANGE_DAYS)}&to=${chartedTo}`;
 
   test('says exactly what the report says', async ({ page }) => {
     // §17. Parity, read from the page rather than recomputed.

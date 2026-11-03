@@ -114,12 +114,13 @@ describeDb('the forced-password-change flag', () => {
 
       const attempt = await asUser(
         subject,
-        `update public.profiles set must_change_password = false where id = $1`,
+        `update public.profiles set must_change_password = false where id = $1 returning id`,
         [subject.profileId],
       );
 
-      expect(attempt.ok).toBe(false);
-      expect(attempt.message).toMatch(/confirming a completed password change/i);
+      // RLS now withholds the entire row before the column guard is reached.
+      expect(attempt.ok).toBe(true);
+      expect(attempt.rowCount).toBe(0);
 
       expect((await readFlag(subject.profileId)).must_change_password).toBe(true);
     });
@@ -154,14 +155,16 @@ describeDb('the forced-password-change flag', () => {
     });
 
     it('cannot backdate password_set_at to fake an old change', async () => {
+      const before = await readFlag(subject.profileId);
       const attempt = await asUser(
         subject,
         `update public.profiles set password_set_at = now() - interval '1 year' where id = $1`,
         [subject.profileId],
       );
 
-      expect(attempt.ok).toBe(false);
-      expect(attempt.message).toMatch(/maintained by the database/i);
+      expect(attempt.ok).toBe(true);
+      expect(attempt.rowCount).toBe(0);
+      expect(await readFlag(subject.profileId)).toEqual(before);
     });
 
     it('cannot clear the flag by hiding it inside an otherwise valid update', async () => {
@@ -177,7 +180,8 @@ describeDb('the forced-password-change flag', () => {
         [subject.profileId],
       );
 
-      expect(attempt.ok).toBe(false);
+      expect(attempt.ok).toBe(true);
+      expect(attempt.rowCount).toBe(0);
       expect((await readFlag(subject.profileId)).must_change_password).toBe(true);
     });
   });
@@ -427,6 +431,9 @@ describeDb('the forced-password-change flag', () => {
 
   // -------------------------------------------------------------------------
   describe('the rest of the security model is unaffected', () => {
+    beforeAll(async () => {
+      await query('select public.confirm_password_change($1)', [subject.authUserId]);
+    });
     it('still refuses a status change without the capability', async () => {
       const attempt = await asUser(
         subject,

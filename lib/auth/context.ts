@@ -15,11 +15,11 @@
  * something a minute ago — a token issued an hour ago asserts an hour-old
  * truth. So the context is read from the database on every request.
  *
- * That read resolves identity through `public.current_profile_id()`, which
- * closes the loop: it resolves only *active* profiles, so a suspended
- * account has no identity for authorization purposes and this function
- * reports it as unauthorised. Disabling an account takes effect on the next
- * request, not when the token expires.
+ * The session bootstrap resolves only the caller's active profile. A forced
+ * password-change account retains this minimal recovery identity, but no
+ * business permissions. requireAuth/requirePermission reject it; database
+ * current_profile_id() and the Data API request gate independently withhold
+ * business access on the next request, without waiting for JWT expiry.
  *
  * ## One round trip, since Phase 18
  *
@@ -28,10 +28,8 @@
  * the application in `iad1` that was about 240ms of transatlantic latency
  * ahead of every page and every client-side navigation.
  *
- * It is now one call to `public.current_session_context()`, which composes
- * the same two Phase 2 primitives — `current_profile_id()` and
- * `current_user_role_keys()` — and reports the failure reason itself rather
- * than leaving it to be inferred from which of three calls came back empty.
+ * It is now one call to `public.current_session_context()`, the deliberately
+ * narrow recovery bootstrap, which reports the failure reason itself.
  * See migration 20261018000300 for why removing the `getClaims()` call
  * removes no verification: the proxy still performs one on every request
  * (it has to, because that is what refreshes the session), and PostgREST
@@ -103,6 +101,8 @@ export type AuthResult =
 
 /**
  * Resolve the caller, without throwing.
+ * Recovery/bootstrap only: business actions must use requireAuth or a
+ * permission guard, never infer authority from the returned raw role keys.
  *
  * Memoised per request with React's `cache`, so a layout and the page beneath
  * it share one database round trip rather than issuing the same query twice.
@@ -204,7 +204,7 @@ export const getAuthContext = cache(async (): Promise<AuthResult> => {
   // Computed from the TypeScript matrix rather than read from the database.
   // A database test asserts the two representations are identical, so this
   // saves a round trip without creating a second source of truth.
-  const permissions = permissionsFor(roles);
+  const permissions = row.must_change_password === true ? [] : permissionsFor(roles);
 
   return {
     ok: true,
@@ -233,7 +233,14 @@ export const getAuthContext = cache(async (): Promise<AuthResult> => {
 export async function requireAuth(): Promise<AuthContext> {
   const result = await getAuthContext();
 
-  if (result.ok) return result.context;
+  if (result.ok) {
+    if (result.context.mustChangePassword) {
+      throw new AuthorizationError(
+        'A password change is required before business access.',
+      );
+    }
+    return result.context;
+  }
 
   throw authFailureToError(result.reason);
 }
@@ -277,7 +284,7 @@ export async function requireAnyPermission(
 
 /** Does the resolved caller hold this capability? For conditional rendering. */
 export function contextCan(context: AuthContext, permission: Permission): boolean {
-  return can(context.roles, permission);
+  return !context.mustChangePassword && can(context.roles, permission);
 }
 
 /** Map a failure reason onto the application error taxonomy. */

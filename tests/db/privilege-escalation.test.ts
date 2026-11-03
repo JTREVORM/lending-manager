@@ -323,8 +323,14 @@ describeDb('privilege escalation', () => {
         [subject.profileId],
       );
 
-      expect(direct.ok).toBe(false);
-      expect(direct.message).toMatch(/confirming a completed password change/i);
+      // RLS now withholds the row entirely, before its column guard runs.
+      expect(direct.ok).toBe(true);
+      expect(direct.rowCount).toBe(0);
+      const flag = await query<{ must_change_password: boolean }>(
+        'select must_change_password from public.profiles where id=$1',
+        [subject.profileId],
+      );
+      expect(flag[0]?.must_change_password).toBe(true);
     });
 
     it('refuses clearing it through the confirmation function too', async () => {

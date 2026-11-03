@@ -1,4 +1,4 @@
-import { query, queryOne } from './db';
+import { getClient, query, queryOne } from './db';
 import { createTestUser, type TestUser } from './auth-fixtures';
 
 /**
@@ -322,11 +322,57 @@ export async function approveLoan(loanId: string, actors: LoanActors): Promise<v
 }
 
 /** Drive a loan to `active`. */
-export async function disburseLoan(loanId: string, actors: LoanActors): Promise<void> {
+export async function disburseLoan(
+  loanId: string,
+  actors: LoanActors,
+  fixtureInstant?: Date,
+): Promise<void> {
   await approveLoan(loanId, actors);
   await runAsCommitted(actors.owner, [
     { sql: `select public.disburse_loan($1)`, params: [loanId] },
   ]);
+  if (fixtureInstant === undefined) return;
+
+  // Match schedule-generation fixtures, but atomically and only before payments.
+  const client = await getClient();
+  const guards = [
+    ['loan_installments', 'loan_installments_no_delete'],
+    ['loan_schedules', 'loan_schedules_no_delete'],
+    ['loans', 'loans_guard_transition'],
+  ] as const;
+  try {
+    await client.query('begin');
+    const payments = await client.query(
+      'select 1 from public.loan_payments where loan_id = $1 limit 1',
+      [loanId],
+    );
+    if (payments.rowCount) throw new Error('Cannot re-anchor a fixture with payments.');
+    for (const [table, trigger] of guards) {
+      await client.query(`alter table public.${table} disable trigger ${trigger}`);
+    }
+    await client.query('delete from public.loan_installments where loan_id = $1', [
+      loanId,
+    ]);
+    await client.query('delete from public.loan_schedules where loan_id = $1', [loanId]);
+    await client.query(
+      `update public.loans set disbursed_at = $2::timestamptz,
+         approved_at = $2::timestamptz - interval '1 hour',
+         submitted_at = $2::timestamptz - interval '2 hours',
+         created_at = $2::timestamptz - interval '3 hours'
+       where id = $1`,
+      [loanId, fixtureInstant.toISOString()],
+    );
+    for (const [table, trigger] of guards) {
+      await client.query(`alter table public.${table} enable trigger ${trigger}`);
+    }
+    await client.query('select public.generate_loan_schedule($1)', [loanId]);
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**

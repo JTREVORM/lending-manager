@@ -17,6 +17,7 @@ import {
   hasDatabase,
   query,
   queryOne,
+  setTestBusinessClock,
   skipReason,
 } from '../helpers/db';
 
@@ -29,6 +30,7 @@ import {
  * twice for one Mobile Money transaction, an installment allocated beyond what
  * it is owed, a loan cleared twice, or a balance driven negative.
  */
+const fixtureNow = new Date('2026-10-01T07:00:00Z');
 const describeDb = hasDatabase ? describe : describe.skip;
 
 if (!hasDatabase) {
@@ -135,12 +137,13 @@ async function tenCollectionLoan(): Promise<{
     termMonths: 1,
     frequency: 'every_3_days',
   });
-  await disburseLoan(loanId, scenario);
+  await disburseLoan(loanId, scenario, fixtureNow);
   return { scenario, loanId };
 }
 
 describeDb('payments under concurrency', () => {
   beforeAll(async () => {
+    await setTestBusinessClock(fixtureNow);
     await deleteTestPayments();
     await deleteTestLoans();
     await deleteTestUsers();
@@ -406,18 +409,18 @@ describeDb('payments under concurrency', () => {
     // 20 payments across 20 loans, all at once. Receipt numbers come from the
     // Phase 1 atomic generator; two borrowers holding the same receipt number
     // would be unresolvable.
-    const scenarios = await Promise.all(
-      Array.from({ length: 20 }, async () => {
-        const scenario = await createLoanScenario();
-        const loanId = await createDraftLoan(scenario.clientId, {
-          principal: 100_000,
-          termMonths: 1,
-          frequency: 'every_3_days',
-        });
-        await disburseLoan(loanId, scenario);
-        return { scenario, loanId };
-      }),
-    );
+    // Fixture anchoring takes table DDL locks; only the payments below race.
+    const scenarios: { scenario: LoanScenario; loanId: string }[] = [];
+    for (let i = 0; i < 20; i += 1) {
+      const scenario = await createLoanScenario();
+      const loanId = await createDraftLoan(scenario.clientId, {
+        principal: 100_000,
+        termMonths: 1,
+        frequency: 'every_3_days',
+      });
+      await disburseLoan(loanId, scenario, fixtureNow);
+      scenarios.push({ scenario, loanId });
+    }
 
     const outcomes = await Promise.all(
       scenarios.map((entry) =>
