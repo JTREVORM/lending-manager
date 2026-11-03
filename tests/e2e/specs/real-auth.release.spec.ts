@@ -330,9 +330,16 @@ test('real Auth JWT: the whole protected surface flips to 403 on a forced flag',
   expect(ids.savings_account_id, 'seeded savings account').toBeTruthy();
 
   const user = await createAccount('owner_admin');
-  const tokens = await signIn(user.phone);
-  const headers = { Authorization: 'Bearer ' + tokens.access_token };
   const api = 'http://127.0.0.1:3001';
+
+  // The harness runs real Auth with GOTRUE_JWT_EXP=60, so a token is good for
+  // a minute. Each phase below takes a fresh password grant rather than
+  // carrying one token through the whole test, or a 401 from a token that
+  // simply aged out would be indistinguishable from the boundary refusing.
+  // The same-token claim is made explicitly, immediately after the flag goes
+  // up, where a minute is ample.
+  let tokens = await signIn(user.phone);
+  let headers = { Authorization: 'Bearer ' + tokens.access_token };
 
   // Tables, report projections and the financial definer RPCs. GET for the
   // relations and the scalar RPCs; POST for the volatile one.
@@ -367,10 +374,20 @@ test('real Auth JWT: the whole protected surface flips to 403 on a forced flag',
     expect([200, 403], `${method} ${path} before`).toContain(response.status());
     if (response.status() === 200) allowed.push(`${method} ${path}`);
   }
-  expect(
-    allowed.length,
-    'an active Owner/Admin must reach some of the protected surface, or this test proves nothing',
-  ).toBeGreaterThan(8);
+  // The three core financial relations are not optional for an Owner/Admin:
+  // production shows 35 loans, 470 payments and 1,667 journal lines for that
+  // role. If any of them is refused beforehand, the fixture is wrong and the
+  // 403s below would prove nothing.
+  for (const core of [
+    'GET /loans?select=id&limit=1',
+    'GET /loan_payments?select=id&limit=1',
+    'GET /journal_lines?select=id&limit=1',
+  ]) {
+    expect(allowed, `an active Owner/Admin must reach ${core} beforehand`).toContain(
+      core,
+    );
+  }
+  expect(allowed.length, 'permitted surface before forcing').toBeGreaterThanOrEqual(5);
 
   // `assess_meeting_fines` writes, so it is only exercised when the seed left
   // a meeting to assess; it is asserted denied below either way.
@@ -384,6 +401,24 @@ test('real Auth JWT: the whole protected surface flips to 403 on a forced flag',
 
   // ---- The flag goes up. The same, unexpired, real Auth token. -----------
   await setFlag(user.id, true);
+
+  // Proved first, on the token already in hand: the boundary takes effect on
+  // the next request, without waiting for the session to expire.
+  const sameToken = allowed[0]!.split(' ') as [string, string];
+  const immediate = await request.fetch(api + sameToken[1], {
+    method: sameToken[0],
+    headers,
+  });
+  expect(immediate.status(), 'the same unexpired real Auth token, after forcing').toBe(
+    403,
+  );
+  expect(z.object({ code: z.string() }).parse(await immediate.json()).code).toBe('42501');
+
+  // A fresh grant for the exhaustive sweep, so nothing below can be a token
+  // that merely aged out. GoTrue still issues one: the flag is the
+  // application's, not Auth's.
+  tokens = await signIn(user.phone);
+  headers = { Authorization: 'Bearer ' + tokens.access_token };
 
   for (const [method, path] of reads) {
     const denied = await request.fetch(api + path, { method, headers });
@@ -453,6 +488,8 @@ test('real Auth JWT: the whole protected surface flips to 403 on a forced flag',
 
   // ---- Confirmed change restores exactly what was permitted before ------
   await setFlag(user.id, false);
+  tokens = await signIn(user.phone);
+  headers = { Authorization: 'Bearer ' + tokens.access_token };
   for (const entry of allowed) {
     const [method, path] = entry.split(' ') as [string, string];
     const restored = await request.fetch(api + path, { method, headers });
@@ -542,8 +579,14 @@ test('real Auth JWT: a borrower reads only their own records, and none when forc
   ).toEqual([]);
 
   await setFlag(borrower.id, true);
-  const forced = await request.get(api + '/loans?select=id', { headers });
+  // A fresh grant, so a 403 here cannot be a token that aged out during the
+  // fixture work above.
+  const forcedTokens = await signIn(borrower.phone);
+  const forced = await request.get(api + '/loans?select=id', {
+    headers: { Authorization: 'Bearer ' + forcedTokens.access_token },
+  });
   expect(forced.status(), 'forced borrower').toBe(403);
+  expect(z.object({ code: z.string() }).parse(await forced.json()).code).toBe('42501');
 });
 
 test('real Auth stack: an anonymous caller reaches no business route', async ({

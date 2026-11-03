@@ -78,8 +78,32 @@ const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
  * And the claim worth measuring is exactly that it changes nothing: a phase
  * that writes a new expense account and a new journal source type is a phase
  * that could, in principle, move a trial balance.
+ *
+ * `20261103` is the forced-password definer-RPC guard. It is in this list for
+ * the plain reason the list exists: it is not deployed yet, so it is part of
+ * the upgrade rather than part of the existing schema. It also *must* be, and
+ * this is the trap the list's own comment warns about — it declares
+ * `public.savings_accounts` and `public.membership_policy_versions` as row
+ * types and calls `savings_account_governing_policy`, all of which Phase 2
+ * creates. Applied as "existing" it runs before them and fails with
+ * `type "public.savings_accounts" does not exist`.
+ *
+ * `20261030115530` and `20261030180224` stay out of the list deliberately:
+ * both are already applied to production, so they are the existing schema,
+ * and neither references a phase object.
+ *
+ * Applying it here is also the better test. It lands on a seeded book between
+ * the two financial baselines, so the claim that an authorization guard moves
+ * no money is measured rather than asserted.
  */
-const PHASE_PREFIXES = ['20261019', '20261020', '20261021', '20261022', '20261028'];
+const PHASE_PREFIXES = [
+  '20261019',
+  '20261020',
+  '20261021',
+  '20261022',
+  '20261028',
+  '20261103',
+];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));

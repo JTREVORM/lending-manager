@@ -341,6 +341,37 @@ PR head.
   *restricted* accounts, which is this release's scope; narrowing it to a
   finance capability is a separate product decision and is not changed here.
 * **`__gate_probe`** disposition remains open exactly as previously recorded.
+* **Supabase's own security advisors** on the production project report four
+  findings, none new and none caused by this work: `security_definer_view`
+  (ERROR) — the known `company_identity` branding projection;
+  `authenticated_security_definer_function_executable` (WARN) — Supabase
+  flagging the very class of issue §3.5 closes;
+  `auth_leaked_password_protection` (WARN) — **disabled**; and
+  `rls_enabled_no_policy` (INFO).
+* **Leaked-password protection is worth turning on.** For a system that issues
+  administrator-set temporary passwords and then requires the holder to choose
+  their own, having GoTrue reject a known-breached choice is a direct
+  improvement to the mechanism this release exists to protect. It is an Auth
+  setting, not a schema change, and was not altered here.
+
+## 6a. Production integrity after this certification
+
+Re-read after every probe, to show the probes left nothing behind:
+
+| Check | Value |
+|---|---|
+| Forced accounts | 2 — both still `active`, `must_change_password = true` |
+| `password_set_at` on both | `2026-10-08 08:41:16+00` (unchanged) |
+| `last_sign_in_at` on both | null (never signed in) |
+| Roles per forced account | 1 each (unchanged) |
+| `public.loans` | 35 |
+| `public.loan_payments` | 470 |
+| `public.journal_lines` | 1667 |
+| Migration history | 160 rows |
+
+No password was reset, no flag changed, no account created, no financial row
+written, no policy or grant altered, and the hook was never disabled. Every
+authorization probe ran inside a transaction that was rolled back.
 
 ---
 

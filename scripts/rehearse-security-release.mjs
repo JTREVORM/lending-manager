@@ -301,9 +301,29 @@ try {
     owner = await tokenFor(fixtures.staff.owner);
   const scalar =
     '/rpc/savings_pledged_amount?p_savings_account_id=00000000-0000-4000-8000-000000000001';
+  // An un-guarded definer RPC: policy metadata rather than a member's money,
+  // left to the hook by 20261103000100 and recorded as residual.
+  const unguarded =
+    '/rpc/membership_governing_policy?p_membership_id=00000000-0000-4000-8000-000000000001';
+  // Before the hook is activated, with the RLS half of the boundary in place.
+  //
+  // This used to assert that a scalar definer RPC answered 200 here, which was
+  // the whole argument for the hook being mandatory: Row Level Security does
+  // not reach inside a SECURITY DEFINER function. 20261103000100 makes the
+  // financial ones refuse on their own, so that is no longer true of them —
+  // and the three claims below say exactly which parts of the old argument
+  // still hold.
   check(
-    'Before activation, RLS identity alone does not gate scalar definer RPC',
-    (await request(scalar, forced)).status === 200,
+    'Before activation, a guarded financial definer RPC refuses on its own',
+    (await request(scalar, forced)).status === 403,
+  );
+  check(
+    'Before activation, an un-guarded definer RPC still answers, so the hook remains mandatory',
+    (await request(unguarded, forced)).status === 200,
+  );
+  check(
+    'Before activation, a table route answers with no rows rather than refusing',
+    (await request('/loans?select=id&limit=0', forced)).status === 200,
   );
   await db.query(`create function public.release_gate_chain() returns void language plpgsql volatile security invoker set search_path='' as $$
     begin perform public.release_legacy_hook(); perform public.enforce_password_change(); end $$;
@@ -319,7 +339,7 @@ try {
     'Chaining preserves existing hook in real HTTP context',
     normal.data.legacy === 'yes',
   );
-  for (const path of ['/loans?select=id&limit=0', scalar])
+  for (const path of ['/loans?select=id&limit=0', scalar, unguarded])
     check('Forced request denied: ' + path, (await request(path, forced)).status === 403);
   check(
     'Normal Owner table reads preserved',
