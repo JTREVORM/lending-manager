@@ -7857,6 +7857,18 @@ export type Database = {
         Returns: undefined;
       };
       /**
+       * Not callable from a client: EXECUTE is revoked from `anon` and
+       * `authenticated`. Declared only because the schema/type parity test
+       * requires every function to appear. The financial SECURITY DEFINER
+       * RPCs call it as their first statement so they refuse a session with
+       * no business identity on their own, rather than depending solely on
+       * the Data API pre-request hook. See migration 20261103000100.
+       */
+      require_business_identity: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      /**
        * Phase 18. The Settings screen's read-only view of reference
        * numbering. SECURITY DEFINER and gated on settings:view, so the
        * `reference_sequences` table stays unreadable to a direct table read.
