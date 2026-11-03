@@ -1414,6 +1414,7 @@ describeDb('privileged functions', () => {
       'repayment_frequencies_guard_identity',
       'request_benefit_information',
       'request_savings_withdrawal',
+      'require_business_identity',
       'reschedule_membership_meeting',
       'reverse_benefit_payment',
       'reverse_expense',
