@@ -378,18 +378,23 @@ PostgreSQL 16 is this sandbox's only available server; PostgreSQL 17 and the
 real-Auth/PostgREST evidence run in CI, which is the authoritative run on the
 PR head.
 
-### CI results — all four jobs green on the PR head
+### CI results — all four jobs green, deterministically
 
-Workflow run **41588722855**, head **`03e72c5`**, conclusion **success** — but
-see the flakiness correction below: one of its passes was not deterministic,
-and the authoritative run is the one on the final head.
+**Authoritative run: 41592055460, head `b7b1a4b`, conclusion success.** This is
+the run to cite: it is the first all-green run in which every assertion is
+deterministic. The earlier green run (41588722855 at `03e72c5`) carried one
+non-deterministic pass — see the correction below.
 
 | Job | Result |
 |---|---|
 | checks, unit/integration, build | **success** — 2,647 unit/integration tests, typecheck, lint, format, money audit, secret scan, production build, bundle assertions |
-| database (real PostgreSQL 17.11) | **success** — **1,898 tests** (1,816 + 18 + 15 + 24 + 25) |
-| security release rehearsal (PostgreSQL 17, real Auth) | **success** — **34 rehearsal checks**, then **14 Playwright tests** against real GoTrue and real PostgREST |
+| database (real PostgreSQL 17.11) | **success** — **1,898 tests** (1,816 + 18 + 15 + 24 + 25), plus the upgrade check's 28 identical financial figures |
+| security release rehearsal (PostgreSQL 17, real Auth) | **success** — **34 rehearsal checks**, then **14 of 14 Playwright tests** against real GoTrue v2.197.0 and real PostgREST 12.2.3 |
 | browser E2E (production build, fresh seed) | **success** — 910 passed, 48 skipped |
+
+Any commit after `b7b1a4b` on this branch is documentation only. The release
+gate's requirement of green CI on the **exact merged head** is §7 step 4, and
+belongs to whoever merges, not to this document.
 
 **The rehearsal's 34 checks** ran on PostgreSQL 17.11 against the real
 PostgREST binary, and include the three that replaced the old
@@ -451,6 +456,16 @@ strictly-fewer-than-total check are keyed to the same set.
 No assertion was weakened and nothing was skipped to get green: a test that
 depended on seed ordering was made deterministic. A security gate that passes
 on a coin toss is worse than one that fails.
+
+Measured on a seeded book, the old fixture query matched **11** candidate
+clients and the corrected one matches **10** — the single excluded client held
+only a `draft` and a `pending_approval` loan. With `order by c.id limit 1` over
+freshly minted UUIDs that is roughly a one-in-eleven failure per run, which is
+exactly the observed "passed once, failed next time". Seed status mix:
+`active=9, approved=1, cleared=2, draft=1, pending_approval=1`.
+
+The corrected case passes in run 41592055460 (`✓ 13 … 403ms`), with all 14
+real-Auth tests green.
 
 ### What the first CI run caught
 
