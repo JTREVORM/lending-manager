@@ -504,27 +504,39 @@ test('real Auth JWT: a borrower reads only their own records, and none when forc
   const api = 'http://127.0.0.1:3001';
   const borrower = await createAccount('client');
   const c = await db();
-  let ownLoan: string | undefined;
+  let ownClient: string | undefined;
+  let ownLoans: string[] = [];
   let totalLoans = 0;
   try {
-    // Link the portal account to one seeded client, then take that client's
-    // loan and somebody else's.
+    // `loans_select_own_or_register` shows a borrower only their own client's
+    // loans, and only in these four statuses — a draft or one awaiting
+    // approval is correctly invisible to them. The client is therefore chosen
+    // by what the policy actually exposes. Picking any client holding any loan
+    // made this test depend on which seeded client sorted first, and the seed
+    // generates fresh ids on every run: it passed once and then failed on a
+    // client whose only loan was still a draft.
+    const visibleStatuses = ['approved', 'active', 'cleared', 'cancelled'];
     const client = await c.query<{ id: string }>(
       `select c.id from public.clients c
-        where exists (select 1 from public.loans l where l.client_id = c.id)
-          and c.profile_id is null
+        where c.profile_id is null
+          and exists (
+            select 1 from public.loans l
+            where l.client_id = c.id and l.status = any($1)
+          )
         order by c.id limit 1`,
+      [visibleStatuses],
     );
     if (client.rowCount) {
+      ownClient = client.rows[0]!.id;
       await c.query('select public.link_client_profile($1, $2)', [
-        client.rows[0]!.id,
+        ownClient,
         borrower.id,
       ]);
-      const loan = await c.query<{ id: string }>(
-        'select id from public.loans where client_id = $1 order by id limit 1',
-        [client.rows[0]!.id],
+      const loans = await c.query<{ id: string }>(
+        'select id from public.loans where client_id = $1 and status = any($2) order by id',
+        [ownClient, visibleStatuses],
       );
-      ownLoan = loan.rows[0]?.id;
+      ownLoans = loans.rows.map((r) => r.id);
     }
     // Counted as the owner, so it is the real total rather than a filtered
     // one: the isolation claim is that the borrower sees strictly less.
@@ -535,11 +547,14 @@ test('real Auth JWT: a borrower reads only their own records, and none when forc
   } finally {
     await c.end();
   }
-  test.skip(!ownLoan, 'The seed left no unlinked client holding a loan');
+  test.skip(
+    ownLoans.length === 0,
+    'The seed left no unlinked client holding a borrower-visible loan',
+  );
   expect(
     totalLoans,
     'the seed must hold more than one loan for this to mean anything',
-  ).toBeGreaterThan(1);
+  ).toBeGreaterThan(ownLoans.length);
 
   const tokens = await signIn(borrower.phone);
   const headers = { Authorization: 'Bearer ' + tokens.access_token };
@@ -547,10 +562,13 @@ test('real Auth JWT: a borrower reads only their own records, and none when forc
   const mine = await request.get(api + '/loans?select=id', { headers });
   expect(mine.status()).toBe(200);
   const visible = z.array(z.object({ id: z.string() })).parse(await mine.json());
+  // Exactly their own client's exposed loans: nothing missing, nothing extra.
+  // The positive half matters as much as the negative one — "sees nothing"
+  // would satisfy isolation trivially.
   expect(
-    visible.map((r) => r.id),
-    'the borrower sees their own loan',
-  ).toContain(ownLoan);
+    [...visible.map((r) => r.id)].sort(),
+    'the borrower sees their own loans',
+  ).toEqual([...ownLoans].sort());
   expect(visible.length, 'a borrower must not see the whole portfolio').toBeLessThan(
     totalLoans,
   );

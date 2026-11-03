@@ -380,7 +380,9 @@ PR head.
 
 ### CI results — all four jobs green on the PR head
 
-Workflow run **41588722855**, head **`03e72c5`**, conclusion **success**.
+Workflow run **41588722855**, head **`03e72c5`**, conclusion **success** — but
+see the flakiness correction below: one of its passes was not deterministic,
+and the authoritative run is the one on the final head.
 
 | Job | Result |
 |---|---|
@@ -418,6 +420,37 @@ this round, driving GoTrue-issued tokens against real PostgREST:
 
 The harness logged `Synthetic fixtures provisioned through real Auth; no
 credentials logged.`
+
+### A flaky test of my own, and the correction
+
+The run above was green, but one of its passes was luck, and that is worth
+stating rather than leaving in the record as a clean result.
+
+Re-running the identical code on a **documentation-only** commit
+(`fdb5bd7`, run 41591197722) failed the new borrower-isolation case:
+
+```
+Error: the borrower sees their own loan
+  real Auth JWT: a borrower reads only their own records, and none when forced
+```
+
+The fault was the test's, not the boundary's. `loans_select_own_or_register`
+shows a borrower their own client's loans **only** in the four statuses
+`approved`, `active`, `cleared` and `cancelled` — a draft or one awaiting
+approval is correctly invisible to them. The test picked the first seeded
+client holding *any* loan, and the seed generates fresh ids on every run, so
+whether that client's loan happened to be in a visible status was down to
+which UUID sorted first.
+
+The fixture now selects a client by what the policy actually exposes, and the
+assertion is tightened from "contains my loan" to "is exactly my client's
+exposed loans, sorted" — nothing missing and nothing extra, which is the
+isolation claim in both directions. The skip condition and the
+strictly-fewer-than-total check are keyed to the same set.
+
+No assertion was weakened and nothing was skipped to get green: a test that
+depended on seed ordering was made deterministic. A security gate that passes
+on a coin toss is worse than one that fails.
 
 ### What the first CI run caught
 
