@@ -14,9 +14,9 @@ the database level and has been closed on the security branch. That fix is
 | 2 | Real Supabase Auth test environment | **PASS** | Isolated, GitHub Actions (real GoTrue) |
 | 3 | Restricted accounts denied loans/payments/ledger/reports/RPCs | **PASS (RLS) / FAIL→FIXED (definer RPCs)** | Production SQL + isolated HTTP |
 | 4 | `ledger_account_balance`, `savings_withdrawable_amount`, `assess_meeting_fines` | **FAIL in production → FIXED on branch** | Production SQL |
-| 5 | Password-change recovery remains accessible | **PASS** | Production SQL + isolated HTTP/browser |
+| 5 | Password-change recovery remains accessible | **PASS** | Production SQL (hook allowlist exercised) + isolated HTTP/browser |
 | 6 | Normal accounts retain legitimate permissions | **PASS** | Production hosted HTTP (live Owner/Admin session) |
-| 7 | Anonymous access, cross-user isolation, Storage authorization | **PASS** | Production SQL (Storage policies) + isolated |
+| 7 | Anonymous access, cross-user isolation, Storage authorization | **PASS** | Anonymous production-verified (§3.6); Storage row-level isolated (§3.4) |
 | 8 | Hosted PostgREST behaviour over real HTTP | **PARTIAL / BLOCKED** | Project's own request logs; see §5 |
 | 9 | Production vs isolated vs blocked clearly separated | **PASS** | This document |
 
@@ -135,7 +135,7 @@ transaction against real production data:
 | `public.savings_accounts` | **0 rows** |
 | `public.clients` | **0 rows** |
 | `public.ledger_accounts` | **0 rows** |
-| `storage.objects` | **0 rows** |
+| `storage.objects` | 0 rows — but see §3.4: production holds no objects at all, so this row proves nothing on its own |
 
 ### 3.2 Normal accounts retain their permissions: PASS
 
@@ -151,6 +151,7 @@ Same method, impersonating **Mwesigwa Trevor** (active `owner_admin`):
 | `public.savings_accounts` | **5 rows** |
 | `public.clients` | **28 rows** |
 | `public.ledger_accounts` | **35 rows** |
+| `storage.objects` | 0 rows — the store is empty for everyone |
 
 This is corroborated over **real hosted HTTP** by the account holder's own
 session after the hook went live (`edge_logs`, 2026-11-02T12:28–12:29Z):
@@ -164,12 +165,29 @@ does not interfere with legitimate work.
 
 ### 3.3 Recovery stays reachable: PASS
 
-For the forced subject, `current_session_context()` still returns
-`outcome = 'ok'` with the profile and `must_change_password = true`, which is
-the recovery bootstrap the change-password screen needs; and the hook permits
-exactly `/rpc/current_session_context`, `/rpc/polytos_readiness`,
-`/rpc/record_sign_in`, `/rpc/record_security_event`, `/rpc/consume_rate_limit`
-and `GET /company_identity`. `confirm_password_change(uuid)` stays
+Exercised directly against production, impersonating **Nakato Winnie Birungi**
+(forced Secretary/Treasurer) in a rolled-back transaction. The recovery
+bootstrap answers:
+
+| Probe | Result |
+|---|---|
+| `current_session_context().outcome` | `ok` |
+| `.must_change_password` | **true** |
+| `.role_keys` | `{secretary_treasurer}` |
+
+And the hook itself was called on each path in turn. Any refusal raises and
+aborts the transaction, so reaching the end is the proof:
+
+* `POST /rpc/current_session_context` — permitted
+* `POST /rpc/record_sign_in` — permitted
+* `POST /rpc/record_security_event` — permitted
+* `POST /rpc/consume_rate_limit` — permitted
+* `GET /rpc/polytos_readiness` — permitted
+* `GET /company_identity` — permitted
+* `GET /loans` — **refused**, SQLSTATE `42501`, *"Business access requires an
+  active account with a completed password change."*
+
+So the allowlist is exactly the recovery surface and nothing else. `confirm_password_change(uuid)` stays
 service-role-only, and the profile column guard still refuses any attempt to
 clear the flag by editing the row. Supabase Auth (`/auth/v1`) is a separate
 service the hook does not intercept, so sign-in, token refresh and sign-out
@@ -177,12 +195,71 @@ are unaffected.
 
 ### 3.4 Storage authorization: PASS
 
-All six buckets are private. Every `storage.objects` policy granted to
-`authenticated` resolves through `user_has_permission(...)` or
-`current_profile_id()` — both of which stop resolving for a restricted
-account — so the boundary reaches the document store without a storage-specific
-change. `company-assets` has no `authenticated` policy at all. Confirmed
-above: the forced Manager sees **0** storage objects.
+All six buckets — `benefit-documents`, `client-documents`, `company-assets`,
+`guarantor-documents`, `loan-documents`, `membership-consent` — are private.
+Every `storage.objects` policy granted to `authenticated` resolves through
+`user_has_permission(...)` or `current_profile_id()`, both of which stop
+resolving for a restricted account, so the boundary reaches the document store
+without a storage-specific change. `company-assets` has no `authenticated`
+policy at all.
+
+**The production part of this is structural, not row-level, and deliberately
+not claimed as more.** All six buckets currently hold **zero objects**, so the
+forced Manager's "0 rows" from `storage.objects` in §3.1 is vacuous — the
+active Owner/Admin sees 0 as well. What production establishes is that every
+policy's predicate depends on a helper the boundary has already closed.
+
+The row-level claim is established in isolation instead, in
+`tests/db/forced-password-authorization.test.ts`: an object is placed in
+`client-documents`, a staff account reads it, the flag goes up, the same
+account reads **no rows** and cannot insert into `loan-documents`, and a
+confirmed password change restores the read. Hosted Supabase Storage is a
+separate service the Docker-free harness does not run, so there is no
+hosted-endpoint Storage evidence in this round.
+
+### 3.6 Anonymous access: PASS — production-verified
+
+Anonymous is refused at the **grant** level, before Row Level Security is
+reached. Impersonating `anon` in production, `select count(*) from public.loans`
+raises `42501: permission denied for table loans`.
+
+| Relation | `anon` SELECT | `authenticated` SELECT |
+|---|---|---|
+| `public.loans` | **no** | yes |
+| `public.loan_payments` | **no** | yes |
+| `public.journal_lines` | **no** | yes |
+| `public.savings_accounts` | **no** | yes |
+| `public.clients` | **no** | yes |
+| `public.profiles` | **no** | yes |
+| `public.audit_log` | **no** | yes |
+| `public.ledger_account_balances` | **no** | yes |
+| `public.loan_portfolio_report` | **no** | yes |
+| `public.company_identity` | **no** | yes |
+| `storage.objects` | yes (Supabase default) | yes |
+
+`storage.objects` is the one relation `anon` may select, which is Supabase's
+own default grant; it is held by Row Level Security instead, and **every**
+storage policy in this schema targets `{authenticated}` only, so no policy
+admits an anonymous caller and the read yields nothing.
+
+Anonymous holds EXECUTE on none of the financial RPCs:
+
+| Function | `anon` EXECUTE |
+|---|---|
+| `ledger_account_balance` | **no** |
+| `savings_withdrawable_amount` | **no** |
+| `savings_pledged_amount` | **no** |
+| `assess_meeting_fines` | **no** |
+| `approve_loan` | **no** |
+| `confirm_password_change` | **no** |
+| `current_session_context` | **no** |
+| `polytos_readiness` | yes — by design, the readiness probe |
+| `enforce_password_change` | yes — by design, it is the pre-request hook |
+
+Note that `company_identity` is **not** anon-readable either. The recovery
+allowlist admits `GET /company_identity` for an *authenticated* forced
+session, not for a logged-out visitor; the login shell is server-rendered, so
+it does not depend on an anonymous read of it.
 
 ### 3.5 DEFECT — the financial definer RPCs had no authorization of their own
 
@@ -296,6 +373,38 @@ PostgreSQL 16 is this sandbox's only available server; PostgreSQL 17 and the
 real-Auth/PostgREST evidence run in CI, which is the authoritative run on the
 PR head.
 
+### What the first CI run caught
+
+The first run of the guard failed two jobs, and both failures were worth
+having. Neither is labelled a pass.
+
+* **`database`** — `verify-membership-upgrade.mjs` splits the migration set
+  into an "existing deployed schema" applied first and the Polytos phase
+  migrations applied on top, by filename prefix. `20261103000100` matched no
+  phase prefix, so it ran before Phase 2 and failed on its own row-type
+  declarations: `type "public.savings_accounts" does not exist`. It belongs in
+  the upgrade set, because it is not deployed. Moving it there also improves
+  what the script measures: the guard now lands on a seeded book between the
+  two financial baselines, and **all 28 financial figures are identical**
+  across 97 existing migrations plus 64 new ones, with 8 new ledger accounts
+  all at zero. An authorization guard moving no money is now measured rather
+  than asserted.
+* **`security release rehearsal`** — `AssertionError: Before activation, RLS
+  identity alone does not gate scalar definer RPC`. That assertion existed to
+  *reproduce* the vulnerability, and the guard makes it false. It is replaced
+  by three checks that state which parts of the old argument still hold: a
+  guarded financial RPC now refuses on its own before the hook is activated;
+  an un-guarded one still answers, so **the hook remains mandatory**; and a
+  table route still answers 200 with no rows rather than refusing. The
+  un-guarded RPC joins the post-activation denial sweep.
+
+One test-design fault was corrected in the same pass: the harness runs GoTrue
+with `GOTRUE_JWT_EXP=60`, and the new sweep carried one token through every
+phase, so a 401 from a token that merely aged out would have been
+indistinguishable from the boundary refusing. Each phase now takes a fresh
+password grant, and the same-token claim is made explicitly immediately after
+the flag goes up.
+
 ---
 
 ## 5. BLOCKED, with reasons
@@ -333,9 +442,9 @@ PR head.
   same request returned 200 inside a live session at 12:28. That is correct
   authorization — an expired or absent session has no grant on that table — and
   it is the reason `company_identity` exists as the public branding
-  projection. It is worth checking that the login shell reads
-  `company_identity` rather than `company_settings` on every path, so a
-  logged-out user never sees a failed branding fetch. Not a security finding.
+  projection. Note that `company_identity` is not anon-readable
+  either (§3.6), so the fix for a logged-out branding fetch is to render it on
+  the server rather than to switch relations. Not a security finding.
 * **`ledger_account_balance` is executable by every active authenticated role**,
   including a borrower, with no capability check. The new guard closes it to
   *restricted* accounts, which is this release's scope; narrowing it to a
