@@ -32,7 +32,7 @@ The unrelated draft demo-cleanup branch is excluded from this security change.
 | Four RLS tables without a policy | **Intended service-only semantics require confirmation.** `membership_consent_challenges`, `rate_limit_counters`, `reference_formats`, `reference_sequences`. | Validate no staff/user direct-access requirement; avoid creating permissive policies solely to clear lint. |
 | Leaked-password protection disabled | **Open configuration hardening.** | Enable in Supabase Dashboard → Authentication settings, if supported by the project's plan (Supabase documents Pro+ availability); confirm provider setting and repeat advisor query. |
 | Git production branch `claude/intelligent-knuth-2r8mpw` not marked protected | **Open governance hardening.** | Add required CI reviews/checks and branch protection in repository settings; verify rules in force. |
-| Preview vs production environment boundary | **Review required.** | Verify previews never point to or mutate production financial data. |
+| Preview vs production environment boundary | **Future-build scope corrected on 2026-11-04.** All five shared Vercel variables — including `SUPABASE_SECRET_KEY`, Supabase URL, publishable key, app environment and site URL — were restricted from `['production','preview']` to `['production']` using the Vercel project configuration API. Re-read confirmed every target is now production-only and the existing live production deployment stayed READY. | **Still open:** older READY preview deployments may retain their prior build-time/runtime environment snapshots; inspect or retire them under deployment governance, and provide isolated preview Supabase credentials before expecting previews to work. No secret values were retrieved or changed. |
 
 ## Required certification gates
 
@@ -48,7 +48,7 @@ The unrelated draft demo-cleanup branch is excluded from this security change.
    cross-branch isolation, and private-storage authorization evidence.
 6. Verify `/api/health` over real HTTP (200 with healthy Data API), TLS,
    required headers, no-store and the business functions.
-7. Finish Auth breached-password configuration and repo governance reviews.
+7. Finish Auth breached-password configuration and repo governance reviews, and certify the isolation of any existing preview deployments.
 8. Keep production launch **NO-GO** if a material authorization boundary
    or negative-role test remains unproven, if there is a critical flaw,
    or if backups/restore have not been certified.
