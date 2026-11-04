@@ -1,0 +1,39 @@
+name: Production anonymous smoke (GET-only)
+
+# Independent hosted evidence. This is intentionally scoped to a security
+# migration or this workflow, rather than every push/PR.
+on:
+  pull_request:
+    branches:
+      - claude/intelligent-knuth-2r8mpw
+    paths:
+      - '.github/workflows/production-anonymous-smoke.yml'
+      - 'supabase/migrations/20261104000100_remove_unintended_gate_probe.sql'
+      - 'supabase/migrations/20261104000200_guard_ledger_account_balance_by_role.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-smoke:
+    name: Production public GET + anonymous-route protection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify production liveness and unauthenticated route denial
+        run: node scripts/certify-production-readonly.mjs
+      - name: Save sanitized public probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-production-public-smoke
+          path: work/production-readonly-certification.json
+          if-no-files-found: warn
+          retention-days: 14
