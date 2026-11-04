@@ -28,7 +28,7 @@ The unrelated draft demo-cleanup branch is excluded from this security change.
 | --- | --- | --- |
 | `public.__gate_probe` | **Fix prepared, not deployed.** Extra `SELECT 1 AS one` view, broad role grants, no other dependent objects observed. | The paired migration drops this exact constant-only view, no CASCADE; fresh installs no-op. CI and production rollout still required. |
 | `public.company_identity` | **Documented exception, not an assumed breach.** Definer view intentionally projects 14 company branding/contact columns to signed-in users while excluding registration/tax details. | Keep current authorized borrower-facing view until a replacement has equivalent proven RLS/column isolation; review displayed contact/address fields for business-policy compliance. |
-| 117 authenticated definer RPCs | **Needs per-function authorization review.** Privileged transaction functions are intended in the application; advisory count is not 117 proven bugs. | Audit callability, capability guards and definer paths, particularly `ledger_account_balance`. Do not indiscriminately revoke EXECUTE. |
+| 117 authenticated definer RPCs | **Requires per-function authorization review.** An actual gap was confirmed in `ledger_account_balance(uuid)`: every active role could read arbitrary GL balances despite `ledger:view` being held only by Owner/Manager/Treasurer. A second, reviewed migration and regression test now guard this call; **not deployed**. The other warnings are not 116 proven bugs. | CI must demonstrate both borrower denial and legitimate finance-role access. Review remaining definer RPCs without indiscriminately revoking EXECUTE. |
 | Four RLS tables without a policy | **Intended service-only semantics require confirmation.** `membership_consent_challenges`, `rate_limit_counters`, `reference_formats`, `reference_sequences`. | Validate no staff/user direct-access requirement; avoid creating permissive policies solely to clear lint. |
 | Leaked-password protection disabled | **Open configuration hardening.** | Enable in Supabase Dashboard → Authentication settings, if supported by the project's plan (Supabase documents Pro+ availability); confirm provider setting and repeat advisor query. |
 | Git production branch `claude/intelligent-knuth-2r8mpw` not marked protected | **Open governance hardening.** | Add required CI reviews/checks and branch protection in repository settings; verify rules in force. |
@@ -39,7 +39,8 @@ The unrelated draft demo-cleanup branch is excluded from this security change.
 1. Complete isolated Auth/PostgREST tests and the GitHub CI suite for
    the exact security PR commit.
 2. Inspect migration diff and staged Supabase Preview; confirm the only
-   schema change is removing the unintended `__gate_probe` view.
+   schema changes are removing the unintended `__gate_probe` view and
+   adding the `ledger:view` guard to `ledger_account_balance(uuid)`.
 3. Approve migration and promote the corresponding application build only
    through the established release process, checking the effective prod alias.
 4. Re-run Supabase security advisor and compare the new inventory.
