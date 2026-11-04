@@ -19,8 +19,23 @@ The unrelated draft demo-cleanup branch is excluded from this security change.
   disabled leaked-password-protection WARN notice.
 - No Vercel error/fatal logs were returned for the 45-minute window
   checked. Absence of logs is not proof of application health.
-- Live `/api/health` and real production Auth over hosted HTTP were
-  **not independently verified** in this review.
+- **Public hosted HTTP verified 2026-11-04T13:09:48Z (16:09:48 EAT)** by
+  GitHub Actions run [41835570464](https://github.com/JTREVORM/lending-manager/actions/runs/41835570464).
+  The exact production URL `https://lending-manager-ten.vercel.app/api/health`
+  returned HTTP **200** with `status=ok`, `dataApi=ok`,
+  `environment=production` and no-store/private caching. `/login`
+  returned 200 with CSP and `X-Content-Type-Options: nosniff`; five
+  unauthenticated protected routes returned HTTP 307 to `/login`, each with
+  private/no-store caching. Seven of seven public smoke checks passed.
+  The sanitized run artifact is `polytos-production-public-smoke`.
+- **Authenticated hosted role/session coverage remains pending**; a passing
+  anonymous/public smoke test is not a signed-in negative-role test.
+- PR #19 originally had a stale head reference (`8859e99`) while its branch
+  pointed at `2261220`. A narrowly scoped `.gitignore` change ignoring
+  only the generated `work/production-readonly-certification.json` (not all
+  `work/`, which contains tracked fixtures) triggered PR synchronization.
+  Both PR and branch then resolved to `c7207cb`; no forced push, PR merge or
+  production deploy was performed.
 
 ## Finding dispositions
 
@@ -47,8 +62,10 @@ The unrelated draft demo-cleanup branch is excluded from this security change.
 5. Collect approved *real hosted* sign-in, logout, session expiry, recovery,
    forced-password 403/42501, manager/treasurer authorization, borrower and
    cross-branch isolation, and private-storage authorization evidence.
-6. Verify `/api/health` over real HTTP (200 with healthy Data API), TLS,
-   required headers, no-store and the business functions.
+6. **Hosted production public HTTP smoke: PASS** (run 41835570464, with
+   /api/health 200/ok and 5/5 anonymous protected-route redirects).
+   Still verify authenticated business functions and any remaining TLS/header
+   and signed-session expectations in the final operator checklist.
 7. Finish Auth breached-password configuration and repo governance reviews, and certify the isolation of any existing preview deployments.
 8. Keep production launch **NO-GO** if a material authorization boundary
    or negative-role test remains unproven, if there is a critical flaw,
