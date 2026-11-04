@@ -42,5 +42,4 @@ begin
 
   return v_credit - v_debit;
 end;
-$function$
-
+$function$;
