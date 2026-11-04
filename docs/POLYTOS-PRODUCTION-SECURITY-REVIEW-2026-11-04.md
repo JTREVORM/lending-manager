@@ -1,0 +1,61 @@
+# POLYTOS production security certification — follow-up (2026-11-04)
+
+## Scope and release position
+
+**Assessment status: PARTIAL / not yet a business launch certificate.**
+Production code currently points to merge commit `64ea09c`, with all five
+GitHub checks passing. The production data was not altered in this review.
+The unrelated draft demo-cleanup branch is excluded from this security change.
+
+## Evidence from the connected production project
+
+- 80/80 public base tables have RLS enabled.
+- Six private storage buckets; the probe did not open or download any files.
+- The `authenticator` role currently has
+  `pgrst.db_pre_request=public.enforce_password_change`.
+- No public `SECURITY DEFINER` functions are executable by `anon`.
+- Security advisor findings: two definer-view ERROR notices, 117 executable
+  definer-function WARN notices, four no-policy INFO notices, and one
+  disabled leaked-password-protection WARN notice.
+- No Vercel error/fatal logs were returned for the 45-minute window
+  checked. Absence of logs is not proof of application health.
+- Live `/api/health` and real production Auth over hosted HTTP were
+  **not independently verified** in this review.
+
+## Finding dispositions
+
+| Finding | Disposition | Follow-up |
+| --- | --- | --- |
+| `public.__gate_probe` | **Fix prepared, not deployed.** Extra `SELECT 1 AS one` view, broad role grants, no other dependent objects observed. | The paired migration drops this exact constant-only view, no CASCADE; fresh installs no-op. CI and production rollout still required. |
+| `public.company_identity` | **Documented exception, not an assumed breach.** Definer view intentionally projects 14 company branding/contact columns to signed-in users while excluding registration/tax details. | Keep current authorized borrower-facing view until a replacement has equivalent proven RLS/column isolation; review displayed contact/address fields for business-policy compliance. |
+| 117 authenticated definer RPCs | **Needs per-function authorization review.** Privileged transaction functions are intended in the application; advisory count is not 117 proven bugs. | Audit callability, capability guards and definer paths, particularly `ledger_account_balance`. Do not indiscriminately revoke EXECUTE. |
+| Four RLS tables without a policy | **Intended service-only semantics require confirmation.** `membership_consent_challenges`, `rate_limit_counters`, `reference_formats`, `reference_sequences`. | Validate no staff/user direct-access requirement; avoid creating permissive policies solely to clear lint. |
+| Leaked-password protection disabled | **Open configuration hardening.** | Enable in Supabase Dashboard → Authentication settings, if supported by the project's plan (Supabase documents Pro+ availability); confirm provider setting and repeat advisor query. |
+| Git production branch `claude/intelligent-knuth-2r8mpw` not marked protected | **Open governance hardening.** | Add required CI reviews/checks and branch protection in repository settings; verify rules in force. |
+| Preview vs production environment boundary | **Review required.** | Verify previews never point to or mutate production financial data. |
+
+## Required certification gates
+
+1. Complete isolated Auth/PostgREST tests and the GitHub CI suite for
+   the exact security PR commit.
+2. Inspect migration diff and staged Supabase Preview; confirm the only
+   schema change is removing the unintended `__gate_probe` view.
+3. Approve migration and promote the corresponding application build only
+   through the established release process, checking the effective prod alias.
+4. Re-run Supabase security advisor and compare the new inventory.
+5. Collect approved *real hosted* sign-in, logout, session expiry, recovery,
+   forced-password 403/42501, manager/treasurer authorization, borrower and
+   cross-branch isolation, and private-storage authorization evidence.
+6. Verify `/api/health` over real HTTP (200 with healthy Data API), TLS,
+   required headers, no-store and the business functions.
+7. Finish Auth breached-password configuration and repo governance reviews.
+8. Keep production launch **NO-GO** if a material authorization boundary
+   or negative-role test remains unproven, if there is a critical flaw,
+   or if backups/restore have not been certified.
+
+## Preservation
+
+Do not clear demo data, remove an Auth account, reset a password, change a
+membership policy, deploy or merge this PR solely because these static checks
+passed. Full certification requires independent positive and negative hosted
+evidence and owner/operator approval.
