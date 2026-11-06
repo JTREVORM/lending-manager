@@ -1,5 +1,27 @@
 # POLYTOS Phase 2 — security hardening and certification report
 
+> **CONTINUED IN PHASE 2B — read
+> [`POLYTOS-PHASE-2B-CI-RECOVERY-2026-11-06.md`](./POLYTOS-PHASE-2B-CI-RECOVERY-2026-11-06.md)
+> alongside this.** This report was written against commit `bd04beb`, where two
+> of the four required CI jobs failed. Three of its statements are superseded
+> there:
+>
+> - **§3 Task 5 / §6** — `20261106000400` withdrew a grant from
+>   `savings_account_governing_policy` on the evidence that no view, RLS policy,
+>   CHECK constraint or application route named it. That evidence was correct
+>   and incomplete: two `SECURITY INVOKER` functions call it, and an invoker
+>   function runs with its caller's privileges, so the grant was load-bearing.
+>   Withdrawing it broke 31 browser tests. Restored in `20261106000600`;
+>   reclassified **C → D**. Seven functions became internal, not eight.
+> - **§5 R1 / the inventory's PENDING-REVIEW set** — the nine are resolved.
+>   Eight were already safe; `client_has_live_loan` was a real disclosure, fixed
+>   in `20261106000700`.
+> - **§6** — the test counts here predate five further migrations and two new
+>   test files. Phase 2B carries the current figures.
+>
+> The method, the findings about the savings disclosure, and every verdict on
+> Tasks 1–4, 6 and 7 stand.
+
 **Date:** 6 November 2026 · **Baseline:** `docs/POLYTOS-PHASE-1-RECOVERY-AUDIT-2026-11-06.md`
 **Branch:** `ccr-2f5e3786-jo3efn` · **Implementation commit:** `a76dd26`
 **Supabase project:** `fszgwemtgyrbhngajpzm` ("lending manager") only. The
