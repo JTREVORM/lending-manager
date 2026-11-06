@@ -1,5 +1,16 @@
 # POLYTOS final security release gates
 
+> **SUPERSEDED — 6 November 2026.** Read
+> [`POLYTOS-PHASE-1-RECOVERY-AUDIT-2026-11-06.md`](./POLYTOS-PHASE-1-RECOVERY-AUDIT-2026-11-06.md)
+> for the current state. This document predates the merge of PR #18 (2026-11-03) and the
+> production redeployment at `64ea09c` (2026-11-04), so its hosted findings are stale in
+> at least three respects: the "NO-GO" decision below refers to PR #18, which has since
+> merged and deployed; the branch/production migration gap it records is closed (161
+> local = 161 hosted, exactly); and the **nine historical migration version
+> discrepancies** it describes are no longer present in production — history is now fully
+> canonical. The isolated-evidence sections remain a valid record of what was executed on
+> 31 October.
+
 Date: 31 October 2026, Africa/Kampala. Decision: **NO-GO for production execution**.
 This package continues PR #18 at `d9c1971e54362ee4851134306b1e78fb385e3372`.
 No production authorization has been granted. No production migration, reload,
