@@ -260,18 +260,48 @@ Verified: granting `authenticated` EXECUTE on
 `savings_withdrawable_amount_internal` makes the gate **exit 1** and name the
 function; revoking it returns **exit 0**.
 
-### Task 8 — Real authentication certification · PARTIAL
+### Task 8 — Real authentication certification · PASS on an isolated stack; hosted still BLOCKED
 
-Recorded honestly rather than claimed. Three distinct environments are involved:
+An isolated stack was built in this session with the **real pinned Supabase Auth
+binary** — not the harness shim — and the role matrix ran against it. The
+binary's SHA-256 was **independently verified** as
+`b5c2991d1df760c9b099c1c2395a94bd1c2f83ed58901934921997179dc9f7ea`, matching the
+pin recorded in `POLYTOS-SECURITY-RELEASE-GATES.md`; PostgREST `v12.2.3`
+likewise. PostgREST connected to PostgreSQL 16.15 and reported **188 functions**
+in its schema cache, down from the pre-Phase-2 surface.
 
-| Coverage | Status | Evidence |
+`tests/e2e/specs/real-auth.release.spec.ts`, desktop project: **14 passed, 0
+failed (1.7m).**
+
+| Required coverage | Result |
+| --- | --- |
+| Owner/Admin sign-in | ✓ |
+| Manager sign-in | ✓ |
+| Secretary/Treasurer sign-in | ✓ |
+| Client (borrower) sign-in | ✓ |
+| Forced-password-change accounts | ✓ administrator reset → forced recovery; and the whole protected surface flips to 403 on the forced flag |
+| Inactive accounts | ✓ still denied **after a real token refresh** |
+| Suspended accounts | ✓ still denied after a real token refresh |
+| Session expiry and refresh | ✓ two tabs renew past a real 60-second JWT expiry without losing identity (1.2m) |
+| Logout and protected routes | ✓ logout invalidates the refresh token |
+| Borrower privacy | ✓ a borrower reads only their own records, **and none when forced** |
+| Negative: unauthorized users receive no data | ✓ an anonymous caller reaches no business route; anonymous readiness and public health still answer |
+
+Two pieces of the brief's list are **not** covered by that run and are recorded
+as such rather than implied:
+
+| Coverage | Status | Why |
 | --- | --- | --- |
-| Role matrix, forced-password, inactive/suspended, borrower privacy, cross-branch isolation, private Storage — **at the data layer** | **PASS** | 1850 database tests on a real PostgreSQL cluster, including the 29 new Phase 2 cases. Every role is a real profile with a real JWT claim; every negative case asserts the refusal *and* that authorized callers still get the right figure |
-| Real Supabase Auth sign-in, session expiry and refresh, logout against protected routes — **isolated stack** | see §6 | The pinned real Auth binary `v2.197.0` was downloaded and its SHA-256 **independently verified** as `b5c299…9f7ea`, matching the pin in `POLYTOS-SECURITY-RELEASE-GATES.md`; PostgREST `v12.2.3` likewise |
-| `security release rehearsal (PostgreSQL 17, real Auth)` | **BLOCKED locally → covered by CI** | The rehearsal asserts PostgreSQL 17. Only 16 is installed here, and installing 17 failed because the session's network policy denied `www.postgresql.org` (403). CI runs it natively on PG 17 and is the authority |
-| **Hosted** authenticated negative-role certification | **BLOCKED — needs authorization** | Requires approved test identities on production, a Product Owner decision that was never taken. No isolated environment substitutes for it. Checklist Step 7 |
+| Cross-branch isolation, private documents and Storage access | **CI only** | These live in `scripts/rehearse-security-release.mjs`, which asserts PostgreSQL 17. Only 16 is installed here, and installing 17 failed because the session's network policy denied `www.postgresql.org` (403). CI runs that job natively on PG 17 and is the authority. Cross-branch isolation is additionally covered at the data layer by the database suite |
+| **Hosted** authenticated negative-role certification | **BLOCKED — needs authorization** | Requires approved test identities on production, a Product Owner decision never taken. No isolated environment substitutes for it. Checklist Step 7 |
 
-No real customer credentials appear in any log, report or test fixture.
+The data layer is covered independently: 1850 database tests on a real
+PostgreSQL cluster, including the 34 new Phase 2 cases. Every role there is a
+real profile with a real JWT claim, and every negative case asserts the refusal
+*and* that authorized callers still receive the correct figure.
+
+No real customer credentials appear in any log, report or test fixture — the
+harness asserts its own credentials are not a person's.
 
 ### Task 9 — Validation · see §6
 
@@ -342,7 +372,7 @@ No assertion was loosened and no test was skipped or disabled.
 | **R4** | `__gate_probe` still in production — the only anon-readable object. Inert (provably non-writable, discloses the constant `1`) but removed only when PR #19 merges | Low |
 | **R5** | `company_identity` remains an advisor ERROR by design (§3 Task 6). Removing the finding rather than documenting it needs column-level privileges on `company_settings` — a schema change, not a view setting | Accepted |
 | **R6** | The gate watches the surface for change; it does not re-prove that each of the 84 functions classified **A** checks the right capability on every path. They rest on their domain suites plus the probe | Residual |
-| **R7** | Local database verification ran on PostgreSQL **16**; CI and production are **17**. The PG 17 rehearsal is CI-only (§3 Task 8) | Low |
+| **R7** | Local database verification and the real-auth run used PostgreSQL **16**; CI and production are **17**. The PG 17 rehearsal — and with it local Storage and cross-branch coverage — is CI-only (§3 Task 8) | Low |
 | **R8** | Hosted authenticated negative-role certification not performed — needs approved production test identities (checklist Step 7) | Open, needs a decision |
 
 ---
@@ -360,20 +390,20 @@ local cluster, Node 22 / npm 10.9.9.
 | `npm run format:check` | **PASS** — all files match Prettier |
 | `vitest --project db` | **PASS** — 80 files, **1850 passed**, 0 failed, 0 skipped (1816 baseline + 34 new) |
 | `tests/db/security-definer-surface.test.ts` | **PASS** — **34 passed**, the Phase 2 regression suite |
-| `npm run test:run` (unit + integration) | **PASS** — see note below |
+| `npm run test:run` (unit + integration) | **PASS** — 83 files, **2647 passed**, 0 failed |
 | `npm run audit:money` | **PASS** — 71 financial files, no hazard; all five engines reach only integer/BigInt helpers; 2 verified exemptions; scanner verified against a positive control |
 | `npm run build` | **PASS** — exit 0 |
 | Fresh migration replay | **PASS** — all **166** migrations applied in order to an empty cluster, no error |
 | Behavioural authorization probe | 110 probed: 20 refused `42501`, 52 refused with an authorization message, 11 inconclusive, 27 no refusal |
-| `security release rehearsal` (PG 17, real Auth) | **BLOCKED locally** — requires PostgreSQL 17; `www.postgresql.org` denied by the session's network policy (403). CI is the authority |
-| Playwright desktop/mobile browser E2E | **Not run locally** — CI is the authority |
+| `real-auth.release.spec.ts` (isolated stack, **real pinned Supabase Auth v2.197.0**) | **PASS** — **14 passed**, 0 failed (1.7m). Auth binary SHA-256 independently verified against the recorded pin |
+| `security release rehearsal` (PG 17, real Auth) | **BLOCKED locally** — requires PostgreSQL 17; `www.postgresql.org` denied by the session's network policy (403). CI is the authority. This is also the only local gap in Storage and cross-branch coverage |
+| Playwright full desktop/mobile browser E2E | **Not run locally** — CI is the authority |
 
 The unit and integration run initially reported **1 failed / 2646 passed**: the
 schema-versus-types test correctly caught that `types/database.types.ts` did not
 yet declare the four new functions. After declaring them,
-`tests/integration/migrations.test.ts` passes 28/28 and the full suite is green.
-Final counts for the record are in the pull request, re-run after the last
-commit.
+`tests/integration/migrations.test.ts` passes 28/28 and the full suite is green
+at **2647 passed**.
 
 No test was weakened, skipped or disabled to obtain any of these results.
 
@@ -395,7 +425,7 @@ No test was weakened, skipped or disabled to obtain any of these results.
 
 ## 8. Verdict
 
-### PASS, with one task BLOCKED and one PARTIAL.
+### PASS, with one task BLOCKED on execution.
 
 | Task | Verdict |
 | --- | --- |
@@ -406,7 +436,7 @@ No test was weakened, skipped or disabled to obtain any of these results.
 | 5 — The sixteen classified | **PASS** — 2 A, 7 C, 7 D, 0 B |
 | 6 — `company_identity` | **PASS** — reviewed exemption on measured evidence, with regression coverage |
 | 7 — Security CI gate | **PASS** — enforced in the required job, verified to fail closed |
-| 8 — Real-auth certification | **PARTIAL** — data layer PASS; PG 17 rehearsal CI-only; hosted certification needs authorization |
+| 8 — Real-auth certification | **PASS on an isolated stack** — 14/14 against the real pinned Auth binary, covering every role, forced-password, inactive/suspended, expiry/refresh, logout and borrower privacy. Storage and cross-branch are CI-only locally; **hosted certification still needs authorization** |
 | 9 — Final validation | **PASS** — all runnable suites green |
 | 10 — Release sequence | **PASS** — nine steps, authorization marked |
 
