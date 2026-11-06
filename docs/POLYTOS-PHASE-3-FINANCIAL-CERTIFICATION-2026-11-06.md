@@ -193,6 +193,7 @@ fact.
 | --- | --- | --- |
 | **F1** | **MEDIUM** | **Capability refusals are inconsistently classified.** 32 functions raise `42501` for a capability refusal; **67 do not** — some omit `using errcode`, and `assess_member_loan_eligibility` sets `P0001` explicitly, so it is a deliberate split. `lib/db-errors.ts` maps `42501` to `AuthorizationError` and `P0001` to `BusinessRuleError`, so roughly two thirds of capability denials are classified as business-rule violations. Anything watching for authorization failures sees a third of them, and an attacker probing transfer approval looks like a user hitting a validation rule. **Not a security defect** — every denial works, and 24 cases prove it. Observability only. **Not changed here**: `lib/clients/actions.ts` and `lib/guarantors/actions.ts` both match on `P0001` to pass those messages through to users, so adding `using errcode` would change user-facing text well outside this phase's scope |
 | **F2** | **LOW** (test infrastructure) | **The E2E seeded book is not financially coherent.** `tests/e2e/harness/seed.mjs` back-dates `disbursed_at` by direct write with the transition trigger suspended, so 11 of its loans carry no `loan_disbursement` journal and GL 1200 is 6,500,000 short — in fact *negative*. No production impact. But it means **the browser E2E suite cannot certify any screen that reconciles the portfolio to the general ledger**, because in that book the two legitimately disagree. Recommendation: either post a backfill entry for the back-dated loans in the seeder, or record explicitly that GL-vs-portfolio screens are out of E2E scope |
+| **F4** | **MEDIUM** (test infrastructure) | **The browser suite was not verifying two of a loan's four lifecycle transitions.** `loan-lifecycle.write.spec.ts` asserted `getByText(/approved/i)` after confirming approval, and `getByText(/active|disbursed/i)` after disbursement. The first matched the breakdown table's own empty state — *"It is created when the loan is approved"* — which a loan still **pending** already displays. So it returned at once, asserted nothing, and waited for nothing before the next `page.goto`, which then raced the approval action while it was still in flight. Proven, not inferred: with the approval POST held four seconds, the old assertion reported visible while the database still read `pending_approval`, the loan was left `pending_approval` after the navigation, and the disburse heading was absent — the exact failure CI reported. With the fixed assertion under the identical hold, the loan reads `approved` and the heading is present. The same pattern was present in `member-loans.write.spec.ts`. **This is mine, and it predates Phase 3**: the vacuous assertion also passed in the green Phase 2 run, so that run did not certify loan approval either. Fixed by asserting the status descriptions, which only the target state carries |
 | **F3** | Positive | Disbursement requires an identified officer at the data layer: `loans_active_requires_disbursement` demands both `disbursed_at` and `disbursed_by`, and the latter comes from `current_profile_id()`. An unattributable session cannot disburse, database owner included |
 
 **No critical or high-severity financial defect was found. No unexplained
@@ -237,7 +238,7 @@ one that admits a gap.
 | Security deposits as a distinct liability | No separate deposit liability was identified in the chart beyond member savings; if one exists it was not reconciled |
 | Cash reconciliation documents (`submit_reconciliation`, `approve_reconciliation`) | Authorization not exercised in the new suite; `money-movement.test.ts` covers the arithmetic |
 | PostgreSQL 17 real-Auth rehearsal | Cannot run in this session: PG 17 is not installed and `www.postgresql.org` is denied by the network policy. CI is the authority |
-| Browser E2E | Not re-run in this phase; see F2 for why it cannot certify GL-vs-portfolio screens regardless |
+| Browser E2E GL-vs-portfolio screens | The suite **was** re-run in this phase, by CI and locally (910 passed, 48 skipped). But see F2: the seeded book's portfolio and general ledger legitimately disagree, so no screen reconciling the two can be certified from it |
 
 ---
 
@@ -296,9 +297,83 @@ four PR #20 must pass:
 - `browser E2E (production build, fresh seed)` — subject to F2: it cannot
   certify GL-vs-portfolio screens
 
-Every one has been reproduced locally and passes, on PostgreSQL 16 rather than
-17 for the three that touch a database. The run on the final head is the
-authority and its result belongs beside this section.
+### The first run failed, and both failures were mine
+
+An earlier draft of this section claimed every job had been reproduced locally
+and passed. That was wrong, and it is worth saying why rather than quietly
+replacing it: the two jobs that failed were the two whose local runs were not
+reproductions of what CI would do.
+
+**Run 42253852295 at `4ca283a`: `failure`.**
+
+| Job | Result |
+| --- | --- |
+| `checks, unit/integration, build` | success |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | success |
+| `database (real PostgreSQL)` | **failure** |
+| `browser E2E (production build, fresh seed)` | **failure** |
+
+**The database failure — a test written against a schema this branch does not
+have.** `refuses a borrower a GL account balance` expected `42501`. The guard
+that produces it is PR #19's `20261104000200_guard_ledger_account_balance_by_role.sql`.
+PR #19's two migrations were staged in the working tree so that §2 could certify
+the true post-release 171-migration state, and excluded from the commits because
+PR #19 owns them — so I wrote a test against the schema that staging produced,
+and CI, at 169, does not have it. Reproduced exactly by moving those two
+migrations out and rebuilding the cluster: `1 failed | 23 passed`,
+`expected true to be false`.
+
+The case now reads the live function for its `ledger:view` guard rather than
+assuming one, and asserts the real behaviour of whichever schema it runs
+against: the refusal at 171, and at 169 the open read that is precisely the
+exposure PR #19 closes. Neither branch of it is vacuous, and the refusal itself
+stays covered by PR #19's own tests, on the branch that owns the guard.
+
+**The browser failure — an assertion that asserted nothing.** See F4. The
+single failing spec was `loan-lifecycle.write.spec.ts:137`, and it failed at
+the disburse heading, which made it look like a disbursement defect. It was
+not. The approval assertion two steps earlier was `getByText(/approved/i)`,
+which matches the breakdown table's empty state on a loan that is still
+pending, so it returned immediately and the next `page.goto` abandoned the
+approval action mid-flight.
+
+That was proven rather than argued. Holding the approval POST for four seconds
+and then navigating, exactly as the spec did:
+
+```
+before approval:                         pending_approval
+the old /approved/i matched immediately: true
+after navigating away:                   pending_approval
+heading present:                         false
+```
+
+and with the fixed assertion in place, under the identical hold:
+
+```
+the fixed assertion waited, and the decision is on the page
+at that moment:                          approved
+after navigating away:                   approved
+heading present:                         true
+```
+
+The full suite was also run locally on the pre-fix code and passed — 910
+passed, 48 skipped, the same count as the green Phase 2 run. That is the point:
+this container is fast enough to win the race and CI's runner is not, so the
+local pass was never evidence. Both specs now assert the status descriptions,
+which only the target state carries, and so wait for the decision before
+navigating. No assertion was relaxed and no test removed; both check strictly
+more than before.
+
+### The run on the corrected head
+
+**Run 42260162874 at `0783b6c`:**
+
+| Job | Result |
+| --- | --- |
+| `checks, unit/integration, build` | **success** |
+| `database (real PostgreSQL)` | **success** — security gate, 1896 database tests, upgrade rehearsal |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | **success** |
+| `browser E2E (production build, fresh seed)` | *pending at the time of writing — to be recorded below* |
 
 **One caveat specific to this branch.** PR #19's two migrations are staged in
 the working tree so that the true post-release 171-migration state is what gets
