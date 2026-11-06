@@ -208,31 +208,85 @@ of quietly opening a write path into company configuration.
 
 ## 5. Open items
 
-### R1 — Nine functions awaiting a real-identifier retest (`PENDING-REVIEW`)
+### R1 — RESOLVED in Phase 2B. One disclosure found, eight cleared.
 
-Each produced **no authorization refusal** under the borrower probe and takes a
-third-party identifier. They are neither confirmed safe nor confirmed leaking;
-the method that found the savings disclosure has not yet been pointed at them.
+All nine were retested with real third-party identifiers, as
+`tests/db/definer-third-party-access.test.ts`, which is now permanent coverage.
+The method was the one that found the savings disclosure: build a real record as
+the owner, read it as an unrelated *linked* borrower — a real client profile
+with the `client` role, so each function's own guard is what is under test and
+not `require_business_identity` — and compare against what an authorized caller
+receives.
 
-| Function | Identifier it accepts |
+"Produced no refusal" turned out to mean two quite different things, which is
+why the phrase was not a verdict.
+
+**Three refuse by raising `42501`,** once there is a real identifier to resolve.
+The null probe never reached those raises because each looks its record up
+first: `benefit_claim_eligibility`, `member_benefit_position`,
+`meeting_fine_candidates`. Reclassified **A**.
+
+**Three refuse by returning a safe value** rather than raising. This is
+idiomatic for their return types and still fail-closed, and it is not an
+existence oracle either, because an unauthorized caller cannot tell "filtered
+out" from "nothing there":
+
+| Function | What an unauthorized caller gets | How |
+| --- | --- | --- |
+| `death_confirmation_count` | `0`, never the true count | predicate in the `WHERE` clause |
+| `condolence_next_of_kin_status` | zero rows | predicate in the `WHERE` clause |
+| `benefit_payment_blocked_reason` | the text `'That claim cannot be read.'` | explicit early return; it returns a reason, so it returns that one |
+
+Reclassified **A**. Worth recording that the first version of the test demanded
+a *raise* from all three and would have reported three safe functions as
+vulnerable. The property that matters is not "it raises" but "the unrelated
+borrower does not receive what an authorized caller receives", and that is what
+is asserted now.
+
+**Two are guarded by what they call,** and stay so. `assess_meeting_fines` goes
+through `meeting_fine_candidates` (needs `fines:view` or `fines:assess`, plus
+the branch) and `assess_meeting_fine` (needs `fines:assess`); both are definer
+functions, and `auth.uid()` is still the end user inside one, so both guards
+fire. `mark_notifications_read` scopes its write to the caller's own audience
+permission and branch. Reclassified **A**.
+
+`20261106000800` nonetheless tightened `assess_meeting_fines`, and it is **not**
+a leak fix: the `fines:assess` check lived in the loop body, so a
+`fines:view`-only session calling it against a meeting with nothing to assess
+received a silent `0` rather than a refusal. Nothing was disclosed — `0` is what
+an authorized caller sees too — and nothing was written. But authorization that
+holds only when there is work to do is a property nobody will remember, and the
+singular `assess_meeting_fine` checks the capability as its first act. The
+capability asked for is the one `lib/policy-update/actions.ts` and
+`app/(app)/meetings/[meetingId]/page.tsx` already require, so no legitimate
+caller can be turned away by it.
+
+### The one real disclosure: `client_has_live_loan`
+
+Migration **`20261106000700`**.
+
+| | Value seen |
 | --- | --- |
-| `client_has_live_loan(uuid)` | a client |
-| `member_benefit_position(uuid, date)` | a membership |
-| `benefit_claim_eligibility(uuid)` | a benefit claim |
-| `benefit_payment_blocked_reason(uuid)` | a benefit claim |
-| `condolence_next_of_kin_status(uuid)` | a benefit claim |
-| `death_confirmation_count(uuid)` | a benefit claim |
-| `assess_meeting_fines(uuid)` | a meeting — **and it mutates** |
-| `meeting_fine_candidates(uuid)` | a meeting |
-| `mark_notifications_read(uuid[])` | notification ids — **and it mutates** |
+| A client with a disbursed, active loan | — |
+| What `owner_admin`, `manager` and `secretary_treasurer` saw | **true** |
+| What an **unrelated borrower** saw | **true** |
 
-Recommended Phase 3 opening move: retest each exactly as §2 did — build the
-record as the owner, read it as an unrelated borrower, compare against the
-owner's answer. The two mutating ones first.
+Same root cause as the savings amounts: `require_business_identity()` alone,
+which refuses forced-password, inactive, suspended and unlinked sessions and
+says nothing about capability — so every ordinary borrower passed it, and the
+function then queried `public.loans` as the definer, bypassing RLS. An identity
+with no loan capability, no relationship to that client and no branch in common
+learned, correctly, that a named person is carrying a live loan. Only the
+client's UUID was needed.
 
-`member_savings_position` was in this set and is now resolved: it refuses with
-`42501` when given a real membership, so its guard is real and the probe result
-was the NULL-argument artefact described in §1.
+Now requires `loans:view` or `savings:view`, or the client's own linked session.
+All three staff roles hold both capabilities and the borrower holds neither, so
+`lib/data/savings.ts`, which reads this for the withdrawal screen with the
+caller's own JWT, is unaffected. Reclassified **A**.
+
+**Net: the PENDING-REVIEW set is empty.** Two of the twenty-five functions this
+programme has now tested behaviourally were real disclosures, and both were
+functions an earlier body-reading pass had recorded as guarded.
 
 ### R2 — Branch protection is authorized but not applied
 
@@ -280,6 +334,18 @@ PostgreSQL)` CI job. It fails when:
 - any function relies on PUBLIC's default EXECUTE (a null ACL);
 - a public table has RLS disabled;
 - a function does not pin `search_path`;
+- **an exposed role can reach a `SECURITY INVOKER` function that depends on
+  something that role cannot execute.** Added in Phase 2B, after its absence
+  cost 31 browser failures: `20261106000400` withdrew a grant from
+  `savings_account_governing_policy` having confirmed that no view, RLS policy,
+  CHECK constraint or application route named it — all four answers correct, all
+  four the wrong question, because two invoker functions call it and an invoker
+  function runs with its caller's privileges. The check walks that call graph
+  transitively; a definer hop ends it, because a definer function runs as its
+  owner. Genuine but unreachable dependencies are recorded as reviewed
+  exemptions keyed on role, caller and target together, so widening any one of
+  them is a new finding, and `--update` carries them forward rather than
+  regenerating them;
 - the loan approval rules move back in front of the authorization wrapper, or
   the internal name becomes executable by `authenticated`;
 - exposed roles hold anything but `SELECT` on `company_identity`;

@@ -215,9 +215,10 @@ describeDb('SECURITY DEFINER functions given a real third-party identifier', () 
       const row = await queryOne<{ id: string }>(
         `insert into public.notifications
            (category, severity, title, body, audience_permission,
-            audience_branch_id, entity_type, entity_id)
-         values ('benefit', 'info', 'Probe notice', 'For staff only',
-                 'benefits:view', $1, 'benefit_claim', $2::text)
+            audience_branch_id, entity_type, entity_id, dedupe_key)
+         values ('benefit_claim_submitted', 'info', 'Probe notice',
+                 'For staff only', 'benefits:view', $1, 'benefit_claim',
+                 $2::uuid, 'probe-' || gen_random_uuid()::text)
          returning id`,
         [branchId, claimId],
       );
