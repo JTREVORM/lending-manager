@@ -21,6 +21,7 @@ No authorization needed. Read-only.
 | Default branch tip | `64ea09c` | `git rev-parse origin/claude/intelligent-knuth-2r8mpw` |
 | Production deployment commit | `64ea09c` | Vercel: production deployment `dpl_9NSBbF…zain` |
 | Hosted migrations | 161 | Supabase migration list |
+| Ledger debits = credits | both 89,649,530 | `sum(debit)`, `sum(credit)` on `journal_lines` |
 | Policy 2.0 | `draft`, unapproved, every flag false | `membership_policy_versions` |
 | Financial records | 35 loans · 470 payments · 597 journal entries · 28 clients | counts |
 | `__gate_probe` | still present, still exactly `SELECT 1 AS one` | `pg_get_viewdef` |
@@ -46,8 +47,12 @@ head before anything else is considered.
       **PostgreSQL 17**. It could not run in the Phase 2 session: PG 17 is not
       installed there and `www.postgresql.org` is blocked by the session's
       network policy, so CI is the authority for it.
-- [ ] Migration count on the branch is **166** (161 + the five Phase 2
-      migrations), replaying cleanly onto an empty cluster.
+- [ ] Migration count on the **PR #20** branch is **169** (161 hosted + the
+      eight Phase 2 migrations), replaying cleanly onto an empty cluster.
+- [ ] The **combined** post-release set — 161 hosted + PR #19's two + PR #20's
+      eight = **171** — replays cleanly in timestamp order. This is the ordering
+      production will actually take, and neither PR exercises it alone, because
+      each branch holds only its own migrations. Verified in Phase 3 (§Step 4).
 
 ---
 
@@ -109,32 +114,52 @@ The reconciliation plan is in
 migration sets matched exactly at 161, with no missing, duplicate, orphaned or
 conflicting entry.
 
-Seven migrations to apply, in order:
+**Ten migrations to apply, in order.** Timestamp order is the dependency order,
+and PR #19's two sort before PR #20's eight, so applying both PRs' migrations by
+version number is correct regardless of which PR merges first.
 
-| Order | Migration | From |
-| --- | --- | --- |
-| 1 | `20261104000100_remove_unintended_gate_probe` | PR #19 |
-| 2 | `20261104000200_guard_ledger_account_balance_by_role` | PR #19 |
-| 3 | `20261106000100_guard_loan_validation_disclosure` | Phase 2 |
-| 4 | `20261106000200_guard_consent_code_redemption` | Phase 2 |
-| 5 | `20261106000300_record_company_identity_exemption` | Phase 2 |
-| 6 | `20261106000400_retire_unused_definer_grants` | Phase 2 |
-| 7 | `20261106000500_guard_savings_amount_disclosure` | Phase 2 |
+| Order | Migration | From | What it does |
+| --- | --- | --- | --- |
+| 1 | `20261104000100_remove_unintended_gate_probe` | PR #19 | Drops the stray `__gate_probe` view, guarded on its definition |
+| 2 | `20261104000200_guard_ledger_account_balance_by_role` | PR #19 | Adds a `ledger:view` check to `ledger_account_balance` |
+| 3 | `20261106000100_guard_loan_validation_disclosure` | PR #20 | Renames the approval rules behind an internal name; authorized wrapper on `loans:view` |
+| 4 | `20261106000200_guard_consent_code_redemption` | PR #20 | Mirrors the issuer's capability pair; a refusal spends no attempt |
+| 5 | `20261106000300_record_company_identity_exemption` | PR #20 | Records the reviewed definer-view exemption; restates the SELECT-only grant. No behaviour change |
+| 6 | `20261106000400_retire_unused_definer_grants` | PR #20 | Withdraws `authenticated` EXECUTE from seven uncalled functions |
+| 7 | `20261106000500_guard_savings_amount_disclosure` | PR #20 | Closes the confirmed cross-member savings disclosure |
+| 8 | `20261106000600_restore_governing_policy_grant` | PR #20 | **Restores** `savings_account_governing_policy` to `authenticated` — #6 withdrew it, and two `SECURITY INVOKER` functions need it |
+| 9 | `20261106000700_guard_client_live_loan_disclosure` | PR #20 | Closes the confirmed `client_has_live_loan` disclosure |
+| 10 | `20261106000800_guard_bulk_meeting_fine_assessment` | PR #20 | Moves `assess_meeting_fines`' capability check to the top |
 
-All seven are additive: they add or replace functions, withdraw grants, and drop
-one verified constant view. None writes a business row. **Use only the
-`fszgwemtgyrbhngajpzm` ("lending manager") project.**
+### Ordering constraints that matter
+
+- **#6 before #8 is mandatory.** #6 withdraws a grant that #8 restores. Applying
+  #8 without #6, or in the other order, leaves the grant in the wrong state.
+  Applying the set by version number gets this right; cherry-picking does not.
+- **#2 must follow nothing in PR #20**, and does not: it only replaces
+  `ledger_account_balance`, which no PR #20 migration touches.
+- **#1 is guarded and will fire, not refuse.** Production's `__gate_probe` was
+  re-read during Phase 1 and its definition is still exactly `SELECT 1 AS one`,
+  which is the condition the migration requires before dropping it.
+- **No duplicate versions** across all ten, checked against the 161 already
+  applied.
+
+All ten are additive: they add or replace functions, withdraw or restore grants,
+and drop one verified constant view. None writes a business row, and none alters
+a financial calculation. **Use only the `fszgwemtgyrbhngajpzm` ("lending
+manager") project.**
 
 - [ ] Take a backup first — see `docs/BACKUP-RESTORE.md`
-- [ ] Apply 1–7 in order
-- [ ] Hosted migration count is **168**
+- [ ] Apply 1–10 in order
+- [ ] Hosted migration count is **171**
 - [ ] Re-check the preserved counts from Step 0: 35 loans · 470 payments ·
       597 journal entries · 28 clients, all unchanged
+- [ ] Ledger debits still equal credits (both **89,649,530** before the release)
 - [ ] Policy 2.0 still `draft` with every flag false
 
-Migration 3 and 7 use `ALTER FUNCTION ... RENAME TO`. If either reports that the
-internal name already exists, it has already been applied — it skips rather than
-renaming a wrapper into the internal slot.
+Migrations 3 and 7 use `ALTER FUNCTION ... RENAME TO`. If either reports that
+the internal name already exists, it has already been applied — it skips rather
+than renaming a wrapper into the internal slot.
 
 ---
 
