@@ -396,14 +396,31 @@ more than before.
 
 ### The run on the corrected head
 
-**Run 42260162874 at `0783b6c`:**
+**Run 42264021103 at `7c45447`: `success`.** All four required jobs.
 
 | Job | Result |
 | --- | --- |
-| `checks, unit/integration, build` | **success** |
-| `database (real PostgreSQL)` | **success** — security gate, 1896 database tests, upgrade rehearsal |
-| `security release rehearsal (PostgreSQL 17, real Auth)` | **success** |
-| `browser E2E (production build, fresh seed)` | *pending at the time of writing — to be recorded below* |
+| `checks, unit/integration, build` | **success** — typecheck, lint, format, unit/integration, money audit, secret scan, dependency audit, production build, bundle assertions |
+| `database (real PostgreSQL)` | **success** — security gate, the database and seeder suites, upgrade rehearsal |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | **success** — the only PG 17 run, and the only coverage of Storage RLS and cross-branch isolation |
+| `browser E2E (production build, fresh seed)` | **success — 910 passed, 48 skipped, 0 failed** (13.9m) |
+
+Two details from the browser job worth keeping, because each is the run's own
+statement rather than my reading of a tally. `Capture the Phase 4 screens`
+carries `if: success()` and ran, reporting 92 screen/viewport pairs with no
+screen overflowing its viewport. And `Upload Playwright artifacts on failure`
+is skipped, its `if: failure()` never having fired.
+
+910 is also the count from the green Phase 2 run and from the local pre-fix run
+here, which is the right outcome: the corrected assertions are strictly
+stronger, and nothing regressed to pay for them.
+
+**Three earlier runs on this branch were cancelled, not failed.** The workflow
+sets `concurrency: cancel-in-progress` on the ref, so each push killed the run
+before it. The browser job at `0783b6c` was fourteen minutes in when a
+documentation push ended it, and that is why the result above is recorded
+against `7c45447` rather than the commit that first carried the fix. The test
+code is byte-identical between them; only this document changed.
 
 **One caveat specific to this branch.** PR #19's two migrations are staged in
 the working tree so that the true post-release 171-migration state is what gets
@@ -423,7 +440,7 @@ it is the one thing in this report that CI does not reproduce.
 | No unexplained financial difference remains | **Met** — both differences explained with cause and arithmetic |
 | Unauthorized financial operations denied | **Met** — 24 cases, with state and audit unchanged |
 | Existing security regression tests green | **Met** — gate passes, Phase 2 fixes intact |
-| All four mandatory CI jobs pass | **§9** |
+| All four mandatory CI jobs pass | **Met** — run 42264021103 at `7c45447`, conclusion `success`; see §9 |
 | No unresolved critical or high financial defect | **Met** — F1 MEDIUM, F2 LOW, F4 MEDIUM; none is a financial-calculation defect, and F2 and F4 are both test infrastructure |
 | All blocked or untested paths recorded | **Met** — §7 |
 
