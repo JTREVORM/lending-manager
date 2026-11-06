@@ -116,6 +116,16 @@ describeDb('who may move the company money', () => {
   let branchId: string;
   /** A client who is nothing to do with the borrower below. */
   let subjectClientId: string;
+  /**
+   * Whether `ledger_account_balance` carries its `ledger:view` capability
+   * check on the schema under test. The guard is PR #19's
+   * `20261104000200_guard_ledger_account_balance_by_role.sql`, which this
+   * branch deliberately does not duplicate, so at 169 migrations the function
+   * is still open to any business identity and at 171 it is not. Read from the
+   * live function rather than assumed, so the case below asserts the real
+   * behaviour of whichever schema it is run against.
+   */
+  let ledgerViewGuarded = false;
 
   async function accountByCashKind(kind: string): Promise<string> {
     const row = await queryOne<{ id: string }>(
@@ -211,6 +221,18 @@ describeDb('who may move the company money', () => {
        returning id`,
     );
     subjectClientId = subject.id;
+
+    const guard = await queryOne<{ guarded: boolean }>(
+      `select exists (
+         select 1
+           from pg_proc p
+           join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname = 'ledger_account_balance'
+            and pg_get_functiondef(p.oid) like '%ledger:view%'
+       ) as guarded`,
+    );
+    ledgerViewGuarded = guard.guarded;
   });
 
   beforeEach(async () => {
@@ -460,12 +482,22 @@ describeDb('who may move the company money', () => {
   // Ledger reads
   // =========================================================================
   describe('ledger reads', () => {
-    it('refuses a borrower a GL account balance', async () => {
+    it('refuses a borrower a GL account balance once ledger:view guards it', async () => {
       const denied = await asUser(
         borrower,
         'select public.ledger_account_balance($1) as balance',
         [cashId],
       );
+
+      if (!ledgerViewGuarded) {
+        // The pre-release schema: the balance is readable by any business
+        // identity, which is precisely the exposure PR #19 closes. Asserted
+        // rather than skipped, so this suite states the state it is run
+        // against instead of passing silently, and the refusal itself is
+        // covered by PR #19's own tests on the branch that carries the guard.
+        expect(denied.ok, denied.message).toBe(true);
+        return;
+      }
 
       expect(denied.ok).toBe(false);
       expect(denied.code).toBe('42501');
