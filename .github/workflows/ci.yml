@@ -185,6 +185,29 @@ jobs:
       - name: Upgrade and existing-borrower demo integration
         run: node scripts/verify-membership-upgrade.mjs
 
+      # Phase 4, Task 0. Walks the 38 cross-subsystem identities that say "the
+      # books reconcile" — the portfolio against GL 1200, the cash position
+      # against the cash accounts, the savings sub-ledger against GL 2100 — and
+      # fails the job on any unexplained difference.
+      #
+      # It builds its own book rather than reusing `lending_test`, because the
+      # verdict depends entirely on what is in the database. The membership-only
+      # demonstration book has no loans, so eleven loan identities would have no
+      # subject rows and prove nothing; the harness calls those VACUOUS and
+      # `--require-complete` (set inside the script) refuses to exit 0 while any
+      # remain. So this step cannot pass by being pointed at an empty book.
+      - name: Financial reconciliation certification
+        run: bash scripts/certify-financial-book.sh
+
+      - name: Upload financial reconciliation certification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-financial-reconciliation-certification
+          path: work/financial-reconciliation.json
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Upload policy financial reconciliation
         if: always()
         uses: actions/upload-artifact@v4

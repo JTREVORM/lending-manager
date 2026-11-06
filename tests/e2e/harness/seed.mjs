@@ -2401,6 +2401,53 @@ console.log(
     );
   }
   console.log(`trial balance: ${trial.debits} both sides`);
+
+  // Phase 4 / Task 0 (Phase 3 finding F2). A balanced trial balance is not the
+  // same thing as a *coherent* book: the disbursements here are back-dated with
+  // the transition guard suspended, so `disburse_loan` never runs and the
+  // journal it would have posted is written by `backfill_ledger_history`
+  // instead. That is accounting-safe — the backfill calls the production
+  // `post_disbursement_journal`, which derives the entry date from the loan's
+  // own `disbursed_at` and attributes it to `disbursed_by` — but it is a step
+  // that could be removed or reordered without the trial balance noticing.
+  //
+  // So the invariant is asserted here rather than assumed. Without these two
+  // checks, GL 1200 can drift from the principal sub-ledger (F2 measured it
+  // 6,500,000 short, and negative) and nothing in the seed would fail. Any
+  // screen that reconciles the portfolio to the general ledger depends on this
+  // holding, which is why the seed refuses to finish without it.
+  const unposted = await one(
+    `select count(*)::text as n
+       from public.loans l
+      where l.disbursed_at is not null
+        and not exists (
+          select 1 from public.journal_entries e
+           where e.source_type = 'loan_disbursement' and e.source_id = l.id)`,
+  );
+  if (unposted.n !== '0') {
+    throw new Error(
+      `seed left ${unposted.n} disbursed loan(s) with no loan_disbursement journal; ` +
+        `GL 1200 cannot agree with the principal sub-ledger (Phase 3 finding F2)`,
+    );
+  }
+
+  const receivable = await one(
+    `select (select coalesce(sum(l.debit) - sum(l.credit), 0)
+               from public.journal_lines l
+               join public.ledger_accounts a on a.id = l.account_id
+              where a.code = '1200')::text as gl,
+            (select coalesce(sum(principal_remaining), 0)
+               from public.loan_balances)::text as subledger`,
+  );
+  if (receivable.gl !== receivable.subledger) {
+    throw new Error(
+      `seed left GL 1200 at ${receivable.gl} against a principal sub-ledger of ` +
+        `${receivable.subledger}; the two must agree (Phase 3 finding F2)`,
+    );
+  }
+  console.log(
+    `loans receivable: GL 1200 ${receivable.gl} = principal sub-ledger ${receivable.subledger}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
