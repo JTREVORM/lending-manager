@@ -160,6 +160,18 @@ jobs:
       # force, and it reuses borrowers. See the header of vitest.config.mts.
       # Each project's own globalSetup rebuilds the cluster the previous step
       # created, so this one step covers all four.
+      # Runs before the suites, deliberately. It reads the privileged surface
+      # of the freshly migrated database and fails on any exposure the
+      # reviewed baseline does not already account for, so a migration that
+      # widens the Data API is refused here rather than diagnosed later from a
+      # behavioural test that happened to notice. It is a step inside this job
+      # rather than a job of its own, so the required status check that
+      # protects the production branch already covers it.
+      - name: Database security gate
+        run: npm run check:security
+        env:
+          DATABASE_URL: postgresql://lending@localhost:5433/lending_test
+
       - name: Database tests, the seeders, borrower reuse, member loans
         run: npm run test:db
         env:
