@@ -106,3 +106,7 @@ CLAUDE.md
 *.scratch
 scratchpad/
 val-screenshots/
+
+# Read-only production certification creates a sanitized, per-run artifact.
+# Other work/ fixtures are version-controlled; do not ignore the whole directory.
+work/production-readonly-certification.json
