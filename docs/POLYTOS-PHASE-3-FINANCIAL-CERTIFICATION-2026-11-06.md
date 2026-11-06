@@ -276,6 +276,25 @@ commits because PR #19 owns them):
 | Historical upgrade rehearsal | **PASS** — six existing borrowers enrolled, non-members retained, **loan book untouched**, full financial fixed point on runs 2 and 3, liability reconciled |
 | `npm run build` | **PASS** |
 
+### Re-run at 169 migrations, which is what CI applies
+
+The table above is the 171-migration state. Because the first CI run failed on
+a test that only passed at 171, the suite was re-run against the branch as CI
+sees it — PR #19's two migrations moved out, the cluster rebuilt from zero:
+
+| Suite | Result |
+| --- | --- |
+| Fresh migration replay | **PASS** — all 169 in timestamp order |
+| `vitest --project db` | **PASS — 82 files, 1896 tests, 0 failed** |
+| `npm run test:db` (db + four seeders) | **PASS** — all five projects |
+| `financial-authorization.test.ts` | **PASS — 24/24** |
+| `loan-lifecycle.write.spec.ts`, `member-loans.write.spec.ts` (fresh seed) | **PASS — 15/15** |
+| Full browser suite, pre-fix code | 910 passed, 48 skipped — see §9 for why that was not evidence |
+
+1896 at 169 and 1896 at 171 is the point of the fix: the ledger case asserts
+the real behaviour of whichever schema it is run against, so it passes in both
+and is vacuous in neither.
+
 The upgrade rehearsal's own reconciliation, which is a second independent book:
 
 ```
