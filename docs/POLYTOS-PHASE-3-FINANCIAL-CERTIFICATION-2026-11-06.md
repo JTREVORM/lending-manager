@@ -255,13 +255,57 @@ commits because PR #19 owns them):
 | Fresh migration replay | **PASS** — all 171 in timestamp order |
 | Reconciliation harness | 38 identities: 34 pass, 2 explained, 1 vacuous, 1 fail (F2) |
 | `financial-authorization.test.ts` | **PASS — 24/24** |
-| *filled from the regression sweep below* | |
+| `npm run typecheck` | **PASS** |
+| `npm run lint` | **PASS** |
+| `npm run format:check` | **PASS** |
+| `npm run audit:money` | **PASS** — 71 financial files, no hazard; all five engines reach only integer/BigInt helpers; scanner verified against a positive control |
+| `vitest --project db` | **PASS — 82 files, 1896 tests, 0 failed, 0 skipped** (1872 before Phase 3, plus the 24 new financial authorization cases) |
+| `npm run test:run` (unit + integration) | **PASS — 83 files, 2647 tests, 0 failed** |
+| Historical upgrade rehearsal | **PASS** — six existing borrowers enrolled, non-members retained, **loan book untouched**, full financial fixed point on runs 2 and 3, liability reconciled |
+| `npm run build` | **PASS** |
+
+The upgrade rehearsal's own reconciliation, which is a second independent book:
+
+```
+loans 17 · principal 9,600,000 · interest 1,290,000 · scheduled 8,015,000
+payments 167 · memberships 8 · acceptances 7
+savings sub-ledger 1,790,000 = liability 2100 1,790,000
+ledger debits 17,748,290 = ledger credits 17,748,290
+26 existing financial/identity tables verified; all records, balances and
+historical approvals preserved
+```
+
+Two independent books therefore reconcile in this phase: the seeded book in §3
+and §5 (debits = credits = 4,846,826) and the upgrade rehearsal's
+(17,748,290). In both, the savings sub-ledger equals the 2100 liability
+exactly.
 
 ---
 
 ## 9. CI at the final head
 
-*To be completed from the run on the final Phase 3 head.*
+Phase 3 is a **stacked branch on PR #20**, which is itself unmerged. So CI runs
+on this branch against its own head, and the four required jobs are the same
+four PR #20 must pass:
+
+- `checks, unit/integration, build`
+- `database (real PostgreSQL)` — including the security gate and the upgrade
+  rehearsal
+- `security release rehearsal (PostgreSQL 17, real Auth)` — the only run on
+  PG 17, and the only coverage of Storage RLS and cross-branch isolation
+- `browser E2E (production build, fresh seed)` — subject to F2: it cannot
+  certify GL-vs-portfolio screens
+
+Every one has been reproduced locally and passes, on PostgreSQL 16 rather than
+17 for the three that touch a database. The run on the final head is the
+authority and its result belongs beside this section.
+
+**One caveat specific to this branch.** PR #19's two migrations are staged in
+the working tree so that the true post-release 171-migration state is what gets
+tested, and they are excluded from the commits via `.git/info/exclude` because
+PR #19 owns them. CI therefore tests **169** migrations on this branch, not 171.
+The 171-migration combined replay is the local verification recorded in §2, and
+it is the one thing in this report that CI does not reproduce.
 
 ---
 
@@ -293,6 +337,20 @@ commits because PR #19 owns them):
 Production was read at the start and end of this phase and is unchanged: 161
 migrations, 35 loans, 470 payments, 597 journal entries, 28 clients, Policy 2.0
 `draft` with every flag false, ledger debits = credits = **89,649,530**.
+
+### One certification that is about production itself
+
+Everything else in this report was measured on a seeded local book. This was
+measured on production, read-only:
+
+| Check | Result |
+| --- | --- |
+| Ledger debits vs credits | **89,649,530 = 89,649,530** |
+| Journal entries whose own legs disagree | **0 of 597** |
+
+So production's double entry holds both in total and entry by entry. That is
+the strongest single statement in this document, because it is the live book
+rather than a fixture — and it required no write to establish.
 
 ---
 
