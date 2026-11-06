@@ -354,27 +354,40 @@ around:
 
 ## 7. CI at the final head
 
-The four required jobs, and what each one now has to clear that it did not at
-`bd04beb`:
+**Run [42213539680](https://github.com/JTREVORM/lending-manager/actions/runs/42213539680)
+at `30189aa` — conclusion: `success`. All four required jobs pass.**
 
-| Job | What it covers | At `bd04beb` |
+| Job | At `bd04beb` | At `30189aa` |
 | --- | --- | --- |
-| `checks, unit/integration, build` | typecheck, lint, format, unit + integration, money audit, secret scan, dependency audit, production build, bundle assertions | PASS |
-| `database (real PostgreSQL)` | fresh 169-migration replay · **the security gate, including the new invoker-chain invariant** · 1872 database tests · **the upgrade rehearsal that failed** | FAIL — rehearsal only |
-| `security release rehearsal (PostgreSQL 17, real Auth)` | the scoped-migration and interruption rehearsal, and the real-Auth release spec, on **PostgreSQL 17** — the only run of these on 17, and the only coverage of Storage RLS and cross-branch isolation | PASS |
-| `browser E2E (production build, fresh seed)` | 910 tests across desktop, tablet and mobile | FAIL — 31 |
+| `checks, unit/integration, build` | success | **success** |
+| `database (real PostgreSQL)` | **FAILURE** | **success** |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | success | **success** |
+| `browser E2E (production build, fresh seed)` | **FAILURE** | **success** |
 
-Every one of those four has now been reproduced locally and passes, on
-PostgreSQL 16 rather than 17 for the three that run against a database. CI on
-the final head is the authority, and its result is what should be read beside
-this table rather than the local reproduction.
+The two steps that failed before, named individually because they are the point
+of this phase:
 
-A note on sequencing, because it matters for reading the run list: each push
-starts a new CI run, so only the run on the **final** head is meaningful. Runs
-against earlier Phase 2B commits were superseded while the browser suite was
-still being verified locally.
+| Step | Result |
+| --- | --- |
+| `Build a local throwaway cluster and apply every migration` | success — all 169 |
+| **`Database security gate`** | **success** — including the new invoker-chain invariant |
+| `Database tests, the seeders, borrower reuse, member loans` | success |
+| **`Upgrade and existing-borrower demo integration`** | **success** — the step that failed at `bd04beb` |
+| `Bring up the stack (migrate, seed, build, serve)` | success |
+| **`Browser tests`** | **success** |
+| `Capture the Phase 4 screens` | success — 92 screen/viewport pairs, **no screen overflows its viewport**. Skipped at `bd04beb`, because the browser tests had failed |
+| `Upload Playwright artifacts on failure` | **skipped** — its `if: failure()` never fired, which is the run's own statement that nothing failed |
 
----
+`security release rehearsal (PostgreSQL 17, real Auth)` is the one job that
+could not be reproduced locally — PostgreSQL 17 is not installed in the session
+and `www.postgresql.org` is denied by its network policy. It is also the only
+coverage of Storage RLS and cross-branch isolation. Its success here is
+therefore CI's evidence, not a local reproduction, and it is the right place to
+rely on CI.
+
+A note on reading the run list: each push starts a new run, so only the run on
+the final head is meaningful. Runs against earlier Phase 2B commits were
+superseded while the browser suite was still being verified locally.
 
 ## 8. Branch protection — manual steps
 
@@ -425,7 +438,7 @@ gh api repos/JTREVORM/lending-manager/branches/claude%2Fintelligent-knuth-2r8mpw
 
 ## 10. Phase 2 recommendation
 
-### Recommendation: Phase 2 is complete as implementation work. Production certification remains NOT GRANTED, and nothing here grants it.
+### Recommendation: Phase 2 is complete as implementation work, with all four required CI jobs green at `30189aa`. Production certification remains NOT GRANTED, and nothing here grants it.
 
 Both CI failures are resolved at their root rather than worked around, and the
 question Phase 2 left open is closed:
