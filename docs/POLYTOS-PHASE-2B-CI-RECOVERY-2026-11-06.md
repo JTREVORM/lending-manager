@@ -86,6 +86,28 @@ The other six functions revoked by `20261106000400` stay revoked: every one of
 their callers is `SECURITY DEFINER`, and a definer hop ends the privilege chain
 because it runs as its owner.
 
+**Measured, across all three viewports:**
+
+| | `bd04beb` | after the fix |
+| --- | --- | --- |
+| passed | 879 | **910** |
+| failed | **31** | **0** |
+| skipped | 48 | 48 |
+
+879 + 31 = 910, so every one of the 31 is fixed and nothing regressed. Each of
+the 17 distinct desktop specs named in the brief was checked individually, and
+three of them answer the brief's constraint directly rather than by implication:
+
+- `savings.write.spec.ts:157` — *a Secretary prepares one, a Manager decides
+  and pays it*: the withdrawal lifecycle end to end, with real money moving.
+- `savings.write.spec.ts:240` — *rejecting one asks why, and moves no money*.
+- `savings.spec.ts:347` — *as a borrower, sees their own savings in the portal,
+  **and no control to move money***.
+
+That last one is the proof that isolation was preserved rather than traded away.
+No borrower gained a capability, no test was removed and no assertion was
+relaxed: what was restored is a privilege chain, not a permission.
+
 ### 1.3 Why converting the two invoker functions was rejected
 
 Making `member_savings_qualification` and `savings_qualification_under_policy`
@@ -285,6 +307,7 @@ Local, PostgreSQL 16, 169 migrations:
 | `definer-third-party-access.test.ts` | **PASS — 22 of 22** |
 | `verify-membership-upgrade.mjs` | **PASS** — 97 + 69 migrations, 28 financial figures identical, ledger balanced |
 | Fresh migration replay | **PASS** — all 169 in order on an empty cluster |
+| **Full browser suite, desktop + tablet + mobile** | **PASS — 910 passed, 0 failed, 48 skipped (17.5m)** |
 | `npm run typecheck` / `lint` / `format:check` | **PASS** |
 
 No test was removed, skipped or disabled, and no assertion was relaxed. Three
@@ -331,14 +354,25 @@ around:
 
 ## 7. CI at the final head
 
-To be completed from the run on the final PR #20 head. All four required jobs
-must pass:
+The four required jobs, and what each one now has to clear that it did not at
+`bd04beb`:
 
-- `checks, unit/integration, build`
-- `database (real PostgreSQL)` — including the security gate step and the
-  upgrade rehearsal that failed at `bd04beb`
-- `security release rehearsal (PostgreSQL 17, real Auth)`
-- `browser E2E (production build, fresh seed)`
+| Job | What it covers | At `bd04beb` |
+| --- | --- | --- |
+| `checks, unit/integration, build` | typecheck, lint, format, unit + integration, money audit, secret scan, dependency audit, production build, bundle assertions | PASS |
+| `database (real PostgreSQL)` | fresh 169-migration replay · **the security gate, including the new invoker-chain invariant** · 1872 database tests · **the upgrade rehearsal that failed** | FAIL — rehearsal only |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | the scoped-migration and interruption rehearsal, and the real-Auth release spec, on **PostgreSQL 17** — the only run of these on 17, and the only coverage of Storage RLS and cross-branch isolation | PASS |
+| `browser E2E (production build, fresh seed)` | 910 tests across desktop, tablet and mobile | FAIL — 31 |
+
+Every one of those four has now been reproduced locally and passes, on
+PostgreSQL 16 rather than 17 for the three that run against a database. CI on
+the final head is the authority, and its result is what should be read beside
+this table rather than the local reproduction.
+
+A note on sequencing, because it matters for reading the run list: each push
+starts a new CI run, so only the run on the **final** head is meaningful. Runs
+against earlier Phase 2B commits were superseded while the browser suite was
+still being verified locally.
 
 ---
 
@@ -391,7 +425,60 @@ gh api repos/JTREVORM/lending-manager/branches/claude%2Fintelligent-knuth-2r8mpw
 
 ## 10. Phase 2 recommendation
 
-To be completed once §7 is filled in.
+### Recommendation: Phase 2 is complete as implementation work. Production certification remains NOT GRANTED, and nothing here grants it.
+
+Both CI failures are resolved at their root rather than worked around, and the
+question Phase 2 left open is closed:
+
+- The upgrade rehearsal failed because of a classification error in its own
+  prefix split, not a migration defect. Fixed by the precedent the script
+  already documents; the historical upgrade now verifies with all 28 financial
+  figures identical and the ledger balanced.
+- The 31 browser failures came from a withdrawn grant breaking a `SECURITY
+  INVOKER` privilege chain, not from a capability check refusing a legitimate
+  caller. 910 pass, 0 fail, and borrower isolation is asserted rather than
+  assumed.
+- The nine PENDING-REVIEW functions are resolved. Eight were safe;
+  `client_has_live_loan` was a real disclosure and is fixed.
+- The gate now derives the invoker-chain dependency that caused the regression,
+  so the class cannot recur silently.
+
+**What that recommendation is not.** It is not a release authorization, and the
+five blockers in §6 all need a person: PR #19 and PR #20 are drafts, nine
+migrations await authorized application, branch protection is authorized but
+**unapplied** and the branch still reports `protected: false`, leaked-password
+protection is off, and hosted authenticated certification has never been
+performed.
+
+### What this phase should be judged on, honestly
+
+Two disclosures were found across Phase 2 and 2B — `savings_withdrawable_amount`
+/ `savings_pledged_amount`, and `client_has_live_loan` — and **both had been
+recorded as guarded** by an earlier pass that read function bodies for the name
+of an authorization helper. That is the finding with the longest shelf life
+here: the method mattered more than any individual fix, and the method that
+worked was calling the function as the attacker and comparing what came back.
+
+Phase 2B also corrected three of my own errors, which belong in the record:
+withdrawing a grant on evidence that was correct but incomplete; asserting that
+three fail-closed functions must *raise*, which would have reported three safe
+functions as vulnerable; and three fixture mistakes against three different
+column conventions in one schema.
+
+### Recommended Phase 3 opening conditions
+
+1. Branch protection applied and **read back** as in force (§8). It is the gate
+   that makes every other gate enforceable.
+2. PR #19 and PR #20 merged; the nine migrations applied under
+   `docs/POLYTOS-RELEASE-AUTHORIZATION-CHECKLIST.md`; the advisor's
+   `security_definer_view` count down to 1.
+3. Leaked-password protection enabled.
+4. A decision on hosted authenticated certification — the one gap no isolated
+   environment can close.
+5. Extend the behavioural method to the remaining functions classified **A** on
+   their domain suites alone. Twenty-five have now been called as an
+   unauthorized caller; the rest have not, and two of the first twenty-five were
+   real.
 
 ---
 
