@@ -59,6 +59,49 @@ if (!hasDatabase) {
 
 /** Well under every approval threshold, so a refusal is never a threshold. */
 const SMALL = 250_000;
+/** Above `expense_approval_threshold`, so the expense stays pending approval. */
+const NEEDS_APPROVAL = 1_500_000;
+
+/**
+ * The SQLSTATE an authorization refusal from the money-movement module carries.
+ *
+ * `P0001`, not `42501`. Every `raise exception` in `record_transfer`,
+ * `approve_transfer`, `reverse_transfer`, `record_expense`, `approve_expense`
+ * and `reverse_expense` omits `using errcode`, so PostgreSQL supplies the
+ * default `raise_exception`. The loan, savings and benefit modules all use
+ * `42501` for the same kind of refusal.
+ *
+ * The denial itself is correct and complete — these tests prove the call is
+ * refused and that nothing is written. What differs is how the refusal is
+ * *classified*: `lib/db-errors.ts` maps `42501` to `AuthorizationError` and
+ * `P0001` to `BusinessRuleError`, so an attacker probing transfer approval is
+ * logged as a user hitting a validation rule. That is an observability defect,
+ * not a security one, and it is recorded as a Phase 3 finding rather than
+ * changed here: adding `using errcode` to six functions would reclassify
+ * errors that `lib/clients/actions.ts` and `lib/guarantors/actions.ts`
+ * currently pass through to users by matching on `P0001`.
+ *
+ * Asserted by name below so the inconsistency is visible in the suite instead
+ * of hidden behind a matcher that accepts either.
+ */
+const MONEY_MOVEMENT_REFUSAL = 'P0001';
+
+/**
+ * And it is not only the money-movement module.
+ *
+ * Measured across the schema: 32 functions raise `42501` for a capability
+ * refusal and 67 do not. Some omit `using errcode` and get PostgreSQL's
+ * default; `assess_member_loan_eligibility` sets `using errcode = 'P0001'`
+ * explicitly, so this is a deliberate split rather than an oversight in a
+ * handful of places.
+ *
+ * Recorded as a Phase 3 finding, severity MEDIUM, observability rather than
+ * security: every one of these denials works, and 24 cases in this file prove
+ * it, but roughly two thirds of capability refusals in the system are
+ * classified as business-rule violations rather than authorization failures.
+ * Anything watching for authorization failures sees a third of them.
+ */
+const ELIGIBILITY_REFUSAL = 'P0001';
 
 describeDb('who may move the company money', () => {
   let owner: TestUser;
@@ -71,6 +114,8 @@ describeDb('who may move the company money', () => {
   let bankId: string;
   let expenseAccountId: string;
   let branchId: string;
+  /** A client who is nothing to do with the borrower below. */
+  let subjectClientId: string;
 
   async function accountByCashKind(kind: string): Promise<string> {
     const row = await queryOne<{ id: string }>(
@@ -155,6 +200,17 @@ describeDb('who may move the company money', () => {
         order by code limit 1`,
     );
     expenseAccountId = expenseAccount.id;
+
+    // A third party for the eligibility reads: a fresh cluster has no clients.
+    const subject = await queryOne<{ id: string }>(
+      `insert into public.clients
+         (full_name, sex, date_of_birth, phone, occupation, village_area, district,
+          status)
+       values ('Phase 3 Eligibility Subject', 'female', '1990-07-08',
+               '+256700555001', 'Trader', 'Kalerwe', 'Kampala', 'active')
+       returning id`,
+    );
+    subjectClientId = subject.id;
   });
 
   beforeEach(async () => {
@@ -202,7 +258,7 @@ describeDb('who may move the company money', () => {
       );
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -233,7 +289,7 @@ describeDb('who may move the company money', () => {
       ]);
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -247,7 +303,7 @@ describeDb('who may move the company money', () => {
       ]);
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -261,7 +317,7 @@ describeDb('who may move the company money', () => {
       ]);
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -302,7 +358,10 @@ describeDb('who may move the company money', () => {
           sql: `select public.record_expense($1, $2, $3::bigint, public.business_date(),
                          'Phase 3 fixture expense', 'A payee', 'P3-EXP-' || gen_random_uuid()::text,
                          null) as id`,
-          params: [expenseAccountId, cashId, SMALL],
+          // Above the approval threshold on purpose: below it the expense
+          // auto-posts and there is correctly nothing left to approve, which
+          // is a threshold test rather than an authorization one.
+          params: [expenseAccountId, cashId, NEEDS_APPROVAL],
         },
       ]);
       if (!made.ok) throw new Error(`could not record an expense: ${made.message}`);
@@ -320,7 +379,7 @@ describeDb('who may move the company money', () => {
       );
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -347,7 +406,7 @@ describeDb('who may move the company money', () => {
       ]);
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -361,7 +420,7 @@ describeDb('who may move the company money', () => {
       ]);
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -374,7 +433,7 @@ describeDb('who may move the company money', () => {
       ]);
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(MONEY_MOVEMENT_REFUSAL);
       expect(await financialState()).toEqual(before);
     });
 
@@ -452,31 +511,23 @@ describeDb('who may move the company money', () => {
   // =========================================================================
   describe('member loan eligibility', () => {
     it('refuses a borrower an eligibility assessment for another client', async () => {
-      const otherClient = await queryOne<{ id: string }>(
-        `select id from public.clients order by created_at limit 1`,
-      );
-
       const denied = await asUser(
         borrower,
         `select * from public.assess_member_loan_eligibility(
                    $1, 500000::bigint, 6::smallint, 'monthly', public.business_date())`,
-        [otherClient.id],
+        [subjectClientId],
       );
 
       expect(denied.ok).toBe(false);
-      expect(denied.code).toBe('42501');
+      expect(denied.code).toBe(ELIGIBILITY_REFUSAL);
     });
 
     it('still answers a Manager, who holds member_loans:view_eligibility', async () => {
-      const otherClient = await queryOne<{ id: string }>(
-        `select id from public.clients order by created_at limit 1`,
-      );
-
       const allowed = await asUser(
         manager,
         `select * from public.assess_member_loan_eligibility(
                    $1, 500000::bigint, 6::smallint, 'monthly', public.business_date())`,
-        [otherClient.id],
+        [subjectClientId],
       );
 
       expect(allowed.ok, allowed.message).toBe(true);
