@@ -1798,6 +1798,14 @@ describeDb('privileged functions', () => {
       // written against — so they must give the same answer to every caller.
       'review_meeting_absence_notice',
       'revoke_member_beneficiary',
+      // Restored in 20261106000600 after 20261106000400 took it away. It is
+      // granted for a reason that is easy to miss and that broke 31 browser
+      // tests: `savings_qualification_under_policy` and
+      // `member_savings_qualification` below are SECURITY INVOKER and call it,
+      // so the session needs EXECUTE in its own right even though nothing in
+      // the application names it. The invoker-chain check in
+      // scripts/check-database-security.mjs now derives that dependency.
+      'savings_account_governing_policy',
       'savings_pledged_amount',
       'savings_qualification_under_policy',
       'savings_statement',
