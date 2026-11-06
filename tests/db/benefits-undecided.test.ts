@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  asUser,
   asUserCommitted,
   createTestUser,
   deleteTestUsers,
@@ -19,6 +18,7 @@ import {
   hasDatabase,
   inRollbackTransaction,
   query,
+  queryOne,
   skipReason,
 } from '../helpers/db';
 import { forcePolicyStatus, publishTestPolicy } from '../helpers/membership';
@@ -171,14 +171,18 @@ describeDb('the policy gate, with every benefit rule undecided', () => {
   });
 
   it('says exactly what is missing, rather than "not available"', async () => {
-    const reason = await asUser(
-      fx.owner,
+    // Read as the owner rather than through a session. As of 20261106000400
+    // this function is no longer granted to `authenticated` — nothing in the
+    // application calls it directly, and the text reaches users through
+    // `assess_benefit_claim`'s refusal, which the case above asserts. Its
+    // result is a pure function of the policy version and does not depend on
+    // the caller, so the wording under test here is identical either way.
+    const reason = await queryOne<{ reason: string }>(
       `select public.benefits_blocked_reason($1) as reason`,
       [fx.undecidedPolicyId],
     );
 
-    expect(reason.message ?? 'ok').toBe('ok');
-    const text = (reason.rows[0] as { reason: string }).reason;
+    const text = reason.reason;
     expect(text).toContain('Some benefit payments wait on');
     expect(text).toContain(
       'whether the medical benefit has a shilling ceiling for the year',
