@@ -11,7 +11,7 @@ deleted. Policy 2.0 untouched.**
 
 ## 1. What this phase found
 
-Three things worth reading before the detail.
+Four things worth reading before the detail.
 
 **The books reconcile.** Thirty-eight cross-subsystem identities were walked
 against a real seeded book — 14 loans, 165 payments, 198 journal entries. Debits
@@ -37,6 +37,17 @@ testing it.** A `secretary_treasurer` holds `transfers:create` and
 or an expense and may not approve or reverse one — including the one they just
 recorded. Twenty-four new cases now assert that, with before/after state and
 audit comparison.
+
+**The browser suite was not verifying that a loan can be approved.** Found
+through a CI failure of my own making, and it predates this phase.
+`loan-lifecycle.write.spec.ts` asserted `getByText(/approved/i)` after
+confirming approval — and the breakdown table's empty state already says *"It
+is created when the loan is approved"* on a loan that is still pending. So the
+assertion matched copy that is there either way: it verified nothing and, worse,
+waited for nothing, leaving the next navigation to abandon the approval action
+mid-flight. The same assertion passed in Phase 2's green run, so that run did
+not certify loan approval either. Proven by holding the request and reading the
+loan's status from the database, in both directions — see F4 and §9.
 
 ---
 
@@ -394,7 +405,7 @@ it is the one thing in this report that CI does not reproduce.
 | Unauthorized financial operations denied | **Met** — 24 cases, with state and audit unchanged |
 | Existing security regression tests green | **Met** — gate passes, Phase 2 fixes intact |
 | All four mandatory CI jobs pass | **§9** |
-| No unresolved critical or high financial defect | **Met** — F1 MEDIUM, F2 LOW, neither financial-calculation defects |
+| No unresolved critical or high financial defect | **Met** — F1 MEDIUM, F2 LOW, F4 MEDIUM; none is a financial-calculation defect, and F2 and F4 are both test infrastructure |
 | All blocked or untested paths recorded | **Met** — §7 |
 
 ---
