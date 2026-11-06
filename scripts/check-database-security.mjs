@@ -55,6 +55,19 @@ if (!connectionString) {
 }
 
 const update = process.argv.includes('--update');
+
+/**
+ * The baseline, read once so the invariants can honour reviewed exemptions.
+ *
+ * An empty object if it cannot be parsed: a missing or broken baseline must
+ * make the gate louder, never quieter.
+ */
+let baselineForInvoker = {};
+try {
+  baselineForInvoker = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
+} catch {
+  baselineForInvoker = {};
+}
 const findings = [];
 const advisory = [];
 
@@ -258,6 +271,87 @@ async function checkInvariants() {
         `definer view would bypass company_settings RLS.`,
     );
   }
+
+  // 6. Every function an exposed role needs because something runs in *its*
+  //    context must actually be executable by that role.
+  //
+  //    This is the check Phase 2 did not have, and its absence cost 31 browser
+  //    failures. `20261106000400` withdrew a grant from
+  //    `savings_account_governing_policy` after confirming that no view, no RLS
+  //    policy, no CHECK constraint and no application route named it. All four
+  //    answers were correct and all four were the wrong question: two SECURITY
+  //    INVOKER functions call it, one of which the application calls by name,
+  //    and an invoker function executes with the privileges of whoever called
+  //    it. So the session needed EXECUTE in its own right, and every savings
+  //    screen died on `permission denied for function`.
+  //
+  //    A SECURITY DEFINER hop ends the chain, because it runs as its owner. So
+  //    the dependency closure to worry about is the one reachable through
+  //    invoker functions only, and that is what this walks.
+  //
+  //    This is the one place the gate matches text against function bodies, and
+  //    the direction matters: PL/pgSQL bodies create no catalog dependencies, so
+  //    there is nothing else to read. Over-matching here produces a *failure* a
+  //    human resolves, never a pass — the opposite of inferring safety from a
+  //    helper's name, which is why that remains advisory.
+  for (const role of EXPOSED_ROLES) {
+    const reachable = await rows(
+      `
+      -- MATERIALIZED, and pg_get_functiondef applied only here: it raises on an
+      -- aggregate, and without this fence the planner is free to evaluate it
+      -- before the prokind filter.
+      with recursive pub as materialized (
+        select p.oid, p.proname, p.prosecdef,
+               pg_get_functiondef(p.oid) as def,
+               has_function_privilege($1, p.oid, 'EXECUTE') as callable
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.prokind = 'f'
+      ),
+      recursive_seed as (
+        select oid, proname, def from pub where not prosecdef and callable
+      ),
+      closure as (
+        select oid, proname, def from recursive_seed
+        union
+        -- Invoker functions reached from an invoker function still run as the
+        -- caller, so the chain continues. A definer hop is absent here on
+        -- purpose: it runs as its owner and ends the chain.
+        select q.oid, q.proname, q.def
+          from closure c
+          join pub q on not q.prosecdef and q.oid <> c.oid
+         where c.def ~ ('\\m' || q.proname || '\\M[[:space:]]*\\(')
+      )
+      select distinct t.proname as needs, c.proname as reached_from
+        from closure c
+        join pub t on t.oid <> c.oid and not t.callable
+       where c.def ~ ('\\m' || t.proname || '\\M[[:space:]]*\\(')
+       order by t.proname`,
+      [role],
+    );
+
+    for (const row of reachable) {
+      // A reviewed exemption: a dependency that exists in the body but cannot
+      // be reached by this role, with the reason recorded in the baseline.
+      // Keyed on all three of role, caller and target, so widening any one of
+      // them is a new finding rather than a silent pass.
+      const exempt = (baselineForInvoker.invoker_chain_exemptions ?? []).find(
+        (e) => e.role === role && e.caller === row.reached_from && e.needs === row.needs,
+      );
+      if (exempt?.reason) continue;
+
+      fail(
+        'invoker-chain-broken',
+        `${role} may execute public.${row.reached_from}, which is SECURITY ` +
+          `INVOKER and references public.${row.needs} — but ${role} cannot ` +
+          `execute ${row.needs}. An invoker function runs with the caller's ` +
+          `privileges, so that call fails at runtime with "permission denied ` +
+          `for function". Either grant EXECUTE on ${row.needs} to ${role} and ` +
+          `record it in the baseline, or make ${row.reached_from} SECURITY ` +
+          `DEFINER so the chain ends before it.`,
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +444,10 @@ async function main() {
       prev[key] ?? { classification: 'REVIEW ME', reason: 'REVIEW ME' };
     const next = {
       $comment: previous.$comment,
+      // Carried forward, never regenerated: these are human judgements about
+      // dependencies that exist but cannot be reached, and --update must not
+      // quietly drop one.
+      invoker_chain_exemptions: previous.invoker_chain_exemptions ?? [],
       functions: Object.fromEntries(
         Object.entries(liveFunctions).map(([key, surface]) => {
           const prior = carry(previous.functions ?? {}, key);

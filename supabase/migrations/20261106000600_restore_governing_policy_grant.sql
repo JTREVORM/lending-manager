@@ -1,0 +1,73 @@
+-- ===========================================================================
+-- Restore `savings_account_governing_policy` to `authenticated`.
+--
+-- ## What broke
+--
+-- `20261106000400` withdrew the `authenticated` grant from seven SECURITY
+-- DEFINER functions on the evidence that nothing in `app/`, `lib/` or
+-- `components/` called them over the Data API and that every caller inside
+-- the database was itself a definer function, which executes as the owner and
+-- so needs nothing from the caller.
+--
+-- That was true of six of the seven. It was wrong about this one, and the
+-- browser suite said so: 31 failures across the savings screens, the savings
+-- account detail, the withdrawal and reversal screens, the responsive savings
+-- pages and the borrower portal.
+--
+-- ## The analysis gap
+--
+-- The check asked which views, RLS policies, CHECK constraints and
+-- application RPC routes named the function. All four answers were "none",
+-- and all four were the wrong question, because they only look one hop out and
+-- only at objects that obviously run in the caller's context.
+--
+-- `savings_account_governing_policy` is reached through a third route:
+--
+--     lib/data/savings.ts  ──rpc──▶  member_savings_qualification [INVOKER]
+--                                        └──▶ savings_account_governing_policy
+--                                    savings_qualification_under_policy [INVOKER]
+--                                        └──▶ savings_account_governing_policy
+--
+-- A SECURITY INVOKER function executes with the privileges of whoever called
+-- it. So although the application never names this function, the session that
+-- calls `member_savings_qualification` needs EXECUTE on it in its own right —
+-- and without the grant every one of those calls fails with
+-- `permission denied for function savings_account_governing_policy`.
+--
+-- The other six stay revoked: their callers are all SECURITY DEFINER, and a
+-- definer hop ends the privilege chain, so nothing downstream needs the
+-- caller to hold anything.
+--
+-- ## Why restoring the grant is the right fix, not a retreat
+--
+-- The alternative — making the two INVOKER functions SECURITY DEFINER so they
+-- stop needing the grant — would be a far larger change than the finding
+-- justifies. Both read member data and are invoker *deliberately*, so that
+-- Row Level Security on the tables underneath decides what each caller may
+-- see. Converting them would move that decision from RLS into hand-written
+-- checks inside two more functions: strictly more privileged code, to remove a
+-- function whose return value is a policy version's UUID.
+--
+-- So this one is reclassified from C (internal) to D (exempt), on the same
+-- ground as `active_membership_policy_id`, `membership_policy_allows` and
+-- `membership_governing_policy`: something evaluated in the caller's own
+-- context depends on it. It discloses which policy version governs an account
+-- — configuration, not a member's money — and `member_savings_qualification`,
+-- the function that actually reads it, carries its own authorization.
+--
+-- `scripts/check-database-security.mjs` now derives this class of dependency
+-- rather than leaving it to be rediscovered: it walks the SECURITY INVOKER
+-- call graph and fails when a function an invoker-reachable caller depends on
+-- is not executable by the roles that reach it. The six that stayed revoked
+-- pass that check; this one did not, which is the test the Phase 2 analysis
+-- should have had.
+--
+-- No function body, signature, volatility, result type or owner changes. No
+-- policy, view, row, financial record or audit entry is touched.
+-- ===========================================================================
+
+GRANT EXECUTE ON FUNCTION public.savings_account_governing_policy(uuid, date)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.savings_account_governing_policy(uuid, date) IS
+  'The membership policy version governing a savings account on a given date. Granted to authenticated deliberately as of 20261106000600: public.member_savings_qualification and public.savings_qualification_under_policy are SECURITY INVOKER and call it, so the session that calls them needs EXECUTE in its own right. Reviewed exemption D in docs/POLYTOS-SECURITY-RISK-INVENTORY.md; it returns a policy version id, which is configuration rather than a member''s money.';

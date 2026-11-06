@@ -88,6 +88,23 @@ const MIGRATIONS = join(PROJECT_ROOT, 'supabase', 'migrations');
  * creates. Applied as "existing" it runs before them and fails with
  * `type "public.savings_accounts" does not exist`.
  *
+ * `20261106` is the Phase 2 security hardening, and it is in this list for
+ * exactly the reason `20261103` is: none of its five migrations is deployed,
+ * so they are part of the upgrade rather than part of the existing schema.
+ * They also *must* be, and they walked straight into the trap this comment
+ * warns about. `20261106000200` declares
+ * `public.membership_consent_challenges%rowtype`, which PL/pgSQL resolves when
+ * the function is created, not when it is first called — so applied as
+ * "existing" it runs before `20261020000300` creates that table and fails with
+ * `relation "public.membership_consent_challenges" does not exist`.
+ * `20261106000500` is the same shape against `savings_accounts` and
+ * `memberships`, and `20261106000400` revokes on functions that `20261020`,
+ * `20261022` and `20261028` create.
+ *
+ * Applying them here is also the better test, for the reason given below: the
+ * five land on a seeded book between the two financial baselines, so the claim
+ * that an authorization guard moves no money is measured rather than asserted.
+ *
  * `20261030115530` and `20261030180224` stay out of the list deliberately:
  * both are already applied to production, so they are the existing schema,
  * and neither references a phase object.
@@ -103,6 +120,7 @@ const PHASE_PREFIXES = [
   '20261022',
   '20261028',
   '20261103',
+  '20261106',
 ];
 
 const isPhaseMigration = (name) =>
