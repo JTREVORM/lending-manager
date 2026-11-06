@@ -228,7 +228,17 @@ test.describe('a new loan', () => {
     // stand. The heading is "Approve this loan"; the control is "Approve…".
     await page.getByRole('button', { name: /^approve/i }).click();
     await page.getByRole('button', { name: /yes, approve this loan/i }).click();
-    await expect(page.getByText(/approved/i).first()).toBeVisible({ timeout: 20_000 });
+    // The status description, which only an approved loan carries — not a
+    // loose /approved/i match over the page. The breakdown table says "It is
+    // created when the loan is approved" while the loan is still pending, so
+    // the old regex matched copy that is there either way: it asserted
+    // nothing and, worse, waited for nothing. The decision has to be observed
+    // before the test navigates, because `page.goto` while the approval
+    // action is still in flight abandons it — which is how this step could
+    // quietly not happen and the failure surface two assertions later.
+    await expect(
+      page.getByText('Approved. The money has not been released yet.'),
+    ).toBeVisible({ timeout: 20_000 });
 
     // --- release the money ----------------------------------------------
     // Two steps as well, and the most deliberate of the three: handing cash
@@ -242,9 +252,11 @@ test.describe('a new loan', () => {
 
     await page.getByRole('button', { name: /the money has been handed over/i }).click();
 
-    await expect(page.getByText(/active|disbursed/i).first()).toBeVisible({
-      timeout: 20_000,
-    });
+    // Again the status description rather than a regex: "active" and
+    // "disbursed" both appear in explanatory copy elsewhere on this page.
+    await expect(
+      page.getByText('Disbursed. The borrower owes the contractual total.'),
+    ).toBeVisible({ timeout: 20_000 });
     await expectNoErrorBoundary(page);
 
     // --- the schedule the database generated ----------------------------
