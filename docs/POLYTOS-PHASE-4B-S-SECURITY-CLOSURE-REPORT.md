@@ -291,14 +291,51 @@ forward from an earlier phase.
 | Financial reconciliation certification | **PASS — 36 pass, 2 explained, 0 vacuous, 0 fail** |
 | Historical migration upgrade rehearsal | **PASS — 114 existing + 72 new, 28 financial figures identical** |
 | typecheck · lint · money audit (86 files) · build | **PASS** |
-| Browser E2E (production build, fresh seed) | **CI only** — needs a real PostgREST binary |
-| Security release rehearsal (PostgreSQL 17, real Auth) | **CI only** — needs PostgreSQL 17 and real Auth |
+| Browser E2E (production build, fresh seed) | **PASS in CI** — cannot run here |
+| Security release rehearsal (PostgreSQL 17, real Auth) | **PASS in CI** — cannot run here |
 
 The last two cannot run in this sandbox: there is no PostgREST or Auth binary
 and only PostgreSQL 16 is installed. They are verified by the two CI jobs of
-the same names, which install those dependencies, and the CI result at this
-branch's final head is the record for them. They are listed as CI-only rather
-than omitted, because a gate nobody ran is not a gate that passed.
+the same names, which install those dependencies. They are named rather than
+omitted, because a gate nobody ran is not a gate that passed.
+
+### The CI run this records
+
+**Run 42390060715 at `93dddb7` — all four mandatory jobs `success`.**
+
+| Job | Conclusion |
+| --- | --- |
+| checks, unit/integration, build | success |
+| database (real PostgreSQL) | success |
+| browser E2E (production build, fresh seed) | success |
+| security release rehearsal (PostgreSQL 17, real Auth) | success |
+
+`Supabase Preview` is **skipped**, so nothing in this work created a branch
+against the hosted project. The check run is the evidence for that rather than
+my word for it.
+
+#### The two failures before it, both mine
+
+Recorded because a report that shows only the green run is not a record of
+what happened.
+
+**Run 42388983134 at `fc62c6e`** failed the checks job on the **Format** step;
+typecheck and lint passed. I had run prettier on
+`ledger-balance-invariant.test.ts` and then run `eslint --fix` over it, and the
+fix reintroduced formatting prettier rejects. Prettier has to run **last**.
+Because that step failed, the eight steps after it — unit and integration
+tests, the money audit, the secret scan, the dependency audit, the production
+build and the bundle assertions — were **skipped, not passed**. The database
+and PostgreSQL 17 jobs passed at that commit; browser E2E was **cancelled**,
+not failed, when the corrective push ended it, because the workflow cancels in
+progress on the ref.
+
+**The local `test:db` before that** failed one test in the `agency` project:
+`agency-foundation.test.ts`'s "refuses a reversed transaction missing any part
+of its trail" asserted a CHECK constraint name, and the narrowed readiness gate
+now refuses an already-`reversed` INSERT before either CHECK is reached. The
+insert is still refused — more strongly — so the assertion was changed to name
+the actual refusal rather than the gate being loosened to suit the test.
 
 ### Test totals, and what moved
 
