@@ -93,6 +93,7 @@ export default defineConfig({
             'tests/db/member-loan-demo-seed.test.ts',
             'tests/db/benefit-demo-seed.test.ts',
             'tests/db/agency-foundation.test.ts',
+            'tests/db/agency-transaction-engine.test.ts',
           ],
         },
       },
@@ -117,6 +118,24 @@ export default defineConfig({
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 30_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-engine',
+          environment: 'node',
+          include: ['tests/db/agency-transaction-engine.test.ts'],
+          // Its own database again, and for a stronger reason than the
+          // foundation suite's: this one posts real journals. It funds float
+          // and a till and then moves money through them, so any suite that
+          // asserts a cash position, a trial balance or a ledger total would
+          // be reading a book this one had written to. Sharing a database
+          // would make those suites depend on file ordering, which is the
+          // failure the foundation suite already hit once.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 60_000,
         },
       },
       {
