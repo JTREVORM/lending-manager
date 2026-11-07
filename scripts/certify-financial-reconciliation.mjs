@@ -347,6 +347,7 @@ async function cash() {
             p.cash_at_bank::text     as screen_bank,
             p.mtn_mobile_money::text as screen_mtn,
             p.airtel_money::text     as screen_airtel,
+            p.agency_float::text     as screen_float,
             p.total_liquidity::text  as screen_total,
             coalesce((select sum(b.balance) from public.ledger_account_balances b
                        where b.branch_id = p.branch_id and b.cash_kind = 'cash_at_hand'), 0)::text as gl_hand,
@@ -378,9 +379,13 @@ async function cash() {
     identity(
       g,
       `total liquidity is the sum of its parts (${r.branch_code})`,
-      big(r.screen_hand) + big(r.screen_bank) + big(r.screen_mtn) + big(r.screen_airtel),
+      big(r.screen_hand) +
+        big(r.screen_bank) +
+        big(r.screen_mtn) +
+        big(r.screen_airtel) +
+        big(r.screen_float),
       r.screen_total,
-      'hand + bank + mtn + airtel',
+      'hand + bank + mtn + airtel + agency float',
       'branch_cash_position.total_liquidity',
     );
     identity(

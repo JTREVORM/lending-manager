@@ -32,6 +32,29 @@ describeDb('tables', () => {
     // without one.
     'account_reconciliations',
     'account_transfers',
+    // Phase 4A: agency banking and digital payments. The provider registry and
+    // what it can be asked to do, the per-branch per-till float accounts, the
+    // manually entered transaction, the two settlement kinds and the two
+    // reconciliation kinds, and the transaction's own append-only trail.
+    //
+    // The two settlements are separate because they move money in opposite
+    // directions and clear different accounts (correction C2), and the two
+    // reconciliations are separate because physical cash and electronic float
+    // have different counterparties, different evidence and different
+    // write-off accounts (correction C9).
+    //
+    // There is no agency commission *receivable* table: the receivable is GL
+    // 1310 and is cleared in aggregate, because providers remit in batches
+    // covering many transactions (correction C7).
+    'agency_cash_reconciliations',
+    'agency_commission_settlements',
+    'agency_float_reconciliations',
+    'agency_payable_settlements',
+    'agency_provider_float_accounts',
+    'agency_service_providers',
+    'agency_transaction_audit_log',
+    'agency_transaction_types',
+    'agency_transactions',
     'audit_log',
     // Polytos Phase 4: the relationship vocabulary a beneficiary or a
     // deceased family member may stand in. `condolence_eligible` is NULL on
@@ -328,6 +351,56 @@ describeDb('foreign keys', () => {
       'account_transfers.reversal_entry_id -> journal_entries (r)',
       'account_transfers.reversed_by -> profiles (n)',
       'account_transfers.to_account_id -> ledger_accounts (r)',
+      // Phase 4A. The agency banking module. RESTRICT throughout, the nullable
+      // profile references included: these tables carry no label column to keep
+      // the name a posting was recorded under, so SET NULL would erase who
+      // verified or reversed it. Profiles are archived, not deleted.
+      'agency_cash_reconciliations.branch_id -> branches (r)',
+      'agency_cash_reconciliations.cash_account_id -> ledger_accounts (r)',
+      'agency_cash_reconciliations.created_by -> profiles (r)',
+      'agency_cash_reconciliations.reconciled_by -> profiles (r)',
+      'agency_cash_reconciliations.variance_journal_entry_id -> journal_entries (r)',
+      'agency_commission_settlements.branch_id -> branches (r)',
+      'agency_commission_settlements.created_by -> profiles (r)',
+      'agency_commission_settlements.journal_entry_id -> journal_entries (r)',
+      'agency_commission_settlements.provider_id -> agency_service_providers (r)',
+      'agency_commission_settlements.settlement_account_id -> ledger_accounts (r)',
+      'agency_float_reconciliations.created_by -> profiles (r)',
+      'agency_float_reconciliations.float_account_id -> agency_provider_float_accounts (r)',
+      'agency_float_reconciliations.reconciled_by -> profiles (r)',
+      'agency_float_reconciliations.variance_journal_entry_id -> journal_entries (r)',
+      'agency_payable_settlements.branch_id -> branches (r)',
+      'agency_payable_settlements.cash_account_id -> ledger_accounts (r)',
+      'agency_payable_settlements.created_by -> profiles (r)',
+      'agency_payable_settlements.journal_entry_id -> journal_entries (r)',
+      'agency_payable_settlements.payable_account_id -> ledger_accounts (r)',
+      'agency_payable_settlements.provider_id -> agency_service_providers (r)',
+      'agency_payable_settlements.reversal_entry_id -> journal_entries (r)',
+      'agency_payable_settlements.reversed_by -> profiles (r)',
+      'agency_provider_float_accounts.branch_id -> branches (r)',
+      'agency_provider_float_accounts.ledger_account_id -> ledger_accounts (r)',
+      'agency_provider_float_accounts.provider_id -> agency_service_providers (r)',
+      'agency_service_providers.income_account_id -> ledger_accounts (r)',
+      'agency_service_providers.payable_account_id -> ledger_accounts (r)',
+      'agency_transaction_audit_log.actor_id -> profiles (r)',
+      'agency_transaction_audit_log.transaction_id -> agency_transactions (r)',
+      'agency_transaction_types.provider_id -> agency_service_providers (r)',
+      'agency_transactions.branch_id -> branches (r)',
+      'agency_transactions.float_account_id -> agency_provider_float_accounts (r)',
+      'agency_transactions.journal_entry_id -> journal_entries (r)',
+      'agency_transactions.original_id -> agency_transactions (r)',
+      'agency_transactions.payable_account_id -> ledger_accounts (r)',
+      'agency_transactions.provider_id -> agency_service_providers (r)',
+      'agency_transactions.reversal_entry_id -> journal_entries (r)',
+      'agency_transactions.reversal_id -> agency_transactions (r)',
+      'agency_transactions.reversed_by -> profiles (r)',
+      'agency_transactions.submitted_by -> profiles (r)',
+      'agency_transactions.transaction_type_id -> agency_transaction_types (r)',
+      'agency_transactions.verified_by -> profiles (r)',
+      // Phase 4A. The agency banking module. RESTRICT throughout, the nullable
+      // profile references included: these tables carry no label column to
+      // keep the name a posting was recorded under, so SET NULL would erase
+      // who verified or reversed it. Profiles are archived, not deleted.
       'audit_log.actor_profile_id -> profiles (r)',
       // Polytos Phase 4. `r` on every fact a benefit decision depends on —
       // the claim, the membership, the client, the branch, the policy

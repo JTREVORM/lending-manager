@@ -378,6 +378,15 @@
         "public_default_acl": false
       }
     },
+    "ensure_agency_float_account(p_provider_id uuid, p_branch_id uuid, p_till_name text)": {
+      "classification": "A",
+      "reason": "Phase 4A agency administration RPC. Provisions one agency float till: creates its 1320-series ledger account with cash_kind = agency_float and registers it. Refuses any caller without the agency:providers capability with SQLSTATE 42501, before it reads a single argument, and only owner_admin holds that capability. Asserted in tests/db/agency-foundation.test.ts, which calls it as a secretary_treasurer and a manager and requires 42501 from both.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "finalise_meeting_minutes(p_meeting_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",

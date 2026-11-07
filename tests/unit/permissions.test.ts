@@ -428,6 +428,22 @@ describe('authorization matrix', () => {
     'reports:view_operational': ['secretary_treasurer', 'manager', 'owner_admin'],
     'reports:view_financial': ['manager', 'owner_admin'],
     'reports:view_sensitive': ['owner_admin'],
+
+    // Phase 4A. The agency banking module, with the same maker-checker split
+    // the money-movement rows above use: the Secretary/Treasurer records and
+    // reads, the Manager verifies and settles, and reopening a closed day or
+    // defining the providers is the Owner's alone. `client` appears in none of
+    // them — a borrower holds no agency capability, which is what makes every
+    // agency RLS predicate false for them.
+    'agency:write': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'agency:verify': ['manager', 'owner_admin'],
+    'agency:reverse': ['manager', 'owner_admin'],
+    'agency:reverse_cross_day': ['owner_admin'],
+    'agency:correct': ['manager', 'owner_admin'],
+    'agency:settlements': ['manager', 'owner_admin'],
+    'agency:reconcile': ['manager', 'owner_admin'],
+    'agency:providers': ['owner_admin'],
+    'agency:reports': ['secretary_treasurer', 'manager', 'owner_admin'],
   };
 
   it('covers every declared permission', () => {

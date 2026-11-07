@@ -76,6 +76,21 @@ describeDb('row level security', () => {
       // no posting behind it.
       'account_reconciliations:SELECT',
       'account_transfers:SELECT',
+      // Phase 4A. The agency banking tables: SELECT only, every one of them,
+      // for exactly the reason the money-movement documents above are. Each is
+      // written by a definer function that posts its journal in the same
+      // transaction, so a session holding INSERT could register a provider
+      // whose income account was the wrong type, or a float till with no
+      // ledger account behind it.
+      'agency_cash_reconciliations:SELECT',
+      'agency_commission_settlements:SELECT',
+      'agency_float_reconciliations:SELECT',
+      'agency_payable_settlements:SELECT',
+      'agency_provider_float_accounts:SELECT',
+      'agency_service_providers:SELECT',
+      'agency_transaction_audit_log:SELECT',
+      'agency_transaction_types:SELECT',
+      'agency_transactions:SELECT',
       'audit_log:SELECT',
       // Phase 10. The branch network and the ledger: SELECT only. Nothing writes to a journal through a session; every posting is made by a definer function.
       // Polytos Phase 4. SELECT only almost everywhere: a beneficiary is
@@ -392,6 +407,19 @@ describeDb('row level security', () => {
       // definer function that posts its journal in the same transaction.
       'account_reconciliations:SELECT',
       'account_transfers:SELECT',
+      // Phase 4A. Read policies only, for the same reason. Each is gated on
+      // `agency:reports` and branch-isolated; the borrower role holds no
+      // `agency:*` capability at all, so the predicate is false for them and
+      // every one of these tables returns nothing.
+      'agency_cash_reconciliations:SELECT',
+      'agency_commission_settlements:SELECT',
+      'agency_float_reconciliations:SELECT',
+      'agency_payable_settlements:SELECT',
+      'agency_provider_float_accounts:SELECT',
+      'agency_service_providers:SELECT',
+      'agency_transaction_audit_log:SELECT',
+      'agency_transaction_types:SELECT',
+      'agency_transactions:SELECT',
       'audit_log:SELECT',
       // Phase 10. Read policies only: no session role writes a journal,
       // a ledger account or a branch — every one of those is a definer
@@ -1062,12 +1090,21 @@ describeDb('privileged functions', () => {
       // rule, and the registers that report per-member rows are
       // `security_invoker` views instead.
       'add_meeting_action_item',
+      // Phase 4A. Three trigger guards and two assertion helpers. The guards
+      // are DEFINER because each reads a second table to check an invariant a
+      // CHECK constraint cannot reach; none of them is reachable by a signed-in
+      // user, because a trigger fires as the table owner and needs no EXECUTE
+      // grant, so the default one is revoked.
+      'agency_float_account_guard',
+      'agency_provider_accounts_guard',
+      'agency_transaction_guard',
       'apply_eligible_penalties',
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
       'approve_reconciliation',
       'approve_transfer',
+      'assert_agency_float_available',
       'assert_cash_account',
       'assert_cash_available',
       'assert_owner_admin_remains',
@@ -1194,6 +1231,7 @@ describeDb('privileged functions', () => {
       'decide_savings_withdrawal',
       'disburse_loan',
       'enrol_member',
+      'ensure_agency_float_account',
       'ensure_penalty_applied',
       'finalise_meeting_minutes',
       'generate_loan_schedule',
@@ -1674,6 +1712,7 @@ describeDb('privileged functions', () => {
       // trigger and the approval validator are the enforcement.
       'enforce_password_change',
       'enrol_member',
+      'ensure_agency_float_account',
       'finalise_meeting_minutes',
       'guarantor_candidates',
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
