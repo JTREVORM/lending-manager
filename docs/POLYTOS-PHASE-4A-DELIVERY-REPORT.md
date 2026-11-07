@@ -1,7 +1,10 @@
 # POLYTOS Phase 4A — Agency Banking foundation and schema
 
 **Scope:** the financial foundation only. No posting function, no UI.
-**Branch:** `ccr-2cd639d2-7rv2sa`
+**Branch:** `phase4a/agency-foundation-2026-11-07`, stacked on PR #21
+(`phase3/financial-certification-2026-11-06` at `9b0d1ef`).
+**Status:** conditionally accepted at first review; this revision answers the
+nine conditions. Draft PR only — not a merge and not a release.
 **Spec:** `docs/AGENCY-BANKING-ARCHITECTURE.md` v3.0 (recovered from `da8824b`)
 **Reconciliation:** `docs/POLYTOS-PHASE-4-ARCHITECTURE-RECONCILIATION.md`
 **Verdict:** **PASS** for Phase 4A. Not authorised for merge or deploy.
@@ -24,6 +27,8 @@ Nine, numbered `20261107000100`–`20261107000900`, all after PR #20's
 | `…000700_agency_permissions` | Nine capability keys and their role grants |
 | `…000800_agency_provider_catalogue_provisional` | Nine providers and 13 transaction types, every row `is_provisional = true` |
 | `…000900_branch_cash_position_agency_float` | Repairs the `total_liquidity` defect the first migration introduced |
+| `…001000_agency_live_posting_readiness` | Refuses any transaction past draft unless the provider is confirmed **and** active, the type is active and states a maximum, and the provider states a commission basis |
+| `…001100_notify_low_agency_float` | `notify_low_float()` reads `low_balance_agency_float`, which nothing read before |
 
 ### Migration count
 
@@ -34,11 +39,23 @@ Nine, numbered `20261107000100`–`20261107000900`, all after PR #20's
 | PR #20 | +8 |
 | PR #21 (Phase 3) | +0 — tests and docs only |
 | **Baseline before Phase 4** | **171** |
-| **Phase 4A** | **+9** |
-| **Total on this branch** | **180** |
+| **Phase 4A** | **+11** |
+| **Full release total** | **182** |
 
-Counted from the directory, not carried forward. All 180 replay in timestamp
-order on a clean PostgreSQL 16 cluster.
+**Recomputed, and it moved.** The first review was told 9 Phase 4A migrations
+and a 180-migration release. Answering conditions 5 and 6 added two more
+(`…001000` and `…001100`), so Phase 4A is **11** migrations. The draft PR's own
+branch carries **180** — PR #21's 169 plus 11 — because PR #19's two are
+deliberately not on it; the complete release, once #19 lands, is **182**.
+Counted from the directory on each branch, never carried forward.
+
+Both were replayed on a clean PostgreSQL 16 cluster: the stacked branch at 180,
+and a throwaway rehearsal branch at 182 with PR #19 merged in. All apply in
+timestamp order, no duplicate version prefixes, and on the 182 rehearsal both
+PRs' effects are present together — #19's probe-drop fired, its `ledger:view`
+guard landed, and Phase 4A's readiness guard and `agency_float` cash kind are
+both in place. The security gate and the full database suite pass on the
+rehearsal as well as on the branch.
 
 ### Ordering constraints
 
@@ -69,9 +86,12 @@ income account and its settlement route all exist and are constrained.
 | Lycamobile | airtime_data | provider_float | **immediate** | 4560 | — | airtime, data | yes |
 | School Fees Collection | school_fees | cash_payable | deferred | 4540 | 2210 | fees payment | yes |
 
-Every row carries `is_provisional = true` (decision C, §8). Additional
-providers are rows, not migrations — the `other` category and 4590 exist for
-them.
+Every row carries `is_provisional = true` **and `is_active = false`**
+(condition 5). "Ready" in the table above therefore means *constrained and
+complete*, not *live*: nothing can be posted against any of these nine until
+somebody confirms its commission terms and switches it on, which §4A below
+enforces at the data layer. Additional providers are rows, not migrations — the
+`other` category and 4590 exist for them.
 
 `commission_rate_bps` and `commission_fixed` are **NULL throughout**. Rates are
 commercially negotiated and nobody supplied them; a plausible guess would be
@@ -140,6 +160,114 @@ hold at 3,865,040.
 
 ---
 
+## 5A. Nothing posts against an unconfirmed provider (condition 5)
+
+The catalogue ships with the specification's default commission models and no
+limits at all, because neither has been confirmed (open decisions C and H). The
+risk was precise: once 4B adds the posting functions, a provisional provider
+would be indistinguishable from a confirmed one, and a transaction type whose
+`max_single_transaction` is NULL would accept **any** amount — so an unreviewed
+rate and an unbounded limit would quietly become live financial behaviour.
+
+Two things close it.
+
+**The nine providers are seeded inactive as well as provisional.** Loading the
+catalogue is no longer the same act as going live with it. Provisional records
+that the terms are unconfirmed; inactive is what actually keeps the provider out
+of the posting path.
+
+**`20261107001000` refuses any transaction past draft** unless five conditions
+hold, each closing one way a figure could go live unreviewed:
+
+| # | Condition | What it prevents |
+| --- | --- | --- |
+| 1 | `is_provisional = false` | Posting on a default nobody confirmed |
+| 2 | `is_active = true` | Posting against a provider not switched on |
+| 3 | the type is active | Posting a retired operation |
+| 4 | the type states a maximum | A silent "unlimited" |
+| 5 | the provider states a commission basis | Income recognised from nothing |
+
+A CHECK also refuses clearing the provisional flag with no commission recorded,
+because a NULL rate means nobody decided rather than zero — and zero is a fine
+answer, it just has to be stated as `commission_fixed = 0`.
+
+**Why a trigger rather than a rule inside the posting functions.** They do not
+exist yet. A readiness rule written in 4B would be one that did not exist while
+the catalogue did, and one a second posting path added later could forget. Here
+it constrains every writer of the table, the table owner included.
+
+Drafts and cancelled rows are exempt, so a counter can still type while a
+provider is being set up. The gate sits on the transition out of draft, which is
+exactly where money starts to move.
+
+Eight tests cover it, including the positive side — a provider that passes all
+five is not blocked, so the gate refuses readiness failures and nothing else.
+
+---
+
+## 5B. Agency float is not available lending cash (condition 6)
+
+Every consumer of `branch_cash_position.total_liquidity` was audited. There are
+two, and both were wrong.
+
+**`getCashPositions()` selected the four components and the total, but not
+`agency_float`.** The finance screen would have shown a total larger than its
+own visible parts, with the difference unexplained — which is exactly float
+being read as spendable till cash. It is now selected, carried on
+`BranchCashPosition.agencyFloat`, and rendered as its own card, labelled as
+float, shown only when there is any, with the same line added to the per-branch
+breakdown so the branch cards add up too.
+
+It is deliberately **not** a `CashKind`. Those four kinds drive the account
+pickers, which is the second finding:
+
+**`getLedgerAccounts({ cashOnly: true })` filtered `cash_kind is not null`.**
+After the fifth kind, all four screens that ask for it — a transfer, an expense
+payment, an income receipt and a cash reconciliation — would have offered float
+accounts. The database refuses every one of them, so the only possible outcome
+was a confusing refusal in front of a user. `cashOnly` now names the four
+lending kinds explicitly, so a sixth kind cannot silently widen those pickers
+either.
+
+**A third finding, from the same audit.** `20261107000100` added
+`finance_settings.low_balance_agency_float` and **nothing read it**:
+`notify_low_float()` picks its threshold with a CASE over the four original
+kinds, so `agency_float` fell through to the `continue` and every float account
+was silently skipped. Wrong in both directions — the column was inert, and an
+agent whose MTN float was nearly spent got no warning, on the one balance that
+cannot be topped up from the drawer. Repaired in `20261107001100`. No test
+caught it because before this phase there was no fifth kind to fall through.
+
+---
+
+## 5C. Generic money-movement paths rechecked (condition 7)
+
+Every `public` function that takes an account id or touches `cash_kind` was
+enumerated from the catalogue and classified.
+
+| Path | Reaches float? | Why |
+| --- | --- | --- |
+| `record_transfer` | **No** | `assert_cash_account` on both legs |
+| `record_expense` | **No** | `assert_cash_account` on the payment account |
+| `record_other_income` | **No** | `assert_cash_account` on the receiving account |
+| `submit_reconciliation` | **No** | `assert_cash_account` on the counted account |
+| 9 posting functions (disbursement, repayment, reversal, savings in/out, benefit, meeting fine, membership fee, backfill) | **No** | each resolves via `branch_cash_account(branch, '<literal kind>')` — never `agency_float` |
+| `payment_method_cash_kind()` | **No** | closed mapping over the four payment methods |
+| `notify_low_float()` | Yes, by design | now reads the float threshold (§5B) |
+
+All four generic entry points funnel through `assert_cash_account`, so
+hardening that one function closed all four. Asserted rather than assumed: two
+tests drive `record_expense`, `record_other_income` and `submit_reconciliation`
+at a float account and require the agency refusal from each.
+
+That last one also keeps **correction C9** intact at the data layer — float
+cannot be reconciled through the generic cash reconciliation, which counts
+physical notes against a till — and the test proves the cash account at the same
+branch is still reconcilable, so the separation is not achieved by breaking
+reconciliation.
+
+---
+
 ## 6. Financial journal matrix
 
 **No journal is posted by Phase 4A.** The matrix is specified in §6 of the
@@ -205,10 +333,11 @@ Everything below was run on this branch at 180 migrations.
 
 | Gate | Result |
 | --- | --- |
-| All 180 migrations, clean cluster, timestamp order | **PASS** |
-| `tests/db/agency-foundation.test.ts` (new) | **PASS — 55/55** |
-| `npm run test:db` (five projects) | **PASS — 2,034** (1,952 + 18 + 15 + 24 + 25) |
-| `npm run test:run` (unit + integration) | **PASS — 2,650 passed, 6 skipped** |
+| All 180 migrations on the branch, clean cluster, timestamp order | **PASS** |
+| All 182 migrations with PR #19, independent rehearsal | **PASS** |
+| `tests/db/agency-foundation.test.ts` | **PASS — 66/66** |
+| `npm run test:db` (five projects) | **PASS — 2,044** (1,962 + 18 + 15 + 24 + 25) |
+| `npm run test:run` (unit + integration) | **PASS — 2,656 passed** |
 | `npm run check:security` | **PASS — no unreviewed privileged exposure** |
 | Financial reconciliation certification | **PASS — 36 pass, 2 explained, 0 vacuous, 0 fail** |
 | `npm run typecheck` | **PASS** |
@@ -227,7 +356,8 @@ change and it is green locally in full.
 
 ### Regressions found and fixed during verification
 
-Five, each caught by an existing test rather than by inspection:
+**Eight in all.** Five in the first pass, each caught by an existing test
+rather than by inspection:
 
 1. `total_liquidity` no longer summed its parts (§5).
 2. Nine RLS policies used the bare per-row helper form.
@@ -242,6 +372,22 @@ Five, each caught by an existing test rather than by inspection:
 One finding of the chart migration's own: a multi-row `INSERT` cannot reference
 a heading created by the same statement, so the first draft left eleven
 accounts unparented.
+
+Three more in this revision, all found by auditing consumers rather than by a
+failing test — because no test existed for a fifth cash kind that had never
+existed:
+
+6. `getCashPositions()` omitted `agency_float`, so the cash position screen
+   would have shown a total larger than its visible parts (§5B).
+7. `getLedgerAccounts({ cashOnly: true })` would have offered float accounts in
+   four account pickers the database refuses (§5B).
+8. `low_balance_agency_float` was added and never read, so float accounts got no
+   low-balance warning at all (§5B).
+
+The pattern is worth naming: widening a constraint is not a local change.
+Three of these eight were consumers of `cash_kind` or of a total derived from
+it, and the first pass found them only where a test already happened to assert
+the invariant.
 
 ---
 
@@ -284,7 +430,24 @@ a clean cluster at 180 migrations, and verified by every gate available in this
 environment. One security gap in the specification was found and closed; one
 defect this phase introduced was found by the existing suite and repaired.
 
-**BLOCKED for merge and deploy.** No Product Owner authorisation has been given,
-the specification still carries its AWAITING APPROVAL header, and decisions B,
-C, F, G and H remain open. Nothing here activates Policy 2.0, deletes demo data,
-touches production or bypasses a security gate.
+**BLOCKED for merge and deploy.** A draft PR is authorised; a merge and a
+release are not. The specification still carries its AWAITING APPROVAL header,
+and decisions B, C, F, G and H remain open.
+
+**No provider is active.** All nine are seeded `is_active = false` and
+provisional, and the data layer refuses to post against any of them. Activating
+one is a deliberate, separately authorised data change — not a migration, and
+not something this branch does.
+
+Nothing here activates Policy 2.0, deletes demo data, touches production or
+bypasses a security gate.
+
+### Residual risks
+
+| Risk | Standing |
+| --- | --- |
+| Commission rates and per-type limits are unset | Mitigated, not resolved. Nothing can post until both are stated (§5A), so the exposure is a blocked counter rather than a wrong journal |
+| `total_liquidity` now includes float | Deliberate and visible: float is shown as its own component on the screen and in the harness identity. A consumer added later that reads the total without the component would reintroduce finding 6 |
+| The 4500-series income guard is a trigger, not a foreign-key domain | A provider pointed at 4100 is refused, but the rule lives in `agency_provider_accounts_guard()`; a future migration that replaced that trigger would need to keep it |
+| Browser E2E and the release rehearsal not run locally | They run on the PR. Phase 4A adds no route; the finance screen change in §5B is the one place a browser test could regress, and it is covered by the existing finance screens' assertions |
+| PR #19 and PR #20 are still open | The 182-migration release was rehearsed, but the ordering that production finally takes depends on the order #19 and #20 land. Their migrations are disjoint and differently dated, so any order gives the same result |
