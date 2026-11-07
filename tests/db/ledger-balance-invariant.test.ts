@@ -45,9 +45,7 @@ async function sourceTypes(client: PoolClient): Promise<string[]> {
     `select pg_get_constraintdef(oid) as def from pg_constraint
       where conname = 'journal_entries_source_valid'`,
   );
-  return [...(r.rows[0]?.def ?? '').matchAll(/'([a-z_]+)'::text/g)].map(
-    (m) => m[1]!,
-  );
+  return [...(r.rows[0]?.def ?? '').matchAll(/'([a-z_]+)'::text/g)].map((m) => m[1]!);
 }
 
 /** An entry of the given source type, with no lines yet. */
