@@ -389,6 +389,12 @@ describe('column type discipline', () => {
      * a table that simply forgot it.
      */
     const NO_UPDATED_AT = new Set([
+      // Phase 4A. The agency transaction's own trail, for the reason every
+      // append-only table here carries: UPDATE, DELETE and TRUNCATE are all
+      // refused by statement-level trigger and the privilege is not granted,
+      // so an `updated_at` would be a timestamp that can never advance —
+      // worse than absent, because it would imply the row can be edited.
+      'agency_transaction_audit_log',
       // Polytos policy update. Three more append-only tables, for the reason
       // every one above is: UPDATE is refused by trigger and the privilege is
       // not granted, so an `updated_at` would be a timestamp that can never
@@ -748,6 +754,16 @@ describe('types stay in step with the schema', () => {
 
     // Trigger functions are not callable over the API and are not generated.
     const TRIGGER_FUNCTIONS = new Set([
+      // Phase 4A. Three agency guards, each enforcing an invariant that spans
+      // two tables and so cannot be a CHECK: a float till's ledger account
+      // really is agency float and really belongs to the branch claiming it; a
+      // provider's income account really is a postable 4500-series account;
+      // and a transaction's type, till and payable really are the ones its
+      // provider registered. None is reachable by a signed-in user — a trigger
+      // fires as the table owner, so the default EXECUTE grant is revoked.
+      'agency_float_account_guard',
+      'agency_provider_accounts_guard',
+      'agency_transaction_guard',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

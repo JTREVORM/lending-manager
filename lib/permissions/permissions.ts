@@ -545,6 +545,33 @@ export const PERMISSIONS = [
   'reports:view_financial',
   /** Open the executive summary: interest and penalty collected, principal lent. */
   'reports:view_sensitive',
+
+  // --- Phase 4A: agency banking and digital payments ----------------------
+  //
+  // The same maker-checker split the money-movement module uses, for the same
+  // reason: verification is what posts an agency transaction to the ledger, so
+  // whoever recorded it must not be the one who posts it. `agency:verify` is
+  // therefore withheld from the Secretary/Treasurer exactly as
+  // `transfers:approve` is, and the database enforces the stronger rule that
+  // nobody verifies their own entry whatever role they hold.
+  /** Record, edit and cancel draft agency transactions. Posts nothing. */
+  'agency:write',
+  /** Verify somebody else's agency transaction, which posts it to the ledger. */
+  'agency:verify',
+  /** Reverse a posted agency transaction dated today, by contra entries. */
+  'agency:reverse',
+  /** Reverse a posted agency transaction dated before today. */
+  'agency:reverse_cross_day',
+  /** Correct the provider reference on a posted transaction. No journal. */
+  'agency:correct',
+  /** Post commission settlements, payable remittances and float top-ups. */
+  'agency:settlements',
+  /** Submit and approve cash-till and provider-float reconciliations. */
+  'agency:reconcile',
+  /** Create and edit providers, their transaction types and their float tills. */
+  'agency:providers',
+  /** View agency transactions, balances, commission and settlement history. */
+  'agency:reports',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -704,6 +731,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // not needed to take money over a counter, and §42 asks for that to be a
     // decision rather than an inheritance.
     'reports:view_operational',
+
+    // Phase 4A. This role is the counter: it records the agency transaction
+    // and reads its own day's work. It does not verify — not even somebody
+    // else's — which is the same line already drawn at `transfers:approve`
+    // and `expenses:approve`.
+    'agency:write',
+    'agency:reports',
   ],
 
   manager: [
@@ -854,6 +888,19 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // loan.
     'reports:view_operational',
     'reports:view_financial',
+
+    // Phase 4A. The Manager is the checker for agency work: they verify what
+    // the counter recorded, reverse the current day's mistakes, settle with
+    // providers and approve a reconciliation. Two are withheld. Reopening a
+    // closed day (`agency:reverse_cross_day`) and defining the providers
+    // themselves (`agency:providers`) are the Owner's.
+    'agency:write',
+    'agency:verify',
+    'agency:reverse',
+    'agency:correct',
+    'agency:settlements',
+    'agency:reconcile',
+    'agency:reports',
   ],
 
   owner_admin: [
@@ -983,6 +1030,19 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'reports:view_operational',
     'reports:view_financial',
     'reports:view_sensitive',
+
+    // Phase 4A. Everything the Manager holds, plus the two that are the
+    // Owner's alone: reopening a day that has closed, and deciding which
+    // providers the business acts for and on what commission terms.
+    'agency:write',
+    'agency:verify',
+    'agency:reverse',
+    'agency:reverse_cross_day',
+    'agency:correct',
+    'agency:settlements',
+    'agency:reconcile',
+    'agency:providers',
+    'agency:reports',
   ],
 } as const;
 
