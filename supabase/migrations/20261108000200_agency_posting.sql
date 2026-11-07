@@ -62,15 +62,29 @@
 -- that could half-fail, and "every journal entry balances individually" stays
 -- true of the posting as a unit. Recorded as a deliberate deviation.
 --
--- ## The balance assertion is not belt and braces
+-- ## Why this function asserts the balance as well
 --
--- `post_journal()` does **not** check that debits equal credits. It has no
--- such check and no constraint behind it — `journal_lines_one_side` only
--- asserts each line is one-sided. "Every entry balances" is a *test* in this
--- repository, not an invariant of the writer. So this function computes both
--- totals and refuses to call `post_journal()` unless they agree. Without it,
--- a future edit to the line builder could write an unbalanced entry and only
--- the certification harness would notice, after the fact.
+-- Corrected in Phase 4B-S, Task 6. An earlier version of this comment said
+-- that "every entry balances" was only a test in this repository and not an
+-- invariant. That was wrong, and wrong in the direction that matters: it
+-- understated the ledger's own protection.
+--
+-- `post_journal()` itself does not check the totals. The *tables* do.
+-- `journal_assert_balanced()` has run since Phase 1
+-- (20261010000100_branches_and_ledger.sql) from two DEFERRABLE INITIALLY
+-- DEFERRED constraint triggers, `journal_entries_assert_balanced` and
+-- `journal_lines_assert_balanced`. At commit, every entry must carry at least
+-- two lines and its debits must equal its credits. Because the triggers sit
+-- on the tables rather than inside the writer, they bind every posting
+-- source — this function included — and because they are deferred they
+-- tolerate the momentarily unbalanced state that inserting lines one at a
+-- time necessarily produces.
+--
+-- This function's own assertion is therefore a second line of defence, kept
+-- deliberately for two reasons: it fails at the point of posting rather than
+-- at commit, and it names the agency transaction in the error instead of a
+-- journal number. It is redundant for correctness and useful for diagnosis.
+-- See docs/POLYTOS-LEDGER-BALANCE-INVARIANT-REVIEW.md.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
@@ -135,6 +149,7 @@ declare
   v_actor      uuid;
   v_label      text;
   v_fee_account uuid;
+  v_outstanding bigint;
 begin
   -- The lock is what makes two concurrent verifications safe: the second
   -- waits here and then reads the status the first committed.
@@ -174,6 +189,49 @@ begin
     into v_commission, v_computed, v_basis, v_rate, v_fixed
   from public.agency_commission_reconcile(t.provider_id, t.principal_amount,
                                           t.commission_supplied) r;
+
+  -- Phase 4B-S. A supplied figure that differs from the configured terms is a
+  -- change to recognised income, so it takes authority rather than typing.
+  -- Phase 4B posted it with a flag; the review is right that the person
+  -- typing it is the person whose branch earns it, and `agency:write` is held
+  -- by every Secretary/Treasurer.
+  --
+  -- Three things must hold together: a stated reason, a reference to evidence
+  -- outside this system, and a verifier holding
+  -- `agency:commission_exception`, which only the Owner has. Both figures are
+  -- kept either way, so a refused discrepancy is still on the record.
+  if v_commission <> v_computed then
+    -- The authorisation is checked, not performed. It was granted earlier by
+    -- `authorise_agency_commission_exception()`, which requires
+    -- `agency:commission_exception` and records who gave it. Requiring the
+    -- *verifier* to hold that capability as well would collapse the two roles
+    -- into one: the Owner authorises the difference, and a Manager still
+    -- verifies the transaction, so neither acts alone.
+    --
+    -- The reason, the authoriser and the two pinned figures arrive together —
+    -- a CHECK constraint says so — therefore a present reason is a complete
+    -- authorisation.
+    if t.commission_exception_reason is null then
+      raise exception
+        'The commission supplied (%) differs from the % the provider''s configured terms produce. Correct the provider terms, or have the difference authorised with a reason and external evidence.',
+        v_commission, v_computed
+        using errcode = 'P0001';
+    end if;
+
+    -- An authorisation is for the figures it was given for, not for the
+    -- transaction forever. `update_agency_transaction` can still edit a draft
+    -- after the Owner has authorised it, and a provider can be re-rated in
+    -- between; either would post a difference nobody approved. Both sides are
+    -- pinned at authorisation and must still hold here.
+    if v_commission <> t.commission_exception_amount
+       or v_computed <> t.commission_exception_computed then
+      raise exception
+        'The authorised difference was % against the % the terms produced then; this transaction now supplies % against %. The figures changed after the authorisation, so it must be authorised again.',
+        t.commission_exception_amount, t.commission_exception_computed,
+        v_commission, v_computed
+        using errcode = 'P0001';
+    end if;
+  end if;
 
   -- --- the accounts -------------------------------------------------------
   v_cash := public.branch_cash_account(t.branch_id, 'cash_at_hand');
@@ -225,6 +283,28 @@ begin
   else
     -- Cash leaves the till, whichever model the provider uses.
     perform public.assert_cash_available(v_cash, v_cash_leg);
+
+    -- Phase 4B-S, decision K closed. A cash_payable withdrawal debits the
+    -- liability, and past zero it stops being a liability: it becomes the bank
+    -- owing us for cash advanced. That is a real arrangement but a different
+    -- instrument, with its own accounting, exposure limit and authority, and
+    -- it must not appear by arithmetic as a negative number in a payable
+    -- account. See docs/POLYTOS-AGENCY-BANK-ADVANCE-MODEL.md, which specifies
+    -- the approved model and is deliberately unimplemented — there is no flag
+    -- to set.
+    --
+    -- Attributed per provider: 2220 is shared by every partner bank, so an
+    -- account-level balance would let one bank's collections fund another's
+    -- withdrawals.
+    if pr.float_model = 'cash_payable' then
+      v_outstanding := public.agency_payable_outstanding(t.provider_id, t.branch_id);
+      if v_outstanding < v_counter_leg then
+        raise exception
+          'Only % shillings are held on behalf of %, which is less than the % this withdrawal would pay out. No approved bank-advance arrangement exists, so the payable may not go into net debit.',
+          v_outstanding, pr.name, v_counter_leg
+          using errcode = 'P0001';
+      end if;
+    end if;
   end if;
 
   -- --- build the lines ----------------------------------------------------
@@ -307,6 +387,6 @@ end;
 $$;
 
 comment on function public.post_agency_transaction(uuid) is
-  'Phase 4B. Posts one agency transaction as a single balanced journal entry, for every provider and direction. Idempotent: a transaction that already has a journal returns it rather than posting again. Locks the row, so two concurrent verifications cannot both post. Asserts debits equal credits before writing, because post_journal() does not.';
+  'Phase 4B. Posts one agency transaction as a single balanced journal entry, for every provider and direction. Idempotent: a transaction that already has a journal returns it rather than posting again. Locks the row, so two concurrent verifications cannot both post. Asserts debits equal credits before writing: a second line of defence that fails at the point of posting and names the transaction, ahead of the deferred journal_assert_balanced() constraint triggers that bind every posting source at commit.';
 
 revoke all on function public.post_agency_transaction(uuid) from public, anon, authenticated;

@@ -94,6 +94,7 @@ export default defineConfig({
             'tests/db/benefit-demo-seed.test.ts',
             'tests/db/agency-foundation.test.ts',
             'tests/db/agency-transaction-engine.test.ts',
+            'tests/db/agency-security-closure.test.ts',
           ],
         },
       },
@@ -136,6 +137,21 @@ export default defineConfig({
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-security',
+          environment: 'node',
+          include: ['tests/db/agency-security-closure.test.ts'],
+          // Its own database, for the reason the other two agency projects
+          // have one, and one more besides: this suite stages real races on
+          // two open connections and commits them in a chosen order. A suite
+          // sharing the database would see balances mid-race.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 90_000,
         },
       },
       {

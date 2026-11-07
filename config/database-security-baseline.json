@@ -126,6 +126,15 @@
         "public_default_acl": false
       }
     },
+    "authorise_agency_commission_exception(p_transaction_id uuid, p_reason text, p_evidence text)": {
+      "classification": "A",
+      "reason": "Phase 4B-S agency RPC. Authorises a commission figure that differs from what the provider's configured terms produce, recording the reason, the external evidence and the authorising officer. Refuses any caller without the agency:commission_exception capability with SQLSTATE 42501, before it reads the transaction; that capability is granted to owner_admin only, so a counter officer cannot raise recognised commission by typing another amount. Works only on a draft or awaiting_verification transaction, refuses one that supplies no commission figure and one whose figure does not actually differ, and writes an append-only commission_exception audit row. Cross-branch access is refused by agency_locked_transaction().",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "begin_benefit_verification(p_claim_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",

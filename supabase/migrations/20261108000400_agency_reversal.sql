@@ -120,13 +120,29 @@ declare
   v_provider record;
   v_type     record;
 begin
-  -- A draft is being typed and a cancelled row never moved money. A reversal
-  -- is a correction of something already posted, on the terms the transaction
-  -- itself snapshots, so it is not live posting either — and refusing it
+  -- A draft is being typed and a cancelled row never moved money.
+  if new.status in ('draft', 'cancelled') then
+    return new;
+  end if;
+
+  -- A reversal is a correction of something already posted, on the terms the
+  -- transaction itself snapshots, so it is not live posting — and refusing it
   -- would trap a historical mistake behind a provider that has since been
   -- switched off. Phase 4B, §8.3.
-  if new.status in ('draft', 'cancelled', 'reversed') then
-    return new;
+  --
+  -- Phase 4B-S narrows the exemption to the transition it was written for.
+  -- Previously any row whose status *was* 'reversed' skipped the gate, which
+  -- also exempted an INSERT that arrived already reversed and an UPDATE from
+  -- any other state. Neither is a correction of a posting, and neither should
+  -- buy an exemption from the readiness rules. Now only a posted row moving to
+  -- reversed is exempt, and nothing else is.
+  if new.status = 'reversed' then
+    if tg_op = 'UPDATE' and old.status = 'posted' then
+      return new;
+    end if;
+    raise exception
+      'A transaction may only become reversed from a posted state.'
+      using errcode = 'P0001';
   end if;
 
   select * into v_provider
@@ -210,10 +226,10 @@ begin
     raise exception 'A reversal needs a reason.' using errcode = 'P0001';
   end if;
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Phase 4B-S: locked and branch-authorized, like every other lifecycle
+  -- function. A reversal moves money, so it was one of the two worst cases in
+  -- the reproduced cross-branch vulnerability.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status = 'reversed' then
     return t.reversal_entry_id;              -- idempotent
@@ -246,6 +262,24 @@ begin
         using errcode = 'P0001';
     end if;
   end if;
+
+  -- Phase 4B-S. Every cash or float account the contra will draw down, locked
+  -- up front in one sorted batch.
+  --
+  -- In practice an agency entry debits exactly one of cash or float, so the
+  -- loop below would take a single lock anyway. But the loop walks the journal
+  -- in line order, which is data-dependent, and relying on "there happens to
+  -- be only one" is how a lock-order inversion arrives later with a new
+  -- posting shape. Sorting them here makes the ordering a property of the code
+  -- rather than of the data.
+  perform public.lock_ledger_balances(array(
+    select l.account_id
+      from public.journal_lines l
+      join public.ledger_accounts a on a.id = l.account_id
+     where l.entry_id = t.journal_entry_id
+       and l.debit > 0
+       and a.cash_kind is not null
+  ));
 
   -- Mirror the original journal, leg for leg, and check sufficiency on every
   -- asset the contra is about to draw down.

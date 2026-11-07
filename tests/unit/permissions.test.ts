@@ -443,6 +443,7 @@ describe('authorization matrix', () => {
     'agency:settlements': ['manager', 'owner_admin'],
     'agency:reconcile': ['manager', 'owner_admin'],
     'agency:providers': ['owner_admin'],
+    'agency:commission_exception': ['owner_admin'],
     'agency:reports': ['secretary_treasurer', 'manager', 'owner_admin'],
   };
 

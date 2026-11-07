@@ -35,14 +35,18 @@ create table public.agency_transaction_audit_log (
 
   constraint agency_audit_action_valid
     check (action = any (array[
-      'submit', 'verify', 'post', 'reverse', 'cancel', 'reference_corrected'
+      'submit', 'verify', 'post', 'reverse', 'cancel', 'reference_corrected',
+      -- Phase 4B-S. Authorising a commission that differs from the provider's
+      -- configured terms is its own act, by its own actor, before the
+      -- transaction is verified by somebody else.
+      'commission_exception'
     ])),
 
   -- A reversal and a reference correction are the two actions a reviewer will
   -- always ask "why" about, so neither may be recorded without an answer.
   constraint agency_audit_reason_required_where_it_matters
     check (
-      action not in ('reverse', 'reference_corrected')
+      action not in ('reverse', 'reference_corrected', 'commission_exception')
       or (reason is not null and pg_catalog.btrim(reason) <> '')
     ),
 

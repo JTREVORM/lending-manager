@@ -386,6 +386,7 @@ describeDb('foreign keys', () => {
       'agency_transaction_audit_log.transaction_id -> agency_transactions (r)',
       'agency_transaction_types.provider_id -> agency_service_providers (r)',
       'agency_transactions.branch_id -> branches (r)',
+      'agency_transactions.commission_exception_by -> profiles (r)',
       'agency_transactions.float_account_id -> agency_provider_float_accounts (r)',
       // Phase 4B: the income account a posting credited, snapshotted
       'agency_transactions.income_account_id -> ledger_accounts (r)',

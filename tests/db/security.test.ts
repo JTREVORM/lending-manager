@@ -1101,6 +1101,13 @@ describeDb('privileged functions', () => {
       // user, because a trigger fires as the table owner and needs no EXECUTE
       // grant, so the default one is revoked.
       'agency_float_account_guard',
+      // Phase 4B-S: branch authorization and per-account balance serialization
+      'agency_locked_transaction',
+      // Phase 4B-S. What is still held on one provider's behalf, used by the
+      // payable floor. DEFINER so it can read the ledger a counter officer
+      // cannot join across; revoked from authenticated, called only from
+      // post_agency_transaction().
+      'agency_payable_outstanding',
       'agency_provider_accounts_guard',
       'agency_transaction_guard',
       // Phase 4A readiness gate: refuses any transaction past draft whose
@@ -1185,6 +1192,10 @@ describeDb('privileged functions', () => {
       'audit_savings_withdrawal_change',
       'audit_settings_change',
       'audit_user_role_change',
+      // Phase 4B-S. Authorises a commission figure that differs from the
+      // provider's configured terms. owner_admin only; its refusals are
+      // asserted in tests/db/agency-transaction-engine.test.ts.
+      'authorise_agency_commission_exception',
       'backfill_ledger_history',
       'begin_benefit_verification',
       'begin_membership_policy_transition',
@@ -1291,6 +1302,7 @@ describeDb('privileged functions', () => {
       'loans_guard_transition',
       'loans_stamp_branch',
       'loans_stamp_product',
+      'lock_ledger_balances',
       // Phase 15. The one writer of the stream, and the ten triggers that
       // call it. Every one is a trigger function or definer-only: none is
       // granted to `authenticated`, which the next assertion checks.
@@ -1664,6 +1676,16 @@ describeDb('privileged functions', () => {
       // date from a caller: `business_now` honours an override only on a
       // direct owner connection, which no application path has.
       'attach_benefit_document',
+      // Phase 4B-S. Like `accept_membership_policy_version`, this one names a
+      // record rather than acting on the caller alone, and it is granted for
+      // the same reason: it checks `agency:commission_exception` on the
+      // session before it reads anything, and that capability belongs to
+      // owner_admin alone. A counter officer calling it is refused with
+      // SQLSTATE 42501, and a transaction in another branch is refused by
+      // `agency_locked_transaction` without disclosing that it exists. Both
+      // refusals are asserted in tests/db/agency-transaction-engine.test.ts
+      // and tests/db/agency-security-closure.test.ts.
+      'authorise_agency_commission_exception',
       'begin_benefit_verification',
       'begin_membership_policy_transition',
       'benefit_amount_for_claim',

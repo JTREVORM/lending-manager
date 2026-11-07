@@ -570,6 +570,18 @@ export const PERMISSIONS = [
   'agency:reconcile',
   /** Create and edit providers, their transaction types and their float tills. */
   'agency:providers',
+  /**
+   * Authorise a commission figure that differs from what the provider's
+   * configured terms produce, against a reason and external evidence.
+   *
+   * The Owner's alone, and deliberately not the Manager's. Recognised
+   * commission is income, so letting the officer who records a transaction
+   * also decide what it earned would make the figure self-certifying. A
+   * Manager still verifies the transaction; what they cannot do is move the
+   * number. The database refuses anybody without this capability with
+   * SQLSTATE 42501.
+   */
+  'agency:commission_exception',
   /** View agency transactions, balances, commission and settlement history. */
   'agency:reports',
 ] as const;
@@ -1042,6 +1054,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:settlements',
     'agency:reconcile',
     'agency:providers',
+    'agency:commission_exception',
     'agency:reports',
   ],
 } as const;

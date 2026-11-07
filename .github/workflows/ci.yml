@@ -148,18 +148,21 @@ jobs:
       - name: Build a local throwaway cluster and apply every migration
         run: npm run db:local:setup
 
-      # `test:db` runs four vitest projects in sequence: the database suite,
-      # the demonstration seeder's, the borrower-reuse one, then the member
-      # loan demonstration's. The seeder's is separate because the policy
-      # version it publishes is global state that would collide with every
-      # membership suite. Borrower reuse is separate again because it needs a
-      # database the synthetic seeder has never touched — once those six fee
-      # and deposit keys are spent on synthetic clients, reuse correctly
-      # refuses to remap them. The member loan one is separate for both
-      # reasons at once: it publishes version 998.0 as the only version in
-      # force, and it reuses borrowers. See the header of vitest.config.mts.
+      # `test:db` runs eight vitest projects in sequence: the database suite,
+      # the three agency ones, the demonstration seeder's, the borrower-reuse
+      # one, the member loan demonstration's, then the benefits one. The
+      # seeder's is separate because the policy version it publishes is global
+      # state that would collide with every membership suite. Borrower reuse is
+      # separate again because it needs a database the synthetic seeder has
+      # never touched — once those six fee and deposit keys are spent on
+      # synthetic clients, reuse correctly refuses to remap them. The member
+      # loan one is separate for both reasons at once: it publishes version
+      # 998.0 as the only version in force, and it reuses borrowers. The three
+      # agency projects are separate because they post real journals, and any
+      # suite reading a cash position or a trial balance would be reading a
+      # book it had written to. See the header of vitest.config.mts.
       # Each project's own globalSetup rebuilds the cluster the previous step
-      # created, so this one step covers all four.
+      # created, so this one step covers all eight.
       # Runs before the suites, deliberately. It reads the privileged surface
       # of the freshly migrated database and fails on any exposure the
       # reviewed baseline does not already account for, so a migration that
@@ -172,7 +175,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test
 
-      - name: Database tests, the seeders, borrower reuse, member loans
+      - name: Database tests, the agency suites, the seeders, borrower reuse, member loans
         run: npm run test:db
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test

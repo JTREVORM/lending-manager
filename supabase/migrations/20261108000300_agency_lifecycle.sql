@@ -74,6 +74,64 @@ revoke all on function public.agency_actor(text) from public, anon, authenticate
 
 
 -- ---------------------------------------------------------------------------
+-- Branch authorization, for a transaction named by its identifier
+--
+-- Phase 4B-S. This closes a reproduced vulnerability, and the reason it
+-- existed is worth stating plainly: `agency_actor()` answers "who is this and
+-- may they do this kind of thing", and nothing answered "may they do it to
+-- *this* record". Every lifecycle function then loaded its target by UUID.
+--
+-- `agency_transactions` has a branch-isolating SELECT policy, so a branch's
+-- staff cannot *read* another branch's transaction. But these functions are
+-- SECURITY DEFINER: inside them the policies do not apply, because the owner
+-- is exempt. So the table was protected and the writers were not — a confused
+-- deputy. Measured before the fix, a branch-A manager could update, submit,
+-- return, verify, cancel, reverse and correct a branch-B transaction: seven of
+-- seven, including the two that move money.
+--
+-- The refusal is deliberately **uniform and non-disclosing**. A transaction
+-- that does not exist and one that belongs to another branch produce exactly
+-- the same message and the same SQLSTATE, so the caller cannot use the
+-- difference to discover which identifiers are real. That is why this does not
+-- keep the old "No such agency transaction" wording for the not-found case.
+--
+-- Head Office keeps the policy it has everywhere else: `user_can_see_branch()`
+-- is true for every branch when the profile carries no branch, so an owner
+-- without one acts across branches exactly as they do in every other module.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.agency_locked_transaction(p_transaction_id uuid)
+returns public.agency_transactions
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  t public.agency_transactions;
+begin
+  -- Locked before the branch is read, so a concurrent writer cannot change the
+  -- branch between the check and the caller's use of the row.
+  select * into t from public.agency_transactions
+   where id = p_transaction_id for update;
+
+  if t.id is null or not public.user_can_see_branch(t.branch_id) then
+    raise exception
+      'No agency transaction with that identifier is available to you.'
+      using errcode = '42501';
+  end if;
+
+  return t;
+end;
+$$;
+
+comment on function public.agency_locked_transaction(uuid) is
+  'Phase 4B-S. Locks one agency transaction and refuses it unless the caller''s branch may see it. The refusal is identical for a transaction that does not exist and one belonging to another branch, so the difference discloses nothing. Every lifecycle function loads its target through this; the SELECT policy cannot protect a SECURITY DEFINER write.';
+
+revoke all on function public.agency_locked_transaction(uuid)
+  from public, anon, authenticated;
+
+
+-- ---------------------------------------------------------------------------
 -- 1. Create a draft
 --
 -- `p_idempotency_key` is the caller's protection against a double tap: a
@@ -103,6 +161,7 @@ as $$
 declare
   v_actor    uuid;
   v_existing uuid;
+  v_existing_branch uuid;
   v_pr       public.agency_service_providers;
   v_ty       public.agency_transaction_types;
   v_branch   uuid;
@@ -111,11 +170,27 @@ declare
 begin
   v_actor := public.agency_actor('agency:write');
 
+  -- Phase 4B-S. The idempotency lookup used to return whatever transaction
+  -- held the key, whoever asked. Reproduced: a branch-A secretary supplying a
+  -- branch-B key was handed branch B's transaction UUID — the one identifier
+  -- every other function then accepted. The key is global by design (Phase
+  -- 4A's unique index), so the lookup has to decide what to do about a key
+  -- from somewhere else, and returning it was the wrong answer.
+  --
+  -- A genuine retry from the branch that owns the key still gets its own
+  -- transaction back. A key held elsewhere is refused without naming it.
   if p_idempotency_key is not null then
-    select id into v_existing from public.agency_transactions
+    select id, branch_id into v_existing, v_existing_branch
+      from public.agency_transactions
      where idempotency_key = p_idempotency_key;
+
     if v_existing is not null then
-      return v_existing;
+      if public.user_can_see_branch(v_existing_branch) then
+        return v_existing;
+      end if;
+      raise exception
+        'That idempotency key is already in use and is not available to you.'
+        using errcode = '42501';
     end if;
   end if;
 
@@ -219,10 +294,8 @@ declare
 begin
   v_actor := public.agency_actor('agency:write');
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Locks the row and refuses it if the caller's branch may not see it.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status <> 'draft' then
     raise exception
@@ -277,10 +350,8 @@ declare
 begin
   v_actor := public.agency_actor('agency:write');
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Locks the row and refuses it if the caller's branch may not see it.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status = 'awaiting_verification' then
     return;                                  -- idempotent: already submitted
@@ -344,10 +415,8 @@ begin
     raise exception 'Returning a transaction needs a reason.' using errcode = 'P0001';
   end if;
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Locks the row and refuses it if the caller's branch may not see it.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status <> 'awaiting_verification' then
     raise exception
@@ -390,10 +459,8 @@ declare
 begin
   v_actor := public.agency_actor('agency:verify');
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Locks the row and refuses it if the caller's branch may not see it.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status = 'posted' then
     return t.journal_entry_id;               -- idempotent: already verified
@@ -458,10 +525,8 @@ declare
 begin
   v_actor := public.agency_actor('agency:write');
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Locks the row and refuses it if the caller's branch may not see it.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status = 'cancelled' then
     return;                                  -- idempotent
@@ -532,10 +597,8 @@ begin
     raise exception 'A corrected reference cannot be blank.' using errcode = 'P0001';
   end if;
 
-  select * into t from public.agency_transactions where id = p_transaction_id for update;
-  if t.id is null then
-    raise exception 'No such agency transaction.' using errcode = 'P0001';
-  end if;
+  -- Locks the row and refuses it if the caller's branch may not see it.
+  t := public.agency_locked_transaction(p_transaction_id);
 
   if t.status <> 'posted' then
     raise exception

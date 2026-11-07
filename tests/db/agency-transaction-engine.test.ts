@@ -770,24 +770,166 @@ describeDb('Phase 4B — agency transaction engine', () => {
       expect(err?.message).toMatch(/no commission basis/i);
     });
 
-    it('posts an explicitly supplied commission, and records that it differed', async () => {
-      // 150bp of 100,000 is 1,500. The operator was told 1,800 by the
-      // provider's handset. Both figures are kept: what was taken, and what
-      // the configuration said.
-      const { txId, entryId } = await postOne(mtnDeposit, 100_000, { supplied: 1_800 });
-      const t = await queryOne<{ amount: string; computed: string; basis: string }>(
-        `select commission_amount::text as amount, commission_computed::text as computed,
-                commission_basis_applied as basis
+    it('refuses a supplied commission that differs, without an authorisation', async () => {
+      // Phase 4B-S closed this. Phase 4B posted a differing figure and flagged
+      // it; the person typing it is the person whose branch earns the income,
+      // and `agency:write` is held by every Secretary/Treasurer, so that was a
+      // self-service income adjustment.
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/differs from the 1500/i);
+      expect(r.message).toMatch(/authorised with a reason and external evidence/i);
+
+      // Both figures survive the refusal, so the discrepancy is investigable.
+      const t = await queryOne<{ supplied: string; status: string }>(
+        `select commission_supplied::text as supplied, status
            from public.agency_transactions where id = $1`,
-        [txId],
+        [id],
+      );
+      expect(Number(t.supplied)).toBe(1_800);
+      expect(t.status).toBe('awaiting_verification');
+    });
+
+    it('refuses the authorisation itself to anyone but an owner', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+      for (const user of [secretary, manager]) {
+        const r = await asUser(
+          user,
+          `select public.authorise_agency_commission_exception($1, 'provider promotion', 'MTN-STMT-9')`,
+          [id],
+        );
+        expect(r.ok).toBe(false);
+        expect(r.code).toBe('42501');
+      }
+    });
+
+    it('posts a differing commission once an owner authorises it, and records who', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+
+      const authorised = await asUserCommitted(owner, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1, $2, $3)`,
+          params: [id, 'Provider ran a promotional rate', 'MTN statement 2026-11-07/441'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      // A manager still verifies it: the Owner authorised the difference, not
+      // the transaction, so neither acts alone.
+      const verified = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+      ]);
+      expect(verified.ok, verified.message).toBe(true);
+      const entryId = (verified.rows[0] as { e: string }).e;
+
+      const t = await queryOne<{
+        amount: string;
+        computed: string;
+        by: string;
+        reason: string;
+        evidence: string;
+      }>(
+        `select commission_amount::text as amount, commission_computed::text as computed,
+                commission_exception_by::text as by, commission_exception_reason as reason,
+                commission_exception_evidence as evidence
+           from public.agency_transactions where id = $1`,
+        [id],
       );
       expect(Number(t.amount)).toBe(1_800);
       expect(Number(t.computed)).toBe(1_500);
-      expect(t.basis).toBe('rate');
+      expect(t.by).toBe(owner.profileId);
+      expect(t.reason).toBe('Provider ran a promotional rate');
+      expect(t.evidence).toBe('MTN statement 2026-11-07/441');
 
+      // The authorised figure is what reached the ledger.
       const lines = await linesOf(entryId);
       expect(lines).toContainEqual({ code: '1310', debit: 1_800, credit: 0 });
       expect(lines).toContainEqual({ code: '4510', debit: 0, credit: 1_800 });
+
+      expect(await auditOf(id)).toContain('commission_exception');
+    });
+
+    it('refuses an authorisation for a figure that does not actually differ', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_500 });
+      const r = await asUser(
+        owner,
+        `select public.authorise_agency_commission_exception($1, 'no reason', 'none')`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/nothing to authorise/i);
+    });
+
+    it('will not let an edit after the authorisation ride on it', async () => {
+      // The authorisation is for the figures it was given for. Authorising a
+      // draft and then editing the figure would otherwise post a number
+      // nobody approved: `update_agency_transaction` edits a draft, and the
+      // exception columns are not its business to clear.
+      const id = await makeDraft(mtnDeposit, 100_000, { supplied: 1_800 });
+
+      const authorised = await asUserCommitted(owner, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1, $2, $3)`,
+          params: [id, 'Promotional rate', 'MTN statement 441'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      // The counter now types a much larger figure and sends it on.
+      const edited = await asUserCommitted(secretary, [
+        {
+          sql: `select public.update_agency_transaction($1, null, null, null, null, null, $2)`,
+          params: [id, 50_000],
+        },
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(edited.ok, edited.message).toBe(true);
+
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/must be authorised again/i);
+      expect(r.message).toContain('1800');
+      expect(r.message).toContain('50000');
+
+      // Nothing posted.
+      const t = await queryOne<{ j: string | null; status: string }>(
+        `select journal_entry_id::text as j, status
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(t.j).toBeNull();
+      expect(t.status).toBe('awaiting_verification');
+    });
+
+    it('will not let a provider re-rating ride on an earlier authorisation', async () => {
+      // Nobody touches the transaction here: the configured terms move under
+      // it, which widens the difference the Owner approved.
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+
+      const authorised = await asUserCommitted(owner, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1, $2, $3)`,
+          params: [id, 'Promotional rate', 'MTN statement 442'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      await query(
+        `update public.agency_service_providers
+            set commission_rate_bps = 50 where id = $1`,
+        [mtnDeposit.providerId],
+      );
+
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/must be authorised again/i);
     });
 
     it('refuses a supplied commission larger than its own principal', async () => {

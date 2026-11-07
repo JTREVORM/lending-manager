@@ -660,10 +660,20 @@ describeDb('Phase 4A — agency banking foundation', () => {
           manager.profileId,
         ],
       );
-      // Fails on the journal requirement first; either constraint proves the
-      // point, which is that an incomplete reversal cannot be stored.
+      // The point of this test is that an incomplete reversal cannot be
+      // stored, and it still cannot be. What refuses it changed in Phase 4B-S:
+      // the readiness gate now refuses a row arriving already `reversed`
+      // outright, so the refusal arrives before either CHECK is reached. A
+      // row can only become reversed by an UPDATE from `posted`, which is the
+      // only transition that is a correction of a real posting.
+      //
+      // `agency_transactions_posted_has_journal` and
+      // `agency_transactions_reversed_is_complete` are both still in place
+      // behind it, and tests/db/agency-security-closure.test.ts asserts the
+      // state machine itself from every other status.
       expect(err).not.toBeNull();
-      expect(err?.constraint).toMatch(/posted_has_journal|reversed_is_complete/);
+      expect(err?.constraint).toBeUndefined();
+      expect(err?.message).toMatch(/only become reversed from a posted state/i);
     });
 
     it('cannot be deleted', async () => {

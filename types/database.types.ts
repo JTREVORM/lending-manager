@@ -5214,6 +5214,11 @@ export type Database = {
           commission_rate_bps_applied: number | null;
           commission_fixed_applied: number | null;
           commission_computed: number | null;
+          commission_exception_reason: string | null;
+          commission_exception_evidence: string | null;
+          commission_exception_by: string | null;
+          commission_exception_amount: number | null;
+          commission_exception_computed: number | null;
           income_account_id: string | null;
         };
         Insert: {
@@ -5251,6 +5256,11 @@ export type Database = {
           commission_rate_bps_applied?: number | null;
           commission_fixed_applied?: number | null;
           commission_computed?: number | null;
+          commission_exception_reason?: string | null;
+          commission_exception_evidence?: string | null;
+          commission_exception_by?: string | null;
+          commission_exception_amount?: number | null;
+          commission_exception_computed?: number | null;
           income_account_id?: string | null;
         };
         Update: {
@@ -5288,6 +5298,11 @@ export type Database = {
           commission_rate_bps_applied?: number | null;
           commission_fixed_applied?: number | null;
           commission_computed?: number | null;
+          commission_exception_reason?: string | null;
+          commission_exception_evidence?: string | null;
+          commission_exception_by?: string | null;
+          commission_exception_amount?: number | null;
+          commission_exception_computed?: number | null;
           income_account_id?: string | null;
         };
         Relationships: [];
@@ -7240,6 +7255,36 @@ export type Database = {
       agency_commission_outstanding: {
         Args: { p_provider_id: string; p_branch_id: string };
         Returns: number;
+      };
+      // --- Phase 4B-S: security closure --------------------------------------
+      //
+      // None of these four is reachable by a signed-in user except
+      // `authorise_agency_commission_exception`, which refuses anybody without
+      // `agency:commission_exception` (owner_admin only) with SQLSTATE 42501.
+      // `agency_locked_transaction` is the single authorization gate the
+      // lifecycle functions share: it locks the row and refuses one in another
+      // branch without disclosing that it exists. `lock_ledger_balances`
+      // serialises concurrent readers of a cash or float balance, and
+      // `agency_payable_outstanding` backs the bank agency payable floor.
+      agency_locked_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: Database['public']['Tables']['agency_transactions']['Row'];
+      };
+      agency_payable_outstanding: {
+        Args: { p_provider_id: string; p_branch_id: string };
+        Returns: number;
+      };
+      authorise_agency_commission_exception: {
+        Args: {
+          p_transaction_id: string;
+          p_reason: string;
+          p_evidence: string;
+        };
+        Returns: undefined;
+      };
+      lock_ledger_balances: {
+        Args: { p_account_ids: string[] };
+        Returns: undefined;
       };
       // --- Phase 4A: agency banking -----------------------------------------
       //
