@@ -84,6 +84,15 @@ describeDb('Phase 4A — agency banking foundation', () => {
   let otherTill: string;
   let headTillAccount: string;
 
+  // The seeded catalogue is provisional *and* inactive, so nothing may be
+  // posted against it (migration 20261107001000). The lifecycle assertions
+  // below are about constraints other than readiness, so they need a provider
+  // that has passed it: confirmed, active, with a commission basis stated and
+  // a type that states a maximum.
+  let liveProviderId: string;
+  let liveTypeId: string;
+  let liveTill: string;
+
   beforeAll(async () => {
     owner = await createTestUser('owner_admin');
     manager = await createTestUser('manager');
@@ -151,6 +160,33 @@ describeDb('Phase 4A — agency banking foundation', () => {
         [headTill],
       )
     ).ledger_account_id;
+
+    liveProviderId = (
+      await queryOne<{ id: string }>(
+        `insert into public.agency_service_providers
+           (code, name, category, float_model, income_account_id,
+            commission_model, commission_rate_bps, is_provisional, is_active)
+         values ('TESTLIVE', 'Test Live Provider', 'mobile_money', 'provider_float',
+                 (select id from public.ledger_accounts where code = '4510'),
+                 'deferred', 150, false, true)
+         returning id`,
+      )
+    ).id;
+    liveTypeId = (
+      await queryOne<{ id: string }>(
+        `insert into public.agency_transaction_types
+           (provider_id, code, name, direction, max_single_transaction)
+         values ($1, 'DEPOSIT', 'Live Deposit', 'deposit', 5000000)
+         returning id`,
+        [liveProviderId],
+      )
+    ).id;
+    liveTill = (
+      await queryOne<{ id: string }>(
+        `select public.ensure_agency_float_account($1, $2) as id`,
+        [liveProviderId, headOffice],
+      )
+    ).id;
   });
 
   afterAll(async () => {
@@ -245,6 +281,61 @@ describeDb('Phase 4A — agency banking foundation', () => {
       );
       expect(attempt.ok).toBe(false);
       expect(attempt.message).toMatch(/agency float account/i);
+    });
+
+    it('refuses agency float on every generic money-movement path', async () => {
+      // Step 7 of the Phase 4A acceptance: `record_transfer` is not the only
+      // way an account id reaches the ledger. All four generic entry points
+      // funnel through `assert_cash_account`, so hardening that one function
+      // closes all four — asserted rather than assumed, because a fifth entry
+      // point added later would have to pass the same gate to be safe.
+      const expenseAccount = await accountId('5010');
+      const incomeAccount = await accountId('4900');
+
+      const attempts = [
+        {
+          what: 'record_expense (payment account)',
+          sql: `select public.record_expense($1, $2, 1000, current_date, 'refused')`,
+          params: [expenseAccount, headTillAccount],
+        },
+        {
+          what: 'record_other_income (receiving account)',
+          sql: `select public.record_other_income($1, $2, 1000, current_date, 'refused')`,
+          params: [incomeAccount, headTillAccount],
+        },
+        {
+          what: 'submit_reconciliation (counted account)',
+          sql: `select public.submit_reconciliation($1, current_date, 1000)`,
+          params: [headTillAccount],
+        },
+      ];
+
+      for (const { what, sql, params } of attempts) {
+        const attempt = await asUser(owner, sql, params);
+        expect(attempt.ok, what).toBe(false);
+        expect(attempt.message, what).toMatch(/agency float account/i);
+      }
+    });
+
+    it('keeps the two reconciliation paths apart — correction C9', async () => {
+      // A float account must not be reconcilable through the generic cash
+      // reconciliation: it has its own table, with the provider's statement
+      // as the counterparty rather than a physical count.
+      const attempt = await asUser(
+        owner,
+        `select public.submit_reconciliation($1, current_date, 0)`,
+        [headTillAccount],
+      );
+      expect(attempt.ok).toBe(false);
+
+      // And the cash account it shares a branch with is still reconcilable.
+      const cashAtHand = await accountId('1010-BR2601');
+      const ok = await asUser(
+        owner,
+        `select public.submit_reconciliation($1, current_date, 0)`,
+        [cashAtHand],
+      );
+      expect(ok.ok).toBe(true);
     });
 
     it('still reaches the balance check for two ordinary cash accounts', async () => {
@@ -533,7 +624,7 @@ describeDb('Phase 4A — agency banking foundation', () => {
       const err = await insertTx(
         'float_account_id, status, verified_by, posted_at, journal_entry_id',
         `$6, 'awaiting_verification', $4, null, null`,
-        [headOffice, mtnProviderId, mtnTypeId, manager.profileId, 50_000, headTill],
+        [headOffice, liveProviderId, liveTypeId, manager.profileId, 50_000, liveTill],
       );
       expect(err?.constraint).toBe('agency_transactions_verifier_not_submitter');
     });
@@ -544,11 +635,11 @@ describeDb('Phase 4A — agency banking foundation', () => {
         `$6, 'posted', $7, now()`,
         [
           headOffice,
-          mtnProviderId,
-          mtnTypeId,
+          liveProviderId,
+          liveTypeId,
           secretary.profileId,
           50_000,
-          headTill,
+          liveTill,
           manager.profileId,
         ],
       );
@@ -561,11 +652,11 @@ describeDb('Phase 4A — agency banking foundation', () => {
         `$6, 'reversed', $7, now(), now()`,
         [
           headOffice,
-          mtnProviderId,
-          mtnTypeId,
+          liveProviderId,
+          liveTypeId,
           secretary.profileId,
           50_000,
-          headTill,
+          liveTill,
           manager.profileId,
         ],
       );
@@ -600,8 +691,8 @@ describeDb('Phase 4A — agency banking foundation', () => {
         `insert into public.agency_transactions
            (branch_id, provider_id, transaction_type_id, submitted_by,
             principal_amount, float_account_id, provider_reference, status)
-         values (${lit(headOffice)}, ${lit(mtnProviderId)}, ${lit(mtnTypeId)},
-                 ${lit(secretary.profileId)}, 1000, ${lit(headTill)}, ${lit(ref)},
+         values (${lit(headOffice)}, ${lit(liveProviderId)}, ${lit(liveTypeId)},
+                 ${lit(secretary.profileId)}, 1000, ${lit(liveTill)}, ${lit(ref)},
                  ${lit(status)});`;
       return expectError(`do $$ begin ${row(statusA)} ${row(statusB)} end $$;`);
     };
@@ -877,19 +968,162 @@ describeDb('Phase 4A — agency banking foundation', () => {
   });
 
   // =========================================================================
-  describe('the provisional catalogue', () => {
-    it('marks every seeded provider provisional', async () => {
-      const rows = await query<{ code: string; is_provisional: boolean }>(
-        `select code, is_provisional from public.agency_service_providers order by code`,
+  describe('live posting readiness — nothing posts against an unconfirmed provider', () => {
+    /** Try to move a transaction past draft, as the table owner. */
+    const pastDraft = (
+      provider: string,
+      type: string,
+      till: string,
+      status = 'awaiting_verification',
+    ) =>
+      expectError(
+        `insert into public.agency_transactions
+           (branch_id, provider_id, transaction_type_id, submitted_by,
+            principal_amount, float_account_id, status)
+         values ($1, $2, $3, $4, 1000, $5, '${status}')`,
+        [headOffice, provider, type, secretary.profileId, till],
       );
-      expect(rows.length).toBeGreaterThanOrEqual(9);
-      for (const r of rows) expect(r.is_provisional).toBe(true);
+
+    it('refuses to post against a provisional provider', async () => {
+      const err = await pastDraft(mtnProviderId, mtnTypeId, headTill);
+      expect(err).not.toBeNull();
+      expect(err?.message).toMatch(/still provisional/i);
+    });
+
+    it('allows a draft against a provisional provider', async () => {
+      // A counter must still be able to type while a provider is set up. The
+      // gate is on the transition out of draft, which is where money moves.
+      const err = await pastDraft(mtnProviderId, mtnTypeId, headTill, 'draft');
+      expect(err).toBeNull();
+    });
+
+    it('refuses to post against a confirmed but inactive provider', async () => {
+      const err = await expectError(
+        `do $$
+         declare p uuid; t uuid; f uuid;
+         begin
+           insert into public.agency_service_providers
+             (code, name, category, float_model, income_account_id,
+              commission_model, commission_fixed, is_provisional, is_active)
+           values ('TESTOFF', 'Switched Off', 'mobile_money', 'provider_float',
+                   (select id from public.ledger_accounts where code = '4510'),
+                   'deferred', 500, false, false)
+           returning id into p;
+           insert into public.agency_transaction_types
+             (provider_id, code, name, direction, max_single_transaction)
+           values (p, 'DEPOSIT', 'Off Deposit', 'deposit', 100000) returning id into t;
+           f := public.ensure_agency_float_account(p, ${lit(headOffice)}::uuid);
+           insert into public.agency_transactions
+             (branch_id, provider_id, transaction_type_id, submitted_by,
+              principal_amount, float_account_id, status)
+           values (${lit(headOffice)}, p, t, ${lit(secretary.profileId)}, 1000,
+                   f, 'awaiting_verification');
+         end $$;`,
+      );
+      expect(err?.message).toMatch(/not active/i);
+    });
+
+    it('refuses to post a type that states no maximum', async () => {
+      const err = await expectError(
+        `do $$
+         declare t uuid;
+         begin
+           insert into public.agency_transaction_types
+             (provider_id, code, name, direction)
+           values (${lit(liveProviderId)}, 'NOLIMIT', 'Unbounded', 'deposit')
+           returning id into t;
+           insert into public.agency_transactions
+             (branch_id, provider_id, transaction_type_id, submitted_by,
+              principal_amount, float_account_id, status)
+           values (${lit(headOffice)}, ${lit(liveProviderId)}, t,
+                   ${lit(secretary.profileId)}, 1000, ${lit(liveTill)},
+                   'awaiting_verification');
+         end $$;`,
+      );
+      expect(err?.message).toMatch(/no maximum single transaction/i);
+    });
+
+    it('refuses to confirm a provider with no commission basis', async () => {
+      const err = await expectError(
+        `update public.agency_service_providers
+            set is_provisional = false where code = 'MTN_MOMO'`,
+      );
+      expect(err?.constraint).toBe('agency_providers_confirmed_states_commission');
+    });
+
+    it('allows confirming a provider once its commission is stated', async () => {
+      const err = await expectError(
+        `update public.agency_service_providers
+            set commission_rate_bps = 150, is_provisional = false, is_active = true
+          where code = 'MTN_MOMO'`,
+      );
+      expect(err).toBeNull();
+    });
+
+    it('posts once the provider is confirmed, active and limited', async () => {
+      // The positive side: a provider that passes all five conditions is not
+      // blocked, so the gate refuses readiness failures and nothing else.
+      const err = await pastDraft(liveProviderId, liveTypeId, liveTill);
+      expect(err).toBeNull();
+    });
+
+    it('refuses a transaction above its type’s maximum', async () => {
+      const err = await expectError(
+        `insert into public.agency_transactions
+           (branch_id, provider_id, transaction_type_id, submitted_by,
+            principal_amount, float_account_id)
+         values ($1, $2, $3, $4, 9999999999, $5)`,
+        [headOffice, liveProviderId, liveTypeId, secretary.profileId, liveTill],
+      );
+      expect(err?.message).toMatch(/may not exceed/i);
+    });
+  });
+
+  // =========================================================================
+  describe('the provisional catalogue', () => {
+    /**
+     * The nine rows migration 20261107000800 seeds. Scoped by code because
+     * this file also creates a confirmed, active fixture provider, which is
+     * deliberately none of these things.
+     */
+    const SEEDED = `code in ('MTN_MOMO','AIRTEL_MONEY','UEDCL','NWSC','DSTV','GOTV',
+                             'LYCAMOBILE','STANBIC','SCHOOL_FEES')`;
+
+    it('seeds exactly nine providers, every one provisional and inactive', async () => {
+      const rows = await query<{
+        code: string;
+        is_provisional: boolean;
+        is_active: boolean;
+      }>(
+        `select code, is_provisional, is_active from public.agency_service_providers
+          where ${SEEDED} order by code`,
+      );
+      expect(rows).toHaveLength(9);
+      for (const r of rows) {
+        expect(r.is_provisional, r.code).toBe(true);
+        // Inactive is what actually keeps them out of the posting path:
+        // loading the catalogue is not the same act as going live with it.
+        expect(r.is_active, r.code).toBe(false);
+      }
     });
 
     it('leaves commission rates unset rather than guessing them', async () => {
       const rows = await query<{ code: string }>(
         `select code from public.agency_service_providers
-          where commission_rate_bps is not null or commission_fixed is not null`,
+          where ${SEEDED}
+            and (commission_rate_bps is not null or commission_fixed is not null)`,
+      );
+      expect(rows).toEqual([]);
+    });
+
+    it('states no transaction limit for any seeded type', async () => {
+      // NULL is "no limit", which is correct for an unreviewed catalogue and
+      // is exactly why the readiness gate refuses to post against it.
+      const rows = await query<{ code: string }>(
+        `select t.code from public.agency_transaction_types t
+           join public.agency_service_providers p on p.id = t.provider_id
+          where p.${SEEDED.replace('code in', 'code in')}
+            and (t.max_single_transaction is not null or t.requires_approval_above is not null)`,
       );
       expect(rows).toEqual([]);
     });

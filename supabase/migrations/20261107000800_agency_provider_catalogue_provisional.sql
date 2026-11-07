@@ -36,40 +36,46 @@
 -- `ensure_agency_float_account()` creates them one at a time when that is known.
 -- ===========================================================================
 
+-- Seeded **inactive** as well as provisional. Provisional records that the
+-- commission terms are unconfirmed; inactive is what actually keeps the
+-- provider out of the posting path, because `20261107001000` refuses any
+-- transaction past draft whose provider is not both confirmed and active.
+-- Loading the catalogue is therefore not the same act as going live with it,
+-- and going live is a deliberate, separately authorised data change.
 insert into public.agency_service_providers
   (code, name, category, float_model, payable_account_id, income_account_id,
    commission_model, is_provisional, is_active)
 values
   -- --- Mobile money: the agent holds float the provider advanced -----------
   ('MTN_MOMO', 'MTN Mobile Money', 'mobile_money', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4510'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4510'), 'deferred', true, false),
   ('AIRTEL_MONEY', 'Airtel Money', 'mobile_money', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4510'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4510'), 'deferred', true, false),
 
   -- --- Utilities: paid out of float, commission remitted later ------------
   -- UEDCL, not UMEME (correction C12): UEDCL is the distributor and Yaka is
   -- its prepaid product.
   ('UEDCL', 'UEDCL Yaka Electricity', 'utility', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4530'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4530'), 'deferred', true, false),
   ('NWSC', 'NWSC Water', 'utility', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4530'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4530'), 'deferred', true, false),
 
   -- --- TV subscriptions ---------------------------------------------------
   ('DSTV', 'DStv', 'tv_subscription', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4550'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4550'), 'deferred', true, false),
   ('GOTV', 'GOtv', 'tv_subscription', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4550'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4550'), 'deferred', true, false),
 
   -- --- Airtime and data: the one immediate-commission category ------------
   -- Correction C12 classifies Lycamobile here rather than as mobile money.
   ('LYCAMOBILE', 'Lycamobile Airtime & Data', 'airtime_data', 'provider_float', null,
-   (select id from public.ledger_accounts where code = '4560'), 'immediate', true, true),
+   (select id from public.ledger_accounts where code = '4560'), 'immediate', true, false),
 
   -- --- Agency banking: the company holds the customer's cash and owes the
   -- --- bank, so this is cash_payable against 2220 rather than float --------
   ('STANBIC', 'Stanbic Bank Agency', 'agency_banking', 'cash_payable',
    (select id from public.ledger_accounts where code = '2220'),
-   (select id from public.ledger_accounts where code = '4520'), 'deferred', true, true),
+   (select id from public.ledger_accounts where code = '4520'), 'deferred', true, false),
 
   -- --- School fees: collected for an institution, owed onward via 2210 ----
   -- §12 Step 7 lists eight providers and no school, but Phase 4B must support
@@ -77,7 +83,7 @@ values
   -- the engine to exercise. A real deployment adds one row per institution.
   ('SCHOOL_FEES', 'School Fees Collection', 'school_fees', 'cash_payable',
    (select id from public.ledger_accounts where code = '2210'),
-   (select id from public.ledger_accounts where code = '4540'), 'deferred', true, true)
+   (select id from public.ledger_accounts where code = '4540'), 'deferred', true, false)
 on conflict (code) do nothing;
 
 

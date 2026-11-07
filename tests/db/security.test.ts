@@ -1098,6 +1098,10 @@ describeDb('privileged functions', () => {
       'agency_float_account_guard',
       'agency_provider_accounts_guard',
       'agency_transaction_guard',
+      // Phase 4A readiness gate: refuses any transaction past draft whose
+      // provider is still provisional or inactive, or whose type states no
+      // maximum. Also a trigger, also unreachable by a signed-in user.
+      'agency_transaction_live_readiness_guard',
       'apply_eligible_penalties',
       'approve_benefit_claim',
       'approve_expense',

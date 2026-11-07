@@ -6024,6 +6024,10 @@ export type Database = {
           airtel_money: number;
           cash_at_bank: number;
           total_liquidity: number;
+          // Phase 4A. Appended after the total, because `create or replace
+          // view` can only add a column at the end. total_liquidity is every
+          // account with a cash_kind, so this is one of its five components.
+          agency_float: number;
         };
         Relationships: [];
       };

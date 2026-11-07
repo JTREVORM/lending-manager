@@ -206,6 +206,18 @@ export interface BranchCashPosition {
   readonly mtnMobileMoney: UgxAmount;
   readonly airtelMoney: UgxAmount;
   readonly cashAtBank: UgxAmount;
+  /**
+   * Electronic float held with agency providers, across every till at this
+   * branch.
+   *
+   * Deliberately **not** a `CashKind`: the four kinds drive the account
+   * pickers on the transfer, expense, income and reconciliation screens, and
+   * agency float must appear in none of them. It is a component of
+   * `totalLiquidity` all the same, so it is carried separately rather than
+   * folded into one of the four — a total larger than its visible parts is
+   * how float gets mistaken for spendable till cash.
+   */
+  readonly agencyFloat: UgxAmount;
   readonly totalLiquidity: UgxAmount;
 }
 

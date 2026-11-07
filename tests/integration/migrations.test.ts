@@ -764,6 +764,8 @@ describe('types stay in step with the schema', () => {
       'agency_float_account_guard',
       'agency_provider_accounts_guard',
       'agency_transaction_guard',
+      'agency_transaction_live_readiness_guard',
+      'notify_low_float',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

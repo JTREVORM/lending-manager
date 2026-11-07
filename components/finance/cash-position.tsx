@@ -1,4 +1,4 @@
-import { Banknote, Landmark, Smartphone, Wallet } from 'lucide-react';
+import { Banknote, Landmark, Radio, Smartphone, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
@@ -51,10 +51,27 @@ export function CashPosition({ positions, lowBalances, className }: CashPosition
       mtn_mobile_money: sum.mtn_mobile_money + p.mtnMobileMoney,
       airtel_money: sum.airtel_money + p.airtelMoney,
       bank: sum.bank + p.cashAtBank,
+      agency_float: sum.agency_float + p.agencyFloat,
       total: sum.total + p.totalLiquidity,
     }),
-    { cash_at_hand: 0, mtn_mobile_money: 0, airtel_money: 0, bank: 0, total: 0 },
+    {
+      cash_at_hand: 0,
+      mtn_mobile_money: 0,
+      airtel_money: 0,
+      bank: 0,
+      agency_float: 0,
+      total: 0,
+    },
   );
+
+  // Phase 4A. Shown only once there is float to show, so a business running no
+  // agency services sees the card it always saw. When there is, it is shown
+  // *separately* and labelled as float rather than as cash: it is a real asset
+  // and a real component of total liquidity, but it is money sitting with MTN
+  // or UEDCL and it cannot be lent, paid out at the counter, or counted into a
+  // till. A business that read it as spendable cash would lend money it does
+  // not have.
+  const hasFloat = totals.agency_float > 0;
 
   const shown: readonly { kind: CashKind; amount: number }[] = [
     { kind: 'cash_at_hand', amount: totals.cash_at_hand },
@@ -65,7 +82,12 @@ export function CashPosition({ positions, lowBalances, className }: CashPosition
 
   return (
     <div className={cn('min-w-0 space-y-3', className)}>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div
+        className={cn(
+          'grid min-w-0 gap-3 sm:grid-cols-2',
+          hasFloat ? 'xl:grid-cols-6' : 'xl:grid-cols-5',
+        )}
+      >
         {shown.map(({ kind, amount }) => {
           const Icon = ICONS[kind];
           const threshold = lowBalances?.[kind];
@@ -96,6 +118,19 @@ export function CashPosition({ positions, lowBalances, className }: CashPosition
             </Card>
           );
         })}
+
+        {hasFloat ? (
+          <Card className="min-w-0 p-4">
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <p className="text-text-muted text-xs font-medium">Agency float</p>
+              <Radio aria-hidden="true" className="text-text-muted size-4 shrink-0" />
+            </div>
+            <p className="text-text mt-1 text-lg font-semibold tabular-nums">
+              <Money amount={totals.agency_float} />
+            </p>
+            <p className="text-text-muted mt-1 text-[11px]">Held with providers</p>
+          </Card>
+        ) : null}
 
         <Card className="bg-surface-sunken min-w-0 p-4">
           <div className="flex min-w-0 items-start justify-between gap-2">
@@ -134,6 +169,14 @@ export function CashPosition({ positions, lowBalances, className }: CashPosition
                     </dd>
                   </div>
                 ))}
+                {position.agencyFloat > 0 ? (
+                  <div className="flex min-w-0 justify-between gap-2 text-xs">
+                    <dt className="text-text-muted truncate">Agency float</dt>
+                    <dd className="text-text shrink-0 tabular-nums">
+                      <Money amount={position.agencyFloat} />
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
             </Card>
           ))}
