@@ -157,6 +157,20 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'agency-settlement',
+          environment: 'node',
+          include: ['tests/db/agency-settlement.test.ts'],
+          // Its own database, like the other agency projects: this suite posts
+          // real settlements and stages races on two connections, so a suite
+          // sharing the database would read a book this one wrote to.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'seed',
           environment: 'node',
           include: ['tests/db/demo-seed.test.ts'],
