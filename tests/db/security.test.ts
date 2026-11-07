@@ -1090,6 +1090,11 @@ describeDb('privileged functions', () => {
       // rule, and the registers that report per-member rows are
       // `security_invoker` views instead.
       'add_meeting_action_item',
+      // Phase 4B: the transaction engine. DEFINER because each writes the ledger
+      'agency_actor',
+      'agency_commission_for',
+      'agency_commission_outstanding',
+      'agency_commission_reconcile',
       // Phase 4A. Three trigger guards and two assertion helpers. The guards
       // are DEFINER because each reads a second table to check an invariant a
       // CHECK constraint cannot reach; none of them is reachable by a signed-in
@@ -1203,6 +1208,7 @@ describeDb('privileged functions', () => {
       // business_settings that would strand an active product is refused.
       'business_settings_keep_products_valid',
       'business_timezone',
+      'cancel_agency_transaction',
       'cancel_benefit_claim',
       'cancel_loan',
       // Phase 12. Freezing the product terms writes an append-only table no
@@ -1225,6 +1231,7 @@ describeDb('privileged functions', () => {
       'condolence_next_of_kin_status',
       'confirm_password_change',
       'consume_rate_limit',
+      'create_agency_transaction',
       'current_profile_id',
       'current_session_context',
       'current_user_branch_id',
@@ -1412,6 +1419,7 @@ describeDb('privileged functions', () => {
       'notify_transfer_pending',
       'open_benefit_claim',
       'open_savings_account',
+      'post_agency_transaction',
       'post_benefit_payment',
       'post_disbursement_journal',
       'post_expense_journal',
@@ -1462,6 +1470,8 @@ describeDb('privileged functions', () => {
       // `authenticated`.
       'require_savings_account_access',
       'reschedule_membership_meeting',
+      'return_agency_transaction',
+      'reverse_agency_transaction',
       'reverse_benefit_payment',
       'reverse_expense',
       'reverse_meeting_fine_payment',
@@ -1502,9 +1512,12 @@ describeDb('privileged functions', () => {
       'savings_withdrawal_requests_guard',
       'schedule_membership_meeting',
       'settings_reference_sequences',
+      'submit_agency_transaction',
       'submit_benefit_claim',
       'submit_reconciliation',
       'transition_membership_to_policy',
+      'update_agency_transaction',
+      'update_agency_transaction_reference',
       'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
@@ -1518,6 +1531,7 @@ describeDb('privileged functions', () => {
       // internal name with no `authenticated` grant, so the Data API cannot
       // reach them. The public name above is now a thin authorized wrapper.
       'validate_loan_for_approval_internal',
+      'verify_agency_transaction',
       'verify_benefit_document',
       'verify_member_beneficiary',
     ]);
@@ -1629,6 +1643,7 @@ describeDb('privileged functions', () => {
       // number minters are **absent**, as they are in every earlier phase:
       // nothing calls them but PostgreSQL.
       'add_meeting_action_item',
+      // Phase 4B: the lifecycle RPCs, each gated on an agency capability
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
@@ -1665,6 +1680,7 @@ describeDb('privileged functions', () => {
       // The preview screen calls it so staff see the authoritative figures
       // rather than the browser's.
       'calculate_loan_breakdown',
+      'cancel_agency_transaction',
       'cancel_benefit_claim',
       'cancel_loan',
       // Phase 9. The rate limiter. Granted to `authenticated` so a signed-in
@@ -1687,6 +1703,7 @@ describeDb('privileged functions', () => {
       'complete_membership_policy_transition',
       'condolence_next_of_kin_status',
       'consume_rate_limit',
+      'create_agency_transaction',
       'current_profile_id',
       // Phase 18. The whole session in one round trip: the caller's active
       // profile, their role keys, and why not when there is none. Granted
@@ -1824,6 +1841,8 @@ describeDb('privileged functions', () => {
       'request_benefit_information',
       'request_savings_withdrawal',
       'reschedule_membership_meeting',
+      'return_agency_transaction',
+      'reverse_agency_transaction',
       'reverse_benefit_payment',
       'reverse_expense',
       'reverse_meeting_fine_payment',
@@ -1865,15 +1884,19 @@ describeDb('privileged functions', () => {
       // storage policies that gate the bucket.
       'storage_path_loan_id',
       'storage_path_membership_id',
+      'submit_agency_transaction',
       'submit_benefit_claim',
       'submit_reconciliation',
       'transition_membership_to_policy',
+      'update_agency_transaction',
+      'update_agency_transaction_reference',
       'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',
       'validate_loan_for_approval',
+      'verify_agency_transaction',
       'verify_benefit_document',
       'verify_member_beneficiary',
     ]);

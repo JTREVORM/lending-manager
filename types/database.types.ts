@@ -5208,6 +5208,13 @@ export type Database = {
           idempotency_key: string | null;
           created_at: string;
           updated_at: string;
+          commission_supplied: number | null;
+          commission_model_applied: string | null;
+          commission_basis_applied: string | null;
+          commission_rate_bps_applied: number | null;
+          commission_fixed_applied: number | null;
+          commission_computed: number | null;
+          income_account_id: string | null;
         };
         Insert: {
           id?: string;
@@ -5238,6 +5245,13 @@ export type Database = {
           idempotency_key?: string | null;
           created_at?: string;
           updated_at?: string;
+          commission_supplied?: number | null;
+          commission_model_applied?: string | null;
+          commission_basis_applied?: string | null;
+          commission_rate_bps_applied?: number | null;
+          commission_fixed_applied?: number | null;
+          commission_computed?: number | null;
+          income_account_id?: string | null;
         };
         Update: {
           id?: string;
@@ -5268,6 +5282,13 @@ export type Database = {
           idempotency_key?: string | null;
           created_at?: string;
           updated_at?: string;
+          commission_supplied?: number | null;
+          commission_model_applied?: string | null;
+          commission_basis_applied?: string | null;
+          commission_rate_bps_applied?: number | null;
+          commission_fixed_applied?: number | null;
+          commission_computed?: number | null;
+          income_account_id?: string | null;
         };
         Relationships: [];
       };
@@ -7117,6 +7138,109 @@ export type Database = {
     };
 
     Functions: {
+      // --- Phase 4B: the agency transaction engine ---------------------------
+      //
+      // Eight lifecycle RPCs reachable by a signed-in user, each refusing a
+      // caller without its agency capability with SQLSTATE 42501. The
+      // commission helpers and the posting routine are NOT reachable: they are
+      // called by the lifecycle functions, which are SECURITY DEFINER, and
+      // their EXECUTE grant is withheld.
+      create_agency_transaction: {
+        Args: {
+          p_transaction_type_id: string;
+          p_principal_amount: number;
+          p_float_account_id?: string | null;
+          p_customer_identifier?: string | null;
+          p_customer_name?: string | null;
+          p_provider_reference?: string | null;
+          p_customer_fee?: number;
+          p_commission_supplied?: number | null;
+          p_description?: string | null;
+          p_transaction_date?: string | null;
+          p_idempotency_key?: string | null;
+        };
+        Returns: string;
+      };
+      update_agency_transaction: {
+        Args: {
+          p_transaction_id: string;
+          p_principal_amount?: number | null;
+          p_customer_identifier?: string | null;
+          p_customer_name?: string | null;
+          p_provider_reference?: string | null;
+          p_customer_fee?: number | null;
+          p_commission_supplied?: number | null;
+          p_description?: string | null;
+        };
+        Returns: undefined;
+      };
+      submit_agency_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      return_agency_transaction: {
+        Args: { p_transaction_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      verify_agency_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: string;
+      };
+      cancel_agency_transaction: {
+        Args: { p_transaction_id: string; p_reason?: string | null };
+        Returns: undefined;
+      };
+      reverse_agency_transaction: {
+        Args: { p_transaction_id: string; p_reason: string };
+        Returns: string;
+      };
+      update_agency_transaction_reference: {
+        Args: { p_transaction_id: string; p_new_reference: string; p_reason: string };
+        Returns: undefined;
+      };
+      // Not reachable by `authenticated`; declared because the schema holds
+      // them and this file is asserted to be complete.
+      post_agency_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: string;
+      };
+      agency_actor: {
+        Args: { p_capability: string };
+        Returns: string;
+      };
+      agency_line: {
+        Args: {
+          p_account_id: string;
+          p_debit: number;
+          p_credit: number;
+          p_memo: string;
+        };
+        Returns: Json;
+      };
+      agency_commission_for: {
+        Args: { p_provider_id: string; p_principal: number };
+        Returns: {
+          amount: number;
+          basis: string;
+          rate_bps: number | null;
+          fixed: number | null;
+        }[];
+      };
+      agency_commission_reconcile: {
+        Args: { p_provider_id: string; p_principal: number; p_supplied?: number | null };
+        Returns: {
+          amount: number;
+          computed: number;
+          basis: string;
+          rate_bps: number | null;
+          fixed: number | null;
+          differs: boolean;
+        }[];
+      };
+      agency_commission_outstanding: {
+        Args: { p_provider_id: string; p_branch_id: string };
+        Returns: number;
+      };
       // --- Phase 4A: agency banking -----------------------------------------
       //
       // `ensure_agency_float_account` is the only one reachable by a signed-in

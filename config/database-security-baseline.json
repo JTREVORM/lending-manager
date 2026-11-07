@@ -198,6 +198,15 @@
         "public_default_acl": false
       }
     },
+    "cancel_agency_transaction(p_transaction_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Cancels an unposted transaction. Refuses a caller without agency:write with 42501, and requires agency:verify to cancel a transaction somebody else submitted. Refuses a posted transaction, which is reversed instead.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "cancel_benefit_claim(p_claim_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -282,6 +291,15 @@
     "consume_rate_limit(p_bucket_key text, p_action text, p_limit integer, p_window_seconds integer)": {
       "classification": "D",
       "reason": "Returns business configuration or policy metadata, not a member's money or personal data. Also depended on in the caller's own context by an RLS policy, a CHECK constraint or a security_invoker view, where raising would turn a correct silent denial into an error.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "create_agency_transaction(p_transaction_type_id uuid, p_principal_amount bigint, p_float_account_id uuid, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_transaction_date date, p_idempotency_key text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Records a draft agency transaction. Refuses a caller without agency:write with SQLSTATE 42501, before it reads a single argument, via agency_actor(). The branch is taken from the officer's own profile and is never an argument, so one branch cannot record against another's till.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -774,6 +792,24 @@
         "public_default_acl": false
       }
     },
+    "return_agency_transaction(p_transaction_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Returns a submitted transaction to draft with a reason. Refuses a caller without agency:verify with 42501, because judging a transaction wrong is the same authority as judging it right. Moves no money.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_agency_transaction(p_transaction_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Reverses a posted transaction by mirroring its journal. Refuses a caller without agency:reverse with 42501, and a prior-day reversal without agency:reverse_cross_day with 42501. Refuses a reversal whose deferred commission has already been settled.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "reverse_benefit_payment(p_payment_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -918,6 +954,15 @@
         "public_default_acl": false
       }
     },
+    "submit_agency_transaction(p_transaction_id uuid)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Moves a draft to awaiting_verification. Refuses a caller without agency:write with 42501. Posts nothing; the readiness gate refuses a provisional or inactive provider here.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "submit_benefit_claim(p_claim_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -939,6 +984,24 @@
     "transition_membership_to_policy(p_transition_id uuid, p_membership_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "update_agency_transaction(p_transaction_id uuid, p_principal_amount bigint, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Edits a draft only. Refuses a caller without agency:write with 42501, and refuses any status but draft, so a submitted transaction cannot be altered under the verifier.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "update_agency_transaction_reference(p_transaction_id uuid, p_new_reference text, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Corrects the provider reference on a posted transaction and writes no journal. Refuses a caller without agency:correct with 42501, and refuses a reference another transaction already claims.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -993,6 +1056,15 @@
     "validate_loan_for_approval(p_loan_id uuid)": {
       "classification": "A",
       "reason": "Guarded in 20261106000100. Thin authorized wrapper; the logic lives behind an internal name with no authenticated grant. Both directions asserted in tests/db/security-definer-surface.test.ts.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "verify_agency_transaction(p_transaction_id uuid)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 — which the verifier_not_submitter CHECK also refuses independently. Asserted in tests/db/agency-transaction-engine.test.ts.",
       "surface": {
         "anon": false,
         "authenticated": true,
