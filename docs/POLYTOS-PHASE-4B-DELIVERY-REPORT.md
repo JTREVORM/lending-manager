@@ -104,7 +104,7 @@ Recorded as a deliberate deviation.
 | Decision | Resolution |
 | --- | --- |
 | Rounding | **Half-up, integer only**: `(P × bps + 5000) / 10000`. 10,000 at 150bp = 150; 10,034 at 150bp = 151; 33 at 150bp = 0, 34 = 1 |
-| No floats anywhere | `P` is `bigint`, `bps` is `integer`, so the product is `bigint` and the division is integer division. No `numeric` column exists in this schema and the money audit passes |
+| No floats anywhere | `P` is `bigint`, `bps` is `integer`, so the product is `bigint` and the division is integer division. No `numeric` column exists anywhere in the schema, and the money audit now reads these migrations — see §8 and defect 9 |
 | Rate **and** fixed both set | **Refused**, not resolved. The greater, the sum, and rate-with-a-floor are all defensible, and the engine must not pick one for the business |
 | Neither set | Refused, and Phase 4A's readiness gate already refuses the provider |
 | Explicit zero | Reported as basis `zero`, distinct from `fixed`, so "we agreed nothing" reads differently from "we have not decided" |
@@ -238,7 +238,7 @@ order on a clean PostgreSQL 16 cluster, with no duplicate version prefixes.
 | Database security gate | **PASS — no unreviewed privileged exposure** |
 | Financial reconciliation certification | **PASS — 36 pass, 2 explained, 0 vacuous, 0 fail** |
 | `npm run typecheck` / `lint` / `format:check` | **PASS** |
-| `npm run audit:money` | **PASS — 71 files, no hazard** |
+| `npm run audit:money` | **PASS — 86 files, no hazard** (71 before this phase extended its reach — see defect 9) |
 | `npm run build` | **PASS** |
 
 CI results at the final head are recorded in §11 once the draft PR's run
@@ -270,8 +270,18 @@ receivable aggregate to any signed-in user.
 | 7 | **Test suite: the insufficient-cash case tripped the type ceiling instead**, so it proved the wrong control | A dedicated service with a raised ceiling, so only cash can bind |
 | 8 | **Test suite: `deleteTestUsers()` cannot run here** — it deletes journal entries, and `agency_transactions.journal_entry_id` is ON DELETE RESTRICT | Cleanup removed and the reason recorded: the project rebuilds its database, and the FK refusing is the schema behaving correctly |
 
+| 9 | **The money audit was not reading any agency SQL, and could not have caught a float in it if it had been.** Two separate holes: its migration filter admitted only `20261004*`, `20261005*` and `20261021*`, so every Phase 4A and 4B migration went unread; and its hazard patterns caught `::float`, `::double`, `::real` and a division by 100, but **not `::numeric`** and not a decimal divisor like `/ 10000.0` — which is the obvious way to turn basis points into a fraction | The filter now admits `20261107*` and `20261108*`, and two patterns were added: a `::numeric` cast and a decimal-literal division. Proved by injecting `round((p × bps)::numeric / 10000.0)` into the commission engine: before, the audit reported "no hazard found"; after, it names both hazards and exits 1. The original was restored byte-identically and the audit is clean at 86 files |
+
 Defects 5 to 7 were mine and were caught by running the suite rather than by
 reading it. Defect 8 is the schema refusing to let a test destroy evidence.
+
+Defect 9 deserves a note of its own, because it is the one that was *reporting
+success*. "71 financial files scanned, no hazard found" was true and told me
+nothing about the newest money arithmetic in the system, which is a division in
+SQL. Extending the file list alone was not enough either — the first injection
+still passed, because the patterns had no opinion about `numeric`. A gate that
+cannot fail on the code it has just started reading is not yet a gate, and the
+only way to know was to make it fail on purpose.
 
 ---
 

@@ -121,6 +121,18 @@ const UNSAFE = [
   [/\bMath\.round\(/, 'Math.round on money'],
   [/\bMath\.(?:floor|ceil)\((?![^)]*length)/, 'Math.floor/ceil on money'],
   [/::\s*(?:float|double|real)/, 'a float cast in SQL'],
+  // `numeric` belongs here with the floats, and its absence was a hole. This
+  // schema admits no `numeric` *column* — `tests/db/schema.test.ts` fails the
+  // build on one — but a `::numeric` **cast** inside an expression is exactly
+  // the escape into decimal arithmetic that rule exists to prevent, and it was
+  // being scanned straight past. Found by injecting
+  // `round((p * bps)::numeric / 10000.0)` into the agency commission engine and
+  // watching this audit report no hazard.
+  [/::\s*numeric/, 'a numeric (decimal) cast in SQL'],
+  // And the division that usually accompanies it. The rule above caught only
+  // a divisor of 100 or 100.0, so `/ 10000.0` — the obvious way to turn basis
+  // points into a fraction — went unread.
+  [/\/\s*\d+\.\d+/, 'a decimal-literal division'],
   [/\btoFixed\(/, 'toFixed'],
 ];
 
@@ -203,9 +215,19 @@ const migrations = readdirSync('supabase/migrations')
       // and Polytos Phase 3, which adds the member interest engine, the
       // eligibility ceiling and the pledge arithmetic to the same files'
       // worth of risk.
+      //
+      // Polytos Phase 4A and 4B are here for the same reason, and the reason
+      // is not that they are new: the agency engine *computes money in SQL*.
+      // It derives a commission from a basis-point rate, which is a division,
+      // and divisions are where a rounding rule either exists in one place or
+      // is invented per call site. Without these prefixes this audit was
+      // reporting a pass over the lending engines while the newest money
+      // arithmetic in the system went unread.
       (name.startsWith('20261004') ||
         name.startsWith('20261005') ||
-        name.startsWith('20261021')) &&
+        name.startsWith('20261021') ||
+        name.startsWith('20261107') ||
+        name.startsWith('20261108')) &&
       name.endsWith('.sql'),
   )
   .map((name) => join('supabase/migrations', name));
