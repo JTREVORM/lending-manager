@@ -1644,9 +1644,6 @@ describeDb('privileged functions', () => {
       // nothing calls them but PostgreSQL.
       'add_meeting_action_item',
       // Phase 4B: the lifecycle RPCs, each gated on an agency capability
-      'agency_commission_for',
-      'agency_commission_outstanding',
-      'agency_commission_reconcile',
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
