@@ -241,8 +241,34 @@ order on a clean PostgreSQL 16 cluster, with no duplicate version prefixes.
 | `npm run audit:money` | **PASS — 86 files, no hazard** (71 before this phase extended its reach — see defect 9) |
 | `npm run build` | **PASS** |
 
-CI results at the final head are recorded in §11 once the draft PR's run
-completes.
+### CI — all four mandatory jobs, green
+
+Run **42368072464** at `a32dcf1`, event `pull_request`, on draft PR #23. Every
+job `success`:
+
+| Job | Result | Duration |
+| --- | --- | --- |
+| `checks, unit/integration, build` | **success** | 2m 49s |
+| `database (real PostgreSQL)` | **success** | 4m 31s |
+| `browser E2E (production build, fresh seed)` | **success** | 13m 59s |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | **success** | 3m 19s |
+
+`Supabase Preview` is **skipped**, so nothing in this work created a branch
+against the hosted project. The check run is the evidence rather than an
+assertion.
+
+### The first attempt failed, and the defect was mine
+
+Run 42367318821 at `e9be504` failed the `database` job on
+`security.test.ts > grants authenticated only the session-scoped helpers`: 157
+expected against 154 actual. `checks` and the `security release rehearsal`
+passed; `browser E2E` was **cancelled** rather than failed, because the
+workflow sets `concurrency: cancel-in-progress` on the ref and the corrective
+push ended it.
+
+The cause is defect 11 below, and the sequencing is the part worth reading: the
+expected list was correct when written and wrong by the time it ran, because the
+grants changed after the last full suite run and I did not repeat it.
 
 ### Exposure decisions
 
@@ -272,8 +298,24 @@ receivable aggregate to any signed-in user.
 
 | 9 | **The money audit was not reading any agency SQL, and could not have caught a float in it if it had been.** Two separate holes: its migration filter admitted only `20261004*`, `20261005*` and `20261021*`, so every Phase 4A and 4B migration went unread; and its hazard patterns caught `::float`, `::double`, `::real` and a division by 100, but **not `::numeric`** and not a decimal divisor like `/ 10000.0` — which is the obvious way to turn basis points into a fraction | The filter now admits `20261107*` and `20261108*`, and two patterns were added: a `::numeric` cast and a decimal-literal division. Proved by injecting `round((p × bps)::numeric / 10000.0)` into the commission engine: before, the audit reported "no hazard found"; after, it names both hazards and exits 1. The original was restored byte-identically and the audit is clean at 86 files |
 
+| 10 | **The money audit was reporting success over code it had never read.** Its migration filter admitted only `20261004*`, `20261005*` and `20261021*`, so every Phase 4A and 4B migration went unread — including the commission engine, the only place in the system that performs a division. Extending the filter was **not sufficient**: with the agency migrations in scope, an injected `round((p × bps)::numeric / 10000.0)` still passed, because the hazard patterns knew `::float`, `::double`, `::real` and a division by 100, but had no opinion about `::numeric` or a divisor like `/ 10000.0` | Filter extended to `20261107*` and `20261108*`, and two patterns added: a `::numeric` cast and a decimal-literal division. Verified in both directions — with the hazard injected the audit names both findings and exits 1; with the file restored byte-identically it is clean at **86** files, up from 71. Neither pattern appears anywhere in the previously-scanned set |
+| 11 | **`security.test.ts` named three functions the database no longer grants.** The eleven new agency functions were added to the authenticated-execute list, and the three commission helpers were then withheld from `authenticated` — without re-running the suite. 157 expected, 154 actual | The three are removed from that list and remain in the SECURITY DEFINER inventory, which is a different question and still true of them. Re-run after the fix on a freshly migrated database: seven projects, 2,101 tests, and the security gate clean |
+
 Defects 5 to 7 were mine and were caught by running the suite rather than by
 reading it. Defect 8 is the schema refusing to let a test destroy evidence.
+
+Defects 10 and 11 are both about **a measurement that had stopped describing
+the code**. The money audit said "71 financial files scanned, no hazard found",
+which was true and said nothing about the newest money arithmetic in the
+system. This report said "test:db PASS — 2,101", and that figure was taken
+before the grant change, so it described a tree that no longer existed. The
+number after the re-run is the same 2,101; what changed is that it is now a
+statement about this commit.
+
+Defect 10 also carries a general lesson about gates. Adding files to a
+scanner's input is not the same as covering them: the first injection passed. A
+gate cannot be trusted on code it has only just started reading until it has
+been made to fail on that code on purpose.
 
 Defect 9 deserves a note of its own, because it is the one that was *reporting
 success*. "71 financial files scanned, no hazard found" was true and told me
@@ -309,6 +351,9 @@ duties at the data layer, computes commission in integer arithmetic with
 immutable evidence of the configuration used, protects float and cash
 separately, cannot double-post under retry or concurrency, and reverses by
 mirroring without deleting anything.
+
+All four mandatory CI jobs pass at the final head, with the one failure that
+preceded them recorded above rather than tidied away.
 
 **BLOCKED for merge, deploy and live use.** A draft PR is authorised; nothing
 else is. No provider is active, none was activated, and decisions C, F, G, H, K,
