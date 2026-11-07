@@ -42,6 +42,12 @@ if (!connectionString) {
 const jsonFlag = process.argv.indexOf('--json');
 const jsonPath = jsonFlag === -1 ? null : process.argv[jsonFlag + 1];
 
+// Certification mode. A vacuous identity proved nothing, so a run that carries
+// any of them is not a certification however many others passed — in this mode
+// the harness refuses to exit 0. Without the flag a vacuous run still exits 0,
+// which is what makes the harness usable for exploring a partial book.
+const requireComplete = process.argv.includes('--require-complete');
+
 const pool = new pg.Pool({ connectionString, max: 2 });
 const checks = [];
 
@@ -341,6 +347,7 @@ async function cash() {
             p.cash_at_bank::text     as screen_bank,
             p.mtn_mobile_money::text as screen_mtn,
             p.airtel_money::text     as screen_airtel,
+            p.agency_float::text     as screen_float,
             p.total_liquidity::text  as screen_total,
             coalesce((select sum(b.balance) from public.ledger_account_balances b
                        where b.branch_id = p.branch_id and b.cash_kind = 'cash_at_hand'), 0)::text as gl_hand,
@@ -372,9 +379,13 @@ async function cash() {
     identity(
       g,
       `total liquidity is the sum of its parts (${r.branch_code})`,
-      big(r.screen_hand) + big(r.screen_bank) + big(r.screen_mtn) + big(r.screen_airtel),
+      big(r.screen_hand) +
+        big(r.screen_bank) +
+        big(r.screen_mtn) +
+        big(r.screen_airtel) +
+        big(r.screen_float),
       r.screen_total,
-      'hand + bank + mtn + airtel',
+      'hand + bank + mtn + airtel + agency float',
       'branch_cash_position.total_liquidity',
     );
     identity(
@@ -933,7 +944,13 @@ async function main() {
       console.log(`\n${group.toUpperCase()}`);
     }
     const mark =
-      c.status === 'PASS' ? 'ok  ' : c.status === 'EXPLAINED' ? 'expl' : 'FAIL';
+      c.status === 'PASS'
+        ? 'ok  '
+        : c.status === 'EXPLAINED'
+          ? 'expl'
+          : c.status === 'VACUOUS'
+            ? 'VAC '
+            : 'FAIL';
     console.log(`  ${mark}  ${c.name}`);
     if (c.left !== null) {
       console.log(`          ${c.leftLabel} = ${c.left}`);
@@ -966,6 +983,8 @@ async function main() {
       `${JSON.stringify(
         {
           checkedAt: new Date().toISOString(),
+          mode: requireComplete ? 'certification' : 'exploratory',
+          certified: fail === 0 && (!requireComplete || vacuous === 0),
           totals: { checks: checks.length, pass, explained, vacuous, fail },
           checks,
         },
@@ -976,8 +995,20 @@ async function main() {
     console.log(`matrix written to ${jsonPath}`);
   }
 
+  // A vacuous identity is not a pass, so in certification mode it is a refusal
+  // rather than a footnote. Otherwise a book with no loans in it would certify
+  // the loan identities by having none of them.
+  if (requireComplete && vacuous > 0) {
+    console.error(
+      `\nREFUSED: --require-complete was given and ${vacuous} identity/identities ` +
+        `were vacuous.\n  A certification cannot rest on identities that had no ` +
+        `subject rows. Seed the missing subjects and run again.`,
+    );
+  }
+
   await pool.end();
-  process.exit(fail === 0 ? 0 : 1);
+  const certified = fail === 0 && (!requireComplete || vacuous === 0);
+  process.exit(certified ? 0 : 1);
 }
 
 main().catch(async (error) => {

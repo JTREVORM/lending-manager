@@ -80,12 +80,43 @@ export default defineConfig({
           fileParallelism: false,
           testTimeout: 30_000,
           // Each seeder suite has a project of its own; see their headers.
+          // So does the agency foundation suite, for the same kind of reason:
+          // it commits a second branch, and a second branch is global state.
+          // `money-movement.test.ts` and `ledger-posting.test.ts` read
+          // `branch_cash_position` with `queryOne`, which requires exactly one
+          // row — so leaving it in this project made those two pass or fail on
+          // file ordering alone. It did pass locally and failed in CI, which is
+          // the definition of the problem rather than bad luck.
           exclude: [
             'tests/db/demo-seed.test.ts',
             'tests/db/demo-borrower-reuse.test.ts',
             'tests/db/member-loan-demo-seed.test.ts',
             'tests/db/benefit-demo-seed.test.ts',
+            'tests/db/agency-foundation.test.ts',
           ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency',
+          environment: 'node',
+          include: ['tests/db/agency-foundation.test.ts'],
+          // Its own database, rebuilt from the migrations, because this suite
+          // commits fixtures the rest of the database suite can see: a second
+          // branch, a confirmed provider, and the float tills provisioned
+          // against both. None of it can be cleaned up afterwards either —
+          // `agency_provider_float_accounts` is append-only by trigger and
+          // every reference to a branch is ON DELETE RESTRICT, which is the
+          // schema behaving correctly.
+          //
+          // Keeping it here rather than in `db` is what makes the suite
+          // honest: it needs two branches to prove that one branch cannot
+          // reach the other's till, and it must not make another file's
+          // single-branch assumption false to get them.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 30_000,
         },
       },
       {

@@ -35,6 +35,7 @@ import {
   isMovementStatus,
   isReconciliationStatus,
   type AccountType,
+  CASH_KINDS,
   type BranchCashPosition,
   type CashKind,
   type ExpenseRow,
@@ -121,7 +122,15 @@ export async function getLedgerAccounts(options?: {
     .order('code');
 
   if (options?.type !== undefined) query = query.eq('account_type', options.type);
-  if (options?.cashOnly === true) query = query.not('cash_kind', 'is', null);
+  // The four lending cash kinds, named explicitly rather than "any account
+  // with a cash_kind". Phase 4A added `agency_float` as a fifth kind, and the
+  // four screens that ask for `cashOnly` — a transfer, an expense payment, an
+  // income receipt and a cash reconciliation — must not offer one: the
+  // database refuses all four (`assert_cash_account` rejects agency float),
+  // and a float account also has its own reconciliation table, so offering it
+  // here would only produce a confusing refusal. Listing CASH_KINDS means a
+  // sixth kind cannot silently widen these pickers either.
+  if (options?.cashOnly === true) query = query.in('cash_kind', [...CASH_KINDS]);
   if (options?.activeOnly === true) query = query.eq('status', 'active');
 
   const { data, error } = await query;
@@ -202,7 +211,7 @@ export async function getCashPositions(): Promise<readonly BranchCashPosition[]>
   const { data, error } = await supabase
     .from('branch_cash_position')
     .select(
-      `branch_id, branch_code, branch_name, cash_at_hand, mtn_mobile_money, airtel_money, cash_at_bank, total_liquidity`,
+      `branch_id, branch_code, branch_name, cash_at_hand, mtn_mobile_money, airtel_money, cash_at_bank, agency_float, total_liquidity`,
     )
     .order('branch_code');
 
@@ -221,6 +230,10 @@ export async function getCashPositions(): Promise<readonly BranchCashPosition[]>
       mtnMobileMoney: money(raw.mtn_mobile_money),
       airtelMoney: money(raw.airtel_money),
       cashAtBank: money(raw.cash_at_bank),
+      // Selected explicitly. `total_liquidity` is every account with a
+      // cash_kind, agency float included, so a screen that showed the total
+      // without this component would show a figure larger than its own parts.
+      agencyFloat: money(raw.agency_float),
       totalLiquidity: money(raw.total_liquidity),
     };
   });
