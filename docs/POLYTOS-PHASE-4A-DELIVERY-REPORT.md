@@ -346,13 +346,74 @@ Everything below was run on this branch at 180 migrations.
 | `npm run audit:money` | **PASS — 71 files, no hazard** |
 | `npm run build` | **PASS** |
 
-### Not run here
+### CI — all four mandatory jobs, green
 
-`browser E2E` and `security release rehearsal` need a PostgREST binary and a
-real Auth binary downloaded in CI, and PostgreSQL 17 for the rehearsal. They
-run on the pull request. Phase 4A adds no route and no screen, so neither
-exercises any new code path; the `database` job is the one that covers this
-change and it is green locally in full.
+Run **42352964304** at `9cbe6dd`, event `pull_request`, on draft PR #22. Every
+job `success`, first attempt:
+
+| Job | Result | Duration |
+| --- | --- | --- |
+| `checks, unit/integration, build` | **success** | 2m 21s |
+| `database (real PostgreSQL)` | **success** | 4m 15s |
+| `browser E2E (production build, fresh seed)` | **success** | 20m 24s |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | **success** | 4m 9s |
+
+Four steps inside them are the ones this phase is accountable for, and each is
+the run's own statement rather than a reading of a tally:
+
+- **`Database security gate`** — success. The gate runs *before* the suites, on
+  the freshly migrated 180-migration schema, and fails on any privileged
+  exposure the reviewed baseline does not already account for. So the single
+  baseline entry this phase adds (`ensure_agency_float_account`, classification
+  A) was accepted by the authority rather than by me.
+- **`Financial reconciliation certification`** — success. This step is new in
+  this branch, and this is the first time it has run in CI. It builds its own
+  coherent book and certifies it with `--require-complete`, so it cannot pass by
+  being pointed at an empty one.
+- **`Upload financial reconciliation certification`** — success, artifact
+  13566445602. The matrix is downloadable from the run rather than taken on
+  trust from this document.
+- **`Upload Playwright artifacts on failure`** — **skipped**. Its `if: failure()`
+  never fired, which is the browser job reporting its own health.
+
+The browser suite matters more here than it looks. Phase 4A adds no route, but
+§5B changes `components/finance/cash-position.tsx` and the data function behind
+it, so the finance screen is live code this phase touched — and it is covered.
+`Capture the Phase 4 screens` also passed, reporting no screen overflowing its
+viewport.
+
+### The first attempt failed, and the defect was in this phase's own test
+
+Run 42352265289 at `24fddb2` failed the `database` job: *"Expected exactly one
+row, received 2"* from `money-movement.test.ts`, twice. The other three jobs
+passed.
+
+The cause was not in `money-movement`. `agency-foundation.test.ts` commits a
+second branch, BR9901, because proving one branch cannot reach another's till
+needs two branches to be true between. Every file in the `db` vitest project
+shares one database, and `money-movement.test.ts` and `ledger-posting.test.ts`
+read `branch_cash_position` with `queryOne`, which requires exactly one row. So
+those two passed or failed on **file ordering alone**: locally the agency file
+ran last, in CI it ran first.
+
+It was reproduced rather than inferred — the agency suite alone against a fresh
+database leaves two branches and `branch_cash_position` returning two rows,
+which is the error verbatim.
+
+Fixed by giving the suite its own vitest project with its own database rebuild,
+which is what this repository already does four times over for the seeder
+suites. The two convenient fixes were both refused: weakening `queryOne` to a
+first-row read would retire an assertion true since Phase 11 to accommodate a
+fixture, and dropping the two-branch test would remove something Phase 4A exists
+to prove. Cleaning up after the fixture is not available either —
+`agency_provider_float_accounts` is append-only by trigger and every branch
+reference is `ON DELETE RESTRICT`, which is the schema behaving correctly.
+
+`test:db` is now six projects and 2,044 tests. The agency count is unchanged at
+66: nothing was removed to get green.
+
+**Recorded rather than tidied away.** The failure and its correction are two
+separate commits on the branch, and no history was rewritten.
 
 ### Regressions found and fixed during verification
 
@@ -449,5 +510,6 @@ bypasses a security gate.
 | Commission rates and per-type limits are unset | Mitigated, not resolved. Nothing can post until both are stated (§5A), so the exposure is a blocked counter rather than a wrong journal |
 | `total_liquidity` now includes float | Deliberate and visible: float is shown as its own component on the screen and in the harness identity. A consumer added later that reads the total without the component would reintroduce finding 6 |
 | The 4500-series income guard is a trigger, not a foreign-key domain | A provider pointed at 4100 is refused, but the rule lives in `agency_provider_accounts_guard()`; a future migration that replaced that trigger would need to keep it |
-| Browser E2E and the release rehearsal not run locally | They run on the PR. Phase 4A adds no route; the finance screen change in §5B is the one place a browser test could regress, and it is covered by the existing finance screens' assertions |
+| Browser E2E and the release rehearsal not runnable locally | **Closed.** Both ran green in CI at `9cbe6dd`, the browser suite covering the §5B finance screen change |
+| A suite with committed fixtures can break another by file order | **Closed for this one**, by the project split. The pattern is live elsewhere: any future suite that commits global state needs the same treatment, and `db` passing locally does not prove it |
 | PR #19 and PR #20 are still open | The 182-migration release was rehearsed, but the ordering that production finally takes depends on the order #19 and #20 land. Their migrations are disjoint and differently dated, so any order gives the same result |
