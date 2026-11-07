@@ -275,7 +275,62 @@ to explain why they avoid it, and matching a comment would fail on correct code.
 
 ## 7. Verification (Task 7)
 
-<!-- VERIFICATION_TABLE -->
+Every figure below is from a run on this branch at 186 migrations, not carried
+forward from an earlier phase.
+
+| Gate | Result |
+| --- | --- |
+| 186 migrations, clean cluster, timestamp order | **PASS** |
+| `agency-security-closure.test.ts` (new) | **PASS — 21/21** |
+| `ledger-balance-invariant.test.ts` (new) | **PASS — 21/21** |
+| `agency-transaction-engine.test.ts` | **PASS — 62/62** (57 before 4B-S) |
+| `agency-foundation.test.ts` | **PASS — 66/66** |
+| `npm run test:db` (eight projects) | **PASS — 2,148** |
+| `npm run test:run` (unit + integration) | **PASS — 2,657** |
+| Database security gate | **PASS — no unreviewed privileged exposure** |
+| Financial reconciliation certification | **PASS — 36 pass, 2 explained, 0 vacuous, 0 fail** |
+| Historical migration upgrade rehearsal | **PASS — 114 existing + 72 new, 28 financial figures identical** |
+| typecheck · lint · money audit (86 files) · build | **PASS** |
+| Browser E2E (production build, fresh seed) | **CI only** — needs a real PostgREST binary |
+| Security release rehearsal (PostgreSQL 17, real Auth) | **CI only** — needs PostgreSQL 17 and real Auth |
+
+The last two cannot run in this sandbox: there is no PostgREST or Auth binary
+and only PostgreSQL 16 is installed. They are verified by the two CI jobs of
+the same names, which install those dependencies, and the CI result at this
+branch's final head is the record for them. They are listed as CI-only rather
+than omitted, because a gate nobody ran is not a gate that passed.
+
+### Test totals, and what moved
+
+| Suite | Before 4B-S | After |
+| --- | --- | --- |
+| `db` project | 1,896 | 1,917 (+21 ledger invariant) |
+| `agency` | 66 | 66 |
+| `agency-engine` | 57 | 62 |
+| `agency-security` | — | 21 (new project) |
+| seeders (4 projects) | 82 | 82 |
+| **`test:db` total** | **2,101** | **2,148** |
+
+The 2,101 baseline is the figure PR #23 recorded, and it reconciles exactly:
+1,896 + 66 + 57 + 82. The engine suite moved 57 → 62 in two steps: the single
+test that asserted the old "post it and flag it" commission behaviour was
+replaced by four asserting the new policy, then two more were added for the
+authorisation-drift holes found while reviewing Task 4.
+
+### Deliberate test-only changes
+
+Two existing assertions were changed, both because the production behaviour
+they described became stricter, and both narrowed rather than loosened:
+
+- `agency-foundation.test.ts`, *"refuses a reversed transaction missing any
+  part of its trail"*: it asserted a CHECK constraint name, but the narrowed
+  readiness gate now refuses a row arriving already `reversed` before either
+  CHECK is reached. The insert is still refused; the assertion now names the
+  stronger refusal, and both CHECKs remain in place behind it.
+- `agency-transaction-engine.test.ts`, the old *"posts an explicitly supplied
+  commission, and records that it differed"*: that behaviour is the defect
+  Task 4 closed, so the test was replaced by four asserting the new policy.
+
 
 ---
 
