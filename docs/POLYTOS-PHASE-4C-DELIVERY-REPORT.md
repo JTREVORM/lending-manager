@@ -344,3 +344,164 @@ NULL rates. No commission rate, limit, threshold or live provider setting is
 invented anywhere. The bank agency no-advance rule holds, and is now
 re-asserted on the settlement path too. Policy 2.0 is not activated. No demo
 data deleted. All existing lending accounting and security controls unchanged.
+
+---
+
+# Phase 4C-S — Cross-phase financial concurrency closure
+
+An independent review of Phase 4C named three concurrency risks. **All three
+were reproduced** against the reviewed head `19f27a6`, and all three are
+closed. One migration, no schema change.
+
+## 1. Verdict on C1, C2 and C3
+
+| | Risk | Verdict |
+| --- | --- | --- |
+| **C1** | Concurrent commission settlement and transaction reversal | **REPRODUCED and closed** |
+| **C2** | Bank withdrawal versus payable settlement | **REPRODUCED and closed** |
+| **C3** | Reconciliation approval versus concurrent credits | **REPRODUCED and closed** |
+
+## 2. Root cause and correction
+
+### C1 — the reversal read the receivable under no lock
+
+`reverse_agency_transaction()` decided whether a transaction's deferred
+commission was still unsettled by reading
+`agency_commission_outstanding()` — with no lock at all.
+`record_commission_settlement()` reads the same figure under
+`lock_agency_provider_balance()`. Two different locks are no mutual exclusion:
+a settlement of 1,500 and a reversal carrying 1,000 can each see the full
+2,000 outstanding, and together leave the receivable at **−500**.
+
+**Correction:** the reversal now takes
+`lock_agency_provider_balance(provider, branch)` before reading the
+receivable, and before its account locks, preserving the global order.
+
+### C2 — the withdrawal read the payable under no lock
+
+`post_agency_transaction()` enforced the bank payable floor by reading
+`agency_payable_outstanding()`, with its only lock coming as a side effect of
+`assert_cash_available()` — which locks the cash account alone. A 60,000
+withdrawal from Cash at Hand and a 60,000 settlement funded from Cash at
+**Bank** therefore shared no lock, both passed against the same 100,000, and
+left the provider at **−20,000**. Observed exactly:
+
+```
+AssertionError: B succeeded: expected -20000 to be greater than or equal to 0
+```
+
+**Phase 4C's own test for this passed, and passed for the wrong reason.** Its
+settlement drew from the same Cash at Hand account the withdrawal locked, so
+the two serialised on *that account* rather than on anything to do with the
+payable. Funding from Cash at Bank removes the overlap and the race appears.
+That is the more useful finding than the defect itself: a concurrency test can
+pass because of an incidental shared resource, and then prove nothing.
+
+**Correction:** `post_agency_transaction()` now takes the provider lock before
+any account lock and before reading the payable.
+
+### C3 — sufficiency checks only lock what they draw down
+
+Locks were acquired as a side effect of the sufficiency checks, and sufficiency
+is only ever checked on the balance being drawn **down**. A deposit *debits*
+cash at hand — it increases the till — so it took **no lock on that till at
+all**. A reconciliation approval holding the till's lock therefore did not stop
+a concurrent credit to it, and the certified variance could describe a balance
+that had already moved. The same applied to the reversal path, which pre-locked
+only the accounts its contra would debit.
+
+**Correction:** `post_agency_transaction()` locks both the cash and counter
+accounts up front, in either direction, before any balance is read. The
+reversal's pre-lock drops `and l.debit > 0` and covers both sides of the
+mirrored entry.
+
+**Locking an account you debit does not stop somebody crediting it.**
+
+### And one lock removed
+
+GL 1310 was in the account-lock list of both commission functions. There is no
+account-level rule on 1310 — no sufficiency check, no floor — because the
+figure that matters is one provider's receivable at one branch, which the
+provider lock protects. Locking it made every commission settlement in the
+business queue behind every other while protecting nothing. Removed, with a
+test that two providers settling into different accounts do not block.
+
+## 3. Concurrent transaction evidence
+
+The outcome races are real but **timing-dependent**: the payable race was
+observed at −20,000 and then, on a later run of the same code, serialised by
+luck on the journal reference counter. A test that reports a defect only
+sometimes is worse than no test, so each regression asserts the thing that is
+actually wrong and is deterministic — that the path does not hold the lock
+which would have prevented the race. One session holds the lock, the other
+attempts the operation, and the test reports whether it walked straight past.
+
+| Test | Before | After |
+| --- | --- | --- |
+| C1 reversal honours the provider lock | *"a transaction reversal read the provider receivable without the provider lock"* | waits, as it must |
+| C2 withdrawal honours the provider lock | *"a bank withdrawal read the provider payable without the provider lock"* | waits, as it must |
+| C3 a deposit honours its till's lock | *"a deposit posted into a till whose balance lock was held by another session"* | waits, as it must |
+| Unrelated providers are not serialised | — | both complete, 0 ungranted advisory locks |
+| A settlement and a replenishment interleave | — | both complete, no deadlock |
+
+## 4. Lock and resource matrix
+
+`docs/POLYTOS-AGENCY-LOCK-RESOURCE-MATRIX.md`, enforced by a test that states
+the expected locks per function rather than deriving them — so a function
+holding **no** lock fails against its row, which an order-only check passed in
+silence. A second test enumerates every function reading a provider-scoped
+outstanding figure and fails if any is missing from the matrix.
+
+## 5. Migrations
+
+One new migration, `20261111000100_agency_concurrency_closure.sql`. No schema
+change: four function bodies are replaced. **193 migrations** on this branch;
+**195** for the complete release once PR #19 lands.
+
+## 6. Verification
+
+| Gate | Result |
+| --- | --- |
+| `agency-settlement.test.ts` | **PASS — 69/69** (63 + 6 for 4C-S) |
+| `npm run test:db` (nine projects) | **PASS — 2,223** |
+| `npm run test:run` | **PASS — 2,658** |
+| Database security gate | **PASS** |
+| Financial certification at 193 migrations | **PASS — 36 pass, 2 explained, 0 vacuous, 0 fail** |
+| Money audit | **PASS — verified by injection into the new migration** |
+| typecheck · lint · format · build | **PASS** |
+
+<!-- CS_CI -->
+
+## 7. Remaining risks
+
+- **The lock order is a convention with a tripwire, not a database
+  invariant.** The matrix test detects a missing or reversed lock; nothing
+  prevents one. This is the same trade recorded in Phase 4C and it has now
+  caught real defects, which is evidence the tripwire works rather than
+  evidence it is sufficient.
+- **The journal reference counter serialises all posting** at commit, which
+  masks concurrency defects by making unrelated operations appear ordered.
+  C2 passing by luck on one run is exactly that. It is a correctness
+  backstop, not a protection, because it is taken *after* every balance
+  check.
+- **Lending postings share the branch till.** `approve_agency_cash_reconciliation`
+  races against lending movement as well as agency movement. The agency paths
+  now lock the till in either direction; the lending money-movement paths were
+  given the same protection by Phase 4B-S through the shared sufficiency
+  helpers, but only on the balance they draw down. A lending path that
+  *credits* a till is subject to the same C3 shape. This is recorded as a risk
+  rather than fixed: it is outside the agency module and changing it would be
+  an unreviewed broad change to the lending engine.
+- **The attribution rule still exists twice** (functions and summary views),
+  detected-not-prevented, as recorded in Phase 4C.
+
+## 8. Verdict
+
+**PASS**, for the three risks in scope. C1, C2 and C3 were each reproduced
+against the reviewed head and each is closed, with a deterministic regression
+test that fails if the lock is removed. One unnecessary lock was removed. No
+previous test was weakened or deleted.
+
+The lending-side variant of C3 named above is **BLOCKED** rather than passed:
+it is a real instance of the same shape, outside this module, and it needs its
+own authorization to change.

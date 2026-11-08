@@ -2225,4 +2225,527 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       expect(tb.d).toBe(tb.c);
     });
   });
+
+  // =========================================================================
+  // Phase 4C-S. Three cross-phase races an independent review identified.
+  //
+  // Each began as a reproduction against the code as it stood after Phase 4C,
+  // and each one succeeded: the combined effect of two authorised operations
+  // drove a provider balance negative, or certified a count against a balance
+  // that had already moved. They are kept as regressions.
+  //
+  // Phase 4C's own concurrency test for the payable passed, and passed for the
+  // wrong reason: its settlement drew from the same Cash at Hand account the
+  // withdrawal locked, so the two serialised on that account rather than on
+  // anything to do with the payable. Funding the settlement from Cash at Bank
+  // removes the overlap and the race appears.
+  // =========================================================================
+  describe('cross-phase financial concurrency (Phase 4C-S)', () => {
+    /**
+     * Does `work` get through while another session holds `lockSql`?
+     *
+     * The outcome races these defects produce are real but timing-dependent -
+     * the payable race below was observed to end at -20,000 and then, on a
+     * later run of the same code, to serialise by luck on the journal
+     * reference counter. A test that reports a defect only sometimes is worse
+     * than no test, so the regression form asserts the thing that is actually
+     * wrong and is deterministic: the path does not take the lock that would
+     * have prevented the race. That also makes it a *missing lock* test
+     * rather than only a lock-order test.
+     */
+    async function completesWhileHeld(
+      lockSql: string,
+      lockParams: unknown[],
+      who: TestUser,
+      workSql: string,
+      workParams: unknown[],
+    ): Promise<{ walkedPast: boolean; error: string | null }> {
+      await query(
+        `update public.finance_settings
+            set low_balance_agency_float = 0, low_balance_cash_at_hand = 0
+          where id = 1`,
+      );
+      const holder = await getClient();
+      const worker = await getClient();
+      let done = false;
+      let error: string | null = null;
+      try {
+        await holder.query('begin');
+        await holder.query(lockSql, lockParams);
+
+        await worker.query('begin');
+        await worker.query(`select set_config('request.jwt.claim.sub',$1,true)`, [
+          who.authUserId,
+        ]);
+
+        const work = worker
+          .query(workSql, workParams)
+          .then(() => {
+            done = true;
+          })
+          .catch((e: unknown) => {
+            done = true;
+            error = (e as { message?: string }).message ?? 'unknown';
+          });
+
+        // A clear chance to finish. If the lock is honoured it cannot.
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        const walkedPast = done;
+
+        await holder.query('commit');
+        await work;
+        await worker.query('rollback');
+        return { walkedPast, error };
+      } finally {
+        holder.release();
+        worker.release();
+      }
+    }
+
+    it('C1: a transaction reversal takes the provider lock before reading the receivable', async () => {
+      // reverse_agency_transaction() decides whether a transaction's deferred
+      // commission is still unsettled by reading
+      // agency_commission_outstanding(). record_commission_settlement() reads
+      // the same figure, but under lock_agency_provider_balance(). Two
+      // different locks are no mutual exclusion at all: a settlement of 1,500
+      // and a reversal carrying 1,000 can each see the full 2,000 and
+      // together leave the receivable at -500.
+      const svc = await provider({ code: 'C1SVC', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode!, 20_000_000);
+      await post(svc, 20_000);
+      const second = await post(svc, 20_000);
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(2_000);
+
+      const r = await completesWhileHeld(
+        `select public.lock_agency_provider_balance($1,$2)`,
+        [svc.providerId, branchA],
+        mgrA,
+        `select public.reverse_agency_transaction($1,'C1 lock coverage')`,
+        [second],
+      );
+      expect(
+        r.walkedPast,
+        r.walkedPast
+          ? 'a transaction reversal read the provider receivable without the provider lock'
+          : 'the reversal waited for the provider lock, as it must',
+      ).toBe(false);
+    });
+
+    it('C2: a bank withdrawal takes the provider lock before reading the payable', async () => {
+      // Observed before the fix: a 60,000 withdrawal from Cash at Hand and a
+      // 60,000 payable settlement funded from Cash at BANK both passed the
+      // payable check against the same 100,000 and left the provider at
+      // -20,000. Phase 4C's own test for this passed only because its
+      // settlement drew from the same Cash at Hand account the withdrawal
+      // locked - the two serialised on that account, not on the payable.
+      const svc = await provider({
+        code: 'C2SVC',
+        branch: branchA,
+        floatModel: 'cash_payable',
+        payable: '2220',
+        direction: 'deposit',
+      });
+      await post(svc, 100_000);
+      expect(await outstandingPayable(svc.providerId, branchA)).toBe(100_000);
+
+      const withdrawType = await queryOne<{ id: string }>(
+        `insert into public.agency_transaction_types
+           (provider_id, code, name, direction, max_single_transaction)
+         values ($1,'WDR','wdr','withdrawal',500000000) returning id`,
+        [svc.providerId],
+      );
+      const key = `C2-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,60000,null,'+256770009000','C',$2,0,null,null,null,$2) as id`,
+          params: [withdrawType.id, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const wid = (c.rows[0] as { id: string }).id;
+      const sub = await asUserCommitted(secA, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [wid] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+
+      const r = await completesWhileHeld(
+        `select public.lock_agency_provider_balance($1,$2)`,
+        [svc.providerId, branchA],
+        mgrA,
+        `select public.verify_agency_transaction($1)`,
+        [wid],
+      );
+      expect(
+        r.walkedPast,
+        r.walkedPast
+          ? 'a bank withdrawal read the provider payable without the provider lock'
+          : 'the withdrawal waited for the provider lock, as it must',
+      ).toBe(false);
+
+      expect(await outstandingPayable(svc.providerId, branchA)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('C3: every agency path that moves a till or float takes its account lock', async () => {
+      // The hazard the review named is not a timing window to be caught by
+      // luck: it is that the posting path checked sufficiency only on the
+      // balance it drew *down*, so a deposit - which DEBITS cash at hand and
+      // increases it - took no lock on that till at all. An approval holding
+      // the till's lock therefore did not stop a concurrent credit to it.
+      //
+      // Proved deterministically rather than by racing: one session holds the
+      // lock a reconciliation approval holds, and the other posts money into
+      // the same account. If the posting path honours the lock it must wait;
+      // if it ignores the lock it returns immediately.
+      const branch = (
+        await queryOne<{ id: string }>(
+          `insert into public.branches (branch_code, name, location, status, opened_on)
+           values ('BRC3','Race Branch C3','Testing','active',current_date)
+           returning id`,
+        )
+      ).id;
+      await query(
+        `insert into public.ledger_accounts
+           (code, name, account_type, normal_side, cash_kind, branch_id, is_postable, status)
+         values ('1010-BRC3','Cash — Race Branch C3','asset','debit',
+                 'cash_at_hand',$1,true,'active')`,
+        [branch],
+      );
+      const till = await accountId('1010-BRC3');
+      await fund('1010-BRC3', 1_000_000);
+
+      const mgrC = await createTestUser('manager');
+      const secC = await createTestUser('secretary_treasurer');
+      for (const u of [mgrC, secC]) {
+        await query(`update public.profiles set branch_id = $1 where id = $2`, [
+          branch,
+          u.profileId,
+        ]);
+      }
+
+      const svc = await provider({ code: 'C3SVC', branch, rateBps: 150 });
+      await fund(svc.floatCode!, 20_000_000);
+
+      // A deposit left submitted: verifying it debits the till by 50,000.
+      const key = `C3-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secC, [
+        {
+          sql: `select public.create_agency_transaction($1,50000,$2,'+256770009101','C',$3,0,null,null,null,$3) as id`,
+          params: [svc.typeId, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const depositId = (c.rows[0] as { id: string }).id;
+      const sub = await asUserCommitted(secC, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [depositId] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+
+      await query(
+        `update public.finance_settings
+            set low_balance_agency_float = 0, low_balance_cash_at_hand = 0
+          where id = 1`,
+      );
+
+      const holder = await getClient();
+      const poster = await getClient();
+      let returnedWhileHeld = false;
+      try {
+        // The holder takes exactly the lock an approval takes, and keeps it.
+        await holder.query('begin');
+        await holder.query(`select public.lock_ledger_balances(array[$1::uuid])`, [till]);
+
+        await poster.query('begin');
+        await poster.query(`select set_config('request.jwt.claim.sub',$1,true)`, [
+          mgrC.authUserId,
+        ]);
+
+        // Does posting into the locked till wait, or walk straight past?
+        const work = poster
+          .query(`select public.verify_agency_transaction($1)`, [depositId])
+          .then(() => {
+            returnedWhileHeld = true;
+          })
+          .catch(() => {
+            // A refusal is also "did not wait", but either way the lock was
+            // not honoured; the assertion below reports which.
+            returnedWhileHeld = true;
+          });
+
+        // Give it a clear chance to finish. If the lock is honoured it cannot.
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        const walkedPast = returnedWhileHeld;
+
+        await holder.query('commit');
+        await work;
+        await poster.query('commit');
+
+        expect(
+          walkedPast,
+          walkedPast
+            ? 'a deposit posted into a till whose balance lock was held by another session'
+            : 'the deposit waited for the lock, as it must',
+        ).toBe(false);
+      } finally {
+        holder.release();
+        poster.release();
+      }
+
+      // The till ends where arithmetic says: 1,000,000 + 50,000.
+      expect(await balance('1010-BRC3')).toBe(1_050_000);
+    });
+
+    it('does not serialise unrelated providers against each other', async () => {
+      // The provider lock must be per provider and branch. If it were coarser
+      // - one lock for the module, or one per branch - every settlement in the
+      // business would queue behind every other, and the fix for C1 and C2
+      // would have bought correctness with a throughput collapse.
+      const one = await provider({ code: 'C4P1', branch: branchA, rateBps: 500 });
+      const two = await provider({ code: 'C4P2', branch: branchA, rateBps: 500 });
+      for (const svc of [one, two]) {
+        await fund(svc.floatCode!, 10_000_000);
+        await post(svc, 200_000); // 10,000 outstanding each
+      }
+      await query(
+        `update public.finance_settings
+            set low_balance_agency_float = 0, low_balance_cash_at_hand = 0
+          where id = 1`,
+      );
+
+      const a = await getClient();
+      const b = await getClient();
+      try {
+        for (const c of [a, b]) {
+          await c.query('begin');
+          await c.query(`select set_config('request.jwt.claim.sub',$1,true)`, [
+            mgrA.authUserId,
+          ]);
+        }
+        // A holds provider one's lock and does not commit.
+        await a.query(
+          `select public.record_commission_settlement($1,$2,4000,$3,'C4-A')`,
+          [one.providerId, branchA, cashA],
+        );
+        expect(await balance('1040-BR2601')).toBeGreaterThan(0);
+
+        // B settles the OTHER provider, into a DIFFERENT account. Into the
+        // same till they would serialise on that till's balance, which is
+        // correct and necessary; the question here is whether anything else
+        // serialises them, and the only remaining shared resource would be
+        // GL 1310.
+        let bDone = false;
+        const work = b
+          .query(`select public.record_commission_settlement($1,$2,4000,$3,'C4-B')`, [
+            two.providerId,
+            branchA,
+            bankA,
+          ])
+          .then(() => {
+            bDone = true;
+          });
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+
+        // B may legitimately still be waiting on the journal reference
+        // counter, which serialises posting for everyone and is not this
+        // test's subject. What it must not be waiting on is A's provider
+        // lock - so check the lock itself rather than inferring from timing.
+        const blocked = await queryOne<{ n: string }>(
+          `select count(*)::text as n
+             from pg_locks
+            where locktype = 'advisory' and not granted`,
+        );
+        expect(
+          Number(blocked.n),
+          `B ${bDone ? 'completed' : 'is still running'}; ungranted advisory locks ${blocked.n}`,
+        ).toBe(0);
+
+        await a.query('commit');
+        await work;
+        await b.query('commit');
+      } finally {
+        a.release();
+        b.release();
+      }
+
+      expect(await outstandingCommission(one.providerId, branchA)).toBe(6_000);
+      expect(await outstandingCommission(two.providerId, branchA)).toBe(6_000);
+    });
+  });
+
+  // =========================================================================
+  describe('the lock and resource matrix (Phase 4C-S Task 4)', () => {
+    /**
+     * Every financially relevant agency function, with the resources it
+     * protects. Stated here rather than derived, so the test detects a
+     * **missing** lock and not merely a reversed order: a function that
+     * acquires neither helper fails against its row, where an
+     * order-only check would have passed it in silence.
+     *
+     * `provider` — does it read or change a provider-scoped balance (the 1310
+     * receivable, or a 2200-series payable)? Those are shared across
+     * providers, so no account lock can protect them.
+     * `accounts` — does it change a cash or float balance, in either
+     * direction?
+     */
+    const MATRIX: {
+      fn: string;
+      provider: boolean;
+      accounts: boolean;
+      checks: string;
+      source: string;
+      races: string;
+    }[] = [
+      {
+        fn: 'post_agency_transaction',
+        provider: true,
+        accounts: true,
+        checks: 'cash or float sufficiency; bank payable floor',
+        source: 'agency_transaction',
+        races: 'payable settlement, another withdrawal, cash and float reconciliation',
+      },
+      {
+        fn: 'reverse_agency_transaction',
+        provider: true,
+        accounts: true,
+        checks: 'commission outstanding; cash or float sufficiency on the contra',
+        source: 'agency_transaction_reversal',
+        races: 'commission settlement, commission correction, reconciliation',
+      },
+      {
+        fn: 'record_commission_settlement',
+        provider: true,
+        accounts: true,
+        checks: 'commission outstanding',
+        source: 'agency_commission_settlement',
+        races: 'transaction reversal, another settlement, cash reconciliation',
+      },
+      {
+        fn: 'reverse_commission_settlement',
+        provider: true,
+        accounts: true,
+        checks: 'receiving account still holds the money',
+        source: 'agency_commission_settlement_reversal',
+        races: 'another settlement, transaction reversal, cash reconciliation',
+      },
+      {
+        fn: 'post_agency_payable_settlement',
+        provider: true,
+        accounts: true,
+        checks: 'payable outstanding; cash sufficiency',
+        source: 'agency_payable_settlement',
+        races: 'bank withdrawal, another settlement, cash reconciliation',
+      },
+      {
+        fn: 'reverse_agency_payable_settlement',
+        provider: true,
+        accounts: true,
+        checks: 'settlement is still posted',
+        source: 'agency_payable_settlement_reversal',
+        races: 'bank withdrawal, another settlement, cash reconciliation',
+      },
+      {
+        fn: 'post_float_replenishment',
+        provider: true,
+        accounts: true,
+        checks: 'funding account sufficiency',
+        source: 'agency_float_replenishment',
+        races: 'float reconciliation, a withdrawal drawing the same float',
+      },
+      {
+        fn: 'approve_agency_float_reconciliation',
+        provider: true,
+        accounts: true,
+        checks: 'snapshot is not stale; float sufficiency on a surplus write-off',
+        source: 'reconciliation_adjustment',
+        races: 'any transaction or replenishment moving the same till',
+      },
+      {
+        // No provider-scoped balance: a branch till is shared between agency
+        // and lending and belongs to neither provider.
+        fn: 'approve_agency_cash_reconciliation',
+        provider: false,
+        accounts: true,
+        checks: 'snapshot is not stale; cash sufficiency on a shortage write-off',
+        source: 'reconciliation_adjustment',
+        races: 'any agency or lending posting moving the same till',
+      },
+      {
+        fn: 'submit_agency_cash_reconciliation',
+        provider: false,
+        accounts: true,
+        checks: 'snapshots the balance under lock',
+        source: '(no journal)',
+        races: 'any posting moving the same till',
+      },
+      {
+        fn: 'submit_agency_float_reconciliation',
+        provider: false,
+        accounts: true,
+        checks: 'snapshots the balance under lock',
+        source: '(no journal)',
+        races: 'any posting moving the same float till',
+      },
+    ];
+
+    it('every function in the matrix acquires the locks its row requires', async () => {
+      const defs = await query<{ proname: string; def: string }>(
+        `select p.proname, pg_get_functiondef(p.oid) as def
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f'
+            and p.proname = any($1::text[])`,
+        [MATRIX.map((m) => m.fn)],
+      );
+      expect(defs.length).toBe(MATRIX.length);
+
+      const failures: string[] = [];
+      for (const row of MATRIX) {
+        const def = defs.find((d) => d.proname === row.fn)?.def ?? '';
+        const hasProvider = def.includes('lock_agency_provider_balance');
+        const hasAccounts =
+          def.includes('lock_ledger_balances') ||
+          // the two sufficiency helpers each take the account lock themselves
+          def.includes('assert_cash_available') ||
+          def.includes('assert_agency_float_available');
+
+        if (row.provider !== hasProvider) {
+          failures.push(
+            `${row.fn}: provider lock ${hasProvider ? 'present' : 'MISSING'}, matrix says ${row.provider}`,
+          );
+        }
+        if (row.accounts !== hasAccounts) {
+          failures.push(
+            `${row.fn}: account lock ${hasAccounts ? 'present' : 'MISSING'}, matrix says ${row.accounts}`,
+          );
+        }
+        // And where both are taken, the provider lock comes first.
+        if (hasProvider && def.includes('lock_ledger_balances')) {
+          if (
+            def.indexOf('lock_agency_provider_balance') >
+            def.indexOf('lock_ledger_balances')
+          ) {
+            failures.push(`${row.fn}: takes the account locks before the provider lock`);
+          }
+        }
+      }
+      expect(failures).toEqual([]);
+    });
+
+    it('names every function that touches a provider balance, so none is forgotten', async () => {
+      // The matrix is only a certification if it is complete. Any function
+      // that reads a provider-scoped outstanding figure must appear in it;
+      // a new one added later fails here until it is classified.
+      const readers = await query<{ proname: string }>(
+        `select p.proname
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f'
+            and (pg_get_functiondef(p.oid) like '%agency_commission_outstanding%'
+              or pg_get_functiondef(p.oid) like '%agency_payable_outstanding%')
+            and p.proname not in (
+              'agency_commission_outstanding', 'agency_payable_outstanding')
+          order by p.proname`,
+      );
+      const named = new Set(MATRIX.filter((m) => m.provider).map((m) => m.fn));
+      const unclassified = readers.map((r) => r.proname).filter((n) => !named.has(n));
+      expect(unclassified).toEqual([]);
+    });
+  });
 });
