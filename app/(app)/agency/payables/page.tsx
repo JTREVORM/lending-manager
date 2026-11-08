@@ -1,5 +1,6 @@
 import { Landmark } from 'lucide-react';
 
+import { PayableSettlementRegister } from '@/components/agency/settlement-registers';
 import { PayableSettlementForm } from '@/components/agency/settlement-forms';
 import { Alert } from '@/components/ui/alert';
 import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
@@ -9,7 +10,7 @@ import { EmptyTableRow } from '@/components/ui/states';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
-import { getAgencyPayables } from '@/lib/data/agency';
+import { getAgencyPayables, getAgencyPayableSettlements } from '@/lib/data/agency';
 import { getLedgerAccounts } from '@/lib/data/finance';
 import { toUgx } from '@/lib/domain/money';
 
@@ -25,8 +26,9 @@ export const metadata = { title: 'Provider remittances' };
 export default async function AgencyPayablesPage() {
   const context = await guardPermission(ROUTES.agencyPayables, 'agency:reports');
 
-  const [rows, accounts] = await Promise.all([
+  const [rows, settlements, accounts] = await Promise.all([
     getAgencyPayables(),
+    getAgencyPayableSettlements({ limit: 100 }),
     getLedgerAccounts({ cashOnly: true, activeOnly: true }),
   ]);
 
@@ -130,6 +132,11 @@ export default async function AgencyPayablesPage() {
           Handing collections over needs the settlement capability.
         </Alert>
       )}
+
+      <PayableSettlementRegister
+        rows={settlements}
+        canReverse={contextCan(context, 'agency:reverse')}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import {
   cancelAgencyTransactionAction,
+  correctAgencyReferenceAction,
   returnAgencyTransactionAction,
   reverseAgencyTransactionAction,
   submitAgencyTransactionAction,
@@ -114,6 +115,61 @@ function Unavailable({ reason }: { readonly reason: string }) {
     <p className="text-text-muted text-xs" role="note">
       {reason}
     </p>
+  );
+}
+
+/**
+ * Correcting what the provider's own system called a transaction.
+ *
+ * The only financial detail of a posted transaction that can be changed, and
+ * it is not financial: no amount, no commission, no account moves, and the
+ * journal is untouched. It exists because a counter officer who mistypes a
+ * provider reference has recorded a true transaction under a wrong external
+ * name, and nothing else in the system can repair that - a reversal would
+ * undo a transaction that really happened.
+ *
+ * `agency:correct` is its own capability for exactly that reason: it is a
+ * narrow licence to edit a label, and the database checks it again.
+ */
+export function ReferenceCorrectionForm({
+  transactionId,
+  currentReference,
+}: {
+  readonly transactionId: string;
+  readonly currentReference: string | null;
+}) {
+  const [result, submit, pending] = useActionState<
+    AgencyActionResult | undefined,
+    FormData
+  >(correctAgencyReferenceAction, undefined);
+
+  return (
+    <form action={submit} className="min-w-0 space-y-3">
+      <input type="hidden" name="transactionId" value={transactionId} />
+      <Field
+        label="Corrected provider reference"
+        name="newReference"
+        required
+        autoComplete="off"
+        defaultValue={currentReference ?? ''}
+        hint="What the provider's system actually shows. Checked for duplicates."
+        error={result?.fieldErrors?.newReference?.[0]}
+      />
+      <Field
+        label="Reason"
+        name="reason"
+        required
+        autoComplete="off"
+        hint="Why the recorded reference was wrong. Kept in the audit log beside both values."
+        error={result?.fieldErrors?.reason?.[0]}
+      />
+      <Button type="submit" size="sm" variant="secondary" loading={pending}>
+        Correct the reference
+      </Button>
+      {result === undefined ? null : (
+        <Alert tone={result.ok ? 'success' : 'danger'}>{result.message}</Alert>
+      )}
+    </form>
   );
 }
 

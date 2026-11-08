@@ -3,7 +3,10 @@ import { notFound } from 'next/navigation';
 
 import { AgencyDirectionBadge, AgencyStatusBadge } from '@/components/agency/badges';
 import { CommissionExceptionForm } from '@/components/agency/commission-exception-form';
-import { LifecycleControls } from '@/components/agency/lifecycle-controls';
+import {
+  LifecycleControls,
+  ReferenceCorrectionForm,
+} from '@/components/agency/lifecycle-controls';
 import { Card } from '@/components/ui/card';
 import { DateValue } from '@/components/ui/data-value';
 import { Money } from '@/components/ui/money';
@@ -128,6 +131,24 @@ export default async function AgencyTransactionPage({
               computed={row.commissionComputed}
               supplied={row.commissionSupplied}
               alreadyAuthorised={row.commissionExceptionReason !== null}
+            />
+          </div>
+        </Card>
+      ) : null}
+
+      {contextCan(context, 'agency:correct') &&
+      (row.status === 'posted' || row.status === 'awaiting_verification') ? (
+        <Card>
+          <h2 className="text-sm font-semibold">Correct the provider reference</h2>
+          <p className="text-text-muted mt-1 text-xs">
+            Changes what the provider&rsquo;s system called this transaction, and nothing
+            else. No amount, no commission and no journal moves &mdash; a transaction that
+            really happened is not undone by a mistyped reference.
+          </p>
+          <div className="mt-2 min-w-0">
+            <ReferenceCorrectionForm
+              transactionId={row.id}
+              currentReference={row.providerReference}
             />
           </div>
         </Card>

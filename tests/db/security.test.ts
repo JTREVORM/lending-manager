@@ -82,14 +82,18 @@ describeDb('row level security', () => {
       // transaction, so a session holding INSERT could register a provider
       // whose income account was the wrong type, or a float till with no
       // ledger account behind it.
+      'agency_cash_reconciliation_register:SELECT',
       'agency_cash_reconciliations:SELECT',
+      'agency_commission_settlement_register:SELECT',
       'agency_commission_settlements:SELECT',
       'agency_commission_summary:SELECT',
       'agency_daily_cash_movement:SELECT',
       'agency_end_of_day_exceptions:SELECT',
       'agency_float_balances:SELECT',
+      'agency_float_reconciliation_register:SELECT',
       'agency_float_reconciliations:SELECT',
       'agency_float_replenishments:SELECT',
+      'agency_payable_settlement_register:SELECT',
       'agency_payable_settlements:SELECT',
       'agency_payable_summary:SELECT',
       'agency_provider_float_accounts:SELECT',
@@ -915,10 +919,19 @@ describeDb('views', () => {
         // and `benefit_claim_portal_view` carries the member's disclosure policy
         // as its column list, so a portal screen cannot render an assessor's note
         // by accident and a future `select *` cannot reintroduce one.
+        // Phase 4D. Four operational registers: the records an officer has to
+        // act on - a count waiting for a second signature, a settlement
+        // recorded by mistake - which the Phase 4C reporting views do not
+        // list. Each is `security_invoker` over a table whose policies
+        // already decide what a branch may see.
+        'agency_cash_reconciliation_register',
+        'agency_commission_settlement_register',
         'agency_commission_summary',
         'agency_daily_cash_movement',
         'agency_end_of_day_exceptions',
         'agency_float_balances',
+        'agency_float_reconciliation_register',
+        'agency_payable_settlement_register',
         'agency_payable_summary',
         'agency_transaction_history',
         'agency_variance_report',
@@ -1060,7 +1073,12 @@ describeDb('views', () => {
     // and the member-loan register. And six from Polytos Phase 4: the claim
     // register and the portal's read of it, the beneficiary register, the
     // payment register, the meeting register and the attendance register.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(55);
+    // Eleven from agency banking: the seven Phase 4C reporting views — float
+    // balances, transaction history, the commission and payable summaries,
+    // the variance report, the daily cash movement and the end-of-day
+    // exceptions — and the four Phase 4D operational registers, which list
+    // the records an officer has to act on rather than reporting a total.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(59);
   });
 });
 

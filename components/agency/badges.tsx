@@ -1,5 +1,10 @@
 import { Badge } from '@/components/ui/badge';
-import type { AgencyDirection, AgencyStatus } from '@/lib/domain/agency';
+import type {
+  AgencyDirection,
+  AgencyReconciliationStatus,
+  AgencySettlementStatus,
+  AgencyStatus,
+} from '@/lib/domain/agency';
 
 const STATUS_TONE: Readonly<
   Record<
@@ -93,6 +98,46 @@ export function VarianceBadge({
     <Badge tone="warning" shape="pill" title={means}>
       {variance > 0 ? '+' : ''}
       {variance.toLocaleString('en-UG')}
+    </Badge>
+  );
+}
+
+const RECONCILIATION_TONE: Readonly<
+  Record<
+    AgencyReconciliationStatus,
+    { tone: 'neutral' | 'info' | 'success' | 'warning'; label: string }
+  >
+> = {
+  open: { tone: 'info', label: 'Awaiting certification' },
+  reconciled: { tone: 'success', label: 'Certified' },
+  adjusted: { tone: 'warning', label: 'Difference written off' },
+};
+
+export function AgencyReconciliationBadge({
+  status,
+}: {
+  readonly status: AgencyReconciliationStatus;
+}) {
+  const { tone, label } = RECONCILIATION_TONE[status];
+  return (
+    <Badge tone={tone} shape="pill">
+      {label}
+    </Badge>
+  );
+}
+
+export function AgencySettlementBadge({
+  status,
+}: {
+  readonly status: AgencySettlementStatus;
+}) {
+  return status === 'reversed' ? (
+    <Badge tone="danger" shape="pill">
+      Reversed
+    </Badge>
+  ) : (
+    <Badge tone="success" shape="pill">
+      Posted
     </Badge>
   );
 }

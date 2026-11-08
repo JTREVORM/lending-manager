@@ -196,6 +196,133 @@ export interface AgencyServiceTypeRow {
   readonly isActive: boolean;
 }
 
+/** The states a reconciliation can be in. */
+export const AGENCY_RECONCILIATION_STATUSES = ['open', 'reconciled', 'adjusted'] as const;
+export type AgencyReconciliationStatus = (typeof AGENCY_RECONCILIATION_STATUSES)[number];
+
+export function isAgencyReconciliationStatus(
+  value: unknown,
+): value is AgencyReconciliationStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_RECONCILIATION_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** The states a settlement can be in. */
+export const AGENCY_SETTLEMENT_STATUSES = ['posted', 'reversed'] as const;
+export type AgencySettlementStatus = (typeof AGENCY_SETTLEMENT_STATUSES)[number];
+
+export function isAgencySettlementStatus(
+  value: unknown,
+): value is AgencySettlementStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_SETTLEMENT_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * One row of `agency_cash_reconciliation_register`: a counted drawer.
+ *
+ * `varianceMeans` is not here, unlike the variance report: this register
+ * carries the raw figures and the screen states the sign convention in words
+ * beside them, because a count has only one kind of variance.
+ */
+export interface AgencyCashCountRow {
+  readonly id: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly cashAccountId: string;
+  readonly accountCode: string;
+  readonly accountName: string;
+  readonly reconciliationDate: BusinessDate;
+  readonly status: AgencyReconciliationStatus;
+  readonly systemClosingBalance: UgxAmount;
+  readonly physicalCount: UgxAmount;
+  readonly variance: UgxAmount;
+  readonly varianceWrittenOff: UgxAmount;
+  readonly varianceJournalEntryId: string | null;
+  readonly notes: string | null;
+  readonly createdBy: string | null;
+  readonly reconciledBy: string | null;
+  /** What the books say now, which approval compares against. */
+  readonly currentSystemBalance: UgxAmount;
+  /**
+   * Whether the account has moved since it was counted.
+   *
+   * True means approval will refuse this count: its variance no longer
+   * describes anything. The screen says so instead of offering a button that
+   * cannot work - but the refusal is the database's, not this flag's.
+   */
+  readonly balanceMoved: boolean;
+}
+
+/** One row of `agency_float_reconciliation_register`: a provider statement. */
+export interface AgencyFloatStatementRow {
+  readonly id: string;
+  readonly floatAccountId: string;
+  readonly tillName: string;
+  readonly accountCode: string;
+  readonly accountName: string;
+  readonly providerId: string | null;
+  readonly providerCode: string | null;
+  readonly providerName: string | null;
+  readonly branchId: string | null;
+  readonly branchCode: string | null;
+  readonly reconciliationDate: BusinessDate;
+  readonly status: AgencyReconciliationStatus;
+  readonly systemClosingBalance: UgxAmount;
+  readonly providerStatementBalance: UgxAmount;
+  readonly providerStatementRef: string | null;
+  readonly variance: UgxAmount;
+  readonly varianceWrittenOff: UgxAmount;
+  readonly varianceJournalEntryId: string | null;
+  readonly notes: string | null;
+  readonly createdBy: string | null;
+  readonly reconciledBy: string | null;
+  readonly currentSystemBalance: UgxAmount;
+  readonly balanceMoved: boolean;
+}
+
+/** One row of `agency_commission_settlement_register`. */
+export interface AgencyCommissionSettlementRow {
+  readonly id: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly settlementDate: BusinessDate;
+  readonly settlementAmount: UgxAmount;
+  readonly settlementAccountCode: string;
+  readonly settlementAccountName: string;
+  readonly providerStatementRef: string | null;
+  readonly status: AgencySettlementStatus;
+  readonly journalEntryId: string | null;
+  readonly reversalEntryId: string | null;
+  readonly reversalReason: string | null;
+}
+
+/** One row of `agency_payable_settlement_register`. */
+export interface AgencyPayableSettlementRow {
+  readonly id: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly settlementDate: BusinessDate;
+  readonly settlementAmount: UgxAmount;
+  readonly cashAccountCode: string;
+  readonly cashAccountName: string;
+  readonly providerReceiptRef: string | null;
+  readonly status: AgencySettlementStatus;
+  readonly journalEntryId: string | null;
+  readonly reversalEntryId: string | null;
+  readonly reversalReason: string | null;
+}
+
 /**
  * Why a provider cannot be used to post, in words a counter officer can act
  * on. `null` means it can.

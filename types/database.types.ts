@@ -5786,6 +5786,113 @@ export type Database = {
       // cannot render an assessor's reasoning about a member's documents by
       // accident, and a future `select *` cannot reintroduce it.
 
+      agency_cash_reconciliation_register: {
+        Row: {
+          id: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          cash_account_id: string | null;
+          account_code: string | null;
+          account_name: string | null;
+          reconciliation_date: string | null;
+          status: string | null;
+          system_closing_balance: number | null;
+          physical_count: number | null;
+          variance: number | null;
+          variance_written_off: number | null;
+          variance_journal_entry_id: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string | null;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          current_system_balance: number | null;
+          balance_moved: boolean | null;
+        };
+        Relationships: [];
+      };
+      agency_float_reconciliation_register: {
+        Row: {
+          id: string | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          ledger_account_id: string | null;
+          account_code: string | null;
+          account_name: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          reconciliation_date: string | null;
+          status: string | null;
+          system_closing_balance: number | null;
+          provider_statement_balance: number | null;
+          provider_statement_ref: string | null;
+          variance: number | null;
+          variance_written_off: number | null;
+          variance_journal_entry_id: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string | null;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          current_system_balance: number | null;
+          balance_moved: boolean | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_settlement_register: {
+        Row: {
+          id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          settlement_date: string | null;
+          settlement_amount: number | null;
+          settlement_account_id: string | null;
+          settlement_account_code: string | null;
+          settlement_account_name: string | null;
+          provider_statement_ref: string | null;
+          status: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_by: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      agency_payable_settlement_register: {
+        Row: {
+          id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          settlement_date: string | null;
+          settlement_amount: number | null;
+          cash_account_id: string | null;
+          cash_account_code: string | null;
+          cash_account_name: string | null;
+          payable_account_id: string | null;
+          provider_receipt_ref: string | null;
+          status: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_by: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
       benefit_claim_register: {
         Row: {
           id: string | null;

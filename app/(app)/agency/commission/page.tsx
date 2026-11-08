@@ -1,5 +1,6 @@
 import { HandCoins } from 'lucide-react';
 
+import { CommissionSettlementRegister } from '@/components/agency/settlement-registers';
 import { CommissionSettlementForm } from '@/components/agency/settlement-forms';
 import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money, MoneyStat } from '@/components/ui/money';
@@ -9,7 +10,7 @@ import { EmptyTableRow } from '@/components/ui/states';
 import { ROUTES } from '@/config/app';
 import { contextCan } from '@/lib/auth/context';
 import { guardPermission } from '@/lib/auth/guard';
-import { getAgencyCommission } from '@/lib/data/agency';
+import { getAgencyCommission, getAgencyCommissionSettlements } from '@/lib/data/agency';
 import { getLedgerAccounts } from '@/lib/data/finance';
 import { toUgx } from '@/lib/domain/money';
 
@@ -26,8 +27,9 @@ export const metadata = { title: 'Commission' };
 export default async function AgencyCommissionPage() {
   const context = await guardPermission(ROUTES.agencyCommission, 'agency:reports');
 
-  const [rows, accounts] = await Promise.all([
+  const [rows, settlements, accounts] = await Promise.all([
     getAgencyCommission(),
+    getAgencyCommissionSettlements({ limit: 100 }),
     getLedgerAccounts({ cashOnly: true, activeOnly: true }),
   ]);
 
@@ -124,6 +126,11 @@ export default async function AgencyCommissionPage() {
           outstanding but not clear it.
         </Alert>
       )}
+
+      <CommissionSettlementRegister
+        rows={settlements}
+        canReverse={contextCan(context, 'agency:reverse')}
+      />
     </div>
   );
 }

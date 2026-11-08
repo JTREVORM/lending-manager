@@ -23,13 +23,20 @@ import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import {
   isAgencyDirection,
+  isAgencyReconciliationStatus,
+  isAgencySettlementStatus,
   isAgencyStatus,
+  type AgencyCashCountRow,
   type AgencyCashMovementRow,
   type AgencyCommissionRow,
+  type AgencyCommissionSettlementRow,
   type AgencyExceptionRow,
   type AgencyFloatRow,
+  type AgencyFloatStatementRow,
   type AgencyPayableRow,
+  type AgencyPayableSettlementRow,
   type AgencyProviderRow,
+  type AgencyReconciliationStatus,
   type AgencyServiceTypeRow,
   type AgencyStatus,
   type AgencyTransactionRow,
@@ -388,6 +395,169 @@ export async function getAgencyServiceTypes(options?: {
       isActive: r.is_active === true,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// 8. The four Phase 4D operational registers
+//
+// What an officer has to act on, rather than what a period totalled: counts
+// waiting for a second signature, statements waiting to be certified,
+// settlements that may need reversing. Each read is one view and no sum.
+// ---------------------------------------------------------------------------
+
+export async function getAgencyCashCounts(options?: {
+  readonly statuses?: readonly AgencyReconciliationStatus[];
+  readonly limit?: number;
+}): Promise<AgencyCashCountRow[]> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_cash_reconciliation_register')
+    .select('*')
+    .order('reconciliation_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(options?.limit ?? 50);
+
+  if (options?.statuses !== undefined && options.statuses.length > 0) {
+    query = query.in('status', [...options.statuses]);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return empty('agency cash counts', error);
+
+  return data.map((r) => ({
+    id: str(r.id),
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    cashAccountId: str(r.cash_account_id),
+    accountCode: str(r.account_code),
+    accountName: str(r.account_name),
+    reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
+    status: isAgencyReconciliationStatus(r.status) ? r.status : 'open',
+    systemClosingBalance: ugx(r.system_closing_balance),
+    physicalCount: ugx(r.physical_count),
+    variance: ugx(r.variance),
+    varianceWrittenOff: ugx(r.variance_written_off),
+    varianceJournalEntryId: strOrNull(r.variance_journal_entry_id),
+    notes: strOrNull(r.notes),
+    createdBy: strOrNull(r.created_by),
+    reconciledBy: strOrNull(r.reconciled_by),
+    currentSystemBalance: ugx(r.current_system_balance),
+    balanceMoved: r.balance_moved === true,
+  }));
+}
+
+export async function getAgencyFloatStatements(options?: {
+  readonly statuses?: readonly AgencyReconciliationStatus[];
+  readonly limit?: number;
+}): Promise<AgencyFloatStatementRow[]> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_float_reconciliation_register')
+    .select('*')
+    .order('reconciliation_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(options?.limit ?? 50);
+
+  if (options?.statuses !== undefined && options.statuses.length > 0) {
+    query = query.in('status', [...options.statuses]);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return empty('agency float statements', error);
+
+  return data.map((r) => ({
+    id: str(r.id),
+    floatAccountId: str(r.float_account_id),
+    tillName: str(r.till_name),
+    accountCode: str(r.account_code),
+    accountName: str(r.account_name),
+    providerId: strOrNull(r.provider_id),
+    providerCode: strOrNull(r.provider_code),
+    providerName: strOrNull(r.provider_name),
+    branchId: strOrNull(r.branch_id),
+    branchCode: strOrNull(r.branch_code),
+    reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
+    status: isAgencyReconciliationStatus(r.status) ? r.status : 'open',
+    systemClosingBalance: ugx(r.system_closing_balance),
+    providerStatementBalance: ugx(r.provider_statement_balance),
+    providerStatementRef: strOrNull(r.provider_statement_ref),
+    variance: ugx(r.variance),
+    varianceWrittenOff: ugx(r.variance_written_off),
+    varianceJournalEntryId: strOrNull(r.variance_journal_entry_id),
+    notes: strOrNull(r.notes),
+    createdBy: strOrNull(r.created_by),
+    reconciledBy: strOrNull(r.reconciled_by),
+    currentSystemBalance: ugx(r.current_system_balance),
+    balanceMoved: r.balance_moved === true,
+  }));
+}
+
+export async function getAgencyCommissionSettlements(options?: {
+  readonly limit?: number;
+}): Promise<AgencyCommissionSettlementRow[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('agency_commission_settlement_register')
+    .select('*')
+    .order('settlement_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(options?.limit ?? 50);
+
+  if (error !== null || data === null) {
+    return empty('agency commission settlements', error);
+  }
+
+  return data.map((r) => ({
+    id: str(r.id),
+    providerId: str(r.provider_id),
+    providerCode: str(r.provider_code),
+    providerName: str(r.provider_name),
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    settlementDate: toBusinessDate(str(r.settlement_date)),
+    settlementAmount: ugx(r.settlement_amount),
+    settlementAccountCode: str(r.settlement_account_code),
+    settlementAccountName: str(r.settlement_account_name),
+    providerStatementRef: strOrNull(r.provider_statement_ref),
+    status: isAgencySettlementStatus(r.status) ? r.status : 'posted',
+    journalEntryId: strOrNull(r.journal_entry_id),
+    reversalEntryId: strOrNull(r.reversal_entry_id),
+    reversalReason: strOrNull(r.reversal_reason),
+  }));
+}
+
+export async function getAgencyPayableSettlements(options?: {
+  readonly limit?: number;
+}): Promise<AgencyPayableSettlementRow[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('agency_payable_settlement_register')
+    .select('*')
+    .order('settlement_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(options?.limit ?? 50);
+
+  if (error !== null || data === null) {
+    return empty('agency payable settlements', error);
+  }
+
+  return data.map((r) => ({
+    id: str(r.id),
+    providerId: str(r.provider_id),
+    providerCode: str(r.provider_code),
+    providerName: str(r.provider_name),
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    settlementDate: toBusinessDate(str(r.settlement_date)),
+    settlementAmount: ugx(r.settlement_amount),
+    cashAccountCode: str(r.cash_account_code),
+    cashAccountName: str(r.cash_account_name),
+    providerReceiptRef: strOrNull(r.provider_receipt_ref),
+    status: isAgencySettlementStatus(r.status) ? r.status : 'posted',
+    journalEntryId: strOrNull(r.journal_entry_id),
+    reversalEntryId: strOrNull(r.reversal_entry_id),
+    reversalReason: strOrNull(r.reversal_reason),
+  }));
 }
 
 /** The tills a signed-in officer may actually post against, for a form. */
