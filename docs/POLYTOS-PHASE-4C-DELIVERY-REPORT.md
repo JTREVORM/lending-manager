@@ -197,7 +197,50 @@ Phase 4B-S = 186 at the reviewed head; **+6 Phase 4C = 192** on this branch;
 
 ## 8. Tests
 
-<!-- TEST_TABLE -->
+Every figure below is from a run on this branch at 192 migrations.
+
+| Suite | Result |
+| --- | --- |
+| `agency-settlement.test.ts` (new) | **PASS — 63/63** |
+| `ledger-balance-invariant.test.ts` | **PASS — 27/27** (21 + 6 for the two new source types) |
+| `agency-transaction-engine.test.ts` | **PASS — 62/62** |
+| `agency-foundation.test.ts` | **PASS — 66/66** |
+| `agency-security-closure.test.ts` | **PASS — 21/21** |
+| `db` project | **PASS — 1,923** |
+| four seeder projects | **PASS — 82** |
+| **`npm run test:db` (nine projects)** | **PASS — 2,217** |
+| `npm run test:run` (unit + integration) | **PASS — 2,658** |
+| Database security gate | **PASS — no unreviewed privileged exposure** |
+| Financial reconciliation certification | **PASS — 36 pass, 2 explained, 0 vacuous, 0 fail** |
+| Historical migration upgrade rehearsal | **PASS — 120 existing + 72 new, 28 financial figures identical** |
+| Arithmetic hazard scan | **PASS — 240 files, 6 acknowledged exemptions, verified by injection** |
+| typecheck · lint · format · build | **PASS** |
+| Browser E2E · PostgreSQL 17 real-Auth rehearsal | **CI only** — no PostgREST or Auth binary here, PostgreSQL 16 only |
+
+Nothing was skipped. The two CI-only gates cannot run in this sandbox and are
+named rather than omitted, because a gate nobody ran is not a gate that
+passed.
+
+### The 63 settlement tests, by task
+
+| Block | Tests |
+| --- | --- |
+| Commission settlement (Task 2) | 11 |
+| Payable settlement and reversal (Task 3) | 9 |
+| Float replenishment (Task 4) | 7 |
+| Cash reconciliation (Task 5) | 10 |
+| Float reconciliation (Task 6) | 8 |
+| Commission settlement correction (Task 7) | 4 |
+| Reporting views (Task 8) | 6 |
+| Security certification (Task 9) | 6 |
+| Cross-cutting lock order | 2 |
+
+Fixtures are meaningful and non-vacuous throughout: partial settlements
+(4,000 then 6,000 of a 10,000 receivable), several providers sharing account
+2220, several branches, and a provider with two tills replenished
+independently. No reconciliation test asserts a zero against a zero — the
+exact-match case is a 1,000,000 count against a 1,000,000 book.
+
 
 ## 9. CI run and final SHA
 
