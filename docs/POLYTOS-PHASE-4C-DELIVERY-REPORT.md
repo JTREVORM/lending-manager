@@ -244,7 +244,54 @@ exact-match case is a 1,000,000 count against a 1,000,000 book.
 
 ## 9. CI run and final SHA
 
-<!-- CI_TABLE -->
+**Run 42452436610 at `c02068b` — all four mandatory jobs `success`.**
+
+| Job | Conclusion |
+| --- | --- |
+| checks, unit/integration, build | **success** |
+| database (real PostgreSQL) | **success** |
+| browser E2E (production build, fresh seed) | **success** |
+| security release rehearsal (PostgreSQL 17, real Auth) | **success** |
+
+Every step inside `checks` passed, not merely the job: typecheck, lint,
+format, unit and integration tests, the money arithmetic audit, the secret
+scan over source and full history, the dependency audit, the production
+build, no-secret-in-client-bundle, and the browser bundle assertions.
+
+Inside `database`: the security gate, all nine test projects, the upgrade and
+existing-borrower integration, and the financial reconciliation certification.
+
+Inside the PostgreSQL 17 job: the scoped migration, hook reload and
+interruption rehearsal, then real recovery and two-tab renewal past JWT
+expiry against a real Auth stack.
+
+`Supabase Preview` is **skipped**, so nothing in this work created a branch
+against the hosted project. The check run is the evidence rather than my word
+for it.
+
+**Final SHA: `c02068b`** for the code. This report's own commit is
+documentation only and the code at both is identical.
+
+### The failures before it, all mine
+
+Recorded because a report that shows only the green run is not a record of
+what happened.
+
+- **The full `test:db` failed with 112 failures across 73 files** before the
+  three real defects below were found. That run was polluted by my own
+  repeated interactive suite runs against the shared cluster, not a
+  regression: `money-movement.test.ts` passes 32/32 on a clean rebuild. The
+  three genuine failures underneath it were only visible after re-running
+  undisturbed, which is why the first explanation was not accepted.
+- **`agency-settlement.test.ts` was missing from the `db` project's exclude
+  list**, so it ran in two projects and committed test branches into the one
+  that reads `branch_cash_position` with `queryOne`. The 4B-S comment above
+  that very list records the same mistake and calls it "the definition of the
+  problem rather than bad luck."
+- **`rls-payments.test.ts` holds a second view inventory** which names every
+  `security_invoker` view rather than counting them, deliberately. The seven
+  new views had to be named there too.
+
 
 ## 10. Remaining defects, risks and business decisions
 
