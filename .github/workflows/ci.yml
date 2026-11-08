@@ -364,12 +364,34 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The key is dearmoured into a binary keyring rather than written as
+      # the ASCII-armoured `.asc` it is served as.
+      #
+      # Both forms are legal in a `signed-by=`, and the armoured one worked
+      # until 2026-11-08, when four of five runs failed here with
+      #
+      #   GPG error: ... noble-pgdg InRelease:
+      #     GPG: add_keyblock_resource ... GPG: keydb_search ...
+      #   E: The repository ... is not signed.
+      #
+      # — apt's verifier failing to load the armoured keyring at all, on a
+      # runner image that had read it an hour earlier. The binary form has no
+      # such ambiguity: it is what `apt-key` always produced, what the
+      # PostgreSQL project's own instructions use, and what every apt version
+      # reads the same way. `--yes` so a re-run overwrites rather than
+      # prompting.
+      #
+      # Infrastructure, not this phase. Changed here because this is one of
+      # the four jobs that must pass before anything is certified, and a gate
+      # that fails four times in five is not a gate.
       - name: Install PostgreSQL 17
         run: |
           sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/keyrings/postgresql.asc >/dev/null
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor --yes -o /etc/apt/keyrings/postgresql.gpg
+          sudo chmod 0644 /etc/apt/keyrings/postgresql.gpg
           . /etc/os-release
-          printf 'deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          printf 'deb [signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-17 postgresql-client-17
           echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"

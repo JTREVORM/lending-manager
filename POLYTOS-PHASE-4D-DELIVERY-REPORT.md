@@ -345,10 +345,15 @@ hosted project.
 
 Two things in that run are worth stating rather than hiding:
 
-- The rehearsal job failed twice on `apt-get update` before passing
-  unchanged on a re-run — the PGDG repository's signature could not be
-  verified on those two runners. Infrastructure, not code, and confirmed as
-  such by re-running rather than by changing anything.
+- The rehearsal job could not install PostgreSQL 17 on four runs out of
+  five: apt refused the PGDG repository as unsigned, failing to load the
+  ASCII-armoured keyring the step had written an hour earlier without
+  trouble. A re-run passed once, which is how it was first taken for a
+  flake; it is not one. The step now dearmours the key into a binary
+  keyring, which is what the PostgreSQL project's own instructions use and
+  what every apt version reads the same way. Infrastructure, not this phase,
+  and changed only because a gate that fails four times in five is not a
+  gate.
 - A local full-suite run showed eight write-spec failures that CI does not.
   They are fixture exhaustion: those specs approve a claim, pay it, mark a
   register — each a one-shot seeded fixture — and the local stack had been
