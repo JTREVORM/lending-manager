@@ -38,6 +38,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { parseSafely } from '@/lib/validation/validate';
 import {
   agencyTransactionIdSchema,
+  verifyAgencyTransactionSchema,
   agencyTransactionReasonSchema,
   cashCountSchema,
   commissionExceptionSchema,
@@ -234,8 +235,9 @@ export async function verifyAgencyTransactionAction(
   const allowed = await authorize('agency:verify', 'agency.verify');
   if (!allowed.ok) return { ok: false, message: allowed.message };
 
-  const parsed = parseSafely(agencyTransactionIdSchema, {
+  const parsed = parseSafely(verifyAgencyTransactionSchema, {
     transactionId: formData.get('transactionId'),
+    reviewedRevision: formData.get('reviewedRevision'),
   });
   if (!parsed.success) return { ok: false, message: INVALID };
 
@@ -243,8 +245,17 @@ export async function verifyAgencyTransactionAction(
   // Posts the journal. The database refuses an officer verifying their own
   // entry, a provisional or inactive provider, insufficient cash or float,
   // and a bank payable that would go into net debit.
+  //
+  // `reviewedRevision` is the revision the screen was rendered from. The
+  // database refuses the posting if the figures have moved since - an Owner
+  // authorising a commission exception behind an open screen, say - so the
+  // manager reloads and sees what they are approving. Passing it is not a
+  // substitute for that check: the database compares it with the row it
+  // locks, and refuses a call that quotes nothing just as firmly once the
+  // figures have changed after submission.
   const { data, error } = await supabase.rpc('verify_agency_transaction', {
     p_transaction_id: parsed.data.transactionId,
+    p_expected_revision: parsed.data.reviewedRevision,
   });
   return settle(error, 'Verifying a transaction', 'Verified and posted.', data);
 }

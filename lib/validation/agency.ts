@@ -87,6 +87,26 @@ export const agencyTransactionIdSchema = z.object({
   transactionId: uuidSchema,
 });
 
+/**
+ * Verification carries the revision the screen was showing.
+ *
+ * Not a policy check: the database compares it with the row it locks. What
+ * this refuses is a form that lost the value, which would otherwise fall back
+ * to the weaker no-token path.
+ */
+export const verifyAgencyTransactionSchema = z.object({
+  transactionId: uuidSchema,
+  reviewedRevision: z
+    .string()
+    .trim()
+    .min(1, 'Reload the transaction before verifying it.')
+    .regex(/^[0-9]+$/, 'Reload the transaction before verifying it.')
+    .transform((v) => Number(v))
+    .refine((v) => Number.isSafeInteger(v) && v >= 1, {
+      message: 'Reload the transaction before verifying it.',
+    }),
+});
+
 export const agencyTransactionReasonSchema = z.object({
   transactionId: uuidSchema,
   reason: reasonSchema,

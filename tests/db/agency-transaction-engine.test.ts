@@ -817,10 +817,28 @@ describeDb('Phase 4B — agency transaction engine', () => {
       ]);
       expect(authorised.ok, authorised.message).toBe(true);
 
-      // A manager still verifies it: the Owner authorised the difference, not
-      // the transaction, so neither acts alone.
+      // Phase 4D: the Owner moved the figure after submission, so a manager
+      // pressing Verify on the screen they already had is refused. Asserted
+      // here rather than worked around, because this is the workflow the
+      // safeguard was built for.
+      const stale = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(stale.ok).toBe(false);
+      expect(stale.message).toMatch(/changed after it was submitted/i);
+
+      // A manager still verifies it, now having reloaded and reviewed the
+      // authorised figure: the Owner authorised the difference, not the
+      // transaction, so neither acts alone.
+      const reloaded = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
       const verified = await asUserCommitted(manager, [
-        { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+        {
+          sql: `select public.verify_agency_transaction($1,$2) as e`,
+          params: [id, Number(reloaded.revision)],
+        },
       ]);
       expect(verified.ok, verified.message).toBe(true);
       const entryId = (verified.rows[0] as { e: string }).e;
@@ -925,8 +943,19 @@ describeDb('Phase 4B — agency transaction engine', () => {
         [mtnDeposit.providerId],
       );
 
+      // The manager reloads and quotes the revision they reviewed, so the
+      // Phase 4D revision guard is satisfied and this test still proves what
+      // it was written to prove: the pinned authorisation is what refuses a
+      // re-rated transaction, not merely a stale screen.
+      const reloaded = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
       const r = await asUserCommitted(manager, [
-        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+        {
+          sql: `select public.verify_agency_transaction($1,$2)`,
+          params: [id, Number(reloaded.revision)],
+        },
       ]);
       expect(r.ok).toBe(false);
       expect(r.message).toMatch(/must be authorised again/i);

@@ -139,6 +139,19 @@ export async function getAgencyTransaction(
   return data === null ? null : mapTransaction(data);
 }
 
+/**
+ * A counter, or nothing.
+ *
+ * Nothing rather than zero or NaN: a screen that could not read the revision
+ * must offer no Verify button at all, and a silent default would hand the
+ * weaker no-revision path to every caller.
+ */
+function intOrNull(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isSafeInteger(v) ? v : null;
+  if (typeof v === 'string' && /^[0-9]+$/.test(v.trim())) return Number(v.trim());
+  return null;
+}
+
 function mapTransaction(r: Record<string, unknown>): AgencyTransactionRow {
   return {
     id: str(r.id),
@@ -164,6 +177,7 @@ function mapTransaction(r: Record<string, unknown>): AgencyTransactionRow {
     reversalEntryId: strOrNull(r.reversal_entry_id),
     submittedBy: strOrNull(r.submitted_by),
     verifiedBy: strOrNull(r.verified_by),
+    revision: intOrNull(r.revision),
   };
 }
 

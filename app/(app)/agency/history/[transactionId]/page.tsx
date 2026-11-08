@@ -104,6 +104,12 @@ export default async function AgencyTransactionPage({
               {row.commissionExceptionReason}
             </Detail>
           )}
+          {/*
+            Shown because verification quotes it back. A manager who presses
+            Verify is approving these figures at this version, and the
+            database refuses the posting if a newer one exists by then.
+          */}
+          <Detail label="Figures version">{row.revision ?? '—'}</Detail>
         </dl>
       </Card>
 
@@ -139,6 +145,7 @@ export default async function AgencyTransactionPage({
             canReverse={contextCan(context, 'agency:reverse')}
             canReverseCrossDay={contextCan(context, 'agency:reverse_cross_day')}
             isPriorDay={row.transactionDate < businessToday()}
+            reviewedRevision={row.revision}
           />
         </div>
       </Card>

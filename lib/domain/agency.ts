@@ -66,6 +66,15 @@ export interface AgencyTransactionRow {
   readonly reversalEntryId: string | null;
   readonly submittedBy: string | null;
   readonly verifiedBy: string | null;
+  /**
+   * What the figures were when this row was read.
+   *
+   * A verifier quotes it back, and the database refuses the posting if the
+   * money has moved since - so a manager cannot approve a commission
+   * exception an Owner authorised behind an open screen. Null only if the
+   * view could not be read, in which case the screen offers no Verify button.
+   */
+  readonly revision: number | null;
 }
 
 /** One row of `agency_float_balances`. */

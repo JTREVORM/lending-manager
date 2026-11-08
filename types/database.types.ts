@@ -5220,6 +5220,8 @@ export type Database = {
           commission_exception_amount: number | null;
           commission_exception_computed: number | null;
           income_account_id: string | null;
+          revision: number;
+          submitted_revision: number | null;
         };
         Insert: {
           id?: string;
@@ -5262,6 +5264,8 @@ export type Database = {
           commission_exception_amount?: number | null;
           commission_exception_computed?: number | null;
           income_account_id?: string | null;
+          revision?: number;
+          submitted_revision?: number | null;
         };
         Update: {
           id?: string;
@@ -5304,6 +5308,8 @@ export type Database = {
           commission_exception_amount?: number | null;
           commission_exception_computed?: number | null;
           income_account_id?: string | null;
+          revision?: number;
+          submitted_revision?: number | null;
         };
         Relationships: [];
       };
@@ -7408,7 +7414,7 @@ export type Database = {
         Returns: undefined;
       };
       verify_agency_transaction: {
-        Args: { p_transaction_id: string };
+        Args: { p_transaction_id: string; p_expected_revision?: number | null };
         Returns: string;
       };
       cancel_agency_transaction: {

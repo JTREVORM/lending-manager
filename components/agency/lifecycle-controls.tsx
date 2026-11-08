@@ -33,11 +33,14 @@ function OneClick({
   label,
   transactionId,
   variant,
+  extra,
 }: {
   readonly action: Action;
   readonly label: string;
   readonly transactionId: string;
   readonly variant: 'primary' | 'secondary' | 'danger';
+  /** Extra fields the server action needs, carried from the rendered row. */
+  readonly extra?: Readonly<Record<string, string>>;
 }) {
   const [result, submit, pending] = useActionState<
     AgencyActionResult | undefined,
@@ -47,6 +50,9 @@ function OneClick({
   return (
     <form action={submit} className="min-w-0">
       <input type="hidden" name="transactionId" value={transactionId} />
+      {Object.entries(extra ?? {}).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <Button type="submit" size="sm" variant={variant} loading={pending}>
         {label}
       </Button>
@@ -122,6 +128,16 @@ export interface LifecycleControlsProps {
   readonly canReverseCrossDay: boolean;
   /** Whether the transaction is dated before today. */
   readonly isPriorDay: boolean;
+  /**
+   * The revision these figures were read at, quoted back when verifying.
+   *
+   * The database refuses a verification that quotes a revision which is no
+   * longer current, so pressing Verify on a screen an Owner has changed
+   * behind fails rather than posting a figure nobody reviewed. Null when the
+   * row did not carry one, and then no Verify button is offered: the honest
+   * answer is to reload, not to fall back to the weaker path.
+   */
+  readonly reviewedRevision: number | null;
 }
 
 /**
@@ -146,6 +162,7 @@ export function LifecycleControls({
   canReverse,
   canReverseCrossDay,
   isPriorDay,
+  reviewedRevision,
 }: LifecycleControlsProps) {
   if (status === 'draft' || status === 'returned') {
     if (!canWrite)
@@ -182,6 +199,11 @@ export function LifecycleControls({
         <Unavailable reason="You recorded this one, so you cannot verify it. A second officer must." />
       );
     }
+    if (reviewedRevision === null) {
+      return (
+        <Unavailable reason="This screen could not read which version of the figures it is showing. Reload the page before verifying." />
+      );
+    }
     return (
       <div className="min-w-0 space-y-2">
         <OneClick
@@ -189,6 +211,7 @@ export function LifecycleControls({
           label="Verify and post"
           transactionId={transactionId}
           variant="primary"
+          extra={{ reviewedRevision: String(reviewedRevision) }}
         />
         <Reasoned
           action={returnAgencyTransactionAction}

@@ -2251,6 +2251,91 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       expect(lines).toContainEqual({ code: '4510', debit: 0, credit: 1_800 });
     });
 
+    it('refuses verification against figures that changed after submission', async () => {
+      // The Phase 4D safeguard. A manager opens the pending queue, an Owner
+      // authorises a commission exception behind them, and the manager presses
+      // Verify on a screen that no longer describes the transaction. Before
+      // the revision guard, that posted the Owner's new figure without the
+      // manager ever having seen it - maker-checker in form but not in fact.
+      const ownerA = await createTestUser('owner_admin');
+      const svc = await provider({ code: 'SETP30', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode!, 5_000_000);
+
+      const key = `P30-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770011000','C',$4,0,null,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const id = (c.rows[0] as { id: string }).id;
+      const sub = await asUserCommitted(secA, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+
+      // What the manager's screen showed when it loaded.
+      const seen = await queryOne<{ revision: string }>(
+        `select revision::text as revision
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+
+      // The Owner changes the money behind them.
+      const authorised = await asUserCommitted(ownerA, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1,$2,$3,$4)`,
+          params: [id, 'provider promotion', 'MTN-STMT-P30', 1_800],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      // The stale screen's Verify button.
+      const stale = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.verify_agency_transaction($1,$2)`,
+          params: [id, Number(seen.revision)],
+        },
+      ]);
+      expect(stale.ok).toBe(false);
+      expect(stale.message).toMatch(/changed since|reload|review the current/i);
+
+      // And a caller that quotes no revision at all is refused too, once the
+      // figures have moved after submission - otherwise the guard would only
+      // bind callers that opted into it.
+      const noToken = await asUserCommitted(mgrA, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(noToken.ok).toBe(false);
+
+      // Nothing posted.
+      const after = await queryOne<{ status: string; j: string | null }>(
+        `select status, journal_entry_id::text as j
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(after.status).toBe('awaiting_verification');
+      expect(after.j).toBeNull();
+
+      // Reloading and verifying the current values works.
+      const current = await queryOne<{ revision: string }>(
+        `select revision::text as revision
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(Number(current.revision)).toBeGreaterThan(Number(seen.revision));
+      const ok = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.verify_agency_transaction($1,$2) as e`,
+          params: [id, Number(current.revision)],
+        },
+      ]);
+      expect(ok.ok, ok.message).toBe(true);
+      const lines = await linesOf((ok.rows[0] as { e: string }).e);
+      expect(lines).toContainEqual({ code: '1310', debit: 1_800, credit: 0 });
+    });
+
     it('refuses a proposed figure that is negative, excessive or no different', async () => {
       const ownerA = await createTestUser('owner_admin');
       const svc = await provider({ code: 'SETP21', branch: branchA, rateBps: 150 });
@@ -2913,6 +2998,218 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       const named = new Set(MATRIX.filter((m) => m.provider).map((m) => m.fn));
       const unclassified = readers.map((r) => r.proname).filter((n) => !named.has(n));
       expect(unclassified).toEqual([]);
+    });
+  });
+
+  describe('the Phase 4D verification surface', () => {
+    it('exposes exactly one verification and one commission-exception function', async () => {
+      // Both functions grew a defaulted argument in Phase 4D. A defaulted
+      // argument changes the signature rather than extending it, so the old
+      // function had to be dropped: leaving both would make every existing
+      // one- or three-argument call ambiguous, and PostgreSQL would refuse it
+      // at runtime rather than at migration time.
+      const fns = await query<{ proname: string; args: string }>(
+        `select p.proname,
+                pg_catalog.pg_get_function_identity_arguments(p.oid) as args
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f'
+            and p.proname in ('verify_agency_transaction',
+                              'authorise_agency_commission_exception')
+          order by p.proname, args`,
+      );
+      expect(fns).toEqual([
+        {
+          proname: 'authorise_agency_commission_exception',
+          args: 'p_transaction_id uuid, p_reason text, p_evidence text, p_proposed_amount bigint',
+        },
+        {
+          proname: 'verify_agency_transaction',
+          args: 'p_transaction_id uuid, p_expected_revision integer',
+        },
+      ]);
+    });
+
+    it('grants EXECUTE on them to signed-in users only', async () => {
+      const grants = await query<{
+        proname: string;
+        authenticated: boolean;
+        anon: boolean;
+        pub: boolean;
+      }>(
+        `select p.proname,
+                pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated,
+                pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE')          as anon,
+                pg_catalog.has_function_privilege('public', p.oid, 'EXECUTE')        as pub
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f'
+            and p.proname in ('verify_agency_transaction',
+                              'authorise_agency_commission_exception',
+                              'agency_transaction_revision_guard',
+                              'agency_transaction_submitted_revision')
+          order by p.proname`,
+      );
+      expect(grants).toEqual([
+        // The triggers are the database's own machinery. Nobody calls them.
+        {
+          proname: 'agency_transaction_revision_guard',
+          authenticated: false,
+          anon: false,
+          pub: false,
+        },
+        {
+          proname: 'agency_transaction_submitted_revision',
+          authenticated: false,
+          anon: false,
+          pub: false,
+        },
+        {
+          proname: 'authorise_agency_commission_exception',
+          authenticated: true,
+          anon: false,
+          pub: false,
+        },
+        {
+          proname: 'verify_agency_transaction',
+          authenticated: true,
+          anon: false,
+          pub: false,
+        },
+      ]);
+    });
+
+    it('still authorises a supplied figure from a three-argument call', async () => {
+      // The original behaviour, unchanged: where the recording officer did
+      // supply an exceptional figure, an Owner authorises that figure with a
+      // reason and evidence and no amount of their own.
+      const ownerA = await createTestUser('owner_admin');
+      const svc = await provider({ code: 'SETP31', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode!, 5_000_000);
+
+      const key = `P31-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770011031','C',$4,0,2200,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const id = (c.rows[0] as { id: string }).id;
+
+      const authorised = await asUserCommitted(ownerA, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1,$2,$3)`,
+          params: [id, 'negotiated rate', 'MTN-STMT-P31'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      const row = await queryOne<{
+        supplied: string;
+        pinned: string;
+        computed: string;
+        reason: string;
+      }>(
+        `select commission_supplied::text        as supplied,
+                commission_exception_amount::text as pinned,
+                commission_exception_computed::text as computed,
+                commission_exception_reason      as reason
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      // The officer's figure is kept, pinned against later drift, and recorded
+      // next to what the provider's terms would have produced.
+      expect(Number(row.supplied)).toBe(2_200);
+      expect(Number(row.pinned)).toBe(2_200);
+      expect(Number(row.computed)).toBe(1_500);
+      expect(row.reason).toBe('negotiated rate');
+    });
+
+    it('lets an already-posted transaction be retried with a stale revision', async () => {
+      // Retry safety comes before the revision guard. A manager whose
+      // connection dropped mid-post must get the journal back, not a
+      // complaint that their screen is old - otherwise the safeguard would
+      // turn a lost response into a transaction nobody can finish.
+      const svc = await provider({ code: 'SETP32', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode!, 5_000_000);
+
+      const key = `P32-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770011032','C',$4,0,null,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      const id = (c.rows[0] as { id: string }).id;
+      const sub = await asUserCommitted(secA, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+
+      const first = await asUserCommitted(mgrA, [
+        { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+      ]);
+      expect(first.ok, first.message).toBe(true);
+      const entry = (first.rows[0] as { e: string }).e;
+
+      // Posting does not itself change a financial field, so the revision is
+      // unmoved - but the retry must survive a wrong one regardless.
+      const retry = await asUserCommitted(mgrA, [
+        { sql: `select public.verify_agency_transaction($1,$2) as e`, params: [id, 1] },
+      ]);
+      expect(retry.ok, retry.message).toBe(true);
+      expect((retry.rows[0] as { e: string }).e).toBe(entry);
+
+      const absurd = await asUserCommitted(mgrA, [
+        { sql: `select public.verify_agency_transaction($1,$2) as e`, params: [id, 999] },
+      ]);
+      expect(absurd.ok, absurd.message).toBe(true);
+      expect((absurd.rows[0] as { e: string }).e).toBe(entry);
+    });
+
+    it('still refuses the recording officer, revision or no revision', async () => {
+      // Maker-checker is not weakened by giving the checker a token: quoting
+      // the current revision does not make you a second person.
+      const svc = await provider({ code: 'SETP33', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode!, 5_000_000);
+
+      // The recorder here is a Manager, who does hold `agency:verify`. A
+      // secretary would be refused for want of the capability, which would
+      // prove nothing about maker-checker.
+      const recorder = await createTestUser('manager');
+      const key = `P33-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(recorder, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770011033','C',$4,0,null,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const id = (c.rows[0] as { id: string }).id;
+      const sub = await asUserCommitted(recorder, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+
+      const rev = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const self = await asUserCommitted(recorder, [
+        {
+          sql: `select public.verify_agency_transaction($1,$2)`,
+          params: [id, Number(rev.revision)],
+        },
+      ]);
+      expect(self.ok).toBe(false);
+      // Refused as the recorder, not for want of a capability or a revision.
+      expect(self.message).toMatch(/cannot be verified by the person who recorded it/i);
+
+      const audit = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.agency_transaction_audit_log
+          where transaction_id = $1 and action = 'verify'`,
+        [id],
+      );
+      expect(Number(audit.n)).toBe(0);
     });
   });
 });

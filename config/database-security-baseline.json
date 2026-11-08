@@ -1152,9 +1152,9 @@
         "public_default_acl": false
       }
     },
-    "verify_agency_transaction(p_transaction_id uuid)": {
+    "verify_agency_transaction(p_transaction_id uuid, p_expected_revision integer)": {
       "classification": "A",
-      "reason": "Phase 4B agency RPC. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 — which the verifier_not_submitter CHECK also refuses independently. Asserted in tests/db/agency-transaction-engine.test.ts.",
+      "reason": "Phase 4B agency RPC, extended in Phase 4D. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 — which the verifier_not_submitter CHECK also refuses independently. The Phase 4D second argument is the revision the verifier reviewed: verification is refused when it is not the current one, and a call quoting no revision is refused once the figures changed after submission, so a manager cannot post a commission exception authorised behind a screen they had already loaded. Asserted in tests/db/agency-transaction-engine.test.ts and tests/db/agency-settlement.test.ts.",
       "surface": {
         "anon": false,
         "authenticated": true,

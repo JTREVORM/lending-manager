@@ -1134,6 +1134,14 @@ describeDb('privileged functions', () => {
       // provider is still provisional or inactive, or whose type states no
       // maximum. Also a trigger, also unreachable by a signed-in user.
       'agency_transaction_live_readiness_guard',
+      // Phase 4D. A trigger that counts changes to the figures, so a verifier
+      // can be made to quote the version they reviewed. Revoked from every
+      // exposed role: nothing but the trigger calls it.
+      'agency_transaction_revision_guard',
+      // Phase 4D. Records the version the second officer was handed, so a
+      // verification that quotes nothing is refused once the money moves
+      // after submission. Also a trigger, also unreachable by a user.
+      'agency_transaction_submitted_revision',
       'apply_eligible_penalties',
       'approve_agency_cash_reconciliation',
       'approve_agency_float_reconciliation',

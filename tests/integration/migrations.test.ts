@@ -773,6 +773,12 @@ describe('types stay in step with the schema', () => {
       'agency_float_replenishment_guard',
       'agency_float_reconciliation_guard',
       'notify_low_float',
+      // Phase 4D. Two triggers that keep the verification revision: one
+      // counts changes to the figures, the other records the version the
+      // second officer was handed. Both fire as the table owner and are
+      // revoked from every exposed role, so neither is callable over the API.
+      'agency_transaction_revision_guard',
+      'agency_transaction_submitted_revision',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',
