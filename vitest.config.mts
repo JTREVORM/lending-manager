@@ -95,6 +95,7 @@ export default defineConfig({
             'tests/db/agency-foundation.test.ts',
             'tests/db/agency-transaction-engine.test.ts',
             'tests/db/agency-security-closure.test.ts',
+            'tests/db/agency-settlement.test.ts',
           ],
         },
       },

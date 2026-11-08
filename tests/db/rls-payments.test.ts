@@ -577,6 +577,13 @@ describeDb('payment row level security', () => {
         // over `benefit_claims` would hand every member's medical claim to
         // anybody who could select from it, and a definer view over the
         // beneficiary register would hand over the payment instructions.
+        'agency_commission_summary',
+        'agency_daily_cash_movement',
+        'agency_end_of_day_exceptions',
+        'agency_float_balances',
+        'agency_payable_summary',
+        'agency_transaction_history',
+        'agency_variance_report',
         'benefit_claim_portal_view',
         'benefit_claim_register',
         'benefit_payment_register',
