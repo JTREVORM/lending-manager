@@ -571,6 +571,16 @@ export const PERMISSIONS = [
   /** Create and edit providers, their transaction types and their float tills. */
   'agency:providers',
   /**
+   * Write a reconciliation variance off to the over-and-short accounts.
+   *
+   * The Owner's alone. `agency:reconcile` records a count and certifies it;
+   * moving the difference into the ledger is a separate act, because
+   * otherwise a manager who miscounts can certify the miscount into the
+   * books. A variance is always *recorded* without this capability — it is
+   * only *written off* with it.
+   */
+  'agency:variance_adjustment',
+  /**
    * Authorise a commission figure that differs from what the provider's
    * configured terms produce, against a reason and external evidence.
    *
@@ -1055,6 +1065,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:reconcile',
     'agency:providers',
     'agency:commission_exception',
+    'agency:variance_adjustment',
     'agency:reports',
   ],
 } as const;

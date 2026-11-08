@@ -1087,4 +1087,788 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       expect(await balance(svc.floatCode as string)).toBe(0);
     });
   });
+
+  // =========================================================================
+  describe('physical cash reconciliation (Task 5)', () => {
+    /** A dedicated branch and till, so one count cannot disturb another. */
+    async function tillBranch(
+      code: string,
+      opening: number,
+    ): Promise<{ branch: string; account: string; accountCode: string }> {
+      const branch = (
+        await queryOne<{ id: string }>(
+          `insert into public.branches (branch_code, name, location, status, opened_on)
+           values ($1, $1, 'Testing', 'active', current_date) returning id`,
+          [code],
+        )
+      ).id;
+      const accountCode = `1010-${code}`;
+      await query(
+        `insert into public.ledger_accounts
+           (code, name, account_type, normal_side, cash_kind, branch_id, is_postable, status)
+         values ($1, $1, 'asset', 'debit', 'cash_at_hand', $2, true, 'active')`,
+        [accountCode, branch],
+      );
+      if (opening > 0) await fund(accountCode, opening);
+      return { branch, account: await accountId(accountCode), accountCode };
+    }
+
+    /**
+     * A maker with no branch of its own, so it can see the per-test branches
+     * these counts create. `mgrA` is scoped to branch A and deliberately
+     * cannot, which is what the branch-isolation test at the end relies on.
+     */
+    let maker: TestUser;
+
+    beforeAll(async () => {
+      maker = await createTestUser('manager');
+    });
+
+    async function submitCount(
+      account: string,
+      count: number,
+      who?: TestUser,
+    ): Promise<string> {
+      who = who ?? maker;
+      const r = await asUserCommitted(who, [
+        {
+          sql: `select public.submit_agency_cash_reconciliation($1,$2) as id`,
+          params: [account, count],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      return (r.rows[0] as { id: string }).id;
+    }
+
+    it('closes an exact match with no adjustment and no journal', async () => {
+      const t = await tillBranch('BRCR1', 1_000_000);
+      const id = await submitCount(t.account, 1_000_000);
+
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,false,null) as e`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      expect((r.rows[0] as { e: string | null }).e).toBeNull();
+
+      const row = await queryOne<{
+        status: string;
+        variance: string;
+        off: string;
+        j: string | null;
+      }>(
+        `select status, variance::text as variance,
+                variance_written_off::text as off, variance_journal_entry_id::text as j
+           from public.agency_cash_reconciliations where id = $1`,
+        [id],
+      );
+      expect(row.status).toBe('reconciled');
+      expect(Number(row.variance)).toBe(0);
+      expect(Number(row.off)).toBe(0);
+      expect(row.j).toBeNull();
+    });
+
+    it('records a cash excess and adjusts it Dr cash, Cr 5950', async () => {
+      const t = await tillBranch('BRCR2', 1_000_000);
+      const id = await submitCount(t.account, 1_003_000); // 3,000 over
+      const overBefore = await balance('5950');
+
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,true,'counted twice, genuine surplus') as e`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      const entry = (r.rows[0] as { e: string }).e;
+
+      // Positive variance on THIS table means more cash than the books say.
+      expect(await linesOf(entry)).toEqual([
+        { code: t.accountCode, debit: 3_000, credit: 0 },
+        { code: '5950', debit: 0, credit: 3_000 },
+      ]);
+      expect(await balance(t.accountCode)).toBe(1_003_000);
+      expect((await balance('5950')) - overBefore).toBe(-3_000);
+    });
+
+    it('records a cash shortage and adjusts it Dr 5950, Cr cash', async () => {
+      const t = await tillBranch('BRCR3', 1_000_000);
+      const id = await submitCount(t.account, 996_000); // 4,000 short
+      const overBefore = await balance('5950');
+
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,true,'till short, unexplained after recount') as e`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      const entry = (r.rows[0] as { e: string }).e;
+
+      expect(await linesOf(entry)).toEqual([
+        { code: '5950', debit: 4_000, credit: 0 },
+        { code: t.accountCode, debit: 0, credit: 4_000 },
+      ]);
+      expect(await balance(t.accountCode)).toBe(996_000);
+      expect((await balance('5950')) - overBefore).toBe(4_000);
+    });
+
+    it('records an unexplained variance without adjusting it', async () => {
+      // A difference must never create an adjustment by itself.
+      const t = await tillBranch('BRCR4', 500_000);
+      const id = await submitCount(t.account, 495_000);
+
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,false,null) as e`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      expect((r.rows[0] as { e: string | null }).e).toBeNull();
+
+      const row = await queryOne<{ variance: string; off: string }>(
+        `select variance::text as variance, variance_written_off::text as off
+           from public.agency_cash_reconciliations where id = $1`,
+        [id],
+      );
+      expect(Number(row.variance)).toBe(-5_000);
+      expect(Number(row.off)).toBe(0);
+      // The books are untouched: the variance is on the record, not in the ledger.
+      expect(await balance(t.accountCode)).toBe(500_000);
+    });
+
+    it('refuses approval by the officer who recorded the count', async () => {
+      const t = await tillBranch('BRCR5', 200_000);
+      const id = await submitCount(t.account, 200_000, maker);
+
+      const r = await asUser(
+        maker,
+        `select public.approve_agency_cash_reconciliation($1,false,null)`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('42501');
+      expect(r.message).toMatch(/cannot approve it/i);
+    });
+
+    it('refuses an adjustment without the adjustment capability', async () => {
+      const t = await tillBranch('BRCR6', 300_000);
+      const id = await submitCount(t.account, 305_000, maker);
+
+      // A manager holds agency:reconcile but not agency:variance_adjustment.
+      const mgr2 = await createTestUser('manager');
+      const r = await asUser(
+        mgr2,
+        `select public.approve_agency_cash_reconciliation($1,true,'just write it off')`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('42501');
+      expect(r.message).toMatch(/agency:variance_adjustment/);
+
+      // But the same officer may certify it without adjusting.
+      const plain = await asUserCommitted(mgr2, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,false,null)`,
+          params: [id],
+        },
+      ]);
+      expect(plain.ok, plain.message).toBe(true);
+    });
+
+    it('refuses a stale count whose balance moved after it was recorded', async () => {
+      const t = await tillBranch('BRCR7', 400_000);
+      const id = await submitCount(t.account, 400_000, maker);
+
+      // Cash moves between the count and the approval.
+      await fund(t.accountCode, 50_000);
+
+      const r = await asUser(
+        ownerHO,
+        `select public.approve_agency_cash_reconciliation($1,false,null)`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/has moved from 400000 to 450000/);
+      expect(r.message).toMatch(/Count it again/i);
+
+      const row = await queryOne<{ status: string }>(
+        `select status from public.agency_cash_reconciliations where id = $1`,
+        [id],
+      );
+      expect(row.status).toBe('open');
+    });
+
+    it('refuses a duplicate date, a future date and a second approval', async () => {
+      const t = await tillBranch('BRCR8', 100_000);
+      const id = await submitCount(t.account, 100_000, maker);
+
+      const dup = await asUserCommitted(maker, [
+        {
+          sql: `select public.submit_agency_cash_reconciliation($1,$2)`,
+          params: [t.account, 100_000],
+        },
+      ]);
+      expect(dup.ok).toBe(false);
+      expect(dup.message).toMatch(/already been reconciled for/i);
+
+      const future = await asUserCommitted(maker, [
+        {
+          sql: `select public.submit_agency_cash_reconciliation($1,$2,current_date + 1)`,
+          params: [t.account, 100_000],
+        },
+      ]);
+      expect(future.ok).toBe(false);
+      expect(future.message).toMatch(/in the future/i);
+
+      const ok = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,false,null)`,
+          params: [id],
+        },
+      ]);
+      expect(ok.ok, ok.message).toBe(true);
+
+      const again = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_cash_reconciliation($1,false,null)`,
+          params: [id],
+        },
+      ]);
+      expect(again.ok).toBe(false);
+      expect(again.message).toMatch(/already reconciled/i);
+    });
+
+    it('refuses an agency float account and a non-cash account', async () => {
+      const svc = await provider({ code: 'SETR1', branch: branchA, rateBps: 150 });
+      const floatAcc = await accountId(svc.floatCode as string);
+
+      const float = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.submit_agency_cash_reconciliation($1,$2)`,
+          params: [floatAcc, 0],
+        },
+      ]);
+      expect(float.ok).toBe(false);
+      expect(float.message).toMatch(/electronic agency float account/i);
+      expect(float.message).toMatch(/provider's statement, not by a physical count/i);
+
+      const bank = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.submit_agency_cash_reconciliation($1,$2)`,
+          params: [bankA, 0],
+        },
+      ]);
+      expect(bank.ok).toBe(false);
+      expect(bank.message).toMatch(/not a till of cash/i);
+    });
+
+    it("refuses a count of another branch's till", async () => {
+      const t = await tillBranch('BRCR9', 100_000);
+      const r = await asUser(
+        mgrA,
+        `select public.submit_agency_cash_reconciliation($1,$2)`,
+        [t.account, 100_000],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('42501');
+    });
+  });
+
+  // =========================================================================
+  describe('provider float reconciliation (Task 6)', () => {
+    async function floatFixture(
+      code: string,
+      opening: number,
+    ): Promise<{ svc: Svc; floatCode: string }> {
+      const svc = await provider({ code, branch: branchA, rateBps: 150 });
+      if (opening > 0) await fund(svc.floatCode as string, opening);
+      return { svc, floatCode: svc.floatCode as string };
+    }
+
+    async function submitStatement(
+      tillId: string,
+      statement: number,
+      ref: string | null,
+      who: TestUser = mgrA,
+    ): Promise<string> {
+      const r = await asUserCommitted(who, [
+        {
+          sql: `select public.submit_agency_float_reconciliation($1,$2,$3) as id`,
+          params: [tillId, statement, ref],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      return (r.rows[0] as { id: string }).id;
+    }
+
+    it('records provider, branch, till and statement evidence', async () => {
+      const f = await floatFixture('SETR2', 2_000_000);
+      const id = await submitStatement(f.svc.tillId as string, 2_000_000, 'MTN-ST-1');
+
+      const row = await queryOne<{
+        p: string;
+        b: string;
+        t: string;
+        ref: string;
+        sys: string;
+        stmt: string;
+        variance: string;
+      }>(
+        `select provider_id::text as p, branch_id::text as b,
+                float_account_id::text as t, provider_statement_ref as ref,
+                system_closing_balance::text as sys,
+                provider_statement_balance::text as stmt, variance::text as variance
+           from public.agency_float_reconciliations where id = $1`,
+        [id],
+      );
+      expect(row.p).toBe(f.svc.providerId);
+      expect(row.b).toBe(branchA);
+      expect(row.t).toBe(f.svc.tillId);
+      expect(row.ref).toBe('MTN-ST-1');
+      expect(Number(row.sys)).toBe(2_000_000);
+      expect(Number(row.stmt)).toBe(2_000_000);
+      expect(Number(row.variance)).toBe(0);
+    });
+
+    it('adjusts a system surplus Dr 5960, Cr float — the opposite sign to cash', async () => {
+      // variance = system - statement. Positive means the books claim more
+      // float than the provider holds.
+      const f = await floatFixture('SETR3', 1_000_000);
+      const id = await submitStatement(f.svc.tillId as string, 999_000, 'MTN-ST-2');
+      const overBefore = await balance('5960');
+
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_float_reconciliation($1,true,'provider statement is authoritative') as e`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      expect(await linesOf((r.rows[0] as { e: string }).e)).toEqual([
+        { code: '5960', debit: 1_000, credit: 0 },
+        { code: f.floatCode, debit: 0, credit: 1_000 },
+      ]);
+      expect(await balance(f.floatCode)).toBe(999_000);
+      expect((await balance('5960')) - overBefore).toBe(1_000);
+    });
+
+    it('adjusts a system shortfall Dr float, Cr 5960', async () => {
+      const f = await floatFixture('SETR4', 1_000_000);
+      const id = await submitStatement(f.svc.tillId as string, 1_002_500, 'MTN-ST-3');
+      const overBefore = await balance('5960');
+
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_float_reconciliation($1,true,'provider credited more than recorded') as e`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      expect(await linesOf((r.rows[0] as { e: string }).e)).toEqual([
+        { code: f.floatCode, debit: 2_500, credit: 0 },
+        { code: '5960', debit: 0, credit: 2_500 },
+      ]);
+      expect(await balance(f.floatCode)).toBe(1_002_500);
+      expect((await balance('5960')) - overBefore).toBe(-2_500);
+    });
+
+    it('refuses a write-off with no named provider statement', async () => {
+      const f = await floatFixture('SETR5', 500_000);
+      const id = await submitStatement(f.svc.tillId as string, 499_000, null);
+
+      const r = await asUser(
+        ownerHO,
+        `select public.approve_agency_float_reconciliation($1,true,'no evidence')`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(
+        /only be written off against a named provider statement/i,
+      );
+    });
+
+    it('refuses a surplus write-off larger than the float actually held', async () => {
+      // The books claim 1,000 and the statement says 0, so the whole balance
+      // is written off; then a second till with nothing in it cannot.
+      const f = await floatFixture('SETR6', 0);
+      const id = await submitStatement(f.svc.tillId as string, 0, 'MTN-ST-6');
+      const r = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_float_reconciliation($1,true,'nothing to write off')`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/nothing to adjust/i);
+    });
+
+    it('enforces maker-checker, the adjustment capability and no double adjustment', async () => {
+      const f = await floatFixture('SETR7', 800_000);
+      const id = await submitStatement(f.svc.tillId as string, 799_000, 'MTN-ST-7', mgrA);
+
+      const sameUser = await asUser(
+        mgrA,
+        `select public.approve_agency_float_reconciliation($1,false,null)`,
+        [id],
+      );
+      expect(sameUser.ok).toBe(false);
+      expect(sameUser.message).toMatch(/cannot approve it/i);
+
+      const mgr2 = await createTestUser('manager');
+      const noCap = await asUser(
+        mgr2,
+        `select public.approve_agency_float_reconciliation($1,true,'write off')`,
+        [id],
+      );
+      expect(noCap.ok).toBe(false);
+      expect(noCap.message).toMatch(/agency:variance_adjustment/);
+
+      const ok = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_float_reconciliation($1,true,'statement authoritative')`,
+          params: [id],
+        },
+      ]);
+      expect(ok.ok, ok.message).toBe(true);
+
+      const again = await asUserCommitted(ownerHO, [
+        {
+          sql: `select public.approve_agency_float_reconciliation($1,true,'again')`,
+          params: [id],
+        },
+      ]);
+      expect(again.ok).toBe(false);
+      expect(again.message).toMatch(/already reconciled/i);
+    });
+
+    it('refuses a stale statement whose float moved after it was recorded', async () => {
+      const f = await floatFixture('SETR8', 600_000);
+      const id = await submitStatement(f.svc.tillId as string, 600_000, 'MTN-ST-8', mgrA);
+      await fund(f.floatCode, 25_000);
+
+      const r = await asUser(
+        ownerHO,
+        `select public.approve_agency_float_reconciliation($1,false,null)`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/has moved from 600000 to 625000/);
+      expect(r.message).toMatch(/Reconcile it again/i);
+    });
+
+    it('refuses a till at a branch the caller cannot see', async () => {
+      const f = await floatFixture('SETR9', 100_000);
+      const r = await asUser(
+        mgrB,
+        `select public.submit_agency_float_reconciliation($1,$2,$3)`,
+        [f.svc.tillId, 100_000, 'MTN-ST-9'],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('42501');
+    });
+  });
+
+  // =========================================================================
+  describe('commission settlement correction (Task 7)', () => {
+    it('restores 1310 by contra and keeps the original settlement', async () => {
+      const svc = await provider({ code: 'SETX1', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 10_000_000);
+      await post(svc, 200_000); // 10,000 accrued
+      const settled = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.record_commission_settlement($1,$2,$3,$4,$5) as id`,
+          params: [svc.providerId, branchA, 10_000, cashA, 'STMT-X1'],
+        },
+      ]);
+      expect(settled.ok, settled.message).toBe(true);
+      const id = (settled.rows[0] as { id: string }).id;
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(0);
+
+      const cashBefore = await balance('1010-BR2601');
+      const rev = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.reverse_commission_settlement($1,'posted against the wrong provider') as e`,
+          params: [id],
+        },
+      ]);
+      expect(rev.ok, rev.message).toBe(true);
+
+      expect(await linesOf((rev.rows[0] as { e: string }).e)).toEqual([
+        { code: '1310', debit: 10_000, credit: 0 },
+        { code: '1010-BR2601', debit: 0, credit: 10_000 },
+      ]);
+      expect(cashBefore - (await balance('1010-BR2601'))).toBe(10_000);
+
+      // The receivable is back, which is the whole point: the amended
+      // agency_commission_outstanding() counts the correction.
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(10_000);
+
+      // The original row is preserved and annotated.
+      const row = await queryOne<{
+        status: string;
+        by: string;
+        reason: string;
+        amount: string;
+      }>(
+        `select status, reversed_by::text as by, reversal_reason as reason,
+                settlement_amount::text as amount
+           from public.agency_commission_settlements where id = $1`,
+        [id],
+      );
+      expect(row.status).toBe('reversed');
+      expect(row.by).toBe(mgrA.profileId);
+      expect(row.reason).toBe('posted against the wrong provider');
+      expect(Number(row.amount)).toBe(10_000);
+    });
+
+    it('releases a historical transaction that the settlement had blocked', async () => {
+      const svc = await provider({ code: 'SETX2', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 10_000_000);
+      const txId = await post(svc, 200_000); // 10,000 accrued
+
+      const settled = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.record_commission_settlement($1,$2,$3,$4,$5) as id`,
+          params: [svc.providerId, branchA, 10_000, cashA, 'STMT-X2'],
+        },
+      ]);
+      expect(settled.ok, settled.message).toBe(true);
+      const settlementId = (settled.rows[0] as { id: string }).id;
+
+      // Phase 4B refuses the reversal while the commission is settled.
+      const blocked = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.reverse_agency_transaction($1,'customer never received it')`,
+          params: [txId],
+        },
+      ]);
+      expect(blocked.ok).toBe(false);
+      expect(blocked.message).toMatch(/settle/i);
+
+      // Correct the settlement...
+      const corrected = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.reverse_commission_settlement($1,'settled in error')`,
+          params: [settlementId],
+        },
+      ]);
+      expect(corrected.ok, corrected.message).toBe(true);
+
+      // ...and the historical reversal becomes possible again.
+      const now = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.reverse_agency_transaction($1,'customer never received it') as e`,
+          params: [txId],
+        },
+      ]);
+      expect(now.ok, now.message).toBe(true);
+      expect((now.rows[0] as { e: string }).e).toBeTruthy();
+
+      // And the receivable nets to zero: accrued, settled, corrected, reversed.
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(0);
+    });
+
+    it('refuses without authority, twice, without a reason, and cross-branch', async () => {
+      const svc = await provider({ code: 'SETX3', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 10_000_000);
+      await post(svc, 200_000);
+      const settled = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.record_commission_settlement($1,$2,$3,$4,$5) as id`,
+          params: [svc.providerId, branchA, 10_000, cashA, 'STMT-X3'],
+        },
+      ]);
+      expect(settled.ok, settled.message).toBe(true);
+      const id = (settled.rows[0] as { id: string }).id;
+
+      const bySec = await asUser(
+        secA,
+        `select public.reverse_commission_settlement($1,'no authority')`,
+        [id],
+      );
+      expect(bySec.ok).toBe(false);
+      expect(bySec.code).toBe('42501');
+      expect(bySec.message).toMatch(/agency:reverse/);
+
+      const crossBranch = await asUser(
+        mgrB,
+        `select public.reverse_commission_settlement($1,'not my branch')`,
+        [id],
+      );
+      expect(crossBranch.ok).toBe(false);
+      expect(crossBranch.code).toBe('42501');
+
+      const noReason = await asUser(
+        mgrA,
+        `select public.reverse_commission_settlement($1,'  ')`,
+        [id],
+      );
+      expect(noReason.ok).toBe(false);
+      expect(noReason.message).toMatch(/needs a reason/i);
+
+      const first = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.reverse_commission_settlement($1,'first')`,
+          params: [id],
+        },
+      ]);
+      expect(first.ok, first.message).toBe(true);
+      const second = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.reverse_commission_settlement($1,'again')`,
+          params: [id],
+        },
+      ]);
+      expect(second.ok).toBe(false);
+      expect(second.message).toMatch(/already reversed/i);
+    });
+
+    it('refuses when the receiving account no longer holds the money', async () => {
+      // A dedicated branch, so the correction's cash check is about this
+      // till alone and not the shared Head Office one.
+      const branch = (
+        await queryOne<{ id: string }>(
+          `insert into public.branches (branch_code, name, location, status, opened_on)
+           values ('BRCRX','Correction Branch','Testing','active',current_date)
+           returning id`,
+        )
+      ).id;
+      await query(
+        `insert into public.ledger_accounts
+           (code, name, account_type, normal_side, cash_kind, branch_id, is_postable, status)
+         values ('1010-BRCRX','Cash — Correction Branch','asset','debit',
+                 'cash_at_hand',$1,true,'active')`,
+        [branch],
+      );
+      const till = await accountId('1010-BRCRX');
+
+      const svc = await provider({
+        code: 'SETX4',
+        branch,
+        rateBps: 500,
+      });
+      await fund(svc.floatCode as string, 10_000_000);
+
+      const mgrC = await createTestUser('manager');
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branch,
+        mgrC.profileId,
+      ]);
+      const secC = await createTestUser('secretary_treasurer');
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branch,
+        secC.profileId,
+      ]);
+
+      await post(svc, 200_000, secC, mgrC); // 10,000 accrued at this branch
+      const settled = await asUserCommitted(mgrC, [
+        {
+          sql: `select public.record_commission_settlement($1,$2,$3,$4,$5) as id`,
+          params: [svc.providerId, branch, 10_000, till, 'STMT-X4'],
+        },
+      ]);
+      expect(settled.ok, settled.message).toBe(true);
+      const id = (settled.rows[0] as { id: string }).id;
+      // 200,000 the customer deposited plus the 10,000 commission received.
+      expect(await balance('1010-BRCRX')).toBe(210_000);
+
+      // The branch spends the commission on an expense, emptying the till.
+      await query(
+        `select public.post_journal($1, current_date, 'spent it',
+            'expense', null, null, null,
+            jsonb_build_array(
+              jsonb_build_object('account_id', public.ledger_account_by_code('5900'),
+                'debit', 210000, 'credit', 0),
+              jsonb_build_object('account_id', $2::uuid, 'debit', 0, 'credit', 210000)),
+            now(),
+            (select p.id from public.profiles p join public.user_roles r
+               on r.profile_id = p.id where r.role_key = 'owner_admin'
+              order by p.created_at limit 1),
+            'fixture')`,
+        [branch, till],
+      );
+      expect(await balance('1010-BRCRX')).toBe(0);
+
+      const r = await asUserCommitted(mgrC, [
+        {
+          sql: `select public.reverse_commission_settlement($1,'settled in error')`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/holds 0 shillings/);
+    });
+  });
+
+  // =========================================================================
+  describe('cross-cutting lock order (concurrency requirement)', () => {
+    it('takes the provider lock before the account locks, in every function', async () => {
+      // The ordering rule is what makes two keyspaces deadlock-free. Reading
+      // it off the source is cheap and would catch a later function that
+      // took the locks the other way round.
+      const rows = await query<{ name: string; ok: boolean }>(
+        `select p.proname as name,
+                (position('lock_agency_provider_balance' in pg_get_functiondef(p.oid))
+                   < position('lock_ledger_balances' in pg_get_functiondef(p.oid))) as ok
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.prokind = 'f'
+            and pg_get_functiondef(p.oid) like '%lock_agency_provider_balance%'
+            and pg_get_functiondef(p.oid) like '%lock_ledger_balances%'
+            and p.proname <> 'lock_agency_provider_balance'
+          order by p.proname`,
+      );
+      // Every function that takes both must take the provider lock first.
+      expect(rows.length).toBeGreaterThanOrEqual(4);
+      expect(rows.filter((r) => !r.ok)).toEqual([]);
+    });
+
+    it('does not deadlock when a settlement and a replenishment interleave', async () => {
+      // Different operations on the same provider and branch, issued
+      // simultaneously. With one global lock order neither can hold a lock
+      // the other needs, so both complete rather than one aborting on a
+      // deadlock detection.
+      const svc = await provider({ code: 'SETL1', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 10_000_000);
+      await post(svc, 200_000); // 10,000 commission outstanding
+      await query(
+        `update public.finance_settings
+            set low_balance_agency_float = 0, low_balance_cash_at_hand = 0
+          where id = 1`,
+      );
+
+      const a = await getClient();
+      const b = await getClient();
+      try {
+        for (const c of [a, b]) {
+          await c.query('begin');
+          await c.query(`select set_config('request.jwt.claim.sub',$1,true)`, [
+            mgrA.authUserId,
+          ]);
+        }
+        // A settles commission; B tops the same provider's float up.
+        await a.query(
+          `select public.record_commission_settlement($1,$2,5000,$3,'LOCK-A')`,
+          [svc.providerId, branchA, cashA],
+        );
+        const bWork = b.query(
+          `select public.post_float_replenishment($1,$2,$3,'LOCK-B')`,
+          [svc.tillId, 100_000, bankA],
+        );
+        await a.query('commit');
+        await bWork; // must succeed, not deadlock
+        await b.query('commit');
+      } finally {
+        a.release();
+        b.release();
+      }
+
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(5_000);
+      expect(await balance(svc.floatCode as string)).toBe(10_100_000 - 200_000);
+    });
+  });
 });
