@@ -328,6 +328,35 @@ screen that pushes the page sideways — which is how a real defect was caught:
 > the two registers: any table that ever holds a required field would hit it
 > again. Every one of the 60 pairs now reports zero overflow.
 
+### Continuous integration
+
+All four mandatory jobs pass at **`d824359`**, CI run
+[42506457381](https://github.com/JTREVORM/lending-manager/actions/runs/42506457381):
+
+| Job | Result |
+|---|---|
+| `checks, unit/integration, build` | ✅ — typecheck, lint, format, 2658 tests, money audit, secret scan, dependency audit, production build, bundle assertions |
+| `database (real PostgreSQL)` | ✅ — security gate, 2238 database tests, the upgrade verifier, the financial reconciliation certification |
+| `browser E2E (production build, fresh seed)` | ✅ — the whole browser suite on a fresh seed, both screenshot captures, both artifacts uploaded |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | ✅ |
+
+`Supabase Preview` is skipped, which is the evidence that nothing reached the
+hosted project.
+
+Two things in that run are worth stating rather than hiding:
+
+- The rehearsal job failed twice on `apt-get update` before passing
+  unchanged on a re-run — the PGDG repository's signature could not be
+  verified on those two runners. Infrastructure, not code, and confirmed as
+  such by re-running rather than by changing anything.
+- A local full-suite run showed eight write-spec failures that CI does not.
+  They are fixture exhaustion: those specs approve a claim, pay it, mark a
+  register — each a one-shot seeded fixture — and the local stack had been
+  reused across several partial runs. CI seeds fresh, which is why its run is
+  the one that counts.
+
+The only commit after `d824359` is this report.
+
 ### Demonstration data
 
 The harness seed builds a counter that has been trading: three obviously
