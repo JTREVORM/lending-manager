@@ -2,6 +2,7 @@ import { Receipt } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
 import { AgencyDirectionBadge, AgencyStatusBadge } from '@/components/agency/badges';
+import { CommissionExceptionForm } from '@/components/agency/commission-exception-form';
 import { LifecycleControls } from '@/components/agency/lifecycle-controls';
 import { Card } from '@/components/ui/card';
 import { DateValue } from '@/components/ui/data-value';
@@ -105,6 +106,26 @@ export default async function AgencyTransactionPage({
           )}
         </dl>
       </Card>
+
+      {contextCan(context, 'agency:commission_exception') &&
+      (row.status === 'draft' || row.status === 'awaiting_verification') ? (
+        <Card>
+          <h2 className="text-sm font-semibold">Authorise a commission difference</h2>
+          <p className="text-text-muted mt-1 text-xs">
+            The counter records no commission: the engine computes it from the
+            provider&rsquo;s configured terms. A different figure is the Owner&rsquo;s
+            decision, and needs a reason and something checkable.
+          </p>
+          <div className="mt-2 min-w-0">
+            <CommissionExceptionForm
+              transactionId={row.id}
+              computed={row.commissionComputed}
+              supplied={row.commissionSupplied}
+              alreadyAuthorised={row.commissionExceptionReason !== null}
+            />
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <h2 className="text-sm font-semibold">What happens next</h2>

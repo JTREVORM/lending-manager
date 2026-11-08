@@ -103,6 +103,22 @@ export const commissionExceptionSchema = z.object({
   reason: reasonSchema,
   /** A statement number, a handset reference, a ticket: something checkable. */
   evidence: nonEmptyString('External evidence', 200),
+  /**
+   * The figure the Owner is authorising.
+   *
+   * Required by the interface, because the counter supplies none: the
+   * standard form has no commission field, so without this the owner-only
+   * workflow would have no figure to authorise. Zero is a legitimate answer -
+   * "we agreed nothing on this one" is a real decision - so it is allowed
+   * here and the database refuses it only if it equals what the terms
+   * already produce.
+   */
+  proposedAmount: ugxAmountFromText({
+    empty: 'Enter the commission being authorised.',
+    malformed: 'Enter a whole number of shillings, with no decimals.',
+    nonPositive: 'A commission cannot be negative.',
+    allowZero: true,
+  }),
 });
 
 // ---------------------------------------------------------------------------

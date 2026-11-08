@@ -7581,6 +7581,7 @@ export type Database = {
           p_transaction_id: string;
           p_reason: string;
           p_evidence: string;
+          p_proposed_amount?: number | null;
         };
         Returns: undefined;
       };

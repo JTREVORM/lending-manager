@@ -2160,6 +2160,173 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       }
     });
 
+    it('lets an Owner propose the exceptional figure the counter never supplies', async () => {
+      // The Phase 4D defect. create_agency_transaction is now called with a
+      // null commission - the counter has no field for it - and the
+      // authorisation function refused exactly that, so the owner-only
+      // workflow had no transaction it would accept. A guard against
+      // authorising nothing had become a dead end.
+      const ownerA = await createTestUser('owner_admin');
+      const svc = await provider({ code: 'SETP20', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode as string, 5_000_000);
+
+      // Recorded exactly as the interface records it: no commission supplied.
+      const key = `P20-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770010000','C',$4,0,null,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const id = (c.rows[0] as { id: string }).id;
+
+      const before = await queryOne<{ supplied: string | null }>(
+        `select commission_supplied::text as supplied
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(before.supplied).toBeNull();
+
+      // Three arguments still mean what they meant: nothing to authorise.
+      const old = await asUser(
+        ownerA,
+        `select public.authorise_agency_commission_exception($1,'promo','STMT-P20')`,
+        [id],
+      );
+      expect(old.ok).toBe(false);
+      expect(old.message).toMatch(/supplies no commission of its own/i);
+
+      // Four arguments record the Owner's figure and authorise it.
+      const r = await asUserCommitted(ownerA, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1,$2,$3,$4)`,
+          params: [id, 'provider ran a promotion', 'MTN-STMT-P20', 1_800],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      const after = await queryOne<{
+        supplied: string;
+        amount: string;
+        computed: string;
+        by: string;
+      }>(
+        `select commission_supplied::text as supplied,
+                commission_exception_amount::text as amount,
+                commission_exception_computed::text as computed,
+                commission_exception_by::text as by
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(Number(after.supplied)).toBe(1_800);
+      // Pinned on both sides, which is what stops it drifting later.
+      expect(Number(after.amount)).toBe(1_800);
+      expect(Number(after.computed)).toBe(1_500);
+      expect(after.by).toBe(ownerA.profileId);
+
+      // And the audit row carries the figure before as well as after, so a
+      // change is never quiet.
+      const audit = await queryOne<{ before: string | null; now: string }>(
+        `select (old_value->>'commission_supplied_before') as before,
+                (new_value->>'commission_supplied') as now
+           from public.agency_transaction_audit_log
+          where transaction_id = $1 and action = 'commission_exception'`,
+        [id],
+      );
+      expect(audit.before).toBeNull();
+      expect(Number(audit.now)).toBe(1_800);
+
+      // It posts the authorised figure, and a Manager still does the posting.
+      const sub = await asUserCommitted(secA, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+      const v = await asUserCommitted(mgrA, [
+        { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+      ]);
+      expect(v.ok, v.message).toBe(true);
+      const lines = await linesOf((v.rows[0] as { e: string }).e);
+      expect(lines).toContainEqual({ code: '1310', debit: 1_800, credit: 0 });
+      expect(lines).toContainEqual({ code: '4510', debit: 0, credit: 1_800 });
+    });
+
+    it('refuses a proposed figure that is negative, excessive or no different', async () => {
+      const ownerA = await createTestUser('owner_admin');
+      const svc = await provider({ code: 'SETP21', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode as string, 5_000_000);
+
+      const make = async (): Promise<string> => {
+        const key = `P21-${Math.random().toString(36).slice(2, 12)}`;
+        const c = await asUserCommitted(secA, [
+          {
+            sql: `select public.create_agency_transaction($1,$2,$3,'+256770010001','C',$4,0,null,null,null,$4) as id`,
+            params: [svc.typeId, 100_000, svc.tillId, key],
+          },
+        ]);
+        expect(c.ok, c.message).toBe(true);
+        return (c.rows[0] as { id: string }).id;
+      };
+
+      const cases: [number, RegExp][] = [
+        [-1, /cannot be negative/i],
+        [100_001, /cannot exceed the principal/i],
+        [1_500, /nothing to authorise/i], // exactly what the terms produce
+      ];
+      for (const [amount, expected] of cases) {
+        const id = await make();
+        const r = await asUser(
+          ownerA,
+          `select public.authorise_agency_commission_exception($1,'why','EV',$2)`,
+          [id, amount],
+        );
+        expect(r.ok, `amount ${amount}`).toBe(false);
+        expect(r.message, `amount ${amount}`).toMatch(expected);
+      }
+    });
+
+    it('records a change made after submission, rather than quietly', async () => {
+      // Allowed - the alternative is cancelling a customer's transaction to
+      // correct a commission - but the audit row must carry both figures.
+      const ownerA = await createTestUser('owner_admin');
+      const svc = await provider({ code: 'SETP22', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode as string, 5_000_000);
+
+      const key = `P22-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770010002','C',$4,0,2000,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const id = (c.rows[0] as { id: string }).id;
+      const sub = await asUserCommitted(secA, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(sub.ok, sub.message).toBe(true);
+
+      const r = await asUserCommitted(ownerA, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1,$2,$3,$4)`,
+          params: [id, 'statement corrected', 'MTN-STMT-P22', 1_800],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      const audit = await queryOne<{ before: string; now: string; status: string }>(
+        `select (old_value->>'commission_supplied_before') as before,
+                (new_value->>'commission_supplied') as now,
+                (old_value->>'status') as status
+           from public.agency_transaction_audit_log
+          where transaction_id = $1 and action = 'commission_exception'`,
+        [id],
+      );
+      expect(Number(audit.before)).toBe(2_000);
+      expect(Number(audit.now)).toBe(1_800);
+      expect(audit.status).toBe('awaiting_verification');
+    });
+
     it('scopes a branch-held Owner/Admin to their own branch for a commission exception', async () => {
       // The gap the review named: agency:commission_exception is owner-only,
       // and every earlier test gave the owner no branch, so Head Office's

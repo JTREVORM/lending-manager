@@ -144,9 +144,9 @@
         "public_default_acl": false
       }
     },
-    "authorise_agency_commission_exception(p_transaction_id uuid, p_reason text, p_evidence text)": {
+    "authorise_agency_commission_exception(p_transaction_id uuid, p_reason text, p_evidence text, p_proposed_amount bigint)": {
       "classification": "A",
-      "reason": "Phase 4B-S agency RPC. Authorises a commission figure that differs from what the provider's configured terms produce, recording the reason, the external evidence and the authorising officer. Refuses any caller without the agency:commission_exception capability with SQLSTATE 42501, before it reads the transaction; that capability is granted to owner_admin only, so a counter officer cannot raise recognised commission by typing another amount. Works only on a draft or awaiting_verification transaction, refuses one that supplies no commission figure and one whose figure does not actually differ, and writes an append-only commission_exception audit row. Cross-branch access is refused by agency_locked_transaction().",
+      "reason": "Phase 4B-S agency RPC, extended in Phase 4D. Authorises a commission figure that differs from what the provider's configured terms produce, recording the reason, the external evidence, the authorising officer and both pinned figures. Called with four arguments it also records the Owner's proposed amount, which the interface must do because the counter supplies none - without it the workflow was unreachable. Refuses any caller without agency:commission_exception with SQLSTATE 42501 before it reads the transaction; that capability is granted to owner_admin only. Refuses another branch's transaction via agency_locked_transaction(), a posted transaction, a negative figure, one above the principal, and one that does not actually differ. The audit row carries the figure before and after, so a change made after submission is never quiet.",
       "surface": {
         "anon": false,
         "authenticated": true,

@@ -342,16 +342,21 @@ export async function authoriseCommissionExceptionAction(
     transactionId: formData.get('transactionId'),
     reason: formData.get('reason'),
     evidence: formData.get('evidence'),
+    proposedAmount: formData.get('proposedAmount'),
   });
   if (!parsed.success) {
     return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
   }
 
   const supabase = await createSupabaseServerClient();
+  // The fourth argument is what makes this reachable at all: the counter
+  // supplies no commission, so without a proposed figure the database would
+  // refuse every transaction the interface can produce.
   const { error } = await supabase.rpc('authorise_agency_commission_exception', {
     p_transaction_id: parsed.data.transactionId,
     p_reason: parsed.data.reason,
     p_evidence: parsed.data.evidence,
+    p_proposed_amount: parsed.data.proposedAmount,
   });
   return settle(error, 'Authorising a commission difference', 'Difference authorised.');
 }
