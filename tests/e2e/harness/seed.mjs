@@ -2298,6 +2298,402 @@ async function seedMembershipAndSavings() {
 }
 
 // ---------------------------------------------------------------------------
+// Polytos Phase 4D: agency banking
+//
+// A counter that has been trading: two mobile money providers with float in
+// their tills and a utility biller whose collections are held as a payable.
+// Every posting goes
+// through the real functions - `create_agency_transaction`,
+// `submit_agency_transaction`, `verify_agency_transaction`,
+// `post_float_replenishment`, `record_commission_settlement`,
+// `post_agency_payable_settlement` and both reconciliations - with a
+// secretary recording and a manager verifying, because that is the only way
+// these rows can exist in production and a seeder that wrote them directly
+// would hand the browser suite a database the application cannot produce.
+//
+// Two things are written directly, and only two: these providers and their
+// transaction types. Nothing in the system writes those tables - there is no
+// function and no capability, because approving a provider's commercial terms
+// is a decision that has not been taken - which is exactly what the
+// Providers screen says, read-only, rather than offering a control that
+// cannot work.
+//
+// ## Why these are separate providers, prefixed DEMO_
+//
+// Phase 4A seeded a registry of nine real providers - MTN, Airtel, UEDCL,
+// NWSC, DStv and the rest - every one of them provisional and inactive,
+// because their commercial terms have not been approved. Activating one is
+// not this phase's to do, so none of them is touched here. The three below
+// are additional, obviously synthetic providers that exist only in this
+// throwaway harness database, which is created from the migrations and
+// destroyed with the run. They give the fourteen agency screens real postings
+// to show without altering the state of a single registered provider, and the
+// registry's nine provisional rows remain exactly as the migration left them
+// - which is also what makes the readiness badge and every provisional
+// refusal demonstrable.
+//
+// `scripts/seed-demo.ts`, which can be pointed at a hosted project, seeds
+// none of this.
+// ---------------------------------------------------------------------------
+async function seedAgency() {
+  const branch = await one(
+    `select id, branch_code from public.branches order by branch_code limit 1`,
+  );
+  const cash = await one(
+    `select a.id, a.code, coalesce(b.balance, 0)::text as balance
+       from public.ledger_accounts a
+       left join public.ledger_account_balances b on b.account_id = a.id
+      where a.cash_kind = 'cash_at_hand' and a.branch_id = $1`,
+    [branch.id],
+  );
+
+  const addProvider = async (p) => {
+    const row = await one(
+      `insert into public.agency_service_providers
+         (code, name, category, float_model, payable_account_id, income_account_id,
+          commission_model, commission_rate_bps, commission_fixed,
+          is_provisional, is_active)
+       values ($1, $2, $3, $4,
+               (select id from public.ledger_accounts where code = $5),
+               (select id from public.ledger_accounts where code = '4510'),
+               $6, $7, $8, $9, true)
+       returning id`,
+      [
+        p.code,
+        p.name,
+        p.category,
+        p.floatModel,
+        p.payable ?? null,
+        p.commissionModel,
+        p.rateBps ?? null,
+        p.fixed ?? null,
+        p.provisional ?? false,
+      ],
+    );
+    return row.id;
+  };
+
+  const addType = async (providerId, t) => {
+    const row = await one(
+      `insert into public.agency_transaction_types
+         (provider_id, code, name, direction, max_single_transaction,
+          requires_approval_above, is_active)
+       values ($1, $2, $3, $4, $5, $6, $7) returning id`,
+      [
+        providerId,
+        t.code,
+        t.name,
+        t.direction,
+        t.max,
+        t.approvalAbove ?? null,
+        t.active ?? true,
+      ],
+    );
+    return row.id;
+  };
+
+  const mtn = await addProvider({
+    code: 'DEMO_MTN',
+    name: 'MTN Mobile Money (demonstration)',
+    category: 'mobile_money',
+    floatModel: 'provider_float',
+    commissionModel: 'deferred',
+    rateBps: 150,
+  });
+  const airtel = await addProvider({
+    code: 'DEMO_AIRTEL',
+    name: 'Airtel Money (demonstration)',
+    category: 'mobile_money',
+    floatModel: 'provider_float',
+    commissionModel: 'deferred',
+    rateBps: 120,
+  });
+  // A utility biller: the customer's money is ours to hold and remit, so it
+  // is a payable rather than a float, and the commission is a flat fee.
+  const nwsc = await addProvider({
+    code: 'DEMO_WATER',
+    name: 'National Water bills (demonstration)',
+    category: 'agency_banking',
+    floatModel: 'cash_payable',
+    payable: '2290',
+    commissionModel: 'immediate',
+    fixed: 800,
+  });
+  const mtnDeposit = await addType(mtn, {
+    code: 'DEMO_MTN_DEP',
+    name: 'Cash in to a wallet',
+    direction: 'deposit',
+    max: 2_000_000,
+  });
+  const mtnWithdrawal = await addType(mtn, {
+    code: 'DEMO_MTN_WDR',
+    name: 'Cash out of a wallet',
+    direction: 'withdrawal',
+    max: 1_000_000,
+    // Configured, and not enforced: the posting engine does not read it.
+    // Seeded so the Providers screen has a figure to strike through and say
+    // so, rather than describing a column nobody can see.
+    approvalAbove: 500_000,
+  });
+  const airtelDeposit = await addType(airtel, {
+    code: 'DEMO_AIR_DEP',
+    name: 'Cash in to a wallet',
+    direction: 'deposit',
+    max: 2_000_000,
+  });
+  const airtelWithdrawal = await addType(airtel, {
+    code: 'DEMO_AIR_WDR',
+    name: 'Cash out of a wallet',
+    direction: 'withdrawal',
+    max: 1_000_000,
+  });
+  const waterBill = await addType(nwsc, {
+    code: 'DEMO_WATER_PAY',
+    name: 'Water bill',
+    direction: 'payment',
+    max: 1_000_000,
+  });
+  // Withdrawn from the counter but kept on the record.
+  await addType(nwsc, {
+    code: 'DEMO_WATER_OLD',
+    name: 'Water bill (old tariff)',
+    direction: 'payment',
+    max: 500_000,
+    active: false,
+  });
+  const till = async (providerId) =>
+    (
+      await one(`select public.ensure_agency_float_account($1, $2) as id`, [
+        providerId,
+        branch.id,
+      ])
+    ).id;
+
+  const mtnTill = await till(mtn);
+  const airtelTill = await till(airtel);
+
+  // Moving the company's own cash into a provider's float. An Owner's, and
+  // refused if the drawer cannot cover it - which is why these two figures
+  // are well inside the cash the lending seed above leaves at hand (about
+  // four million). If that ever shrinks, the replenishment refuses with the
+  // drawer's balance in the message rather than seeding something impossible.
+  await asUser(owner, `select public.post_float_replenishment($1, $2, $3, $4, null)`, [
+    mtnTill,
+    1_500_000,
+    cash.id,
+    'MTN float top-up',
+  ]);
+  await asUser(owner, `select public.post_float_replenishment($1, $2, $3, $4, null)`, [
+    airtelTill,
+    800_000,
+    cash.id,
+    'Airtel float top-up',
+  ]);
+
+  let keySeq = 0;
+  const nextKey = () => {
+    keySeq += 1;
+    return `E2E-AG-${String(keySeq).padStart(4, '0')}`;
+  };
+
+  /** Records one transaction as the secretary. Returns its id. */
+  const record = async (typeId, amount, tillId, customer, reference, fee = 0) => {
+    const key = nextKey();
+    const row = await asUser(
+      secretary,
+      `select public.create_agency_transaction($1,$2,$3,$4,$5,$6,$7,null,null,null,$8) as id`,
+      [typeId, amount, tillId, customer, 'Counter customer', reference, fee, key],
+    );
+    return row[0].id;
+  };
+
+  const submit = (id) =>
+    asUser(secretary, `select public.submit_agency_transaction($1)`, [id]);
+
+  /**
+   * Verifies as the manager, quoting the revision the row is at.
+   *
+   * The revision is read here rather than assumed, which is what a manager's
+   * screen does: the database refuses a verification quoting a stale one.
+   */
+  const verify = async (id) => {
+    const r = await one(`select revision from public.agency_transactions where id = $1`, [
+      id,
+    ]);
+    await asUser(manager, `select public.verify_agency_transaction($1, $2)`, [
+      id,
+      r.revision,
+    ]);
+    return id;
+  };
+
+  const posted = async (typeId, amount, tillId, customer, reference, fee = 0) => {
+    const id = await record(typeId, amount, tillId, customer, reference, fee);
+    await submit(id);
+    return verify(id);
+  };
+
+  // A trading day's worth, across both wallets and the biller.
+  await posted(mtnDeposit, 450_000, mtnTill, '+256772200001', 'MP260401.1234.A11111');
+  await posted(mtnDeposit, 120_000, mtnTill, '+256772200002', 'MP260401.1235.A11112');
+  await posted(mtnWithdrawal, 300_000, mtnTill, '+256772200003', 'MP260401.1236.A11113');
+  await posted(airtelDeposit, 200_000, airtelTill, '+256772200004', 'AIR-77120045');
+  await posted(airtelWithdrawal, 150_000, airtelTill, '+256772200005', 'AIR-77120046');
+  await posted(waterBill, 86_500, null, 'NWSC-0455121', 'NW-882311', 1_000);
+  await posted(waterBill, 142_000, null, 'NWSC-0455122', 'NW-882312', 1_000);
+
+  // One the counter recorded and nobody has verified: the pending queue.
+  const awaiting = await record(
+    mtnDeposit,
+    275_000,
+    mtnTill,
+    '+256772200006',
+    'MP260401.1240.A11117',
+  );
+  await submit(awaiting);
+
+  // One still being typed.
+  const draft = await record(
+    airtelDeposit,
+    60_000,
+    airtelTill,
+    '+256772200007',
+    'AIR-77120050',
+  );
+
+  // One posted and then reversed, so the register shows a contra entry and
+  // the history screen has a reversal to explain.
+  const reversed = await posted(
+    mtnDeposit,
+    95_000,
+    mtnTill,
+    '+256772200008',
+    'MP260401.1241.A11118',
+  );
+  await asUser(manager, `select public.reverse_agency_transaction($1, $2)`, [
+    reversed,
+    'Customer cancelled at the counter before the wallet was credited.',
+  ]);
+
+  // One where the provider paid a promotional rate, authorised by the Owner
+  // and then verified by a manager who reloaded and saw the new figure. This
+  // is the Phase 4D revision guard end to end, in the demonstration data.
+  const exceptional = await record(
+    mtnDeposit,
+    500_000,
+    mtnTill,
+    '+256772200009',
+    'MP260401.1242.A11119',
+  );
+  await submit(exceptional);
+  await asUser(
+    owner,
+    `select public.authorise_agency_commission_exception($1, $2, $3, $4)`,
+    [
+      exceptional,
+      'MTN ran a promotional rate on deposits over 400,000 this week.',
+      'MTN statement 2026-04-01, line 42',
+      9_000,
+    ],
+  );
+  await verify(exceptional);
+
+  // Part of the commission MTN owes has been paid in; part of what we hold
+  // for the water board has been remitted.
+  const commissionSettlement = await asUser(
+    owner,
+    `select public.record_commission_settlement($1, $2, $3, $4, $5, null) as id`,
+    [mtn, branch.id, 6_000, cash.id, 'MTN commission statement 2026-03'],
+  );
+  const payableSettlement = await asUser(
+    owner,
+    `select public.post_agency_payable_settlement($1, $2, $3, $4, $5, null) as id`,
+    [nwsc, branch.id, 150_000, cash.id, 'NWSC receipt 55120'],
+  );
+
+  // A float statement the provider sent that does not agree with our books,
+  // left awaiting a second officer: the float reconciliation screen's own
+  // row, and one of the end-of-day exceptions.
+  const floatBooks = await one(
+    `select coalesce(b.balance, 0)::text as balance
+       from public.agency_provider_float_accounts f
+       left join public.ledger_account_balances b on b.account_id = f.ledger_account_id
+      where f.id = $1`,
+    [mtnTill],
+  );
+  // Recorded by the owner, so a manager is the second officer who may
+  // certify it - and a manager holds no `agency:variance_adjustment`, which
+  // is what makes "writing a difference off is the Owner's" visible on the
+  // screen. `agency:reconcile` is a manager's and an owner's capability; a
+  // secretary holds neither, which is why neither reading is theirs.
+  const openFloatStatement = await asUser(
+    owner,
+    `select public.submit_agency_float_reconciliation($1, $2, $3, null, $4) as id`,
+    [
+      mtnTill,
+      Number(floatBooks.balance) - 4_000,
+      'MTN-STMT-2026-04-01',
+      'Provider shows 4,000 less than our books. Queried with the agent line.',
+    ],
+  );
+
+  // And a counted drawer, certified with its difference left outstanding -
+  // which is the third kind of end-of-day exception. Counted last, because a
+  // count is refused at approval if its account moves in between.
+  const drawer = await one(
+    `select coalesce(b.balance, 0)::text as balance
+       from public.ledger_account_balances b where b.account_id = $1`,
+    [cash.id],
+  );
+  const certifiedCount = await asUser(
+    manager,
+    `select public.submit_agency_cash_reconciliation($1, $2, null, $3) as id`,
+    [
+      cash.id,
+      Number(drawer.balance) - 2_000,
+      'Counted at close. Two thousand short; recount gave the same figure.',
+    ],
+  );
+  await asUser(
+    owner,
+    `select public.approve_agency_cash_reconciliation($1, false, null)`,
+    [certifiedCount[0].id],
+  );
+
+  console.log('agency banking seeded');
+
+  return {
+    agency: {
+      providers: { mtn, airtel, nwsc },
+      types: { mtnDeposit, mtnWithdrawal, waterBill },
+      tills: { mtn: mtnTill, airtel: airtelTill },
+      transactions: {
+        awaitingVerification: awaiting,
+        draft,
+        reversed,
+        commissionException: exceptional,
+      },
+      settlements: {
+        commission: commissionSettlement[0].id,
+        payable: payableSettlement[0].id,
+      },
+      reconciliations: {
+        certifiedCashCount: certifiedCount[0].id,
+        openFloatStatement: openFloatStatement[0].id,
+      },
+    },
+  };
+}
+
+const agencyPresent = await one(
+  `select pg_catalog.to_regclass('public.agency_service_providers') is not null as present`,
+);
+const agency = agencyPresent.present
+  ? await seedAgency()
+  : (console.log('agency banking skipped: the Phase 4 agency schema is not present'),
+    null);
+
+// ---------------------------------------------------------------------------
 // The fixture manifest
 //
 // Written as JSON beside the harness so a spec refers to a loan by what it
@@ -2336,6 +2732,9 @@ async function seedMembershipAndSavings() {
     // would let a spec read one and fail somewhere confusing; a manifest
     // missing the keys makes the spec's own type the thing that complains.
     ...(polytos ?? {}),
+    // Polytos Phase 4D. Named the same way, and absent entirely where the
+    // agency schema was not there to seed.
+    ...(agency ?? {}),
   };
 
   writeFileSync(

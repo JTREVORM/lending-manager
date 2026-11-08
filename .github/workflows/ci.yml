@@ -306,6 +306,33 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # The same thing again for Phase 4D's fourteen agency screens. A
+      # separate script and a separate artifact rather than more entries in
+      # the one above: the two phases are reviewed separately, and a reviewer
+      # asked for the agency evidence should not have to find fifteen PNGs
+      # among seventy-five.
+      #
+      # It also measures each screen's horizontal overflow at four widths and
+      # exits non-zero on a screen that pushes the page sideways - which is
+      # how the Phase 4D settlement registers were caught doing exactly that
+      # at 390px, through an absolutely positioned screen-reader hint.
+      - name: Capture the Phase 4D agency screens
+        if: success()
+        run: |
+          source <(bash tests/e2e/harness/stack.sh env)
+          node scripts/capture-agency-screens.mjs
+
+      - name: Upload the Phase 4D agency screens
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-phase-4d-agency-screens
+          # The PNGs and `timings.json` only — never `.e2e/state/`, which
+          # holds the harness's session cookies.
+          path: .e2e/shots/agency/
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Tear down the stack
         if: always()
         run: bash tests/e2e/harness/stack.sh down || true

@@ -1,0 +1,395 @@
+# POLYTOS — Phase 4D delivery report
+
+**Agency Banking & Digital Payments: the operational interface**
+
+Branch `phase4d/agency-banking-interface-2026-11-08`, stacked on PR #25
+(`fix/shared-till-concurrency-2026-11-08`). Draft, unmerged, and not deployed.
+
+---
+
+## 1. What this phase was asked for, and what it is
+
+Fourteen operational screens over the Phase 4A–4C agency engine, mobile-first,
+in the existing POLYTOS design system, with every financial action going
+through a server action that calls a database function. No journal arithmetic
+in React. No authorization by hidden button.
+
+It is built. Fourteen feature items across fourteen routes, every control
+either wired to a real authorized server action or visibly explained, and the
+whole section asserted in a real browser on both a desktop and a phone profile
+against a counter that has been trading.
+
+Three things in it are **not** what the brief assumed, and each is stated in
+its own section below rather than buried: the commission-exception workflow
+needed a database change before it could work at all (§4), verification needed
+a second one before maker-checker was real rather than nominal (§3), and
+provider configuration is read-only because no authorized write path for it
+exists (§7).
+
+---
+
+## 2. The screen inventory: 14 feature items, 14 routes
+
+The two counts match, and the mapping is not one-to-one. One route is a
+dashboard the brief did not list as a feature; one feature — transaction-type
+settings — has no route of its own, because it is the second half of the
+provider configuration screen and splitting it would put a provider's terms on
+one page and its limits on another.
+
+| # | Feature item | Route | Ships JS? |
+|---|---|---|---|
+| 1 | Record an agency transaction | `/agency/record` | yes |
+| 2 | Pending verification queue | `/agency/pending` | no |
+| 3 | Transaction history | `/agency/history` | no |
+| 4 | One transaction in full, with its lifecycle controls | `/agency/history/[transactionId]` | yes |
+| 5 | Float and till balances | `/agency/float` | no |
+| 6 | Float replenishment | `/agency/float/replenish` | yes |
+| 7 | Commission, and recording a remittance received | `/agency/commission` | yes |
+| 8 | Provider remittances, and paying one | `/agency/payables` | yes |
+| 9 | Physical cash reconciliation | `/agency/reconciliation/cash` | yes |
+| 10 | Electronic float reconciliation | `/agency/reconciliation/float` | yes |
+| 11 | Agency financial reports | `/agency/reports` | no |
+| 12 | End-of-day exceptions | `/agency/exceptions` | no |
+| 13 | Provider configuration | `/agency/providers` | no |
+| 14 | Transaction-type settings | `/agency/providers` (same screen) | no |
+| — | The section dashboard | `/agency` | no |
+
+**Fourteen feature items. Fourteen routes.** Items 13 and 14 share one route;
+`/agency` is the fourteenth route and is not one of the fourteen items.
+
+Nine of the fourteen ship no JavaScript at all. That is the reason the whole
+section cost 34 KB gzipped: a register that reads a view and renders a table
+is a Server Component, and only the seven components that take input cross
+into the browser.
+
+---
+
+## 3. The safeguard this phase added: verification against stale figures
+
+`verify_agency_transaction(uuid)` took only an identifier, so it could not
+tell a considered verification from a stale one. Reproduced before fixing:
+
+1. A manager opens the pending verification queue.
+2. An Owner authorises a commission exception on one of those rows, changing
+   the figure that will post.
+3. The manager presses Verify on the screen they already had.
+
+That posted the Owner's figure without the manager ever having seen it.
+Maker-checker in form — two people, two capabilities — but not in fact,
+because the second person approved something other than what they read.
+
+**The mechanism** (migration `20261113000200`): a `revision` counter on
+`agency_transactions`, incremented by a trigger whenever a field that affects
+the money changes, and `submitted_revision`, recorded when the transaction is
+handed to a second officer. Verification now takes the revision the verifier
+reviewed, and two guards refuse a stale posting:
+
+- a caller that quotes a revision must quote the current one;
+- a caller that quotes **nothing** is refused as soon as the figures have
+  moved after submission — otherwise the protection would bind only callers
+  that opted in, which is a statement about the application rather than about
+  the database.
+
+Both sit after the idempotent early return, so a retry of an already-posted
+transaction still gets its journal back rather than a complaint about a
+revision. Asserted with two real PostgreSQL sessions: a retry quoting
+revision 1, and one quoting an absurd 999, both return the original journal.
+
+The interface carries the revision through: the transaction screen shows
+*Figures version*, the Verify form posts it, and a screen that could not read
+one offers no Verify button at all and says to reload — the honest answer,
+rather than falling back to the weaker path.
+
+**What this moved.** Two existing engine tests now reload before verifying,
+which is the behaviour the safeguard exists to require. One of them asserts
+the refusal first, so the workflow records it rather than routing around it.
+
+**The commission-exception surface, verified as asked.** Exactly one
+`verify_agency_transaction` and one `authorise_agency_commission_exception`
+exist, so no call is ambiguous; the three-argument authorisation still
+authorises a figure the recording officer supplied, unchanged and pinned;
+EXECUTE is granted to `authenticated` only, and the two new trigger functions
+are revoked from every exposed role. The recorder is still refused, revision
+or no revision, and nothing is written to the audit log when they try.
+
+---
+
+## 4. Commission: read-only on the form, the Owner's by exception
+
+The standard recording form has **no commission field**. It shows what the
+provider's configured terms produce, read-only, computed with the same half-up
+integer arithmetic as the database (`((P × bps) + 5000) / 10000`), and passes
+`p_commission_supplied = NULL` so the engine computes the figure it will post.
+
+A different figure is the Owner's decision and is taken on the transaction,
+through `authorise_agency_commission_exception`, which requires a reason and
+checkable external evidence, pins the authorised amount against later drift,
+and writes an audit row carrying the figure before, the figure after and what
+the terms would have produced.
+
+That workflow did not work when Batch 2 began: the function refused a NULL
+supplied amount, so a transaction recorded by the standard form — which
+correctly supplies none — could never have an exception authorised against it.
+Migration `20261113000100` adds a fourth, defaulted `p_proposed_amount`, and
+the three-argument behaviour is unchanged for a transaction whose recorder did
+supply a figure. The capability is checked in the database, not only in the
+server action.
+
+---
+
+## 5. Server actions and the functions behind them
+
+Seventeen server actions in `lib/agency/actions.ts`, every one of them
+`requirePermission` → `checkActorRateLimit` → `parseSafely(schema)` →
+`supabase.rpc()` → `mapDatabaseError` → `revalidatePath`. No action computes a
+balance, a commission or a variance.
+
+| Action | Capability | Database function |
+|---|---|---|
+| `recordAgencyTransactionAction` | `agency:write` | `create_agency_transaction` |
+| `submitAgencyTransactionAction` | `agency:write` | `submit_agency_transaction` |
+| `verifyAgencyTransactionAction` | `agency:verify` | `verify_agency_transaction(uuid, integer)` |
+| `returnAgencyTransactionAction` | `agency:verify` | `return_agency_transaction` |
+| `cancelAgencyTransactionAction` | `agency:write` | `cancel_agency_transaction` |
+| `reverseAgencyTransactionAction` | `agency:reverse` | `reverse_agency_transaction` |
+| `correctAgencyReferenceAction` | `agency:correct` | `update_agency_transaction_reference` |
+| `authoriseCommissionExceptionAction` | `agency:commission_exception` | `authorise_agency_commission_exception` |
+| `recordCommissionSettlementAction` | `agency:settlements` | `record_commission_settlement` |
+| `reverseCommissionSettlementAction` | `agency:reverse` | `reverse_commission_settlement` |
+| `postPayableSettlementAction` | `agency:settlements` | `post_agency_payable_settlement` |
+| `reversePayableSettlementAction` | `agency:reverse` | `reverse_agency_payable_settlement` |
+| `postFloatReplenishmentAction` | `agency:settlements` | `post_float_replenishment` |
+| `submitCashCountAction` | `agency:reconcile` | `submit_agency_cash_reconciliation` |
+| `approveCashCountAction` | `agency:reconcile` | `approve_agency_cash_reconciliation` |
+| `submitFloatStatementAction` | `agency:reconcile` | `submit_agency_float_reconciliation` |
+| `approveFloatStatementAction` | `agency:reconcile` | `approve_agency_float_reconciliation` |
+
+Reads go through `lib/data/agency.ts`, which reads eleven `security_invoker`
+views and the two configuration tables, and never sums anything itself. The
+one exception is explicit: the two headline figures on `/agency/reports` are
+integer additions of rows the database already produced, stated as such in the
+code.
+
+---
+
+## 6. Role and permission matrix, as the database grants it
+
+| Capability | Secretary/Treasurer | Manager | Owner/Admin |
+|---|---|---|---|
+| `agency:write` — record, submit, cancel | ✅ | ✅ | ✅ |
+| `agency:reports` — read every agency screen | ✅ | ✅ | ✅ |
+| `agency:verify` — verify and post | — | ✅ | ✅ |
+| `agency:reverse` — reverse a posting or a settlement | — | ✅ | ✅ |
+| `agency:correct` — correct a provider reference | — | ✅ | ✅ |
+| `agency:settlements` — settle, remit, replenish | — | ✅ | ✅ |
+| `agency:reconcile` — record and certify a reading | — | ✅ | ✅ |
+| `agency:variance_adjustment` — write a difference off | — | — | ✅ |
+| `agency:commission_exception` — authorise a different commission | — | — | ✅ |
+| `agency:reverse_cross_day` — reverse a prior-day posting | — | — | ✅ |
+| `agency:providers` — read provider configuration | — | — | ✅ |
+
+Enforced three times over: `guardPermission` on the route, `requirePermission`
+in the server action, and the database function's own `agency_actor(...)`
+check, which refuses with SQLSTATE 42501 whatever the interface did. A
+borrower holds no `agency:*` capability at all, so every agency view returns
+them nothing.
+
+Hiding is never the control. Where an officer may not act, the screen says
+whose the action is — asserted in the browser suite for a Secretary on a
+transaction awaiting verification, for a Manager on a variance they may not
+write off, and for the officer who recorded a reading and therefore may not
+certify it.
+
+---
+
+## 7. Provider configuration is read-only, and why
+
+`/agency/providers` shows every registered provider, its commercial terms, its
+readiness, and every transaction type with the single-transaction ceiling the
+database enforces. Nothing on it can be changed.
+
+That is not an unfinished screen. The database grants `authenticated` nothing
+but SELECT on `agency_service_providers` and `agency_transaction_types`, and
+**no function exists that writes either** — every other agency write goes
+through a SECURITY DEFINER function with a capability check, and these two
+have none, because approving a provider's commercial terms is a decision
+nobody has taken. Building a write path would mean inventing that approval
+workflow and activating providers, which this phase was explicitly told not to
+do. So the screen says so, in one sentence, and offers no control that would
+fail.
+
+### `requires_approval_above` is shown struck through and marked not enforced
+
+Decision L is unresolved and the posting engine does not read the column. The
+screen shows the configured figure — somebody will ask what it does — renders
+it struck through, and carries a warning stating plainly that a transaction
+above it posts exactly like one below it, and that the protection which does
+hold is the maximum, which the database refuses past. No threshold control is
+offered and no threshold is invented anywhere in this phase: no Zod schema
+carries one, and `lib/validation/agency.ts` says why in its own header.
+
+---
+
+## 8. What the database gained
+
+Six migrations in this phase's lineage, 197 in the repository:
+
+| Migration | What it does |
+|---|---|
+| `20261111000100_agency_concurrency_closure` | Phase 4C-S: provider lock before account locks on every posting path, both directions |
+| `20261112000100_shared_till_account_locking` | Workstream A (PR #25): `post_journal` locks every cash/float account in its lines |
+| `20261113000100_agency_commission_exception_amount` | The Owner's proposed amount, so the exception workflow works against the standard form |
+| `20261113000200_agency_verification_revision` | The revision guard described in §3 |
+| `20261113000300_agency_operational_registers` | Four `security_invoker` registers the operational screens read |
+
+The four registers exist because the Phase 4C views report what is
+*outstanding*; none of them lists the records an officer has to *act on*. Each
+is a plain join with nothing computed that the database does not already hold.
+The two reconciliation registers additionally carry today's balance beside the
+recorded one, read from the same `ledger_account_balances` row the approval
+function locks and compares, so a screen never offers an Approve button that
+is certain to fail — while the refusal itself stays in the database, because
+the screen's reading is always a moment older.
+
+Both registers also carry `variance_means` as a column, exactly as
+`agency_variance_report` does. The cash and float tables use **opposite**
+conventions — a cash variance is the count less the books, a float variance is
+the books less the provider — and the first draft of this interface stated the
+float one backwards from memory. The seeded figures caught it; carrying the
+database's own sentence means a screen cannot state it backwards again.
+
+---
+
+## 9. Evidence
+
+### Database, on a clean PostgreSQL 16 cluster
+
+| Suite | Result |
+|---|---|
+| `db` (the main database project) | 1923 passed |
+| `agency` | 66 passed |
+| `agency-engine` | 62 passed |
+| `agency-security` | 21 passed |
+| `agency-settlement` | 78 passed |
+| `shared-till` | 6 passed |
+| seed, seed-reuse, seed-member-loans, seed-benefits | 82 passed |
+| **Total** | **2238 passed** |
+
+Security scanner clean, with the new signatures and their reasons in
+`config/database-security-baseline.json`. Financial arithmetic audit: 244
+financial files, no hazard, positive control verified.
+
+### Application
+
+Unit and integration: 2658 passed. Typecheck, lint, format and the production
+build clean.
+
+### Browser, against the production build and a trading counter
+
+`tests/e2e/specs/agency.spec.ts` — 33 tests, run on both the desktop and the
+mobile profile, 66 in all. Every one of the fifteen screen states renders with
+a 200, no error boundary, its own content and a clean console; the figures are
+the database's; the commission field is absent; the approval threshold is
+marked unenforced; and four role-based access tests point a Secretary, a
+Manager and a borrower straight at URLs they may not open.
+
+Accessibility: `tests/e2e/specs/accessibility.spec.ts` sweeps five agency
+screens for WCAG 2.1 AA with axe — the two reconciliation screens (a checkbox,
+a revealed reason field and a submit button inside a table cell), the
+nine-column history register, the struck-through money column on the providers
+screen, and the recording form. 104 passed, zero violations.
+
+Per-page cost: `/agency`, `/agency/record`, `/agency/pending`,
+`/agency/reconciliation/cash` and `/agency/reports` joined the budgeted pages
+in `tests/e2e/specs/performance.spec.ts`, against unchanged ceilings. Measured
+cold on a 390px phone: 167–178 KB of JavaScript, the same band as `/payments`
+at 178 KB.
+
+### Screenshots
+
+`scripts/capture-agency-screens.mjs` photographs fifteen screen states at four
+viewports (1440, 1366, 820, 390) plus three states only another role can see,
+and writes a timing table: **60 screen/viewport pairs**, uploaded by CI as
+`polytos-phase-4d-agency-screens`. Slowest screen 204 ms median.
+
+It measures horizontal overflow at every viewport and exits non-zero on a
+screen that pushes the page sideways — which is how a real defect was caught:
+
+> **The settlement registers pushed the page 768 px sideways on a phone.** An
+> absolutely positioned descendant resolves against its nearest positioned
+> ancestor, and without one that is the document. `.sr-only` is absolute, and
+> `Label` renders one for a required field — so the hidden "(required)" span
+> belonging to the reversal form inside a wide table cell was placed at its
+> static position *inside the scrolled table*, a thousand pixels to the right,
+> measured against the document. The table scrolled correctly and the whole
+> page scrolled with it.
+>
+> Fixed in `DataTable` by making the scroll area a containing block, not in
+> the two registers: any table that ever holds a required field would hit it
+> again. Every one of the 60 pairs now reports zero overflow.
+
+### Demonstration data
+
+The harness seed builds a counter that has been trading: three obviously
+synthetic providers prefixed `DEMO_`, a funded float, eight posted
+transactions, one awaiting verification, one draft, one reversed, one carrying
+an Owner-authorised commission exception verified at its new revision, a
+commission remittance received, a remittance paid, a certified cash count
+2,000 short and a float statement 4,000 adrift awaiting a second officer.
+
+The nine providers Phase 4A registered are **untouched** — still provisional,
+still inactive, because nobody has approved their commercial terms. No
+registered provider is activated anywhere, and `scripts/seed-demo.ts`, which
+can be pointed at a hosted project, seeds none of this.
+
+---
+
+## 10. The bundle budget, raised once with its case
+
+635 → 670 KB gzipped, for the measured 665. The case is written out in
+`tests/integration/bundle.test.ts` beside the four raises before it:
+
+- no new dependency; `package.json` untouched and the 120 KB largest-chunk
+  ceiling unchanged — the largest chunk *fell*, 72 KB to 71 KB;
+- 97 chunks became 104: seven chunks for fourteen screens, because nine of
+  them ship nothing;
+- just under five kilobytes a chunk, which is what a form costs;
+- what a page costs did not move, and five agency routes are now under the
+  per-page browser budget — raising a total without that would be raising it
+  on trust.
+
+---
+
+## 11. Outstanding decisions and release blockers
+
+### Release blocker — lending cash sufficiency (unresolved, carried forward)
+
+The lending posting paths do not refuse a payment that would take Cash at Hand
+negative. Workstream A (PR #25) closed the *concurrency* half of this — every
+cash and float account a journal touches is now locked before it is written,
+in both directions — but the *policy* half is untouched: nobody has decided
+whether a till may go negative, and if not, what happens at the counter when
+it would. This is a policy decision, not a UI one, and it stays open.
+
+### Decision L — `requires_approval_above` (unresolved)
+
+Configured, not enforced, and now visibly marked as such on the provider
+screen. Whether a threshold should gate verification, at what figure, and
+whose approval it needs are all open. Nothing in this phase invents an answer.
+
+### Provider activation (deliberately not done)
+
+Nine registered providers remain provisional and inactive. Activating one
+needs their commercial terms approved and a write path that does not exist.
+
+### Policy 2.0 (not activated)
+
+Untouched by this phase.
+
+---
+
+## 12. What this phase did not do
+
+No merge. No production deployment. No provider activation. No Policy 2.0
+activation. No demo data deleted. The `Supabase Preview` job is skipped, which
+is the evidence that nothing reached the hosted project.

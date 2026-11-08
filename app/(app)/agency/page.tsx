@@ -94,6 +94,13 @@ export default async function AgencyPage() {
               { href: ROUTES.agencyFloatCount, label: 'Float reconciliation' },
               { href: ROUTES.agencyReports, label: 'Reports' },
               { href: ROUTES.agencyExceptions, label: 'End-of-day exceptions' },
+              // Last, and only for the officer who can open it: the route
+              // needs `agency:providers`, and a link that leads to a refusal
+              // is worse than no link. A counter officer never needs it; an
+              // Owner reads it once.
+              ...(contextCan(context, 'agency:providers')
+                ? [{ href: ROUTES.agencyProviders, label: 'Providers and services' }]
+                : []),
             ].map((item) => (
               <li key={item.href}>
                 <Link href={item.href} className="text-brand hover:underline">

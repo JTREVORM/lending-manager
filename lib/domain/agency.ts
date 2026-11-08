@@ -225,9 +225,11 @@ export function isAgencySettlementStatus(
 /**
  * One row of `agency_cash_reconciliation_register`: a counted drawer.
  *
- * `varianceMeans` is not here, unlike the variance report: this register
- * carries the raw figures and the screen states the sign convention in words
- * beside them, because a count has only one kind of variance.
+ * `varianceMeans` is carried from the view, as the variance report does it.
+ * The cash and float tables use opposite conventions - a cash variance is
+ * the count less the books, a float variance is the books less the
+ * provider - and a screen that stated either from memory would eventually
+ * state it backwards. This one did, before the seeded figures showed it.
  */
 export interface AgencyCashCountRow {
   readonly id: string;
@@ -241,6 +243,8 @@ export interface AgencyCashCountRow {
   readonly systemClosingBalance: UgxAmount;
   readonly physicalCount: UgxAmount;
   readonly variance: UgxAmount;
+  /** The database's own statement of what this row's sign means. */
+  readonly varianceMeans: string;
   readonly varianceWrittenOff: UgxAmount;
   readonly varianceJournalEntryId: string | null;
   readonly notes: string | null;
@@ -276,6 +280,8 @@ export interface AgencyFloatStatementRow {
   readonly providerStatementBalance: UgxAmount;
   readonly providerStatementRef: string | null;
   readonly variance: UgxAmount;
+  /** The database's own statement, and the opposite sign to a cash count. */
+  readonly varianceMeans: string;
   readonly varianceWrittenOff: UgxAmount;
   readonly varianceJournalEntryId: string | null;
   readonly notes: string | null;

@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 635 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 670 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -210,6 +210,46 @@ describeBundle('the browser bundle', () => {
     // headroom than the earlier raises, deliberately, because a phase that
     // adds 84 KB should not also be handed room for the next one.
     //
+    // ## 635 → 670, for Polytos Phase 4D agency banking
+    //
+    // Fourteen screens for 34 KB, which is the smallest per-screen cost of
+    // any phase that has raised this ceiling - and the reason is worth
+    // stating, because it is the thing to hold on to rather than the number.
+    //
+    //   - **No new dependency.** `package.json` is untouched, and the two
+    //     assertions that actually catch a library creeping in both pass
+    //     unchanged: the chart, date and utility list above, and the 120 KB
+    //     largest-chunk ceiling. The largest chunk *fell*, 72 KB to 71 KB.
+    //   - **Seven chunks for fourteen screens.** 97 chunks became 104,
+    //     because nine of the fourteen ship no JavaScript at all. The
+    //     registers, the reports, the exceptions list and the provider
+    //     configuration are Server Components that read a view and render a
+    //     table; only the seven that must take input - the recording form,
+    //     the lifecycle controls, the commission exception, the three
+    //     settlement forms, the two reconciliation forms and the two
+    //     settlement registers - cross into the browser.
+    //   - **Just under five kilobytes a chunk.** Every one is built from the
+    //     same `DataTable`, `Money`, `Field` and `Alert` primitives as the
+    //     rest of the application. A register that carries a whole form
+    //     inside a table cell costs about what a form costs, because it is
+    //     the same form.
+    //   - **What a page costs did not move, and is asserted on this section
+    //     too.** Measured cold on a 390px phone against this build:
+    //     `/agency` 167 KB of JavaScript, `/agency/record` 172 KB,
+    //     `/agency/reconciliation/cash` 178 KB - the same band as
+    //     `/payments` at 178 KB, which is the screen this application has
+    //     always been measured by. `/agency`, `/agency/record`,
+    //     `/agency/pending`, `/agency/reconciliation/cash` and
+    //     `/agency/reports` joined the budgeted pages in
+    //     `tests/e2e/specs/performance.spec.ts`, against the same unchanged
+    //     ceilings every other page is held to. Raising a total without
+    //     putting the new routes under the per-page budget would be raising
+    //     it on trust.
+    //
+    // 670 leaves five kilobytes over the measured 665 - tighter again than
+    // the last raise, deliberately. A phase that needs room should have to
+    // make its own case here, as this one did.
+    //
     // It is not what a page costs. No page loads all seventy: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -217,7 +257,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(635);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(670);
   });
 
   it('emits no source map for the browser', () => {

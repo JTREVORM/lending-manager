@@ -213,6 +213,53 @@ export interface Fixtures {
     readonly waitingDays: number;
     readonly yearBasis: string;
   };
+  /**
+   * Polytos Phase 4D. The agency counter the harness has been trading at.
+   *
+   * Three obviously synthetic providers, prefixed `DEMO_`, created only in
+   * this throwaway database. The nine providers Phase 4A registered are left
+   * exactly as the migration made them - provisional and inactive, because
+   * nobody has approved their commercial terms - so the fourteen agency
+   * screens have real postings to show without any registered provider being
+   * activated anywhere.
+   *
+   *   transactions.awaitingVerification  recorded and submitted, so the
+   *                                      pending queue is not empty
+   *   transactions.draft                 still being typed at the counter
+   *   transactions.reversed              posted and then reversed, so the
+   *                                      history has a contra entry
+   *   transactions.commissionException   a promotional rate the Owner
+   *                                      authorised and a manager then
+   *                                      verified at the new revision
+   *   reconciliations.openFloatStatement a provider statement 4,000 short of
+   *                                      our books, awaiting a second officer
+   *   reconciliations.certifiedCashCount a drawer 2,000 short, certified with
+   *                                      the difference left outstanding
+   */
+  readonly agency: {
+    readonly providers: {
+      readonly mtn: string;
+      readonly airtel: string;
+      readonly nwsc: string;
+    };
+    readonly types: {
+      readonly mtnDeposit: string;
+      readonly mtnWithdrawal: string;
+      readonly waterBill: string;
+    };
+    readonly tills: { readonly mtn: string; readonly airtel: string };
+    readonly transactions: {
+      readonly awaitingVerification: string;
+      readonly draft: string;
+      readonly reversed: string;
+      readonly commissionException: string;
+    };
+    readonly settlements: { readonly commission: string; readonly payable: string };
+    readonly reconciliations: {
+      readonly certifiedCashCount: string;
+      readonly openFloatStatement: string;
+    };
+  };
   readonly memberLending: {
     readonly multiplierBps: number;
     readonly interestBasis: string;

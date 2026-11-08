@@ -5799,6 +5799,7 @@ export type Database = {
           system_closing_balance: number | null;
           physical_count: number | null;
           variance: number | null;
+          variance_means: string | null;
           variance_written_off: number | null;
           variance_journal_entry_id: string | null;
           notes: string | null;
@@ -5830,6 +5831,7 @@ export type Database = {
           provider_statement_balance: number | null;
           provider_statement_ref: string | null;
           variance: number | null;
+          variance_means: string | null;
           variance_written_off: number | null;
           variance_journal_entry_id: string | null;
           notes: string | null;

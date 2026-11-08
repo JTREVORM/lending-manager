@@ -50,6 +50,22 @@ const PAGES = [
   '/benefits',
   '/benefits/claims',
   '/meetings',
+  // Polytos Phase 4D. The agency section joins the budgeted pages for the
+  // same reason the benefits section did: the phase that added it raised the
+  // bundle-total ceiling, and a total raised without the new routes under a
+  // per-page budget would be a total raised on trust.
+  //
+  // These five are where a regression would be felt. `/agency` and
+  // `/agency/pending` are opened every few minutes by a counter officer and
+  // a manager; `/agency/record` is the form the counter lives in;
+  // `/agency/reports` reads four stacked views at once and is the heaviest
+  // read in the section; `/agency/reconciliation/cash` carries a form inside
+  // a table cell, which is the most JavaScript any agency screen ships.
+  '/agency',
+  '/agency/record',
+  '/agency/pending',
+  '/agency/reconciliation/cash',
+  '/agency/reports',
 ] as const;
 
 interface PageCost {

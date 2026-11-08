@@ -390,10 +390,7 @@ export function CashCountRegister({
                 <Money amount={row.physicalCount} />
               </TableCell>
               <TableCell>
-                <VarianceBadge
-                  variance={row.variance}
-                  means="Positive means more cash was counted than the books show."
-                />
+                <VarianceBadge variance={row.variance} means={row.varianceMeans} />
               </TableCell>
               <TableCell align="numeric">
                 <Money amount={row.currentSystemBalance} />
@@ -480,10 +477,7 @@ export function FloatStatementRegister({
                 <Money amount={row.providerStatementBalance} />
               </TableCell>
               <TableCell>
-                <VarianceBadge
-                  variance={row.variance}
-                  means="Positive means the provider shows more float than our books do."
-                />
+                <VarianceBadge variance={row.variance} means={row.varianceMeans} />
               </TableCell>
               <TableCell align="numeric">
                 <Money amount={row.currentSystemBalance} />

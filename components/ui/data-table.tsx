@@ -199,7 +199,24 @@ export function DataTable({
   return (
     <div
       className={cn(
-        'border-border bg-surface scroll-area min-w-0 rounded-lg border shadow-xs',
+        // `relative` is load-bearing, not decoration.
+        //
+        // An absolutely positioned descendant resolves against its nearest
+        // positioned ancestor, and without one that is the document. A
+        // `.sr-only` element is absolute - `Label` renders one for a required
+        // field - so a form inside a wide table cell placed its hidden
+        // "(required)" span at its static position *inside the scrolled
+        // table*, a thousand pixels to the right, measured against the
+        // document. The table scrolled correctly and the whole page scrolled
+        // sideways with it: 768px of horizontal page scroll on a phone, which
+        // is the exact defect this component exists to prevent, arriving
+        // through a screen-reader hint nobody can see.
+        //
+        // Found by the overflow measurement in
+        // `scripts/capture-agency-screens.mjs`, on the two settlement
+        // registers. Fixed here rather than in those registers because any
+        // table that ever holds a required field would hit it again.
+        'border-border bg-surface scroll-area relative min-w-0 rounded-lg border shadow-xs',
         capped ? 'scroll-both' : 'scroll-x',
         containerClassName,
       )}

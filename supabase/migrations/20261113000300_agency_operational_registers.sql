@@ -45,6 +45,11 @@ select
   r.system_closing_balance,
   r.physical_count,
   r.variance,
+  -- The two reconciliation tables use opposite conventions, and this one is
+  -- not the same as the float register's below. Carried as a column, exactly
+  -- as `agency_variance_report` does, so a screen states the database's own
+  -- sentence instead of a developer's recollection of it.
+  'physical count less the books'::text as variance_means,
   r.variance_written_off,
   r.variance_journal_entry_id,
   r.notes,
@@ -95,6 +100,9 @@ select
   r.provider_statement_balance,
   r.provider_statement_ref,
   r.variance,
+  -- The opposite sign to the cash register above: positive here means our
+  -- books hold more than the provider's statement does.
+  'the books less the provider statement'::text as variance_means,
   r.variance_written_off,
   r.variance_journal_entry_id,
   r.notes,

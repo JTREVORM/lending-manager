@@ -87,6 +87,19 @@ const SCREENS = [
   '/payments/summary?section=branch',
   '/account',
   '/account/password',
+  // Polytos Phase 4D. Five of the fourteen agency screens, chosen the same
+  // way: the densest tables and the screens that put a control inside one.
+  // `/agency/history` is a nine-column register; the two reconciliation
+  // screens render a checkbox, a revealed reason field and a submit button
+  // inside a table cell, which is where a label association or a focus order
+  // goes wrong first; `/agency/providers` carries a struck-through money
+  // column, whose contrast on a tinted surface is exactly the thing to
+  // check; `/agency/record` is the form a counter officer uses all day.
+  '/agency/record',
+  '/agency/history',
+  '/agency/reconciliation/cash',
+  '/agency/reconciliation/float',
+  '/agency/providers',
 ] as const;
 
 test.describe('the staff application meets WCAG AA', () => {
