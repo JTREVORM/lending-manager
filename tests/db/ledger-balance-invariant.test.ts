@@ -103,7 +103,11 @@ async function settle(client: PoolClient): Promise<string | null> {
 }
 
 describeDb('the balance invariant binds every Phase 4 posting source', () => {
-  it('covers all five agency source types, and nothing is missing', async () => {
+  it('covers every agency source type, and nothing is missing', async () => {
+    // Deliberately exact rather than a superset. Phase 4C added two source
+    // types and this assertion is what made that visible: a source type
+    // nobody has considered against the balance invariant should fail here
+    // until somebody considers it.
     await inRollbackTransaction(async (client) => {
       const all = await sourceTypes(client);
       expect(all).toEqual(expect.arrayContaining(['agency_transaction']));
@@ -113,6 +117,9 @@ describeDb('the balance invariant binds every Phase 4 posting source', () => {
         'agency_commission_settlement',
         'agency_payable_settlement',
         'agency_payable_settlement_reversal',
+        // Phase 4C
+        'agency_float_replenishment',
+        'agency_commission_settlement_reversal',
       ]);
     });
   });
@@ -124,6 +131,8 @@ describeDb('the balance invariant binds every Phase 4 posting source', () => {
     'agency_commission_settlement',
     'agency_payable_settlement',
     'agency_payable_settlement_reversal',
+    'agency_float_replenishment',
+    'agency_commission_settlement_reversal',
   ] as const;
 
   for (const source of agencySources) {

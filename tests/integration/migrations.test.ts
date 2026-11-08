@@ -765,6 +765,13 @@ describe('types stay in step with the schema', () => {
       'agency_provider_accounts_guard',
       'agency_transaction_guard',
       'agency_transaction_live_readiness_guard',
+      // Phase 4C. Two more of the same kind: each asserts that a
+      // denormalised provider and branch agree with the till's own
+      // registration, which spans two tables and so cannot be a CHECK.
+      // Neither is reachable by a signed-in user — a trigger fires as the
+      // table owner and needs no EXECUTE grant.
+      'agency_float_replenishment_guard',
+      'agency_float_reconciliation_guard',
       'notify_low_float',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.

@@ -148,7 +148,7 @@ alter table public.agency_float_replenishments enable row level security;
 -- with the Head Office rule restated inline.
 create policy agency_float_replenishments_select_with_permission
   on public.agency_float_replenishments
-  for select
+  for select to authenticated
   using (
     (select public.user_has_permission('agency:reports'))
     and (
@@ -158,6 +158,7 @@ create policy agency_float_replenishments_select_with_permission
     )
   );
 
+revoke all on table public.agency_float_replenishments from anon, authenticated;
 grant select on public.agency_float_replenishments to authenticated;
 
 

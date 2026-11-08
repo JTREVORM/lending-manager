@@ -281,7 +281,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 150,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
 
       const incomeBefore = await balance('4510');
       await post(svc, 100_000); // accrues 1,500 commission
@@ -329,7 +329,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000); // 10,000 commission
       expect(await outstandingCommission(svc.providerId, branchA)).toBe(10_000);
 
@@ -359,7 +359,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 150,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 100_000); // 1,500
 
       const r = await asUserCommitted(mgrA, [
@@ -414,7 +414,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000); // 10,000
 
       const first = await asUserCommitted(mgrA, [
@@ -442,14 +442,14 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000);
 
       const cases: [string, RegExp][] = [
         ['1020-BR2601', /cannot be used as the receiving account/i], // MTN wallet
         ['1030-BR2601', /cannot be used as the receiving account/i], // Airtel wallet
         ['1010-BRSET9', /does not belong to the branch/i], // other branch
-        [svc.floatCode as string, /cannot be used as the receiving account/i],
+        [svc.floatCode!, /cannot be used as the receiving account/i],
       ];
       for (const [code, expected] of cases) {
         const r = await asUserCommitted(mgrA, [
@@ -472,7 +472,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000);
 
       const crossBranch = await asUser(
@@ -516,7 +516,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000);
 
       const r = await asUserCommitted(mgrA, [
@@ -551,7 +551,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch: branchA,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000); // 10,000 outstanding
       expect(await outstandingCommission(svc.providerId, branchA)).toBe(10_000);
 
@@ -918,7 +918,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
     it('posts Dr float, Cr funding account on its exact lines', async () => {
       const svc = await provider({ code: 'SETF1', branch: branchA, rateBps: 150 });
       const bankBefore = await balance('1040-BR2601');
-      const floatBefore = await balance(svc.floatCode as string);
+      const floatBefore = await balance(svc.floatCode!);
 
       const r = await asUserCommitted(mgrA, [
         {
@@ -936,10 +936,10 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       );
       expect(Number(row.amount)).toBe(500_000);
       expect(await linesOf(row.e)).toEqual([
-        { code: svc.floatCode as string, debit: 500_000, credit: 0 },
+        { code: svc.floatCode!, debit: 500_000, credit: 0 },
         { code: '1040-BR2601', debit: 0, credit: 500_000 },
       ]);
-      expect((await balance(svc.floatCode as string)) - floatBefore).toBe(500_000);
+      expect((await balance(svc.floatCode!)) - floatBefore).toBe(500_000);
       expect(bankBefore - (await balance('1040-BR2601'))).toBe(500_000);
     });
 
@@ -982,7 +982,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         )
       ).code;
 
-      const firstBefore = await balance(svc.floatCode as string);
+      const firstBefore = await balance(svc.floatCode!);
       const r = await asUserCommitted(mgrA, [
         {
           sql: `select public.post_float_replenishment($1,$2,$3,$4)`,
@@ -992,7 +992,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       expect(r.ok, r.message).toBe(true);
 
       expect(await balance(secondCode)).toBe(300_000);
-      expect(await balance(svc.floatCode as string)).toBe(firstBefore);
+      expect(await balance(svc.floatCode!)).toBe(firstBefore);
     });
 
     it('refuses prohibited funding accounts', async () => {
@@ -1003,7 +1003,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         ['1020-BR2601', /cannot be used as the funding account/i],
         ['1030-BR2601', /cannot be used as the funding account/i],
         ['1010-BRSET9', /does not belong to the branch/i],
-        [other.floatCode as string, /cannot be used as the funding account/i],
+        [other.floatCode!, /cannot be used as the funding account/i],
         ['1310', /cannot be used as the funding account/i],
       ];
       for (const [code, expected] of cases) {
@@ -1017,7 +1017,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         expect(r.ok, code).toBe(false);
         expect(r.message, code).toMatch(expected);
       }
-      expect(await balance(svc.floatCode as string)).toBe(0);
+      expect(await balance(svc.floatCode!)).toBe(0);
     });
 
     it('refuses a secretary, a non-positive amount and a duplicate reference', async () => {
@@ -1058,7 +1058,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       ]);
       expect(again.ok).toBe(false);
       expect(again.message).toMatch(/already records reference/i);
-      expect(await balance(svc.floatCode as string)).toBe(40_000);
+      expect(await balance(svc.floatCode!)).toBe(40_000);
     });
 
     it('refuses a till at a branch the caller cannot see', async () => {
@@ -1084,7 +1084,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       ]);
       expect(r.ok).toBe(false);
       expect(r.message).toMatch(/holds \d+ shillings/);
-      expect(await balance(svc.floatCode as string)).toBe(0);
+      expect(await balance(svc.floatCode!)).toBe(0);
     });
   });
 
@@ -1344,7 +1344,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('refuses an agency float account and a non-cash account', async () => {
       const svc = await provider({ code: 'SETR1', branch: branchA, rateBps: 150 });
-      const floatAcc = await accountId(svc.floatCode as string);
+      const floatAcc = await accountId(svc.floatCode!);
 
       const float = await asUserCommitted(mgrA, [
         {
@@ -1385,8 +1385,8 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       opening: number,
     ): Promise<{ svc: Svc; floatCode: string }> {
       const svc = await provider({ code, branch: branchA, rateBps: 150 });
-      if (opening > 0) await fund(svc.floatCode as string, opening);
-      return { svc, floatCode: svc.floatCode as string };
+      if (opening > 0) await fund(svc.floatCode!, opening);
+      return { svc, floatCode: svc.floatCode! };
     }
 
     async function submitStatement(
@@ -1407,7 +1407,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('records provider, branch, till and statement evidence', async () => {
       const f = await floatFixture('SETR2', 2_000_000);
-      const id = await submitStatement(f.svc.tillId as string, 2_000_000, 'MTN-ST-1');
+      const id = await submitStatement(f.svc.tillId!, 2_000_000, 'MTN-ST-1');
 
       const row = await queryOne<{
         p: string;
@@ -1438,7 +1438,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       // variance = system - statement. Positive means the books claim more
       // float than the provider holds.
       const f = await floatFixture('SETR3', 1_000_000);
-      const id = await submitStatement(f.svc.tillId as string, 999_000, 'MTN-ST-2');
+      const id = await submitStatement(f.svc.tillId!, 999_000, 'MTN-ST-2');
       const overBefore = await balance('5960');
 
       const r = await asUserCommitted(ownerHO, [
@@ -1458,7 +1458,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('adjusts a system shortfall Dr float, Cr 5960', async () => {
       const f = await floatFixture('SETR4', 1_000_000);
-      const id = await submitStatement(f.svc.tillId as string, 1_002_500, 'MTN-ST-3');
+      const id = await submitStatement(f.svc.tillId!, 1_002_500, 'MTN-ST-3');
       const overBefore = await balance('5960');
 
       const r = await asUserCommitted(ownerHO, [
@@ -1478,7 +1478,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('refuses a write-off with no named provider statement', async () => {
       const f = await floatFixture('SETR5', 500_000);
-      const id = await submitStatement(f.svc.tillId as string, 499_000, null);
+      const id = await submitStatement(f.svc.tillId!, 499_000, null);
 
       const r = await asUser(
         ownerHO,
@@ -1495,7 +1495,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       // The books claim 1,000 and the statement says 0, so the whole balance
       // is written off; then a second till with nothing in it cannot.
       const f = await floatFixture('SETR6', 0);
-      const id = await submitStatement(f.svc.tillId as string, 0, 'MTN-ST-6');
+      const id = await submitStatement(f.svc.tillId!, 0, 'MTN-ST-6');
       const r = await asUserCommitted(ownerHO, [
         {
           sql: `select public.approve_agency_float_reconciliation($1,true,'nothing to write off')`,
@@ -1508,7 +1508,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('enforces maker-checker, the adjustment capability and no double adjustment', async () => {
       const f = await floatFixture('SETR7', 800_000);
-      const id = await submitStatement(f.svc.tillId as string, 799_000, 'MTN-ST-7', mgrA);
+      const id = await submitStatement(f.svc.tillId!, 799_000, 'MTN-ST-7', mgrA);
 
       const sameUser = await asUser(
         mgrA,
@@ -1547,7 +1547,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('refuses a stale statement whose float moved after it was recorded', async () => {
       const f = await floatFixture('SETR8', 600_000);
-      const id = await submitStatement(f.svc.tillId as string, 600_000, 'MTN-ST-8', mgrA);
+      const id = await submitStatement(f.svc.tillId!, 600_000, 'MTN-ST-8', mgrA);
       await fund(f.floatCode, 25_000);
 
       const r = await asUser(
@@ -1576,7 +1576,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
   describe('commission settlement correction (Task 7)', () => {
     it('restores 1310 by contra and keeps the original settlement', async () => {
       const svc = await provider({ code: 'SETX1', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000); // 10,000 accrued
       const settled = await asUserCommitted(mgrA, [
         {
@@ -1627,7 +1627,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('releases a historical transaction that the settlement had blocked', async () => {
       const svc = await provider({ code: 'SETX2', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       const txId = await post(svc, 200_000); // 10,000 accrued
 
       const settled = await asUserCommitted(mgrA, [
@@ -1674,7 +1674,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('refuses without authority, twice, without a reason, and cross-branch', async () => {
       const svc = await provider({ code: 'SETX3', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000);
       const settled = await asUserCommitted(mgrA, [
         {
@@ -1751,7 +1751,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch,
         rateBps: 500,
       });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
 
       const mgrC = await createTestUser('manager');
       await query(`update public.profiles set branch_id = $1 where id = $2`, [
@@ -1833,7 +1833,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       // the other needs, so both complete rather than one aborting on a
       // deadlock detection.
       const svc = await provider({ code: 'SETL1', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 10_000_000);
+      await fund(svc.floatCode!, 10_000_000);
       await post(svc, 200_000); // 10,000 commission outstanding
       await query(
         `update public.finance_settings
@@ -1868,7 +1868,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       }
 
       expect(await outstandingCommission(svc.providerId, branchA)).toBe(5_000);
-      expect(await balance(svc.floatCode as string)).toBe(10_100_000 - 200_000);
+      expect(await balance(svc.floatCode!)).toBe(10_100_000 - 200_000);
     });
   });
 
@@ -1915,7 +1915,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('show a branch-scoped manager only their own branch', async () => {
       const svc = await provider({ code: 'SETV1', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
       await post(svc, 200_000);
 
       // mgrB is scoped to branch B and has no branch-A rows.
@@ -1945,7 +1945,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       // views, because those functions are revoked from authenticated. Two
       // copies of a rule drift, so this asserts they still agree.
       const svc = await provider({ code: 'SETV2', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
       await post(svc, 400_000); // 20,000 accrued
       const settled = await asUserCommitted(mgrA, [
         {
@@ -2027,7 +2027,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
 
     it('list end-of-day exceptions and daily movement for real fixtures', async () => {
       const svc = await provider({ code: 'SETV4', branch: branchA, rateBps: 500 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
 
       // A draft left unverified is an exception.
       const key = `E-${Math.random().toString(36).slice(2, 12)}`;
@@ -2177,7 +2177,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       ]);
 
       const svc = await provider({ code: 'SETQ1', branch: branchA, rateBps: 150 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
       const key = `Q-${Math.random().toString(36).slice(2, 12)}`;
       const c = await asUserCommitted(secA, [
         {

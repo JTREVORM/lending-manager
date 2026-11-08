@@ -55,6 +55,10 @@ left join public.ledger_account_balances bal on bal.account_id = a.id;
 comment on view public.agency_float_balances is
   'Phase 4C. Electronic float held in each provider till, by provider and branch. security_invoker, so the caller''s own row-level policies scope it.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_float_balances from anon, authenticated;
 grant select on public.agency_float_balances to authenticated;
 
 
@@ -97,6 +101,10 @@ join public.branches b on b.id = t.branch_id;
 comment on view public.agency_transaction_history is
   'Phase 4C. One row per agency transaction with its provider, service, direction, money and commission, including any authorised commission exception. security_invoker.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_transaction_history from anon, authenticated;
 grant select on public.agency_transaction_history to authenticated;
 
 
@@ -155,6 +163,10 @@ group by lines.provider_id, p.code, p.name, lines.branch_id, b.branch_code;
 comment on view public.agency_commission_summary is
   'Phase 4C. Commission earned, received, returned by correction, and still outstanding, per provider and branch. Attributed by source entity because 1310 is shared across providers, and computed inline rather than from agency_commission_outstanding(), which is revoked from authenticated on purpose.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_commission_summary from anon, authenticated;
 grant select on public.agency_commission_summary to authenticated;
 
 
@@ -206,6 +218,10 @@ group by lines.provider_id, p.code, p.name, lines.branch_id, b.branch_code;
 comment on view public.agency_payable_summary is
   'Phase 4C. What was collected on each provider''s behalf, what has been remitted, what a reversal put back, and what is still held — per provider and branch, never per shared 2200-series account.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_payable_summary from anon, authenticated;
 grant select on public.agency_payable_summary to authenticated;
 
 
@@ -273,6 +289,10 @@ join public.branches b on b.id = r.branch_id;
 comment on view public.agency_variance_report is
   'Phase 4C. Cash counts and float statements in one list. The two tables use opposite variance conventions, so every row states what its own sign means rather than leaving a reader to infer it.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_variance_report from anon, authenticated;
 grant select on public.agency_variance_report to authenticated;
 
 
@@ -313,6 +333,10 @@ group by e.branch_id, b.branch_code, e.entry_date, a.id, a.code, e.source_type;
 comment on view public.agency_daily_cash_movement is
   'Phase 4C. Agency cash into and out of each branch till per day, by source. Lending movement through the same drawer is excluded here and included in the cash reconciliation, which counts the whole till.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_daily_cash_movement from anon, authenticated;
 grant select on public.agency_daily_cash_movement to authenticated;
 
 
@@ -402,4 +426,8 @@ where v.till_is_active and v.provider_is_active and v.balance <= 0;
 comment on view public.agency_end_of_day_exceptions is
   'Phase 4C. What should be looked at before a day is called finished: transactions neither verified nor cancelled, reconciliations awaiting approval, certified reconciliations whose difference was never explained, and active float tills that have run dry.';
 
+-- The database grants defaults on every new relation, so a bare grant is
+-- not enough: without this revoke, anon holds all seven privileges on a
+-- brand-new view. Revoke first, then grant the one that is intended.
+revoke all on public.agency_end_of_day_exceptions from anon, authenticated;
 grant select on public.agency_end_of_day_exceptions to authenticated;
