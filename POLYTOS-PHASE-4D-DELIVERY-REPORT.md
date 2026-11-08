@@ -330,8 +330,11 @@ screen that pushes the page sideways — which is how a real defect was caught:
 
 ### Continuous integration
 
-All four mandatory jobs pass at **`d824359`**, CI run
-[42506457381](https://github.com/JTREVORM/lending-manager/actions/runs/42506457381):
+All four mandatory jobs pass at **`87ec0f6`**, CI run
+[42511315927](https://github.com/JTREVORM/lending-manager/actions/runs/42511315927)
+(the pull request's own run; the push run
+[42511311163](https://github.com/JTREVORM/lending-manager/actions/runs/42511311163)
+on the same commit is green too):
 
 | Job | Result |
 |---|---|
@@ -360,7 +363,7 @@ Two things in that run are worth stating rather than hiding:
   reused across several partial runs. CI seeds fresh, which is why its run is
   the one that counts.
 
-The only commit after `d824359` is this report.
+The only commit after `87ec0f6` is this report, which changes no code.
 
 ### Demonstration data
 
