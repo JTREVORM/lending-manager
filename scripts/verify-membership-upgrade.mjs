@@ -121,6 +121,28 @@ const PHASE_PREFIXES = [
   '20261028',
   '20261103',
   '20261106',
+  // Phase 4A-4D, agency banking and digital payments. In the list for the
+  // plain reason the list exists: none of it is deployed, so all of it is
+  // part of the upgrade rather than part of the existing schema.
+  //
+  // It was outside the list until Phase 4D, and that was wrong in a way
+  // nothing caught until the harness seed grew an agency section: the seed
+  // ran against a database that already had the agency engine but not the
+  // Polytos savings deposits, so the float top-up was refused for want of
+  // cash in a drawer that had not been filled yet. The seed was not the
+  // defect. Classifying unreleased migrations as "existing" was.
+  //
+  // Applying them here is also the stronger check, for the same reason the
+  // comment above gives for Phase 4: they land on a seeded book between the
+  // two financial baselines, so the claim that agency banking moves not one
+  // shilling of anybody's loan is measured rather than asserted.
+  '20261107',
+  '20261108',
+  '20261109',
+  '20261110',
+  '20261111',
+  '20261112',
+  '20261113',
 ];
 
 const isPhaseMigration = (name) =>
