@@ -96,6 +96,7 @@ export default defineConfig({
             'tests/db/agency-transaction-engine.test.ts',
             'tests/db/agency-security-closure.test.ts',
             'tests/db/agency-settlement.test.ts',
+            'tests/db/shared-till-concurrency.test.ts',
           ],
         },
       },
@@ -164,6 +165,20 @@ export default defineConfig({
           // Its own database, like the other agency projects: this suite posts
           // real settlements and stages races on two connections, so a suite
           // sharing the database would read a book this one wrote to.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'shared-till',
+          environment: 'node',
+          include: ['tests/db/shared-till-concurrency.test.ts'],
+          // Its own database: this suite disburses loans and posts payments,
+          // and it stages lock contention on two connections. A suite sharing
+          // the database would read a book this one wrote to.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,
