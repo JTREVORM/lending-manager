@@ -2168,7 +2168,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       // authorising nothing had become a dead end.
       const ownerA = await createTestUser('owner_admin');
       const svc = await provider({ code: 'SETP20', branch: branchA, rateBps: 150 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
 
       // Recorded exactly as the interface records it: no commission supplied.
       const key = `P20-${Math.random().toString(36).slice(2, 12)}`;
@@ -2254,7 +2254,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
     it('refuses a proposed figure that is negative, excessive or no different', async () => {
       const ownerA = await createTestUser('owner_admin');
       const svc = await provider({ code: 'SETP21', branch: branchA, rateBps: 150 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
 
       const make = async (): Promise<string> => {
         const key = `P21-${Math.random().toString(36).slice(2, 12)}`;
@@ -2290,7 +2290,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       // correct a commission - but the audit row must carry both figures.
       const ownerA = await createTestUser('owner_admin');
       const svc = await provider({ code: 'SETP22', branch: branchA, rateBps: 150 });
-      await fund(svc.floatCode as string, 5_000_000);
+      await fund(svc.floatCode!, 5_000_000);
 
       const key = `P22-${Math.random().toString(36).slice(2, 12)}`;
       const c = await asUserCommitted(secA, [
