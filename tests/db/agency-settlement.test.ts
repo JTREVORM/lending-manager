@@ -1871,4 +1871,358 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       expect(await balance(svc.floatCode as string)).toBe(10_100_000 - 200_000);
     });
   });
+
+  // =========================================================================
+  describe('reporting views (Task 8)', () => {
+    const VIEWS = [
+      'agency_float_balances',
+      'agency_transaction_history',
+      'agency_commission_summary',
+      'agency_payable_summary',
+      'agency_variance_report',
+      'agency_daily_cash_movement',
+      'agency_end_of_day_exceptions',
+    ] as const;
+
+    it("are all security_invoker, so the caller's own policies apply", async () => {
+      // If one were left as a definer view it would read with the owner's
+      // privileges and bypass every policy below it. That is the single
+      // property the whole design rests on, so it is asserted directly.
+      const rows = await query<{ viewname: string; invoker: string }>(
+        `select c.relname as viewname,
+                coalesce((select option_value from pg_options_to_table(c.reloptions)
+                           where option_name = 'security_invoker'), 'unset') as invoker
+           from pg_class c join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public' and c.relkind = 'v'
+            and c.relname = any($1::text[])
+          order by c.relname`,
+        [[...VIEWS]],
+      );
+      expect(rows.length).toBe(VIEWS.length);
+      expect(rows.filter((r) => r.invoker !== 'true')).toEqual([]);
+    });
+
+    it('show a borrower nothing at all', async () => {
+      // A client holds no agency capability, so every base policy yields no
+      // rows and so does every view over them.
+      const borrower = await createTestUser('client');
+      for (const view of VIEWS) {
+        const r = await asUser(borrower, `select count(*)::int as n from public.${view}`);
+        expect(r.ok, `${view}: ${r.message}`).toBe(true);
+        expect((r.rows[0] as { n: number }).n, view).toBe(0);
+      }
+    });
+
+    it('show a branch-scoped manager only their own branch', async () => {
+      const svc = await provider({ code: 'SETV1', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 5_000_000);
+      await post(svc, 200_000);
+
+      // mgrB is scoped to branch B and has no branch-A rows.
+      const mine = await asUser(
+        mgrB,
+        `select count(*)::int as n from public.agency_transaction_history
+          where branch_id = $1`,
+        [branchA],
+      );
+      expect(mine.ok, mine.message).toBe(true);
+      expect((mine.rows[0] as { n: number }).n).toBe(0);
+
+      // Head Office sees it.
+      const ho = await asUser(
+        ownerHO,
+        `select count(*)::int as n from public.agency_transaction_history
+          where branch_id = $1`,
+        [branchA],
+      );
+      expect(ho.ok, ho.message).toBe(true);
+      expect((ho.rows[0] as { n: number }).n).toBeGreaterThan(0);
+    });
+
+    it('agree with the definer helpers they deliberately do not call', async () => {
+      // The attribution rule is written twice - once in
+      // agency_commission_outstanding/agency_payable_outstanding, once in the
+      // views, because those functions are revoked from authenticated. Two
+      // copies of a rule drift, so this asserts they still agree.
+      const svc = await provider({ code: 'SETV2', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 5_000_000);
+      await post(svc, 400_000); // 20,000 accrued
+      const settled = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.record_commission_settlement($1,$2,$3,$4,$5)`,
+          params: [svc.providerId, branchA, 8_000, cashA, 'STMT-V2'],
+        },
+      ]);
+      expect(settled.ok, settled.message).toBe(true);
+
+      const fromView = await queryOne<{
+        earned: string;
+        received: string;
+        outstanding: string;
+      }>(
+        `select commission_earned::text as earned,
+                commission_received::text as received,
+                commission_outstanding::text as outstanding
+           from public.agency_commission_summary
+          where provider_id = $1 and branch_id = $2`,
+        [svc.providerId, branchA],
+      );
+      expect(Number(fromView.earned)).toBe(20_000);
+      expect(Number(fromView.received)).toBe(8_000);
+      expect(Number(fromView.outstanding)).toBe(12_000);
+      expect(Number(fromView.outstanding)).toBe(
+        await outstandingCommission(svc.providerId, branchA),
+      );
+
+      // And the payable side, on a bank agency provider.
+      const bank = await provider({
+        code: 'SETV3',
+        branch: branchA,
+        floatModel: 'cash_payable',
+        payable: '2220',
+        direction: 'deposit',
+      });
+      await post(bank, 300_000);
+      const remit = await asUserCommitted(mgrA, [
+        {
+          sql: `select public.post_agency_payable_settlement($1,$2,$3,$4,$5)`,
+          params: [bank.providerId, branchA, 120_000, cashA, 'RCPT-V3'],
+        },
+      ]);
+      expect(remit.ok, remit.message).toBe(true);
+
+      const pv = await queryOne<{
+        collected: string;
+        remitted: string;
+        outstanding: string;
+      }>(
+        `select collected_on_behalf::text as collected, remitted::text as remitted,
+                payable_outstanding::text as outstanding
+           from public.agency_payable_summary
+          where provider_id = $1 and branch_id = $2`,
+        [bank.providerId, branchA],
+      );
+      expect(Number(pv.collected)).toBe(300_000);
+      expect(Number(pv.remitted)).toBe(120_000);
+      expect(Number(pv.outstanding)).toBe(180_000);
+      expect(Number(pv.outstanding)).toBe(
+        await outstandingPayable(bank.providerId, branchA),
+      );
+    });
+
+    it('report both variance conventions with their meaning stated', async () => {
+      const r = await query<{ kind: string; means: string }>(
+        `select distinct reconciliation_kind as kind, variance_means as means
+           from public.agency_variance_report order by 1`,
+      );
+      // Both kinds present, and neither leaves its sign to be guessed.
+      expect(r.map((x) => x.kind)).toEqual(['cash', 'float']);
+      expect(r.find((x) => x.kind === 'cash')?.means).toBe(
+        'physical count less the books',
+      );
+      expect(r.find((x) => x.kind === 'float')?.means).toBe(
+        'the books less the provider statement',
+      );
+    });
+
+    it('list end-of-day exceptions and daily movement for real fixtures', async () => {
+      const svc = await provider({ code: 'SETV4', branch: branchA, rateBps: 500 });
+      await fund(svc.floatCode as string, 5_000_000);
+
+      // A draft left unverified is an exception.
+      const key = `E-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770007000','C',$4,0,null,null,null,$4) as id`,
+          params: [svc.typeId, 50_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const draftId = (c.rows[0] as { id: string }).id;
+
+      const ex = await query<{ kind: string; subject: string }>(
+        `select exception_kind as kind, subject_id::text as subject
+           from public.agency_end_of_day_exceptions
+          where subject_id = $1`,
+        [draftId],
+      );
+      expect(ex).toEqual([{ kind: 'unverified_transaction', subject: draftId }]);
+
+      // And a posted transaction shows up in the day's cash movement.
+      await post(svc, 100_000);
+      const move = await queryOne<{ cashIn: string; net: string }>(
+        `select sum(cash_in)::text as "cashIn", sum(net_movement)::text as net
+           from public.agency_daily_cash_movement
+          where branch_id = $1 and source_type = 'agency_transaction'`,
+        [branchA],
+      );
+      expect(Number(move.cashIn)).toBeGreaterThan(0);
+      expect(Number(move.net)).not.toBe(0);
+    });
+  });
+
+  // =========================================================================
+  describe('financial security certification (Task 9)', () => {
+    /** Every settlement and reconciliation RPC, with the capability it needs. */
+    const RPCS: { call: string; capability: string }[] = [
+      {
+        call: `select public.record_commission_settlement(
+                 '00000000-0000-0000-0000-000000000001'::uuid,
+                 '00000000-0000-0000-0000-000000000002'::uuid, 1000,
+                 '00000000-0000-0000-0000-000000000003'::uuid, null)`,
+        capability: 'agency:settlements',
+      },
+      {
+        call: `select public.post_agency_payable_settlement(
+                 '00000000-0000-0000-0000-000000000001'::uuid,
+                 '00000000-0000-0000-0000-000000000002'::uuid, 1000,
+                 '00000000-0000-0000-0000-000000000003'::uuid, null)`,
+        capability: 'agency:settlements',
+      },
+      {
+        call: `select public.post_float_replenishment(
+                 '00000000-0000-0000-0000-000000000001'::uuid, 1000,
+                 '00000000-0000-0000-0000-000000000003'::uuid, null)`,
+        capability: 'agency:settlements',
+      },
+      {
+        call: `select public.reverse_agency_payable_settlement(
+                 '00000000-0000-0000-0000-000000000001'::uuid, 'why')`,
+        capability: 'agency:reverse',
+      },
+      {
+        call: `select public.reverse_commission_settlement(
+                 '00000000-0000-0000-0000-000000000001'::uuid, 'why')`,
+        capability: 'agency:reverse',
+      },
+      {
+        call: `select public.submit_agency_cash_reconciliation(
+                 '00000000-0000-0000-0000-000000000003'::uuid, 1000)`,
+        capability: 'agency:reconcile',
+      },
+      {
+        call: `select public.approve_agency_cash_reconciliation(
+                 '00000000-0000-0000-0000-000000000001'::uuid, false, null)`,
+        capability: 'agency:reconcile',
+      },
+      {
+        call: `select public.submit_agency_float_reconciliation(
+                 '00000000-0000-0000-0000-000000000001'::uuid, 1000, null)`,
+        capability: 'agency:reconcile',
+      },
+      {
+        call: `select public.approve_agency_float_reconciliation(
+                 '00000000-0000-0000-0000-000000000001'::uuid, false, null)`,
+        capability: 'agency:reconcile',
+      },
+    ];
+
+    it('refuses every settlement and reconciliation RPC to a borrower', async () => {
+      const borrower = await createTestUser('client');
+      for (const { call, capability } of RPCS) {
+        const r = await asUser(borrower, call);
+        expect(r.ok, call).toBe(false);
+        expect(r.code, call).toBe('42501');
+        expect(r.message, call).toContain(capability);
+      }
+    });
+
+    it('refuses the settlement RPCs to a secretary without settlement authority', async () => {
+      for (const { call, capability } of RPCS) {
+        if (capability === 'agency:reconcile') continue; // secretaries hold none of these either
+        const r = await asUser(secA, call);
+        expect(r.ok, call).toBe(false);
+        expect(r.code, call).toBe('42501');
+        expect(r.message, call).toContain(capability);
+      }
+    });
+
+    it('refuses a suspended officer and one who must change their password', async () => {
+      // current_profile_id() requires status active and no forced password
+      // change, so both are refused before any capability is consulted.
+      const suspended = await createTestUser('owner_admin');
+      await query(`update public.profiles set status = 'suspended' where id = $1`, [
+        suspended.profileId,
+      ]);
+      const forced = await createTestUser('owner_admin');
+      await query(
+        `update public.profiles set must_change_password = true where id = $1`,
+        [forced.profileId],
+      );
+
+      for (const user of [suspended, forced]) {
+        for (const { call } of RPCS.slice(0, 3)) {
+          const r = await asUser(user, call);
+          expect(r.ok, call).toBe(false);
+          expect(r.code, call).toBe('42501');
+          expect(r.message, call).toMatch(/unidentified session/i);
+        }
+      }
+    });
+
+    it('scopes a branch-held Owner/Admin to their own branch for a commission exception', async () => {
+      // The gap the review named: agency:commission_exception is owner-only,
+      // and every earlier test gave the owner no branch, so Head Office's
+      // see-everything rule hid the branch question entirely. An owner_admin
+      // WITH a branch must be refused another branch's transaction.
+      const ownerA = await createTestUser('owner_admin');
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branchA,
+        ownerA.profileId,
+      ]);
+      const ownerB = await createTestUser('owner_admin');
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branchB,
+        ownerB.profileId,
+      ]);
+
+      const svc = await provider({ code: 'SETQ1', branch: branchA, rateBps: 150 });
+      await fund(svc.floatCode as string, 5_000_000);
+      const key = `Q-${Math.random().toString(36).slice(2, 12)}`;
+      const c = await asUserCommitted(secA, [
+        {
+          sql: `select public.create_agency_transaction($1,$2,$3,'+256770008000','C',$4,0,1800,null,null,$4) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key],
+        },
+      ]);
+      expect(c.ok, c.message).toBe(true);
+      const id = (c.rows[0] as { id: string }).id;
+
+      // The branch-B owner holds the capability and still may not touch it.
+      const wrongBranch = await asUser(
+        ownerB,
+        `select public.authorise_agency_commission_exception($1,'promo','STMT-Q1')`,
+        [id],
+      );
+      expect(wrongBranch.ok).toBe(false);
+      expect(wrongBranch.code).toBe('42501');
+      expect(wrongBranch.message).toMatch(
+        /No agency transaction with that identifier is available to you/i,
+      );
+
+      // The branch-A owner may.
+      const rightBranch = await asUserCommitted(ownerA, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1,'promo','STMT-Q1')`,
+          params: [id],
+        },
+      ]);
+      expect(rightBranch.ok, rightBranch.message).toBe(true);
+
+      const row = await queryOne<{ by: string }>(
+        `select commission_exception_by::text as by
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(row.by).toBe(ownerA.profileId);
+    });
+
+    it('leaves the trial balance balanced after everything this suite posted', async () => {
+      const tb = await queryOne<{ d: string; c: string }>(
+        `select sum(total_debit)::text as d, sum(total_credit)::text as c
+           from public.trial_balance`,
+      );
+      expect(tb.d).toBe(tb.c);
+    });
+  });
 });
