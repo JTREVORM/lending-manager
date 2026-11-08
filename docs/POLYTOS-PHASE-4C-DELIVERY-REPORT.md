@@ -470,7 +470,21 @@ change: four function bodies are replaced. **193 migrations** on this branch;
 | Money audit | **PASS — verified by injection into the new migration** |
 | typecheck · lint · format · build | **PASS** |
 
-<!-- CS_CI -->
+**Run 42461308897 at `8c2d704` — all four mandatory jobs `success`.**
+
+| Job | Conclusion |
+| --- | --- |
+| checks, unit/integration, build | **success** |
+| database (real PostgreSQL) | **success** |
+| browser E2E (production build, fresh seed) | **success** |
+| security release rehearsal (PostgreSQL 17, real Auth) | **success** |
+
+Every step inside `checks` passed, not merely the job. Inside `database`: the
+security gate, all nine test projects, the upgrade integration and the
+financial certification at 193 migrations. `Supabase Preview` is **skipped**,
+so nothing here created a branch against the hosted project.
+
+**Final SHA for Phase 4C-S: `8c2d704`.**
 
 ## 7. Remaining risks
 
