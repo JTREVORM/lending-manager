@@ -491,8 +491,9 @@ screen that pushes the page sideways — which is how a real defect was caught:
 
 ### Continuous integration
 
-All four mandatory jobs pass at **`75d4726`**, CI run
-[42583163817](https://github.com/JTREVORM/lending-manager/actions/runs/42583163817):
+All four mandatory jobs pass at **`20e6fcd`**, CI run
+[42613096813](https://github.com/JTREVORM/lending-manager/actions/runs/42613096813),
+green on the first attempt:
 
 | Job | Result |
 |---|---|
@@ -540,7 +541,12 @@ Things worth stating rather than hiding:
   archive against a pinned sha256 — so the message names the download. The
   outage itself was waited out; nothing in the repository could fix a 504.
 
-The only commit after `75d4726` is this report, which changes no code.
+The browser suite on that run covers 1005 tests, `agency.write.spec.ts`'s
+fifteen among them. The Phase 4D-F certification before the three added
+workflows was `75d4726`, CI run
+[42583163817](https://github.com/JTREVORM/lending-manager/actions/runs/42583163817).
+
+The only commit after `20e6fcd` is this report, which changes no code.
 
 ### Demonstration data
 
