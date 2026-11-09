@@ -143,10 +143,40 @@ const PHASE_PREFIXES = [
   '20261111',
   '20261112',
   '20261113',
+  '20261114',
 ];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
+
+/**
+ * Refuse to run if a migration newer than the newest unreleased one is being
+ * treated as released.
+ *
+ * The list above is a manual record of what is not deployed yet, and twice
+ * now a new migration has been added without it - once in Phase 4D and once
+ * in 4D-F. Both times the symptom was a seeding failure three steps later,
+ * with nothing in the message about this list.
+ *
+ * The rule is narrow on purpose: a file dated after the newest prefix here
+ * cannot already be in production, because the ones here are not. Anything
+ * older is a judgement the list has already made, and is left alone.
+ */
+function assertPhaseListIsCurrent(names) {
+  const newest = PHASE_PREFIXES.reduce((a, b) => (a > b ? a : b));
+  const missed = names
+    .filter((name) => name.slice(0, 8) > newest && !isPhaseMigration(name))
+    .sort();
+
+  if (missed.length > 0) {
+    throw new Error(
+      `These migrations are newer than every unreleased one and are being ` +
+        `treated as the released schema, which cannot be right:\n` +
+        missed.map((name) => `  ${name}`).join('\n') +
+        `\n\nAdd their date prefixes to PHASE_PREFIXES in ${'scripts/verify-membership-upgrade.mjs'}.`,
+    );
+  }
+}
 
 const PORT = process.env.UPGRADE_PG_PORT ?? '5433';
 const USER = process.env.UPGRADE_PG_USER ?? 'lending';
@@ -305,6 +335,8 @@ async function capture(client) {
 const all = readdirSync(MIGRATIONS)
   .filter((name) => name.endsWith('.sql'))
   .sort();
+
+assertPhaseListIsCurrent(all);
 
 const before = all.filter((name) => !isPhaseMigration(name));
 const phase = all.filter(isPhaseMigration);
