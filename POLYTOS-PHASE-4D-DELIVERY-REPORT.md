@@ -479,11 +479,8 @@ screen that pushes the page sideways — which is how a real defect was caught:
 
 ### Continuous integration
 
-All four mandatory jobs pass at **`87ec0f6`**, CI run
-[42511315927](https://github.com/JTREVORM/lending-manager/actions/runs/42511315927)
-(the pull request's own run; the push run
-[42511311163](https://github.com/JTREVORM/lending-manager/actions/runs/42511311163)
-on the same commit is green too):
+All four mandatory jobs pass at **`75d4726`**, CI run
+[42583163817](https://github.com/JTREVORM/lending-manager/actions/runs/42583163817):
 
 | Job | Result |
 |---|---|
@@ -495,7 +492,10 @@ on the same commit is green too):
 `Supabase Preview` is skipped, which is the evidence that nothing reached the
 hosted project.
 
-Two things in that run are worth stating rather than hiding:
+Phase 4D's own certification was at `87ec0f6`, CI run
+[42511315927](https://github.com/JTREVORM/lending-manager/actions/runs/42511315927).
+
+Things worth stating rather than hiding:
 
 - The rehearsal job could not install PostgreSQL 17 on four runs out of
   five: apt refused the PGDG repository as unsigned, failing to load the
@@ -512,7 +512,23 @@ Two things in that run are worth stating rather than hiding:
   reused across several partial runs. CI seeds fresh, which is why its run is
   the one that counts.
 
-The only commit after `87ec0f6` is this report, which changes no code.
+- **The upgrade verifier failed twice on its own bookkeeping.** It splits
+  the migrations into the released schema and the unreleased phases by a
+  hand-kept list of date prefixes, and a new migration was added without it
+  in Phase 4D and again in 4D-F. Both times the symptom appeared three steps
+  later with nothing in the message about the list. The list now checks
+  itself: a migration dated after the newest unreleased one cannot already be
+  in production, and the verifier refuses to run and names the files.
+  Verified by injecting a probe migration dated 2999, which makes it exit 1.
+- **Two CI jobs download a release binary, and GitHub's release endpoint
+  returned 504 for about half an hour.** The PostgREST download was using
+  `curl -sSL` without `-f`, which does not fail on an HTTP error: it wrote
+  the error page to the file, and the job reported `tar: This does not look
+  like a tar archive`. It now fails on the error, retries, and checks the
+  archive against a pinned sha256 — so the message names the download. The
+  outage itself was waited out; nothing in the repository could fix a 504.
+
+The only commit after `75d4726` is this report, which changes no code.
 
 ### Demonstration data
 
