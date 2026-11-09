@@ -2913,6 +2913,23 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         races: 'bank withdrawal, another settlement, cash reconciliation',
       },
       {
+        fn: 'verify_agency_float_trade',
+        provider: true,
+        accounts: true,
+        checks: 'cash sufficiency on a purchase, float sufficiency on a sale or transfer',
+        source: 'agency_float_purchase | agency_float_sale | agency_float_transfer',
+        races:
+          'another trade on the same line, a counter transaction, float reconciliation',
+      },
+      {
+        fn: 'reverse_agency_float_trade',
+        provider: true,
+        accounts: true,
+        checks: 'sufficiency on whatever the contra draws down',
+        source: 'agency_float_*_reversal',
+        races: 'another trade, a counter transaction, float reconciliation',
+      },
+      {
         fn: 'record_agency_commission_payout',
         provider: true,
         accounts: true,
@@ -3031,7 +3048,11 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
               -- Phase 4E. A reader, like the two above: it takes no lock and
               -- moves nothing, so it belongs in neither the matrix nor this
               -- list of functions that must appear in it.
-              'agency_commission_outstanding_by_line')
+              'agency_commission_outstanding_by_line',
+              -- Phase 4E. Advisory: it reads the figures to tell the Owner
+              -- what stands in the way of closing a line, takes no lock and
+              -- moves nothing.
+              'agency_agent_line_obligations')
           order by p.proname`,
       );
       const named = new Set(MATRIX.filter((m) => m.provider).map((m) => m.fn));

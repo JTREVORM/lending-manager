@@ -1106,4 +1106,385 @@ describeDb('Phase 4E — Mobile Money foundation', () => {
       expect(row.transacted).toBeNull();
     });
   });
+
+  // =========================================================================
+  // OD-4 — the Owner's five controls over a line
+  // =========================================================================
+  describe('agent line administration', () => {
+    async function obligations(tillId: string): Promise<string[]> {
+      const r = await queryOne<{ v: string[] }>(
+        `select public.agency_agent_line_obligations($1) as v`,
+        [tillId],
+      );
+      return r.v;
+    }
+
+    async function register(
+      providerId: string,
+      till: string,
+      who: TestUser = owner,
+      label = 'Counter',
+    ) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.register_agency_agent_line($1, $2, $3, $4, $5, $6) as id`,
+          params: [providerId, branch, till, label, null, null],
+        },
+      ]);
+    }
+
+    /** A provider with no lines, so registration is the first thing done to it. */
+    async function bareProvider(code: string): Promise<string> {
+      const pr = await queryOne<{ id: string }>(
+        `insert into public.agency_service_providers
+           (code, name, category, float_model, income_account_id,
+            commission_model, commission_source, is_provisional, is_active)
+         values ($1, $1, 'mobile_money', 'provider_float',
+                 (select id from public.ledger_accounts where code = '4510'),
+                 'deferred', 'reported', false, true)
+         returning id`,
+        [code],
+      );
+      return pr.id;
+    }
+
+    it('registers a line, mints its ledger account and records its identity', async () => {
+      const providerId = await bareProvider('E4ADM1');
+      const r = await asUserCommitted(owner, [
+        {
+          sql: `select public.register_agency_agent_line(
+                  $1, $2, 'counter1', 'Counter one', '+256772777001', 'AG-7001',
+                  current_date, 'opened for the pilot') as id`,
+          params: [providerId, branch],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      const id = (r.rows[0] as { id: string }).id;
+
+      const row = await queryOne<{
+        till_name: string;
+        label: string;
+        msisdn: string;
+        agent_code: string;
+        status: string;
+        code: string;
+        opened: string;
+      }>(
+        `select f.till_name, f.label, f.line_msisdn as msisdn, f.agent_code,
+                f.status, a.code, f.opened_on::text as opened
+           from public.agency_provider_float_accounts f
+           join public.ledger_accounts a on a.id = f.ledger_account_id
+          where f.id = $1`,
+        [id],
+      );
+      expect(row.till_name).toBe('counter1');
+      expect(row.label).toBe('Counter one');
+      expect(row.msisdn).toBe('+256772777001');
+      expect(row.agent_code).toBe('AG-7001');
+      expect(row.status).toBe('active');
+      expect(row.code).toMatch(/^1320\.E4ADM1\./);
+      expect(row.opened).not.toBe('');
+    });
+
+    it('is the Owner\u2019s to do, not a Manager\u2019s', async () => {
+      const providerId = await bareProvider('E4ADM2');
+      const r = await register(providerId, 'counter1', mgr);
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('42501');
+    });
+
+    it('refuses a till name the provider already uses at that branch', async () => {
+      // `ensure_agency_float_account()` is idempotent, which is right for a
+      // seed and wrong for a form: the Owner would be told a line was created
+      // while their details were discarded.
+      const providerId = await bareProvider('E4ADM3');
+      expect((await register(providerId, 'counter1')).ok).toBe(true);
+      const again = await register(providerId, 'counter1');
+      expect(again.ok).toBe(false);
+      expect(again.message).toMatch(/already has a line called counter1/i);
+    });
+
+    it('refuses a blank till name', async () => {
+      const providerId = await bareProvider('E4ADM4');
+      const r = await register(providerId, '   ');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/needs a till name/i);
+    });
+
+    it('edits the identity, leaves a NULL alone and clears an empty string', async () => {
+      const providerId = await bareProvider('E4ADM5');
+      const id = ((await register(providerId, 'counter1')).rows[0] as { id: string }).id;
+      await asUserCommitted(owner, [
+        {
+          sql: `select public.update_agency_agent_line($1, 'Renamed', '+256772777005', 'AG-7005', 'a note')`,
+          params: [id],
+        },
+      ]);
+
+      // A NULL leaves the label alone while the note changes.
+      const partial = await asUserCommitted(owner, [
+        {
+          sql: `select public.update_agency_agent_line($1, null, null, null, 'a different note')`,
+          params: [id],
+        },
+      ]);
+      expect(partial.ok, partial.message).toBe(true);
+
+      let row = await queryOne<{ label: string; notes: string; msisdn: string }>(
+        `select label, notes, line_msisdn as msisdn
+           from public.agency_provider_float_accounts where id = $1`,
+        [id],
+      );
+      expect(row.label).toBe('Renamed');
+      expect(row.notes).toBe('a different note');
+      expect(row.msisdn).toBe('+256772777005');
+
+      // An empty string clears.
+      await asUserCommitted(owner, [
+        {
+          sql: `select public.update_agency_agent_line($1, null, '', null, null)`,
+          params: [id],
+        },
+      ]);
+      row = await queryOne(
+        `select label, notes, line_msisdn as msisdn
+           from public.agency_provider_float_accounts where id = $1`,
+        [id],
+      );
+      expect(row.msisdn).toBeNull();
+    });
+
+    it('suspends with a reason, and refuses a second suspension', async () => {
+      const providerId = await bareProvider('E4ADM6');
+      const id = ((await register(providerId, 'counter1')).rows[0] as { id: string }).id;
+
+      const noReason = await asUser(
+        owner,
+        `select public.set_agency_agent_line_suspended($1, true, '  ')`,
+        [id],
+      );
+      expect(noReason.ok).toBe(false);
+      expect(noReason.message).toMatch(/each need a reason/i);
+
+      const done = await asUserCommitted(owner, [
+        {
+          sql: `select public.set_agency_agent_line_suspended($1, true, 'SIM swap reported')`,
+          params: [id],
+        },
+      ]);
+      expect(done.ok, done.message).toBe(true);
+
+      const row = await queryOne<{ status: string; active: boolean; reason: string }>(
+        `select status, is_active as active, status_reason as reason
+           from public.agency_provider_float_accounts where id = $1`,
+        [id],
+      );
+      expect(row.status).toBe('suspended');
+      expect(row.active).toBe(false);
+      expect(row.reason).toMatch(/SIM swap/);
+
+      const twice = await asUser(
+        owner,
+        `select public.set_agency_agent_line_suspended($1, true, 'again')`,
+        [id],
+      );
+      expect(twice.ok).toBe(false);
+      expect(twice.message).toMatch(/already suspended/i);
+    });
+
+    it('lifts a suspension, and puts that reason where the row cannot keep it', async () => {
+      const providerId = await bareProvider('E4ADM7');
+      const id = ((await register(providerId, 'counter1')).rows[0] as { id: string }).id;
+      await asUserCommitted(owner, [
+        {
+          sql: `select public.set_agency_agent_line_suspended($1, true, 'reported stolen')`,
+          params: [id],
+        },
+      ]);
+
+      const back = await asUserCommitted(owner, [
+        {
+          sql: `select public.set_agency_agent_line_suspended($1, false, 'handset recovered')`,
+          params: [id],
+        },
+      ]);
+      expect(back.ok, back.message).toBe(true);
+
+      const row = await queryOne<{
+        status: string;
+        active: boolean;
+        reason: string | null;
+      }>(
+        `select status, is_active as active, status_reason as reason
+           from public.agency_provider_float_accounts where id = $1`,
+        [id],
+      );
+      expect(row.status).toBe('active');
+      expect(row.active).toBe(true);
+      expect(row.reason).toBeNull();
+
+      // The row's columns are cleared when a suspension is lifted, so the
+      // reason it was lifted lives in the audit log or nowhere.
+      const audit = await queryOne<{ action: string; reason: string }>(
+        `select action, new_values->>'reason' as reason
+           from public.audit_log
+          where entity_type = 'agency_agent_line' and entity_id = $1
+            and action = 'agency_agent_line.reinstated'
+          order by id desc limit 1`,
+        [id],
+      );
+      expect(audit.reason).toBe('handset recovered');
+
+      const notSuspended = await asUser(
+        owner,
+        `select public.set_agency_agent_line_suspended($1, false, 'again')`,
+        [id],
+      );
+      expect(notSuspended.ok).toBe(false);
+      expect(notSuspended.message).toMatch(/is not suspended/i);
+    });
+
+    it('closes a clean line, with a reason and a closing date', async () => {
+      const providerId = await bareProvider('E4ADM8');
+      const id = ((await register(providerId, 'counter1')).rows[0] as { id: string }).id;
+      expect(await obligations(id)).toEqual([]);
+
+      const r = await asUserCommitted(owner, [
+        {
+          sql: `select public.close_agency_agent_line($1, 'provider withdrew the line')`,
+          params: [id],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      const row = await queryOne<{ status: string; closed: string; reason: string }>(
+        `select status, closed_on::text as closed, status_reason as reason
+           from public.agency_provider_float_accounts where id = $1`,
+        [id],
+      );
+      expect(row.status).toBe('closed');
+      expect(row.closed).not.toBe('');
+      expect(row.reason).toMatch(/provider withdrew/i);
+    });
+
+    it('refuses to close a line that still holds float, and says how much', async () => {
+      const svc = await liveProvider({
+        code: 'E4ADM9',
+        source: 'reported',
+        direction: 'deposit',
+      });
+      expect(await obligations(svc.tillId)).toEqual([
+        expect.stringMatching(/still holds 20000000 shillings of float/),
+      ]);
+
+      const r = await asUser(
+        owner,
+        `select public.close_agency_agent_line($1, 'tidy up')`,
+        [svc.tillId],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/cannot be closed yet/i);
+      expect(r.message).toMatch(/still holds 20000000 shillings of float/i);
+      expect(r.message).toMatch(/suspend the line instead/i);
+    });
+
+    it('refuses to close a line that is owed commission, or has work in flight', async () => {
+      const svc = await liveProvider({
+        code: 'E4ADMA',
+        source: 'reported',
+        direction: 'deposit',
+      });
+      // One posted transaction leaves commission outstanding, and one draft
+      // leaves work in flight.
+      await post({ typeId: svc.typeId, tillId: svc.tillId }, 50_000, {
+        commission: 400,
+      });
+      const key = `E4A-${Math.random().toString(36).slice(2, 10)}`;
+      const draft = await asUserCommitted(sec, [
+        {
+          sql: `select public.create_agency_transaction($1, 10000, $2, '+256770009100', 'C', $3, 0, 0, null, null, $3)`,
+          params: [svc.typeId, svc.tillId, key],
+        },
+      ]);
+      expect(draft.ok, draft.message).toBe(true);
+
+      const blockers = await obligations(svc.tillId);
+      expect(blockers).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/shillings of float/),
+          expect.stringMatching(/400 shillings of commission are still owed to it/),
+          expect.stringMatching(/1 transaction\(s\) are still in flight/),
+        ]),
+      );
+
+      const r = await asUser(
+        owner,
+        `select public.close_agency_agent_line($1, 'tidy up')`,
+        [svc.tillId],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/still owed to it/i);
+      expect(r.message).toMatch(/still in flight/i);
+    });
+
+    it('needs a reason to close, and is the Owner\u2019s to do', async () => {
+      const providerId = await bareProvider('E4ADMB');
+      const id = ((await register(providerId, 'counter1')).rows[0] as { id: string }).id;
+
+      const noReason = await asUser(
+        owner,
+        `select public.close_agency_agent_line($1, '   ')`,
+        [id],
+      );
+      expect(noReason.ok).toBe(false);
+      expect(noReason.message).toMatch(/needs a reason/i);
+
+      const notOwner = await asUser(
+        mgr,
+        `select public.close_agency_agent_line($1, 'because')`,
+        [id],
+      );
+      expect(notOwner.ok).toBe(false);
+      expect(notOwner.code).toBe('42501');
+    });
+
+    it('will not edit or suspend a closed line', async () => {
+      const providerId = await bareProvider('E4ADMC');
+      const id = ((await register(providerId, 'counter1')).rows[0] as { id: string }).id;
+      expect(
+        (
+          await asUserCommitted(owner, [
+            {
+              sql: `select public.close_agency_agent_line($1, 'retired')`,
+              params: [id],
+            },
+          ])
+        ).ok,
+      ).toBe(true);
+
+      const edit = await asUser(
+        owner,
+        `select public.update_agency_agent_line($1, 'New name')`,
+        [id],
+      );
+      expect(edit.ok).toBe(false);
+      expect(edit.message).toMatch(/closed, so its details are history/i);
+
+      const suspend = await asUser(
+        owner,
+        `select public.set_agency_agent_line_suspended($1, true, 'why')`,
+        [id],
+      );
+      expect(suspend.ok).toBe(false);
+      expect(suspend.message).toMatch(/closed. A closed line is not suspended/i);
+
+      const again = await asUser(
+        owner,
+        `select public.close_agency_agent_line($1, 'again')`,
+        [id],
+      );
+      expect(again.ok).toBe(false);
+      expect(again.message).toMatch(/already closed/i);
+    });
+  });
 });

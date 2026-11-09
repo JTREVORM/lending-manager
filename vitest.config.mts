@@ -99,6 +99,7 @@ export default defineConfig({
             'tests/db/shared-till-concurrency.test.ts',
             'tests/db/agency-money-foundation.test.ts',
             'tests/db/agency-money-commission.test.ts',
+            'tests/db/agency-money-float.test.ts',
           ],
         },
       },
@@ -180,6 +181,7 @@ export default defineConfig({
           include: [
             'tests/db/agency-money-foundation.test.ts',
             'tests/db/agency-money-commission.test.ts',
+            'tests/db/agency-money-float.test.ts',
           ],
           // Its own database, like every other agency project. This suite
           // commits providers, agent lines and posted transactions, suspends
