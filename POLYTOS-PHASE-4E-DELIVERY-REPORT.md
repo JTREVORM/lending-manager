@@ -130,7 +130,7 @@ on each run.
 | --- | --- | --- |
 | `tests/db/agency-money-foundation.test.ts` (new) | 54 | the three accounts; agent-line identity and immutability; suspension and closure; service ceilings; reported commission; fee modes; timestamps; the Owner's five controls |
 | `tests/db/agency-money-commission.test.ts` (new) | 28 | payout, partial payout, over-payout, duplicates, per-line attribution, suspension and closure rules; the OD-10 split and both recovery methods; the statement-period reconciliation and its silence |
-| `tests/db/agency-money-float.test.ts` (new) | 28 | a pending trade moving nothing; all four purchase and sale journals; transfers within and across branches; maker-checker; stale revisions; rejection; reversal; suspension rules |
+| `tests/db/agency-money-float.test.ts` (new) | 32 | a pending trade moving nothing; all four purchase and sale journals; transfers within and across branches; maker-checker; stale revisions; rejection; reversal; suspension rules; and four concurrency races — a sale behind a held line, two sales of the same float where only one may win, two opposing cross-branch transfers that must not deadlock, and a payout behind the line it pays into |
 
 Existing suites, all still passing with every behaviour change above:
 

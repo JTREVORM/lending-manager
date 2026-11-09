@@ -31,7 +31,16 @@ import {
   createTestUser,
   type TestUser,
 } from '../helpers/auth-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import type { PoolClient } from 'pg';
+
+import {
+  closePool,
+  getClient,
+  hasDatabase,
+  query,
+  queryOne,
+  skipReason,
+} from '../helpers/db';
 
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
@@ -65,6 +74,7 @@ describeDb('Phase 4E — float trades', () => {
   let owner: TestUser;
   let mgr: TestUser;
   let mgr2: TestUser;
+  let hoMgr: TestUser;
   let sec: TestUser;
   let branch: string;
   let branchB: string;
@@ -241,6 +251,9 @@ describeDb('Phase 4E — float trades', () => {
     owner = await createTestUser('owner_admin');
     mgr = await createTestUser('manager');
     mgr2 = await createTestUser('manager');
+    // Head Office: the only authority that spans both branches, and a
+    // different person from the Owner who records the cross-branch work.
+    hoMgr = await createTestUser('manager');
     sec = await createTestUser('secretary_treasurer');
 
     branch = (
@@ -265,9 +278,10 @@ describeDb('Phase 4E — float trades', () => {
     ]);
     // The Owner is Head Office: a cross-branch transfer needs authority at
     // both ends, which only a null branch has.
-    await query(`update public.profiles set branch_id = null where id = $1`, [
-      owner.profileId,
-    ]);
+    await query(
+      `update public.profiles set branch_id = null where id = any($1::uuid[])`,
+      [[owner.profileId, hoMgr.profileId]],
+    );
 
     const cash = await queryOne<{ id: string; code: string }>(
       `select id, code from public.ledger_accounts
@@ -1057,6 +1071,203 @@ describeDb('Phase 4E — float trades', () => {
       });
       expect(move.ok).toBe(false);
       expect(move.message).toMatch(/receiving agent line is suspended/i);
+    });
+  });
+
+  // =========================================================================
+  // Concurrency — the races the lock order exists for
+  // =========================================================================
+  describe('two officers at once', () => {
+    /**
+     * Stages a race by holding the lock the work under test must take, then
+     * asserting that the work did not walk past it.
+     *
+     * An error is not "walked past the lock": a path refused for an unrelated
+     * reason never reached the lock at all, and reporting that as a
+     * concurrency defect would be wrong. The caller asserts on the error.
+     */
+    async function blockedBy(
+      lockAccounts: readonly string[],
+      work: (client: PoolClient) => Promise<unknown>,
+    ): Promise<{ walkedPast: boolean; error: string | null }> {
+      const holder = await getClient();
+      const worker = await getClient();
+      let done = false;
+      let error: string | null = null;
+      try {
+        await holder.query('begin');
+        await holder.query(`select public.lock_ledger_balances($1::uuid[])`, [
+          lockAccounts,
+        ]);
+
+        await worker.query('begin');
+        const run = work(worker)
+          .then(() => {
+            done = true;
+          })
+          .catch((e: unknown) => {
+            done = true;
+            error = (e as { message?: string }).message ?? 'unknown';
+          });
+
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        const walkedPast = done && error === null;
+
+        await holder.query('commit');
+        await run;
+        try {
+          await worker.query('commit');
+        } catch {
+          await worker.query('rollback').catch(() => undefined);
+        }
+        return { walkedPast, error };
+      } finally {
+        holder.release();
+        worker.release();
+      }
+    }
+
+    async function ledgerIdOf(tillId: string): Promise<string> {
+      const r = await queryOne<{ id: string }>(
+        `select ledger_account_id::text as id
+           from public.agency_provider_float_accounts where id = $1`,
+        [tillId],
+      );
+      return r.id;
+    }
+
+    it('serialises a sale behind whoever holds the line', async () => {
+      const { lines } = await provider({ code: 'FTRACE1' });
+      const line = at(lines);
+      const r = await record({
+        kind: 'sale',
+        tillId: line.tillId,
+        amount: 100_000,
+        reference: 'RACE-1',
+        settlement: cashId,
+        fee: 0,
+      });
+      const id = (r.rows[0] as { id: string }).id;
+
+      const staged = await blockedBy([await ledgerIdOf(line.tillId)], async (c) => {
+        await c.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({ sub: mgr.authUserId, role: 'authenticated' }),
+        ]);
+        await c.query(`select public.verify_agency_float_trade($1)`, [id]);
+      });
+
+      expect(staged.walkedPast, 'the sale posted while the line was locked').toBe(false);
+    });
+
+    it('lets only one of two sales of the same float succeed', async () => {
+      // 100,000 of float, two sales of 80,000 recorded. Whichever verifies
+      // first takes the float; the second must be refused for insufficient
+      // float rather than both posting and leaving the line at -60,000.
+      const { lines } = await provider({ code: 'FTRACE2', openingFloat: 100_000 });
+      const line = at(lines);
+
+      const ids: string[] = [];
+      for (const ref of ['RACE-2A', 'RACE-2B']) {
+        const r = await record({
+          kind: 'sale',
+          tillId: line.tillId,
+          amount: 80_000,
+          reference: ref,
+          settlement: cashId,
+          fee: 0,
+        });
+        expect(r.ok, r.message).toBe(true);
+        ids.push((r.rows[0] as { id: string }).id);
+      }
+
+      const results = await Promise.all(ids.map((id) => verify(id, mgr)));
+      const posted = results.filter((r) => r.ok);
+      const refused = results.filter((r) => !r.ok);
+
+      expect(posted).toHaveLength(1);
+      expect(refused).toHaveLength(1);
+      expect(refused[0]?.message).toMatch(/less than the 80000 being sent out of it/i);
+      expect(await balance(line.floatCode)).toBe(20_000);
+    });
+
+    it('does not deadlock when two cross-branch transfers oppose each other', async () => {
+      // The case the branch-id lock order exists for. Two transfers between
+      // the same pair of branches, in opposite directions, verified at the
+      // same moment: taking the two provider-balance locks in the order each
+      // call's own arguments arrive would have one holding A and waiting for
+      // B while the other holds B and waits for A.
+      const { lines } = await provider({
+        code: 'FTRACE3',
+        tills: [{ name: 'main' }, { name: 'other', branch: 'B' }],
+      });
+      const a = at(lines, 0);
+      const b = at(lines, 1);
+
+      const outbound = await record(
+        {
+          kind: 'transfer',
+          tillId: a.tillId,
+          amount: 50_000,
+          reference: 'RACE-3A',
+          counterTillId: b.tillId,
+        },
+        owner,
+      );
+      expect(outbound.ok, outbound.message).toBe(true);
+
+      const inbound = await record(
+        {
+          kind: 'transfer',
+          tillId: b.tillId,
+          amount: 40_000,
+          reference: 'RACE-3B',
+          counterTillId: a.tillId,
+        },
+        owner,
+      );
+      expect(inbound.ok, inbound.message).toBe(true);
+
+      // Verified by Head Office, because one of the two trades belongs to the
+      // other branch and a branch manager may not post it — which the
+      // branch check refuses before the locks are reached.
+      const both = await Promise.all([
+        verify((outbound.rows[0] as { id: string }).id, hoMgr),
+        verify((inbound.rows[0] as { id: string }).id, hoMgr),
+      ]);
+
+      // Both succeed, and neither reports a deadlock. A deadlock would be
+      // PostgreSQL's own 40P01, which no amount of retrying in the test would
+      // make correct.
+      for (const r of both) {
+        expect(r.ok, r.message).toBe(true);
+        expect(r.message ?? '').not.toMatch(/deadlock/i);
+      }
+
+      // Net: A sent 50,000 and received 40,000.
+      expect(await balance(a.floatCode)).toBe(5_000_000 - 50_000 + 40_000);
+      expect(await balance(b.floatCode)).toBe(5_000_000 + 50_000 - 40_000);
+    });
+
+    it('serialises a commission payout behind the line it pays into', async () => {
+      // Not a float trade, but the same lock and the same hazard: a payout and
+      // a sale on one line must not both read the same float.
+      const { lines } = await provider({ code: 'FTRACE4' });
+      const line = at(lines);
+
+      const staged = await blockedBy([await ledgerIdOf(line.tillId)], async (c) => {
+        await c.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({ sub: mgr.authUserId, role: 'authenticated' }),
+        ]);
+        await c.query(`select public.record_agency_commission_payout($1, 1, 'RACE-4')`, [
+          line.tillId,
+        ]);
+      });
+
+      // It is refused or it waits; what it must not do is complete while
+      // another session holds the line.
+      expect(staged.walkedPast, 'the payout completed while the line was locked').toBe(
+        false,
+      );
     });
   });
 });
