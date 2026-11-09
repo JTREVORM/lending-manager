@@ -97,6 +97,7 @@ export default defineConfig({
             'tests/db/agency-security-closure.test.ts',
             'tests/db/agency-settlement.test.ts',
             'tests/db/shared-till-concurrency.test.ts',
+            'tests/db/agency-money-foundation.test.ts',
           ],
         },
       },
@@ -165,6 +166,21 @@ export default defineConfig({
           // Its own database, like the other agency projects: this suite posts
           // real settlements and stages races on two connections, so a suite
           // sharing the database would read a book this one wrote to.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-money',
+          environment: 'node',
+          include: ['tests/db/agency-money-foundation.test.ts'],
+          // Its own database, like every other agency project. This suite
+          // commits providers, agent lines and posted transactions, suspends
+          // lines and changes service ceilings — all of it visible to anything
+          // sharing the database, and none of it rollback-able.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,

@@ -144,6 +144,8 @@ const PHASE_PREFIXES = [
   '20261112',
   '20261113',
   '20261114',
+  // Phase 4E, Mobile Money. Unreleased like every agency phase before it.
+  '20261115',
 ];
 
 const isPhaseMigration = (name) =>

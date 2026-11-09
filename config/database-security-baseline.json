@@ -11,7 +11,7 @@
   "functions": {
     "accept_membership_policy_version(p_membership_id uuid, p_policy_version_id uuid, p_consent_method text, p_signature_name text, p_signature_path text, p_witness_profile_id uuid, p_challenge_id uuid, p_accepted_place text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -29,7 +29,7 @@
     },
     "add_meeting_action_item(p_meeting_id uuid, p_description text, p_assigned_to uuid, p_due_on date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -56,7 +56,7 @@
     },
     "approve_benefit_claim(p_claim_id uuid, p_approved_amount bigint, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -65,7 +65,7 @@
     },
     "approve_expense(p_expense_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -83,7 +83,7 @@
     },
     "approve_reconciliation(p_reconciliation_id uuid, p_notes text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -92,7 +92,7 @@
     },
     "approve_transfer(p_transfer_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -101,7 +101,7 @@
     },
     "assess_benefit_claim(p_claim_id uuid, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -110,7 +110,7 @@
     },
     "assess_meeting_fine(p_meeting_id uuid, p_membership_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -128,7 +128,7 @@
     },
     "assess_member_loan_eligibility(p_client_id uuid, p_amount bigint, p_term_months smallint, p_repayment_frequency text, p_as_of date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -137,7 +137,7 @@
     },
     "attach_benefit_document(p_claim_id uuid, p_beneficiary_id uuid, p_kind text, p_object_path text, p_content_type text, p_byte_size bigint, p_label text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -155,7 +155,7 @@
     },
     "begin_benefit_verification(p_claim_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -164,7 +164,7 @@
     },
     "begin_membership_policy_transition(p_to_version_id uuid, p_effective_on date, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -182,7 +182,7 @@
     },
     "benefit_expense_by_type(p_from date, p_to date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -200,7 +200,7 @@
     },
     "benefit_summary(p_from date, p_to date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -236,7 +236,7 @@
     },
     "cancel_benefit_claim(p_claim_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -254,7 +254,7 @@
     },
     "cancel_meeting_fine(p_fine_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -263,7 +263,7 @@
     },
     "cancel_membership_meeting(p_meeting_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -272,7 +272,7 @@
     },
     "cancel_savings_withdrawal(p_request_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -281,7 +281,7 @@
     },
     "carry_forward_unpaid_installments(p_loan_id uuid, p_as_of date, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -299,7 +299,7 @@
     },
     "complete_membership_policy_transition(p_transition_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -324,9 +324,9 @@
         "public_default_acl": false
       }
     },
-    "create_agency_transaction(p_transaction_type_id uuid, p_principal_amount bigint, p_float_account_id uuid, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_transaction_date date, p_idempotency_key text)": {
+    "create_agency_transaction(p_transaction_type_id uuid, p_principal_amount bigint, p_float_account_id uuid, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_transaction_date date, p_idempotency_key text, p_customer_fee_mode text, p_transacted_at timestamp with time zone)": {
       "classification": "A",
-      "reason": "Phase 4B agency RPC. Records a draft agency transaction. Refuses a caller without agency:write with SQLSTATE 42501, before it reads a single argument, via agency_actor(). The branch is taken from the officer's own profile and is never an argument, so one branch cannot record against another's till.",
+      "reason": "Phase 4B agency RPC. Records a draft agency transaction. Refuses a caller without agency:write with SQLSTATE 42501, before it reads a single argument, via agency_actor(). The branch is taken from the officer's own profile and is never an argument, so one branch cannot record against another's till. Phase 4E re-signed it for the fee mode and the provider timestamp; the old eleven-argument signature was dropped so there is exactly one overload of the call that records money.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -398,7 +398,7 @@
     },
     "decide_savings_withdrawal(p_request_id uuid, p_approve boolean, p_notes text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -416,7 +416,7 @@
     },
     "enrol_member(p_client_id uuid, p_payment_method text, p_fee_reference text, p_consent_method text, p_signature_name text, p_fee_idempotency_key uuid, p_signature_path text, p_witness_profile_id uuid, p_challenge_id uuid, p_initial_deposit bigint, p_deposit_reference text, p_deposit_idempotency_key uuid, p_notes text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -434,7 +434,7 @@
     },
     "finalise_meeting_minutes(p_meeting_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -443,7 +443,7 @@
     },
     "issue_membership_card(p_membership_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -452,7 +452,7 @@
     },
     "issue_membership_consent_code(p_membership_id uuid, p_policy_version_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -470,7 +470,7 @@
     },
     "mark_meeting_attendance(p_meeting_id uuid, p_membership_id uuid, p_attendance text, p_absence_reason text, p_note text, p_correction_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -488,7 +488,7 @@
     },
     "medical_benefit_consumed(p_membership_id uuid, p_period_from date, p_period_to date, p_exclude_claim_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -506,7 +506,7 @@
     },
     "meeting_fine_summary(p_branch_id uuid, p_from date, p_to date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -524,7 +524,7 @@
     },
     "member_loan_summary()": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -560,7 +560,7 @@
     },
     "open_benefit_claim(p_membership_id uuid, p_claim_type text, p_event_date date, p_provider_name text, p_admission_at timestamp with time zone, p_discharge_at timestamp with time zone, p_bill_amount bigint, p_deceased_name text, p_deceased_relationship text, p_beneficiary_id uuid, p_deceased_beneficiary_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -587,7 +587,7 @@
     },
     "post_benefit_payment(p_claim_id uuid, p_payment_method text, p_external_reference text, p_idempotency_key uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -605,7 +605,7 @@
     },
     "post_meeting_fine_payment(p_fine_id uuid, p_amount bigint, p_payment_method text, p_external_reference text, p_idempotency_key uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -614,7 +614,7 @@
     },
     "post_payment(p_loan_id uuid, p_amount bigint, p_payment_method text, p_external_reference text, p_idempotency_key uuid, p_notes text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -623,7 +623,7 @@
     },
     "post_savings_deposit(p_savings_account_id uuid, p_amount bigint, p_payment_method text, p_external_reference text, p_idempotency_key uuid, p_notes text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -632,7 +632,7 @@
     },
     "post_savings_withdrawal(p_request_id uuid, p_payment_method text, p_external_reference text, p_idempotency_key uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -641,7 +641,7 @@
     },
     "preview_membership_policy_transition(p_to_version_id uuid, p_effective_on date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -659,7 +659,7 @@
     },
     "record_death_confirmation(p_claim_id uuid, p_confirming_membership_id uuid, p_statement text, p_confirmation_method text, p_signature_name text, p_evidence_path text, p_relationship_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -668,7 +668,7 @@
     },
     "record_draft_policy_timing(p_policy_id uuid, p_effective_from date, p_authorization_reference text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -677,7 +677,7 @@
     },
     "record_expense(p_expense_account_id uuid, p_payment_account_id uuid, p_amount bigint, p_expense_date date, p_description text, p_payee text, p_external_reference text, p_receipt_path text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -686,7 +686,7 @@
     },
     "record_meeting_absence_notice(p_meeting_id uuid, p_membership_id uuid, p_reason_kind text, p_reason text, p_reported_via text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -695,7 +695,7 @@
     },
     "record_meeting_minutes(p_meeting_id uuid, p_minutes text, p_amendment_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -704,7 +704,7 @@
     },
     "record_membership_fee(p_membership_id uuid, p_amount bigint, p_payment_method text, p_external_reference text, p_idempotency_key uuid, p_notes text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -713,7 +713,7 @@
     },
     "record_other_income(p_income_account_id uuid, p_receiving_account_id uuid, p_amount bigint, p_income_date date, p_description text, p_payer text, p_client_id uuid, p_loan_id uuid, p_external_reference text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -740,7 +740,7 @@
     },
     "record_transfer(p_from_account_id uuid, p_to_account_id uuid, p_amount bigint, p_transfer_date date, p_description text, p_external_reference text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -758,7 +758,7 @@
     },
     "register_member_beneficiary(p_membership_id uuid, p_full_name text, p_relationship text, p_phone text, p_alternative_phone text, p_village_area text, p_district text, p_identity_document_kind text, p_identity_reference text, p_is_primary boolean, p_supersedes_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -767,7 +767,7 @@
     },
     "reject_benefit_claim(p_claim_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -776,7 +776,7 @@
     },
     "reject_expense(p_expense_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -794,7 +794,7 @@
     },
     "reject_reconciliation(p_reconciliation_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -803,7 +803,7 @@
     },
     "reject_transfer(p_transfer_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -821,7 +821,7 @@
     },
     "request_benefit_information(p_claim_id uuid, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -830,7 +830,7 @@
     },
     "request_savings_withdrawal(p_savings_account_id uuid, p_amount bigint, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -839,7 +839,7 @@
     },
     "reschedule_membership_meeting(p_meeting_id uuid, p_scheduled_at timestamp with time zone, p_reason text, p_venue text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -875,7 +875,7 @@
     },
     "reverse_benefit_payment(p_payment_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -893,7 +893,7 @@
     },
     "reverse_expense(p_expense_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -902,7 +902,7 @@
     },
     "reverse_meeting_fine_payment(p_payment_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -911,7 +911,7 @@
     },
     "reverse_membership_fee(p_receipt_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -920,7 +920,7 @@
     },
     "reverse_other_income(p_income_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -938,7 +938,7 @@
     },
     "reverse_savings_transaction(p_transaction_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -947,7 +947,7 @@
     },
     "reverse_transfer(p_transfer_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -956,7 +956,7 @@
     },
     "review_meeting_absence_notice(p_notice_id uuid, p_approved boolean, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -965,7 +965,7 @@
     },
     "revoke_member_beneficiary(p_beneficiary_id uuid, p_reason text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -992,7 +992,7 @@
     },
     "savings_summary(p_from date, p_to date)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1010,7 +1010,25 @@
     },
     "schedule_membership_meeting(p_branch_id uuid, p_meeting_type text, p_title text, p_venue text, p_scheduled_at timestamp with time zone, p_agenda text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "set_agency_provider_commission_source(p_provider_id uuid, p_source text, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Sets whether a provider's commission is computed from its configuration or reported per transaction. Refuses a caller without agency:providers with SQLSTATE 42501, refuses a provider that is already confirmed because its posted snapshots cite the basis in force, and refuses the reported source while a rate or fixed amount is configured. Audited.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "set_agency_service_limit(p_transaction_type_id uuid, p_max_single_transaction bigint, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-11. Sets one service's maximum single transaction. Refuses a caller without agency:providers with SQLSTATE 42501 before it reads the type, so only the Owner configures a ceiling. Refuses NULL and zero, because the live-readiness guard treats an unstated ceiling as a reason not to post and this function exists to state one. Writes the before and after values and the Owner's reason to the audit log.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1019,7 +1037,7 @@
     },
     "settings_reference_sequences()": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1055,7 +1073,7 @@
     },
     "submit_benefit_claim(p_claim_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1064,7 +1082,7 @@
     },
     "submit_reconciliation(p_account_id uuid, p_business_date date, p_counted_balance bigint, p_explanation text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1073,16 +1091,16 @@
     },
     "transition_membership_to_policy(p_transition_id uuid, p_membership_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
         "public_default_acl": false
       }
     },
-    "update_agency_transaction(p_transaction_id uuid, p_principal_amount bigint, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text)": {
+    "update_agency_transaction(p_transaction_id uuid, p_principal_amount bigint, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_customer_fee_mode text, p_transacted_at timestamp with time zone)": {
       "classification": "A",
-      "reason": "Phase 4B agency RPC. Edits a draft only. Refuses a caller without agency:write with 42501, and refuses any status but draft, so a submitted transaction cannot be altered under the verifier.",
+      "reason": "Phase 4B agency RPC. Edits a draft only. Refuses a caller without agency:write with 42501, and refuses any status but draft, so a submitted transaction cannot be altered under the verifier. Phase 4E re-signed it for the fee mode and the provider timestamp, and dropped the old eight-argument signature so there is one overload.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1100,7 +1118,7 @@
     },
     "update_meeting_action_item(p_action_id uuid, p_status text, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1154,7 +1172,7 @@
     },
     "verify_agency_transaction(p_transaction_id uuid, p_expected_revision integer)": {
       "classification": "A",
-      "reason": "Phase 4B agency RPC, extended in Phase 4D. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 — which the verifier_not_submitter CHECK also refuses independently. The Phase 4D second argument is the revision the verifier reviewed: verification is refused when it is not the current one, and a call quoting no revision is refused once the figures changed after submission, so a manager cannot post a commission exception authorised behind a screen they had already loaded. Asserted in tests/db/agency-transaction-engine.test.ts and tests/db/agency-settlement.test.ts.",
+      "reason": "Phase 4B agency RPC, extended in Phase 4D. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 \u2014 which the verifier_not_submitter CHECK also refuses independently. The Phase 4D second argument is the revision the verifier reviewed: verification is refused when it is not the current one, and a call quoting no revision is refused once the figures changed after submission, so a manager cannot post a commission exception authorised behind a screen they had already loaded. Asserted in tests/db/agency-transaction-engine.test.ts and tests/db/agency-settlement.test.ts.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1163,7 +1181,7 @@
     },
     "verify_benefit_document(p_document_id uuid, p_verified boolean, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1172,7 +1190,7 @@
     },
     "verify_member_beneficiary(p_beneficiary_id uuid, p_verified boolean, p_evidence_kind text, p_evidence_path text, p_note text)": {
       "classification": "A",
-      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments \u2014 measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1183,7 +1201,7 @@
   "views": {
     "company_identity": {
       "classification": "D",
-      "reason": "Reviewed exemption, 20261106000300. security_invoker = off is deliberate: company_settings requires settings:view to read, so invoker mode returns zero rows for every borrower and breaks receipts and the forced-password recovery screen — measured on a clean database, not assumed. The controls are the fourteen-column published projection (no registration or tax number) and a SELECT-only grant, both asserted in tests/db/security-definer-surface.test.ts and by this gate, because the view is auto-updatable and a write grant would bypass company_settings RLS.",
+      "reason": "Reviewed exemption, 20261106000300. security_invoker = off is deliberate: company_settings requires settings:view to read, so invoker mode returns zero rows for every borrower and breaks receipts and the forced-password recovery screen \u2014 measured on a clean database, not assumed. The controls are the fourteen-column published projection (no registration or tax number) and a SELECT-only grant, both asserted in tests/db/security-definer-surface.test.ts and by this gate, because the view is auto-updatable and a write grant would bypass company_settings RLS.",
       "surface": {
         "security_invoker": "off",
         "anon_privileges": "",
