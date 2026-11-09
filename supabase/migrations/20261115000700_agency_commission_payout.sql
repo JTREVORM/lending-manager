@@ -210,10 +210,14 @@ alter table public.journal_entries
     'savings_deposit', 'savings_deposit_reversal',
     'savings_withdrawal', 'savings_withdrawal_reversal',
     'benefit_payment', 'benefit_payment_reversal',
+    -- In the order they were added, which is how
+    -- tests/db/ledger-balance-invariant.test.ts reads this list: a tidier
+    -- grouping would lose the record of when each source appeared.
     'agency_transaction', 'agency_transaction_reversal',
-    'agency_commission_settlement', 'agency_commission_settlement_reversal',
+    'agency_commission_settlement',
     'agency_payable_settlement', 'agency_payable_settlement_reversal',
     'agency_float_replenishment',
+    'agency_commission_settlement_reversal',
     -- Phase 4E
     'agency_commission_payout', 'agency_commission_payout_reversal',
     'agency_commission_recovery',

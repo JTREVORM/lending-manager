@@ -702,7 +702,7 @@ $$;
 
 comment on function public.update_agency_transaction(
   uuid, bigint, text, text, text, bigint, bigint, text, text, timestamptz) is
-  'Phase 4B, extended in Phase 4E. Edits a draft agency transaction, including its fee mode and the provider''s own timestamp. A NULL argument leaves the field alone, which is what makes a partial edit possible; the revision trigger records that the financial details moved, so a Manager cannot verify a figure they have not seen.';
+  'Phase 4B, extended in Phase 4E. Edits a draft agency transaction, including its fee mode and the instant the provider recorded it. A NULL argument leaves the field alone, which is what makes a partial edit possible; the revision trigger records that the financial details moved, so a Manager cannot verify a figure they have not seen.';
 
 revoke all on function public.update_agency_transaction(
   uuid, bigint, text, text, text, bigint, bigint, text, text, timestamptz)

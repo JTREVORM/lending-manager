@@ -297,6 +297,15 @@
         "public_default_acl": false
       }
     },
+    "certify_agency_commission_reconciliation(p_reconciliation_id uuid, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decisions OD-9 and OD-2. Certifies a commission reconciliation: a second officer has seen the difference. Writes no journal line of any kind, so certification never changes a balance. Refuses a caller without agency:reconcile with 42501 via agency_actor(), a reconciliation from another branch, one already certified, and the person who submitted it.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "client_has_live_loan(p_client_id uuid)": {
       "classification": "PENDING-REVIEW",
       "reason": "Behavioural probe (borrower session, null arguments) produced no authorization refusal, and this function takes a third-party identifier. NOT yet retested with a real identifier, so it is neither confirmed safe nor confirmed leaking. Carried as an open Phase 3 item in docs/POLYTOS-SECURITY-RISK-INVENTORY.md.",
@@ -1128,6 +1137,15 @@
     "submit_agency_cash_reconciliation(p_cash_account_id uuid, p_physical_count bigint, p_date date, p_notes text)": {
       "classification": "A",
       "reason": "Phase 4C agency RPC. Records one physical count of a branch till, covering agency and lending cash together because they share the drawer. Requires agency:reconcile with 42501. Refuses a branch the caller cannot see, refuses an agency float account by name and anything that is not cash at hand, refuses a negative count, a future date, and a second count of the same account on the same day. Snapshots the system balance under the account lock.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "submit_agency_commission_reconciliation(p_float_account_id uuid, p_period_start date, p_period_end date, p_provider_reported_commission bigint, p_statement_ref text, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-9. Records one provider statement period for one agent line with what the books recognised over the provider's own dates and what the statement reports. Posts no journal. Refuses a caller without agency:reconcile with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a period that overlaps one already reconciled for that line, a period ending in the future or ending before it starts, a negative reported figure, and a missing or repeated statement reference. Takes the provider balance lock before the overlap check, which is what makes that check sound rather than racy.",
       "surface": {
         "anon": false,
         "authenticated": true,

@@ -100,10 +100,20 @@ revoke all on table public.agency_commission_recoveries from anon, authenticated
 grant select on table public.agency_commission_recoveries to authenticated;
 
 drop policy if exists agency_commission_recoveries_read on public.agency_commission_recoveries;
+-- The branch rule is restated inline rather than delegated to
+-- `user_can_see_branch(branch_id)`. That helper is correlated *and* SECURITY
+-- DEFINER, so PostgreSQL neither hoists nor inlines it: it stays a real
+-- function call per row, each one running two queries against `profiles`.
+-- 20261018000100 rewrote eighty-one policies for exactly this reason, and
+-- `tests/db/rls-hoisting.test.ts` fails any policy that reintroduces it —
+-- which is how this one was caught.
 create policy agency_commission_recoveries_read
   on public.agency_commission_recoveries for select
+  to authenticated
   using ((select public.user_has_permission('agency:reports'))
-         and (select public.user_can_see_branch(branch_id)));
+         and (branch_id is null
+              or (select public.current_user_branch_id()) is null
+              or branch_id = (select public.current_user_branch_id())));
 
 -- Append-only, like every other agency register: a recovery is corrected by
 -- recording another one, never by editing what was recorded.

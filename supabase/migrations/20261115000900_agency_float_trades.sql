@@ -225,12 +225,19 @@ revoke all on table public.agency_float_trades from anon, authenticated;
 grant select on table public.agency_float_trades to authenticated;
 
 drop policy if exists agency_float_trades_read on public.agency_float_trades;
+-- The branch rule restated inline, for the reason 20261018000100 gives:
+-- `user_can_see_branch()` is correlated and SECURITY DEFINER, so it runs two
+-- queries against `profiles` for every row rather than once for the query.
+-- Both ends of a transfer are named, because a cross-branch transfer concerns
+-- the receiving branch too.
 create policy agency_float_trades_read
   on public.agency_float_trades for select
+  to authenticated
   using ((select public.user_has_permission('agency:reports'))
-         and ((select public.user_can_see_branch(branch_id))
-              or (counter_branch_id is not null
-                  and (select public.user_can_see_branch(counter_branch_id)))));
+         and (branch_id is null
+              or (select public.current_user_branch_id()) is null
+              or branch_id = (select public.current_user_branch_id())
+              or counter_branch_id = (select public.current_user_branch_id())));
 
 comment on policy agency_float_trades_read on public.agency_float_trades is
   'Phase 4E. A trade is visible to either end of it: a cross-branch transfer concerns both branches, and the receiving branch must be able to see what is coming before it is posted.';

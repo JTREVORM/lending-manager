@@ -47,9 +47,12 @@ describeDb('tables', () => {
     // 1310 and is cleared in aggregate, because providers remit in batches
     // covering many transactions (correction C7).
     'agency_cash_reconciliations',
+    'agency_commission_reconciliations',
+    'agency_commission_recoveries',
     'agency_commission_settlements',
     'agency_float_reconciliations',
     'agency_float_replenishments',
+    'agency_float_trades',
     'agency_payable_settlements',
     'agency_provider_float_accounts',
     'agency_service_providers',
@@ -361,8 +364,25 @@ describeDb('foreign keys', () => {
       'agency_cash_reconciliations.created_by -> profiles (r)',
       'agency_cash_reconciliations.reconciled_by -> profiles (r)',
       'agency_cash_reconciliations.variance_journal_entry_id -> journal_entries (r)',
+      // Phase 4E. The provider statement periods reconciled against the
+      // books. RESTRICT throughout, the two profile references included:
+      // who read the statement and who certified it are the control, and a
+      // NULL there would erase it.
+      'agency_commission_reconciliations.branch_id -> branches (r)',
+      'agency_commission_reconciliations.created_by -> profiles (r)',
+      'agency_commission_reconciliations.float_account_id -> agency_provider_float_accounts (r)',
+      'agency_commission_reconciliations.provider_id -> agency_service_providers (r)',
+      'agency_commission_reconciliations.reconciled_by -> profiles (r)',
+      // Phase 4E. Commission received and given back. RESTRICT on the
+      // journal entry too: the recovery is what the entry explains.
+      'agency_commission_recoveries.branch_id -> branches (r)',
+      'agency_commission_recoveries.created_by -> profiles (r)',
+      'agency_commission_recoveries.float_account_id -> agency_provider_float_accounts (r)',
+      'agency_commission_recoveries.journal_entry_id -> journal_entries (r)',
+      'agency_commission_recoveries.provider_id -> agency_service_providers (r)',
       'agency_commission_settlements.branch_id -> branches (r)',
       'agency_commission_settlements.created_by -> profiles (r)',
+      'agency_commission_settlements.float_account_id -> agency_provider_float_accounts (r)',
       'agency_commission_settlements.journal_entry_id -> journal_entries (r)',
       'agency_commission_settlements.provider_id -> agency_service_providers (r)',
       'agency_commission_settlements.reversal_entry_id -> journal_entries (r)',
@@ -380,6 +400,21 @@ describeDb('foreign keys', () => {
       'agency_float_replenishments.funding_account_id -> ledger_accounts (r)',
       'agency_float_replenishments.journal_entry_id -> journal_entries (r)',
       'agency_float_replenishments.provider_id -> agency_service_providers (r)',
+      // Phase 4E. Float bought, sold and moved between lines. Both ends of
+      // a cross-branch transfer are RESTRICT, and so is the settlement
+      // account, because a posted trade names the account the money came
+      // from or went to.
+      'agency_float_trades.branch_id -> branches (r)',
+      'agency_float_trades.counter_branch_id -> branches (r)',
+      'agency_float_trades.counter_float_account_id -> agency_provider_float_accounts (r)',
+      'agency_float_trades.created_by -> profiles (r)',
+      'agency_float_trades.float_account_id -> agency_provider_float_accounts (r)',
+      'agency_float_trades.journal_entry_id -> journal_entries (r)',
+      'agency_float_trades.provider_id -> agency_service_providers (r)',
+      'agency_float_trades.reversal_entry_id -> journal_entries (r)',
+      'agency_float_trades.reversed_by -> profiles (r)',
+      'agency_float_trades.settlement_account_id -> ledger_accounts (r)',
+      'agency_float_trades.verified_by -> profiles (r)',
       'agency_payable_settlements.branch_id -> branches (r)',
       'agency_payable_settlements.cash_account_id -> ledger_accounts (r)',
       'agency_payable_settlements.created_by -> profiles (r)',
@@ -391,6 +426,8 @@ describeDb('foreign keys', () => {
       'agency_provider_float_accounts.branch_id -> branches (r)',
       'agency_provider_float_accounts.ledger_account_id -> ledger_accounts (r)',
       'agency_provider_float_accounts.provider_id -> agency_service_providers (r)',
+      'agency_provider_float_accounts.status_changed_by -> profiles (n)',
+      'agency_provider_float_accounts.updated_by -> profiles (n)',
       'agency_service_providers.income_account_id -> ledger_accounts (r)',
       'agency_service_providers.payable_account_id -> ledger_accounts (r)',
       'agency_transaction_audit_log.actor_id -> profiles (r)',

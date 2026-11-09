@@ -779,6 +779,17 @@ describe('types stay in step with the schema', () => {
       // revoked from every exposed role, so neither is callable over the API.
       'agency_transaction_revision_guard',
       'agency_transaction_submitted_revision',
+      // Phase 4E. Four more of the same kind. Two guard what cannot be a
+      // CHECK because it spans two tables — an agent line's till name and
+      // ledger account are immutable because the account code encodes them,
+      // and a commission payout's destination really is the line's own float
+      // account. One keeps the float-trade verification revision. One writes
+      // every agency configuration change to the general audit log. All four
+      // fire as the table owner and are revoked from every exposed role.
+      'agency_float_account_immutable_identity',
+      'agency_commission_settlement_destination_guard',
+      'agency_float_trade_revision_guard',
+      'audit_agency_configuration_change',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

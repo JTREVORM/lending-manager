@@ -566,6 +566,17 @@ export const PERMISSIONS = [
   'agency:correct',
   /** Post commission settlements, payable remittances and float top-ups. */
   'agency:settlements',
+  /**
+   * Record a float purchase, sale or line-to-line transfer as pending.
+   *
+   * Moves no money: posting one requires `agency:settlements`, held by a
+   * different person, and the maker-checker separation is a CHECK on
+   * `agency_float_trades` rather than a hidden button. Decision OD-7 extends
+   * the recording half to cashiers for exactly this reason — a float sale is
+   * a cash payment to an external party with a fee the seller types, so one
+   * person should not be able to complete it alone.
+   */
+  'agency:float_trade',
   /** Submit and approve cash-till and provider-float reconciliations. */
   'agency:reconcile',
   /** Create and edit providers, their transaction types and their float tills. */
@@ -759,6 +770,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // else's — which is the same line already drawn at `transfers:approve`
     // and `expenses:approve`.
     'agency:write',
+    // Decision OD-7: the counter may record a float purchase, sale or
+    // line-to-line transfer. It posts nothing — a different holder of
+    // agency:settlements verifies it, and the data layer refuses the same
+    // person doing both.
+    'agency:float_trade',
     'agency:reports',
   ],
 
@@ -922,6 +938,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:correct',
     'agency:settlements',
     'agency:reconcile',
+    'agency:float_trade',
     'agency:reports',
   ],
 
@@ -1062,6 +1079,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:reverse_cross_day',
     'agency:correct',
     'agency:settlements',
+    'agency:float_trade',
     'agency:reconcile',
     'agency:providers',
     'agency:commission_exception',

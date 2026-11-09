@@ -120,6 +120,16 @@ describeDb('the balance invariant binds every Phase 4 posting source', () => {
         // Phase 4C
         'agency_float_replenishment',
         'agency_commission_settlement_reversal',
+        // Phase 4E
+        'agency_commission_payout',
+        'agency_commission_payout_reversal',
+        'agency_commission_recovery',
+        'agency_float_purchase',
+        'agency_float_purchase_reversal',
+        'agency_float_sale',
+        'agency_float_sale_reversal',
+        'agency_float_transfer',
+        'agency_float_transfer_reversal',
       ]);
     });
   });
@@ -133,6 +143,15 @@ describeDb('the balance invariant binds every Phase 4 posting source', () => {
     'agency_payable_settlement_reversal',
     'agency_float_replenishment',
     'agency_commission_settlement_reversal',
+    'agency_commission_payout',
+    'agency_commission_payout_reversal',
+    'agency_commission_recovery',
+    'agency_float_purchase',
+    'agency_float_purchase_reversal',
+    'agency_float_sale',
+    'agency_float_sale_reversal',
+    'agency_float_transfer',
+    'agency_float_transfer_reversal',
   ] as const;
 
   for (const source of agencySources) {

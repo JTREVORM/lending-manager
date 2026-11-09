@@ -7498,6 +7498,8 @@ export type Database = {
           p_description?: string | null;
           p_transaction_date?: string | null;
           p_idempotency_key?: string | null;
+          p_customer_fee_mode?: string | null;
+          p_transacted_at?: string | null;
         };
         Returns: string;
       };
@@ -7647,6 +7649,138 @@ export type Database = {
           p_reference?: string | null;
           p_replenishment_date?: string | null;
         };
+        Returns: string;
+      };
+      agency_agent_line_obligations: {
+        Args: { p_float_account_id: string };
+        Returns: string[];
+      };
+      agency_commission_earned_by_line: {
+        Args: { p_float_account_id: string; p_from: string; p_to: string };
+        Returns: number;
+      };
+      agency_commission_outstanding_by_line: {
+        Args: { p_float_account_id: string };
+        Returns: number;
+      };
+      agency_commission_recovery_outstanding_by_line: {
+        Args: { p_float_account_id: string };
+        Returns: number;
+      };
+      certify_agency_commission_reconciliation: {
+        Args: { p_reconciliation_id: string; p_notes?: string | null };
+        Returns: undefined;
+      };
+      close_agency_agent_line: {
+        Args: {
+          p_float_account_id: string;
+          p_reason: string;
+          p_closed_on?: string | null;
+        };
+        Returns: undefined;
+      };
+      record_agency_commission_payout: {
+        Args: {
+          p_float_account_id: string;
+          p_amount: number;
+          p_provider_reference: string;
+          p_payout_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      record_agency_commission_recovery: {
+        Args: {
+          p_float_account_id: string;
+          p_amount: number;
+          p_method: string;
+          p_provider_reference: string;
+          p_recovery_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      record_agency_float_trade: {
+        Args: {
+          p_kind: string;
+          p_float_account_id: string;
+          p_float_amount: number;
+          p_reference: string;
+          p_counter_float_account_id?: string | null;
+          p_settlement_account_id?: string | null;
+          p_cash_amount?: number | null;
+          p_fee_amount?: number | null;
+          p_source_kind?: string | null;
+          p_counterparty_name?: string | null;
+          p_trade_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      register_agency_agent_line: {
+        Args: {
+          p_provider_id: string;
+          p_branch_id: string;
+          p_till_name: string;
+          p_label?: string | null;
+          p_line_msisdn?: string | null;
+          p_agent_code?: string | null;
+          p_opened_on?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      reject_agency_float_trade: {
+        Args: { p_trade_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      reverse_agency_float_trade: {
+        Args: { p_trade_id: string; p_reason: string };
+        Returns: string;
+      };
+      set_agency_agent_line_suspended: {
+        Args: {
+          p_float_account_id: string;
+          p_suspended: boolean;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
+      set_agency_provider_commission_source: {
+        Args: { p_provider_id: string; p_source: string; p_reason?: string | null };
+        Returns: string;
+      };
+      set_agency_service_limit: {
+        Args: {
+          p_transaction_type_id: string;
+          p_max_single_transaction: number;
+          p_reason?: string | null;
+        };
+        Returns: string;
+      };
+      submit_agency_commission_reconciliation: {
+        Args: {
+          p_float_account_id: string;
+          p_period_start: string;
+          p_period_end: string;
+          p_provider_reported_commission: number;
+          p_statement_ref: string;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      update_agency_agent_line: {
+        Args: {
+          p_float_account_id: string;
+          p_label?: string | null;
+          p_line_msisdn?: string | null;
+          p_agent_code?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: undefined;
+      };
+      verify_agency_float_trade: {
+        Args: { p_trade_id: string; p_expected_revision?: number | null };
         Returns: string;
       };
       record_commission_settlement: {

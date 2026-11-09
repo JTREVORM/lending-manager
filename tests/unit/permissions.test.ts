@@ -441,6 +441,11 @@ describe('authorization matrix', () => {
     'agency:reverse_cross_day': ['owner_admin'],
     'agency:correct': ['manager', 'owner_admin'],
     'agency:settlements': ['manager', 'owner_admin'],
+    // Decision OD-7. The counter records a float purchase, sale or transfer;
+    // a different holder of agency:settlements posts it. Both halves are
+    // needed, which is why the recording half reaches down to the cashier
+    // and the posting half does not.
+    'agency:float_trade': ['secretary_treasurer', 'manager', 'owner_admin'],
     'agency:reconcile': ['manager', 'owner_admin'],
     'agency:providers': ['owner_admin'],
     'agency:commission_exception': ['owner_admin'],

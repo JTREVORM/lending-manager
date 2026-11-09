@@ -744,4 +744,281 @@ describeDb('Phase 4E — commission payout and recovery', () => {
       expect(err.ok).toBe(false);
     });
   });
+
+  // =========================================================================
+  // OD-9 and OD-2 — the control that replaces the configured rate
+  // =========================================================================
+  describe('reconciling against the provider\u2019s statement', () => {
+    async function submit(
+      tillId: string,
+      from: string,
+      to: string,
+      reported: number,
+      ref: string,
+      who: TestUser = mgr,
+    ) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.submit_agency_commission_reconciliation(
+                  $1, $2::date, $3::date, $4, $5) as id`,
+          params: [tillId, from, to, reported, ref],
+        },
+      ]);
+    }
+
+    async function certify(id: string, who: TestUser = owner) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.certify_agency_commission_reconciliation($1)`,
+          params: [id],
+        },
+      ]);
+    }
+
+    async function reconRow(id: string) {
+      return queryOne<{
+        status: string;
+        system: string;
+        reported: string;
+        variance: string;
+        reconciled_by: string | null;
+      }>(
+        `select status, system_commission_earned::text as system,
+                provider_reported_commission::text as reported,
+                variance::text as variance, reconciled_by::text as reconciled_by
+           from public.agency_commission_reconciliations where id = $1`,
+        [id],
+      );
+    }
+
+    /** Yesterday and today, so a period never ends in the future. */
+    async function dates(): Promise<{ from: string; to: string }> {
+      const r = await queryOne<{ from: string; to: string }>(
+        `select (public.business_date() - 2)::text as from,
+                public.business_date()::text as to`,
+      );
+      return r;
+    }
+
+    it('records what the books say, what the provider says, and the difference', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC1' });
+      const line = at(lines);
+      await post(line, 100_000, 700);
+      await post(line, 50_000, 300);
+
+      const d = await dates();
+      const r = await submit(line.tillId, d.from, d.to, 1_200, 'STMT-OCT');
+      expect(r.ok, r.message).toBe(true);
+
+      const row = await reconRow((r.rows[0] as { id: string }).id);
+      expect(row.system).toBe('1000');
+      expect(row.reported).toBe('1200');
+      // Positive: the provider says they paid more than we recognised.
+      expect(row.variance).toBe('200');
+      expect(row.status).toBe('open');
+    });
+
+    it('counts only posted transactions dated inside the period', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC2' });
+      const line = at(lines);
+      await post(line, 100_000, 500);
+
+      // A transaction dated before the window.
+      const key = `EO-${Math.random().toString(36).slice(2, 10)}`;
+      const old = await asUserCommitted(sec, [
+        {
+          sql: `select public.create_agency_transaction(
+                  $1, 40000, $2, '+256770008100', 'C', $3, 0, 900, null,
+                  public.business_date() - 40, $3) as id`,
+          params: [line.typeId, line.tillId, key],
+        },
+      ]);
+      expect(old.ok, old.message).toBe(true);
+      const oldId = (old.rows[0] as { id: string }).id;
+      expect(
+        (
+          await asUserCommitted(sec, [
+            { sql: `select public.submit_agency_transaction($1)`, params: [oldId] },
+          ])
+        ).ok,
+      ).toBe(true);
+      expect(
+        (
+          await asUserCommitted(mgr, [
+            { sql: `select public.verify_agency_transaction($1)`, params: [oldId] },
+          ])
+        ).ok,
+      ).toBe(true);
+
+      const d = await dates();
+      const r = await submit(line.tillId, d.from, d.to, 500, 'STMT-WINDOW');
+      expect(r.ok, r.message).toBe(true);
+      // The 900 from forty days ago is outside the statement period.
+      expect((await reconRow((r.rows[0] as { id: string }).id)).system).toBe('500');
+    });
+
+    it('refuses a period that overlaps one already reconciled, and names it', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC3' });
+      const line = at(lines);
+      await post(line, 100_000, 500);
+
+      const first = await queryOne<{ from: string; to: string }>(
+        `select (public.business_date() - 10)::text as from,
+                (public.business_date() - 5)::text as to`,
+      );
+      expect((await submit(line.tillId, first.from, first.to, 500, 'OV-1')).ok).toBe(
+        true,
+      );
+
+      const overlapping = await queryOne<{ from: string; to: string }>(
+        `select (public.business_date() - 7)::text as from,
+                (public.business_date() - 1)::text as to`,
+      );
+      const r = await submit(line.tillId, overlapping.from, overlapping.to, 100, 'OV-2');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/overlaps the statement already reconciled/i);
+      expect(r.message).toMatch(/OV-1/);
+      expect(r.message).toMatch(/count the same transactions twice/i);
+    });
+
+    it('refuses a period that ends in the future, and one that ends before it starts', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC4' });
+      const line = at(lines);
+
+      const future = await queryOne<{ from: string; to: string }>(
+        `select public.business_date()::text as from,
+                (public.business_date() + 1)::text as to`,
+      );
+      const ahead = await submit(line.tillId, future.from, future.to, 0, 'FUT-1');
+      expect(ahead.ok).toBe(false);
+      expect(ahead.message).toMatch(/ends in the future/i);
+
+      const backwards = await queryOne<{ from: string; to: string }>(
+        `select public.business_date()::text as from,
+                (public.business_date() - 3)::text as to`,
+      );
+      const wrongWay = await submit(
+        line.tillId,
+        backwards.from,
+        backwards.to,
+        0,
+        'BACK-1',
+      );
+      expect(wrongWay.ok).toBe(false);
+      expect(wrongWay.message).toMatch(/ends before it starts/i);
+    });
+
+    it('needs the statement reference, and refuses a repeat of one', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC5' });
+      const line = at(lines);
+      const d = await dates();
+
+      const blank = await submit(line.tillId, d.from, d.to, 0, '  ');
+      expect(blank.ok).toBe(false);
+      expect(blank.message).toMatch(/statement reference/i);
+
+      expect((await submit(line.tillId, d.from, d.to, 0, 'REP-1')).ok).toBe(true);
+
+      const earlier = await queryOne<{ from: string; to: string }>(
+        `select (public.business_date() - 30)::text as from,
+                (public.business_date() - 20)::text as to`,
+      );
+      const again = await submit(line.tillId, earlier.from, earlier.to, 0, 'REP-1');
+      expect(again.ok).toBe(false);
+      expect(again.message).toMatch(/already been reconciled/i);
+    });
+
+    it('needs agency:reconcile, which a cashier does not hold', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC6' });
+      const d = await dates();
+      const r = await submit(at(lines).tillId, d.from, d.to, 0, 'NOPE-1', sec);
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('42501');
+    });
+
+    it('is certified by a second officer, and posts no journal line at all', async () => {
+      // Decision OD-2, asserted rather than described: certification changes
+      // no balance, so a real difference has to be corrected at the
+      // transaction or adjusted on the Owner's authority. A certification
+      // that quietly moved 1310 would make the reconciliation the thing that
+      // decides income, and nobody would look at the transactions again.
+      const { lines } = await liveProvider({ code: 'ECREC7' });
+      const line = at(lines);
+      await post(line, 100_000, 700);
+      const d = await dates();
+
+      const r = await submit(line.tillId, d.from, d.to, 900, 'STMT-NOJ');
+      expect(r.ok, r.message).toBe(true);
+      const id = (r.rows[0] as { id: string }).id;
+
+      const entriesBefore = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.journal_entries`,
+      );
+      const receivableBefore = await lineOutstanding(line.tillId);
+      const incomeBefore = await balance('4510');
+
+      const self = await certify(id, mgr);
+      expect(self.ok).toBe(false);
+      expect(self.message).toMatch(/cannot be certified by the person who submitted it/i);
+
+      const done = await certify(id, owner);
+      expect(done.ok, done.message).toBe(true);
+
+      const row = await reconRow(id);
+      expect(row.status).toBe('certified');
+      expect(row.reconciled_by).toBe(owner.profileId);
+      // The variance survives certification: certified means two people have
+      // seen the difference, not that it is resolved.
+      expect(row.variance).toBe('200');
+
+      const entriesAfter = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.journal_entries`,
+      );
+      expect(entriesAfter.n).toBe(entriesBefore.n);
+      expect(await lineOutstanding(line.tillId)).toBe(receivableBefore);
+      expect(await balance('4510')).toBe(incomeBefore);
+
+      const twice = await certify(id, owner);
+      expect(twice.ok).toBe(false);
+      expect(twice.message).toMatch(/already certified/i);
+    });
+
+    it('keeps the figure the two officers compared, even after a later reversal', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC8' });
+      const line = at(lines);
+      const txId = await post(line, 100_000, 800);
+      const d = await dates();
+
+      const r = await submit(line.tillId, d.from, d.to, 800, 'STMT-SNAP');
+      expect(r.ok, r.message).toBe(true);
+      const id = (r.rows[0] as { id: string }).id;
+      expect((await reconRow(id)).system).toBe('800');
+
+      const rev = await asUserCommitted(mgr, [
+        {
+          sql: `select public.reverse_agency_transaction($1, 'corrected afterwards')`,
+          params: [txId],
+        },
+      ]);
+      expect(rev.ok, rev.message).toBe(true);
+
+      // The live figure has moved; the snapshot has not, because it is what
+      // the officers actually reconciled.
+      expect(await lineOutstanding(line.tillId)).toBe(0);
+      expect((await reconRow(id)).system).toBe('800');
+    });
+
+    it('cannot be deleted', async () => {
+      const { lines } = await liveProvider({ code: 'ECREC9' });
+      const d = await dates();
+      const r = await submit(at(lines).tillId, d.from, d.to, 0, 'KEEP-REC');
+      expect(r.ok, r.message).toBe(true);
+      const err = await asUser(
+        owner,
+        `delete from public.agency_commission_reconciliations where id = $1`,
+        [(r.rows[0] as { id: string }).id],
+      );
+      expect(err.ok).toBe(false);
+    });
+  });
 });
