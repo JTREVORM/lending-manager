@@ -648,6 +648,24 @@
         "public_default_acl": false
       }
     },
+    "record_agency_commission_payout(p_float_account_id uuid, p_amount bigint, p_provider_reference text, p_payout_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Records commission the provider paid into one agent line's float: Dr the line's 1320 account, Cr 1310, touching no income account because the income was recognised per transaction. Refuses a caller without agency:settlements with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a closed line, more than that line's own outstanding receivable, and a missing or repeated provider reference. Takes the provider balance lock before the sorted account locks.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "record_agency_commission_recovery(p_float_account_id uuid, p_amount bigint, p_method text, p_provider_reference text, p_recovery_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-10. Clears a commission recovery payable in 2230, either by deduction from the line's float or by offset against commission owed. Refuses a caller without agency:settlements with 42501 via agency_actor(), a line the caller's branch cannot see, an invented method, more than the line owes back, a float deduction the line cannot cover, and a missing or repeated reference.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "record_commission_settlement(p_provider_id uuid, p_branch_id uuid, p_settlement_amount bigint, p_settlement_account_id uuid, p_statement_ref text, p_settlement_date date)": {
       "classification": "A",
       "reason": "Phase 4C agency RPC. Records one remittance of accrued commission: Dr the branch receiving account, Cr 1310. Refuses a caller without agency:settlements with SQLSTATE 42501 via agency_actor(), before it reads any argument. Refuses a branch the caller cannot see with the same refusal as an unknown provider, so it discloses neither. Refuses an immediate-commission provider, a non-positive amount, a receiving account that is not the settling branch's own cash-at-hand or bank account, a duplicate provider statement reference, and more than the provider's outstanding receivable at that branch - read after a provider-and-branch advisory lock, so two concurrent settlements cannot both fit inside one balance. Never posts to 4510: the income was recognised at accrual.",

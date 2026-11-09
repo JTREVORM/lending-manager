@@ -1625,7 +1625,13 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       expect(Number(row.amount)).toBe(10_000);
     });
 
-    it('releases a historical transaction that the settlement had blocked', async () => {
+    it('reverses a transaction whose commission was already settled, and records what is owed back', async () => {
+      // Phase 4C refused this reversal outright and told the officer to
+      // reverse the settlement first. Decision OD-10 replaced that rule: the
+      // customer's transaction and the provider's monthly payment are
+      // different events, and a keying error at the counter must not need a
+      // month's commission unwound to correct it. What was already received
+      // becomes a liability in 2230 instead of a negative receivable.
       const svc = await provider({ code: 'SETX2', branch: branchA, rateBps: 500 });
       await fund(svc.floatCode!, 10_000_000);
       const txId = await post(svc, 200_000); // 10,000 accrued
@@ -1638,18 +1644,27 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       ]);
       expect(settled.ok, settled.message).toBe(true);
       const settlementId = (settled.rows[0] as { id: string }).id;
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(0);
 
-      // Phase 4B refuses the reversal while the commission is settled.
-      const blocked = await asUserCommitted(mgrA, [
+      const owedBefore = await balance('2230');
+
+      const reversed = await asUserCommitted(mgrA, [
         {
-          sql: `select public.reverse_agency_transaction($1,'customer never received it')`,
+          sql: `select public.reverse_agency_transaction($1,'customer never received it') as e`,
           params: [txId],
         },
       ]);
-      expect(blocked.ok).toBe(false);
-      expect(blocked.message).toMatch(/settle/i);
+      expect(reversed.ok, reversed.message).toBe(true);
+      expect((reversed.rows[0] as { e: string }).e).toBeTruthy();
 
-      // Correct the settlement...
+      // The receivable is not negative, and the 10,000 already received is
+      // now money we hold that is no longer ours.
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(0);
+      expect(await balance('2230')).toBe(owedBefore + 10_000);
+
+      // Correcting the settlement afterwards still works, and leaves both
+      // figures standing: the provider owes us the commission again, and we
+      // owe them what they had already paid. An offset recovery clears both.
       const corrected = await asUserCommitted(mgrA, [
         {
           sql: `select public.reverse_commission_settlement($1,'settled in error')`,
@@ -1657,19 +1672,22 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         },
       ]);
       expect(corrected.ok, corrected.message).toBe(true);
+      expect(await outstandingCommission(svc.providerId, branchA)).toBe(10_000);
+      expect(await balance('2230')).toBe(owedBefore + 10_000);
 
-      // ...and the historical reversal becomes possible again.
-      const now = await asUserCommitted(mgrA, [
+      // Two offsetting figures, each true on its own: the provider owes us the
+      // commission again, and we hold 10,000 of theirs. Phase 4C netted them
+      // to zero inside 1310, which was tidier and said less. An offset
+      // recovery is how they are closed out, and it moves no money.
+      const offset = await asUserCommitted(mgrA, [
         {
-          sql: `select public.reverse_agency_transaction($1,'customer never received it') as e`,
-          params: [txId],
+          sql: `select public.record_agency_commission_recovery($1, 10000, 'commission_offset', 'OFFSET-X2')`,
+          params: [svc.tillId],
         },
       ]);
-      expect(now.ok, now.message).toBe(true);
-      expect((now.rows[0] as { e: string }).e).toBeTruthy();
-
-      // And the receivable nets to zero: accrued, settled, corrected, reversed.
+      expect(offset.ok, offset.message).toBe(true);
       expect(await outstandingCommission(svc.providerId, branchA)).toBe(0);
+      expect(await balance('2230')).toBe(owedBefore);
     });
 
     it('refuses without authority, twice, without a reason, and cross-branch', async () => {
@@ -2895,6 +2913,23 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         races: 'bank withdrawal, another settlement, cash reconciliation',
       },
       {
+        fn: 'record_agency_commission_payout',
+        provider: true,
+        accounts: true,
+        checks: "the line's own commission outstanding",
+        source: 'agency_commission_payout',
+        races:
+          'another payout on the same provider, transaction reversal, float reconciliation',
+      },
+      {
+        fn: 'record_agency_commission_recovery',
+        provider: true,
+        accounts: true,
+        checks: "the line's recovery payable; float sufficiency on a deduction",
+        source: 'agency_commission_recovery',
+        races: 'another recovery, a payout, float reconciliation',
+      },
+      {
         fn: 'post_float_replenishment',
         provider: true,
         accounts: true,
@@ -2992,7 +3027,11 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
             and (pg_get_functiondef(p.oid) like '%agency_commission_outstanding%'
               or pg_get_functiondef(p.oid) like '%agency_payable_outstanding%')
             and p.proname not in (
-              'agency_commission_outstanding', 'agency_payable_outstanding')
+              'agency_commission_outstanding', 'agency_payable_outstanding',
+              -- Phase 4E. A reader, like the two above: it takes no lock and
+              -- moves nothing, so it belongs in neither the matrix nor this
+              -- list of functions that must appear in it.
+              'agency_commission_outstanding_by_line')
           order by p.proname`,
       );
       const named = new Set(MATRIX.filter((m) => m.provider).map((m) => m.fn));

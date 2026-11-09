@@ -98,6 +98,7 @@ export default defineConfig({
             'tests/db/agency-settlement.test.ts',
             'tests/db/shared-till-concurrency.test.ts',
             'tests/db/agency-money-foundation.test.ts',
+            'tests/db/agency-money-commission.test.ts',
           ],
         },
       },
@@ -176,7 +177,10 @@ export default defineConfig({
         test: {
           name: 'agency-money',
           environment: 'node',
-          include: ['tests/db/agency-money-foundation.test.ts'],
+          include: [
+            'tests/db/agency-money-foundation.test.ts',
+            'tests/db/agency-money-commission.test.ts',
+          ],
           // Its own database, like every other agency project. This suite
           // commits providers, agent lines and posted transactions, suspends
           // lines and changes service ceilings — all of it visible to anything

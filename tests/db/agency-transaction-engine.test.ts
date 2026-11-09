@@ -1882,14 +1882,37 @@ describeDb('Phase 4B — agency transaction engine', () => {
         ),
       ).toBe(0);
 
-      const r = await asUser(
-        manager,
-        `select public.reverse_agency_transaction($1, 'too late')`,
-        [txId],
+      // Decision OD-10 replaced Phase 4B's refusal here. The reversal is
+      // permitted, and the 5,000 the provider had already paid is
+      // reclassified as a recovery payable rather than pushing the
+      // receivable below zero, which would assert that the provider owes us
+      // less than nothing.
+      const r = await asUserCommitted(manager, [
+        {
+          sql: `select public.reverse_agency_transaction($1, 'too late')`,
+          params: [txId],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      expect(
+        Number(
+          (
+            await queryOne<{ o: string }>(
+              `select public.agency_commission_outstanding($1, $2)::text as o`,
+              [s.providerId, branchA],
+            )
+          ).o,
+        ),
+      ).toBe(0);
+
+      const owed = await queryOne<{ v: string }>(
+        `select coalesce(b.balance, 0)::text as v
+           from public.ledger_accounts a
+           left join public.ledger_account_balances b on b.account_id = a.id
+          where a.code = '2230'`,
       );
-      expect(r.ok).toBe(false);
-      expect(r.message).toMatch(/already been settled/i);
-      expect(r.message).toMatch(/Reverse the commission settlement first/i);
+      expect(Number(owed.v)).toBe(5_000);
     });
   });
 
