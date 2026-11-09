@@ -1,4 +1,6 @@
 import { Receipt } from 'lucide-react';
+
+import { AgencyReadError } from '@/components/agency/read-failure';
 import { notFound } from 'next/navigation';
 
 import { AgencyDirectionBadge, AgencyStatusBadge } from '@/components/agency/badges';
@@ -34,7 +36,28 @@ export default async function AgencyTransactionPage({
 }) {
   const { transactionId } = await params;
   const context = await guardPermission(ROUTES.agencyHistory, 'agency:reports');
-  const row = await getAgencyTransaction(transactionId);
+  const read = await getAgencyTransaction(transactionId);
+
+  // A failed read is not a missing transaction. Answering it with the
+  // not-found page would tell an officer their transaction does not exist
+  // because a query timed out - and "it was never recorded" is precisely
+  // the conclusion that sends somebody to record it a second time.
+  if (!read.ok) {
+    return (
+      <div className="min-w-0 space-y-4">
+        <PageHeader
+          eyebrow="Agency Banking"
+          icon={Receipt}
+          title="Transaction"
+          description="This transaction could not be read."
+          back={{ href: ROUTES.agencyHistory, label: 'Transaction history' }}
+        />
+        <AgencyReadError failure={read} />
+      </div>
+    );
+  }
+
+  const row = read.row;
 
   // Absent, or at a branch this officer may not see — the view returns
   // nothing in both cases, and they are deliberately indistinguishable.

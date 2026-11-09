@@ -1,5 +1,7 @@
 import { BadgeCheck } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { AgencyTransactionRegister } from '@/components/agency/transaction-register';
 import { Alert } from '@/components/ui/alert';
 import { PageHeader } from '@/components/ui/page-header';
@@ -48,11 +50,15 @@ export default async function AgencyPendingPage() {
         </Alert>
       )}
 
-      <AgencyTransactionRegister
-        rows={rows}
-        caption="Agency transactions awaiting verification or returned for correction"
-        emptyMessage="Nothing is waiting."
-      />
+      {rows.ok ? (
+        <AgencyTransactionRegister
+          rows={rows.rows}
+          caption="Agency transactions awaiting verification or returned for correction"
+          emptyMessage="Nothing is waiting."
+        />
+      ) : (
+        <AgencyReadError failure={rows} />
+      )}
     </div>
   );
 }

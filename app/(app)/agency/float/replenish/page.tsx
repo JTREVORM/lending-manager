@@ -1,5 +1,7 @@
 import { PiggyBank } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { FloatReplenishmentForm } from '@/components/agency/settlement-forms';
 import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
@@ -38,7 +40,11 @@ export default async function ReplenishFloatPage() {
         description="Move the business's own money into a provider's electronic float."
         back={{ href: ROUTES.agencyFloat, label: 'Float and tills' }}
       />
-      <FloatReplenishmentForm tills={tills} accounts={funding} />
+      {tills.ok ? (
+        <FloatReplenishmentForm tills={tills.rows} accounts={funding} />
+      ) : (
+        <AgencyReadError failure={tills} />
+      )}
     </div>
   );
 }

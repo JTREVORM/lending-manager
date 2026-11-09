@@ -322,6 +322,65 @@ export async function resetRateLimits(): Promise<void> {
   }
 }
 
+/**
+ * Read a row or two straight from the harness database.
+ *
+ * A browser can show that a screen said "Recorded". Only the database can
+ * show that one journal was written, that its lines balance, and that the
+ * audit log names who did it - which is the difference between testing an
+ * interface and testing a financial system through one.
+ *
+ * Guarded by the same check the destructive helpers use, so it can never be
+ * pointed at anything but the throwaway stack. Callers read; nothing here
+ * writes, because a test that set up its own data behind the interface would
+ * stop proving the interface can.
+ */
+export async function queryHarness<Row extends Record<string, unknown>>(
+  sql: string,
+  params: readonly unknown[] = [],
+): Promise<Row[]> {
+  const url = process.env.E2E_DATABASE_URL;
+  if (url === undefined || url === '') {
+    throw new Error(
+      'E2E_DATABASE_URL is not set; source tests/e2e/harness/stack.sh env.',
+    );
+  }
+
+  assertTestDatabaseUrl(url, 'browser');
+
+  const require = createRequire(join(process.cwd(), 'package.json'));
+  const { Client } = require('pg') as {
+    Client: new (c: { connectionString: string }) => {
+      connect(): Promise<void>;
+      query(sql: string, params?: readonly unknown[]): Promise<{ rows: Row[] }>;
+      end(): Promise<void>;
+    };
+  };
+
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  try {
+    const { rows } = await client.query(sql, params);
+    return rows;
+  } finally {
+    await client.end();
+  }
+}
+
+/** The one row a query returned, or a failure that says which query. */
+export async function queryHarnessOne<Row extends Record<string, unknown>>(
+  sql: string,
+  params: readonly unknown[] = [],
+): Promise<Row> {
+  const rows = await queryHarness<Row>(sql, params);
+  if (rows.length !== 1) {
+    throw new Error(
+      `Expected exactly one row, got ${String(rows.length)}: ${sql.slice(0, 120)}`,
+    );
+  }
+  return rows[0]!;
+}
+
 export async function signIn(page: Page, who: Who): Promise<void> {
   const phone = who === 'borrower' ? fixtures.borrower : fixtures.staff[who];
 

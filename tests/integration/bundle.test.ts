@@ -221,13 +221,21 @@ describeBundle('the browser bundle', () => {
     //     unchanged: the chart, date and utility list above, and the 120 KB
     //     largest-chunk ceiling. The largest chunk *fell*, 72 KB to 71 KB.
     //   - **Seven chunks for fourteen screens.** 97 chunks became 104,
-    //     because nine of the fourteen ship no JavaScript at all. The
-    //     registers, the reports, the exceptions list and the provider
-    //     configuration are Server Components that read a view and render a
-    //     table; only the seven that must take input - the recording form,
-    //     the lifecycle controls, the commission exception, the three
-    //     settlement forms, the two reconciliation forms and the two
-    //     settlement registers - cross into the browser.
+    //     because seven of the fourteen routes render no client component of
+    //     their own: the dashboard, the pending queue, the transaction
+    //     history, the float balances, the reports, the exceptions list and
+    //     the provider configuration are Server Components that read a view
+    //     and render a table. The other seven take input - the recording
+    //     form, the lifecycle controls and commission exception on one
+    //     transaction, the float top-up, the two settlement screens and the
+    //     two reconciliation screens - and only those cross into the
+    //     browser.
+    //
+    //     (An earlier draft of this comment said nine. It was counted from
+    //     memory rather than from the import graph, and the import graph
+    //     says seven. Every page still carries the shell's own JavaScript,
+    //     which is what makes "ships no JavaScript" the wrong phrase for
+    //     any of them.)
     //   - **Just under five kilobytes a chunk.** Every one is built from the
     //     same `DataTable`, `Money`, `Field` and `Alert` primitives as the
     //     rest of the application. A register that carries a whole form

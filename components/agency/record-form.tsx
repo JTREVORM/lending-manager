@@ -48,12 +48,35 @@ export interface RecordFormProps {
  * points), and the engine recomputes it under lock at posting. When a
  * provider's terms are not confirmed, nothing is shown.
  *
- * ## Double submission
+ * ## Double submission, and the thing that is not one
  *
- * The idempotency key is generated once per mounted form, so a second press —
- * or a retry after a timeout the officer never saw resolve — carries the same
- * key and the database refuses the duplicate rather than posting twice. The
- * button is also disabled while the action is pending.
+ * The idempotency key answers one question: "did the submission I just made
+ * arrive?" So it has to survive a retry of *that* submission and must not
+ * survive past it.
+ *
+ * Phase 4D built only the first half. The key was minted once per mounted
+ * form, which is right for a double tap and wrong for everything after a
+ * success: a secretary who recorded one customer and then typed the next
+ * without reloading sent the second transaction under the first one's key,
+ * and the database - correctly idempotent - handed back the first
+ * transaction while this form reported success. The second customer's money
+ * was never recorded.
+ *
+ * So the key is `mount nonce + attempt`, and the attempt advances on a
+ * confirmed success and on nothing else:
+ *
+ *   - **pending** - the button is disabled, so a double tap cannot submit
+ *     twice from here at all;
+ *   - **failed, or never answered** - the key is unchanged, so the officer's
+ *     retry is the same submission asked again and the database returns the
+ *     first transaction rather than writing a second;
+ *   - **succeeded** - a new key, and the customer's fields are cleared, so
+ *     the next customer is a new transaction.
+ *
+ * None of that is a guarantee on its own, which is why the database makes
+ * the same distinction itself: `create_agency_transaction` refuses a key
+ * already recorded against materially different details instead of returning
+ * the earlier transaction. This form is the convenience; that is the control.
  */
 export function RecordForm({ services, tills, terms }: RecordFormProps) {
   const [result, submit, pending] = useActionState<
@@ -62,12 +85,67 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
   >(recordAgencyTransactionAction, undefined);
 
   const formId = useId();
-  // One key per mounted form: a retry of the same submission reuses it.
-  const [idempotencyKey] = useState(
-    () => `ui-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+
+  /**
+   * One nonce per mounted form, and one attempt number per recorded
+   * transaction. Together they are the submission's identity.
+   */
+  const [mountNonce] = useState(
+    () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
   );
+  const [attempt, setAttempt] = useState(0);
+  const idempotencyKey = `ui-${mountNonce}-${String(attempt)}`;
+
   const [serviceId, setServiceId] = useState(services[0]?.id ?? '');
+
+  /**
+   * Every field the officer types is controlled, and that is not a style
+   * preference.
+   *
+   * React resets an uncontrolled form after a form action completes -
+   * whatever the action returned. So a submission that failed, or that the
+   * counter's connection never answered, used to leave the officer staring
+   * at a blank form with the customer in front of them and no idea whether
+   * the money had moved. Holding the values in state keeps them through a
+   * failure, and lets a success clear them deliberately rather than as a
+   * side effect of the framework.
+   */
   const [principal, setPrincipal] = useState('');
+  const [fee, setFee] = useState('0');
+  const [customerIdentifier, setCustomerIdentifier] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [providerReference, setProviderReference] = useState('');
+  const [description, setDescription] = useState('');
+
+  /**
+   * A recorded transaction ends this submission.
+   *
+   * The attempt advances, which retires the key, and the fields that
+   * describe a customer are cleared so the next one starts empty. The
+   * service and the till stay as they are: a counter works one provider at
+   * a time, and re-choosing it for every customer in the queue is how an
+   * officer ends up recording against the wrong till.
+   *
+   * Adjusted during render against the last result this form has seen,
+   * rather than in an effect. `result` keeps its identity until the next
+   * submission resolves, so the comparison fires exactly once per
+   * resolution - and React re-renders with the new state before anything
+   * reaches the screen, so the officer never sees the old customer's
+   * details beside a success message.
+   */
+  const [handled, setHandled] = useState(result);
+  if (result !== handled) {
+    setHandled(result);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      setPrincipal('');
+      setFee('0');
+      setCustomerIdentifier('');
+      setCustomerName('');
+      setProviderReference('');
+      setDescription('');
+    }
+  }
 
   const service = services.find((s) => s.id === serviceId) ?? null;
   const providerTerms = service === null ? undefined : terms[service.providerId];
@@ -168,7 +246,8 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
           label="Customer fee (UGX)"
           name="customerFee"
           inputMode="numeric"
-          defaultValue="0"
+          value={fee}
+          onChange={(event) => setFee(event.target.value)}
           hint="What the customer paid us on top, if anything."
           error={result?.fieldErrors?.customerFee?.[0]}
         />
@@ -198,11 +277,19 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
           </p>
         </div>
 
+        {/*
+          Cleared on a recorded transaction and kept through a failure. The
+          next customer's reference must not be the last customer's, and a
+          form that still reads "Nakato" after Nakato's transaction was
+          recorded is a form that invites recording it twice.
+        */}
         <Field
           label="Customer identifier"
           name="customerIdentifier"
           required
           autoComplete="off"
+          value={customerIdentifier}
+          onChange={(event) => setCustomerIdentifier(event.target.value)}
           hint="The phone number, meter number or account the customer gave."
           error={result?.fieldErrors?.customerIdentifier?.[0]}
         />
@@ -211,6 +298,8 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
           label="Customer name"
           name="customerName"
           autoComplete="off"
+          value={customerName}
+          onChange={(event) => setCustomerName(event.target.value)}
           hint="Optional."
           error={result?.fieldErrors?.customerName?.[0]}
         />
@@ -220,6 +309,8 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
           name="providerReference"
           required
           autoComplete="off"
+          value={providerReference}
+          onChange={(event) => setProviderReference(event.target.value)}
           hint="What the provider's own system called it. Checked for duplicates."
           error={result?.fieldErrors?.providerReference?.[0]}
         />
@@ -228,6 +319,8 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
           label="Note"
           name="description"
           autoComplete="off"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
           hint="Optional."
           error={result?.fieldErrors?.description?.[0]}
         />

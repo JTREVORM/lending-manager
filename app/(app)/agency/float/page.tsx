@@ -1,5 +1,7 @@
 import { PiggyBank } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { ProviderReadinessBadge } from '@/components/agency/badges';
 import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money, MoneyStat } from '@/components/ui/money';
@@ -22,7 +24,36 @@ export const metadata = { title: 'Float and tills' };
  */
 export default async function AgencyFloatPage() {
   const context = await guardPermission(ROUTES.agencyFloat, 'agency:reports');
-  const rows = await getAgencyFloatBalances();
+  const read = await getAgencyFloatBalances();
+
+  const header = (
+    <PageHeader
+      eyebrow="Agency Banking"
+      icon={PiggyBank}
+      title="Float and till balances"
+      description="Electronic value held with each provider, by till."
+      back={{ href: ROUTES.agency, label: 'Agency Services' }}
+      primaryAction={
+        contextCan(context, 'agency:settlements') ? (
+          <ActionLink href={ROUTES.agencyReplenish}>Top up a till</ActionLink>
+        ) : undefined
+      }
+    />
+  );
+
+  // Every figure on this screen comes from the one read. If it did not
+  // happen there is nothing honest left to render: a zero float and an
+  // empty till list would both be claims about money.
+  if (!read.ok) {
+    return (
+      <div className="min-w-0 space-y-4">
+        {header}
+        <AgencyReadError failure={read} />
+      </div>
+    );
+  }
+
+  const rows = read.rows;
   const total = rows.reduce((sum, r) => sum + r.balance, 0);
   const empty = rows.filter(
     (r) => r.tillIsActive && r.providerIsActive && r.balance <= 0,
@@ -30,18 +61,7 @@ export default async function AgencyFloatPage() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        eyebrow="Agency Banking"
-        icon={PiggyBank}
-        title="Float and till balances"
-        description="Electronic value held with each provider, by till."
-        back={{ href: ROUTES.agency, label: 'Agency Services' }}
-        primaryAction={
-          contextCan(context, 'agency:settlements') ? (
-            <ActionLink href={ROUTES.agencyReplenish}>Top up a till</ActionLink>
-          ) : undefined
-        }
-      />
+      {header}
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <MoneyStat

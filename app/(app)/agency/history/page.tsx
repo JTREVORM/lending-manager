@@ -1,5 +1,7 @@
 import { Receipt } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { AgencyTransactionRegister } from '@/components/agency/transaction-register';
 import { PageHeader } from '@/components/ui/page-header';
 import { ROUTES } from '@/config/app';
@@ -28,11 +30,15 @@ export default async function AgencyHistoryPage() {
         description="Recorded, verified, reversed and cancelled — the whole counter."
         back={{ href: ROUTES.agency, label: 'Agency Services' }}
       />
-      <AgencyTransactionRegister
-        rows={rows}
-        caption="Agency transaction history"
-        emptyMessage="No agency transaction has been recorded yet."
-      />
+      {rows.ok ? (
+        <AgencyTransactionRegister
+          rows={rows.rows}
+          caption="Agency transaction history"
+          emptyMessage="No agency transaction has been recorded yet."
+        />
+      ) : (
+        <AgencyReadError failure={rows} />
+      )}
     </div>
   );
 }

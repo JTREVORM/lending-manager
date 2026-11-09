@@ -1,5 +1,7 @@
 import { FileBarChart } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { VarianceBadge } from '@/components/agency/badges';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -43,15 +45,10 @@ export default async function AgencyReportsPage() {
     getAgencyVariances({ limit: 60 }),
   ]);
 
-  // Summing rows the database already produced, for a heading. Integer
-  // addition over integer shillings: no rounding happens here because there
-  // is nothing to round.
-  const commissionOutstanding = toUgx(
-    commission.reduce((total, row) => total + row.outstanding, 0),
-  );
-  const payableOutstanding = toUgx(
-    payables.reduce((total, row) => total + row.outstanding, 0),
-  );
+  // Every section reports its own read. A report is read to make a
+  // decision, so one failed query must leave a gap that says so rather than
+  // a zero that does not.
+  const failures = [commission, payables, movement, variances].filter((r) => !r.ok);
 
   return (
     <div className="min-w-0 space-y-4">
@@ -63,17 +60,25 @@ export default async function AgencyReportsPage() {
         back={{ href: ROUTES.agency, label: 'Agency Services' }}
       />
 
+      {failures.map((failure) =>
+        failure.ok ? null : <AgencyReadError key={failure.what} failure={failure} />,
+      )}
+
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <MoneyStat
-          label="Commission owed to us"
-          amount={commissionOutstanding}
-          note="Earned and not yet received, across every provider and branch you can see."
-        />
-        <MoneyStat
-          label="Collections owed to providers"
-          amount={payableOutstanding}
-          note="Customer money held and not yet remitted."
-        />
+        {commission.ok ? (
+          <MoneyStat
+            label="Commission owed to us"
+            amount={toUgx(commission.rows.reduce((t, row) => t + row.outstanding, 0))}
+            note="Earned and not yet received, across every provider and branch you can see."
+          />
+        ) : null}
+        {payables.ok ? (
+          <MoneyStat
+            label="Collections owed to providers"
+            amount={toUgx(payables.rows.reduce((t, row) => t + row.outstanding, 0))}
+            note="Customer money held and not yet remitted."
+          />
+        ) : null}
       </div>
 
       <Card>
@@ -102,12 +107,16 @@ export default async function AgencyReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {commission.length === 0 ? (
+              {!commission.ok ? (
+                <EmptyTableRow colSpan={6}>
+                  Not read. The panel above says why; this is not an empty section.
+                </EmptyTableRow>
+              ) : commission.rows.length === 0 ? (
                 <EmptyTableRow colSpan={6}>
                   No commission has been earned at a branch you can see.
                 </EmptyTableRow>
               ) : (
-                commission.map((row) => (
+                commission.rows.map((row) => (
                   <TableRow key={`${row.providerId}|${row.branchId}`}>
                     <TableCell header>{row.providerName}</TableCell>
                     <TableCell>{row.branchCode}</TableCell>
@@ -159,13 +168,17 @@ export default async function AgencyReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {payables.length === 0 ? (
+              {!payables.ok ? (
+                <EmptyTableRow colSpan={6}>
+                  Not read. The panel above says why; this is not an empty section.
+                </EmptyTableRow>
+              ) : payables.rows.length === 0 ? (
                 <EmptyTableRow colSpan={6}>
                   Nothing has been collected on a provider&rsquo;s behalf at a branch you
                   can see.
                 </EmptyTableRow>
               ) : (
-                payables.map((row) => (
+                payables.rows.map((row) => (
                   <TableRow key={`${row.providerId}|${row.branchId}`}>
                     <TableCell header>{row.providerName}</TableCell>
                     <TableCell>{row.branchCode}</TableCell>
@@ -217,12 +230,16 @@ export default async function AgencyReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {movement.length === 0 ? (
+              {!movement.ok ? (
+                <EmptyTableRow colSpan={7}>
+                  Not read. The panel above says why; this is not an empty section.
+                </EmptyTableRow>
+              ) : movement.rows.length === 0 ? (
                 <EmptyTableRow colSpan={7}>
                   No agency cash has moved at a branch you can see.
                 </EmptyTableRow>
               ) : (
-                movement.map((row) => (
+                movement.rows.map((row) => (
                   <TableRow
                     key={`${row.branchId}|${row.entryDate}|${row.cashAccountCode}|${row.sourceType}`}
                   >
@@ -282,12 +299,16 @@ export default async function AgencyReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {variances.length === 0 ? (
+              {!variances.ok ? (
+                <EmptyTableRow colSpan={9}>
+                  Not read. The panel above says why; this is not an empty section.
+                </EmptyTableRow>
+              ) : variances.rows.length === 0 ? (
                 <EmptyTableRow colSpan={9}>
                   Nothing has been reconciled at a branch you can see.
                 </EmptyTableRow>
               ) : (
-                variances.map((row) => (
+                variances.rows.map((row) => (
                   <TableRow key={`${row.kind}|${row.id}`}>
                     <TableCell header>
                       <DateValue value={row.reconciliationDate} />

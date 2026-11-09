@@ -13,7 +13,7 @@
  * the mobile project. A script that both captured evidence and judged it
  * would be a script nobody could trust in either role.
  *
- * ## It writes nothing
+ * ## It records no money
  *
  * The harness seed already builds everything these screens need - three
  * demonstration providers, a funded float, eight posted transactions, one
@@ -22,6 +22,14 @@
  * cash count and an open float statement - because the browser suite needs
  * the same data. So this reads `tests/e2e/harness/fixtures.json` and
  * photographs what is there.
+ *
+ * It makes exactly one kind of database change, at the end, and undoes it:
+ * the Phase 4D-F section photographs what a screen shows when a financial
+ * read *fails*, which it produces by revoking the signed-in role's SELECT on
+ * one view for the length of one page load. Each revoke is paired with a
+ * restore in a `finally`, and the section runs last so a crash between the
+ * two cannot affect any other photograph. No row is written, read or
+ * deleted.
  *
  * That means it is safe to run before the browser suite as well as after, and
  * it does not need the stack rebuilt afterwards.
@@ -265,6 +273,86 @@ for (const screen of RESTRICTED) {
   console.log(`  ${file.replace(`${ROOT}/`, '')}  as the ${screen.state}`);
 
   await context.close();
+}
+
+// ---------------------------------------------------------------------------
+// What a failed financial read looks like
+// ---------------------------------------------------------------------------
+//
+// The Phase 4D-F deliverable, photographed. Before it, each of these screens
+// answered a failed query with "UGX 0", "No float till is registered" or
+// "Nothing outstanding" - three statements about money produced by a query
+// that never ran.
+//
+// The failure is real: the signed-in role's SELECT on the view is revoked for
+// the length of one page load and restored immediately. Last in the script,
+// and each revoke paired with its restore, so nothing else is photographed
+// through a database that is missing a grant.
+
+const FAILURE_SHOTS = [
+  {
+    name: 'agency-commission-unreadable',
+    path: '/agency/commission',
+    view: 'agency_commission_summary',
+  },
+  {
+    name: 'agency-exceptions-unreadable',
+    path: '/agency/exceptions',
+    view: 'agency_end_of_day_exceptions',
+  },
+  {
+    name: 'agency-float-unreadable',
+    path: '/agency/float',
+    view: 'agency_float_balances',
+  },
+];
+
+const { Client } = require('pg');
+
+async function withRevokedGrant(view, run) {
+  if (!/^agency_[a-z_]+$/.test(view)) throw new Error(`Not an agency view: ${view}`);
+  const url = process.env.E2E_DATABASE_URL;
+  if (url === undefined || url === '') {
+    console.error('  ! E2E_DATABASE_URL is not set; skipping the failure shots.');
+    return;
+  }
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query(`revoke select on table public.${view} from authenticated`);
+    await run();
+  } finally {
+    await client.query(`grant select on table public.${view} to authenticated`);
+    await client.end();
+  }
+}
+
+for (const shot of FAILURE_SHOTS) {
+  await withRevokedGrant(shot.view, async () => {
+    const context = await browser.newContext({
+      storageState: owner,
+      viewport: { width: 1440, height: 900 },
+      timezoneId: 'Africa/Kampala',
+      locale: 'en-UG',
+      ignoreHTTPSErrors: true,
+    });
+    const page = await context.newPage();
+    const response = await page.goto(`${BASE}${shot.path}`, {
+      waitUntil: 'domcontentloaded',
+    });
+
+    // A refused read is still a rendered page: the screen's job is to say so,
+    // not to fall over.
+    if (response?.status() !== 200) {
+      badResponses.push(`${shot.path} (read failure) → ${String(response?.status())}`);
+    }
+
+    const file = join(OUT, `${shot.name}-desktop.png`);
+    await page.screenshot({ path: file, fullPage: true });
+    console.log(`  ${file.replace(`${ROOT}/`, '')}  with ${shot.view} unreadable`);
+
+    await context.close();
+  });
 }
 
 await browser.close();

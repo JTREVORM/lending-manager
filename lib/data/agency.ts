@@ -64,17 +64,68 @@ function strOrNull(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
 
-/** A read that came back empty because it failed, logged and not thrown. */
-function empty<Row>(what: string, error: { message: string } | null): Row[] {
+/**
+ * Why a failed read is not an empty list.
+ *
+ * Every reader here used to answer a failure with `[]`, logged and moved on.
+ * On a screen that renders a register that reads as "nothing yet", and on a
+ * screen that totals a column it reads as "UGX 0" - a figure the business
+ * would act on, produced by a query that never ran. "No commission
+ * outstanding" and "we could not read the commission" are opposite
+ * statements, and the data layer was turning the second into the first.
+ *
+ * So a read returns an outcome and a screen has to handle both arms. The
+ * kinds are the ones a reader can actually tell apart:
+ *
+ *   `forbidden`    the database refused the caller - PostgREST answers
+ *                  42501 or its own 401/403 codes. The route guard and RLS
+ *                  normally make this unreachable, which is exactly why it
+ *                  is worth naming when it happens.
+ *   `unavailable`  anything else: the network, the API, a view that is not
+ *                  there, a statement timeout.
+ *
+ * Note what is *not* a kind. Row Level Security refuses by returning no rows
+ * rather than by erroring, so "this officer may not see this branch" and
+ * "this branch has nothing" are indistinguishable here by design - that
+ * distinction is made before the read, by `guardPermission` on the route.
+ * Detecting it afterwards would mean inventing a signal the database does
+ * not send.
+ */
+export interface AgencyReadFailure {
+  readonly ok: false;
+  readonly kind: 'forbidden' | 'unavailable';
+  /** What could not be read, for the sentence a screen shows. */
+  readonly what: string;
+}
+
+/** Rows, or the reason there are none. */
+export type AgencyRows<Row> =
+  { readonly ok: true; readonly rows: readonly Row[] } | AgencyReadFailure;
+
+/** One row, nothing, or the reason neither could be determined. */
+export type AgencyMaybeRow<Row> =
+  { readonly ok: true; readonly row: Row | null } | AgencyReadFailure;
+
+/** PostgREST's ways of saying "not you". */
+const FORBIDDEN_CODES = new Set(['42501', 'PGRST301', 'PGRST302', '401', '403']);
+
+function failed(
+  what: string,
+  error: { readonly message: string; readonly code?: string } | null,
+): AgencyReadFailure {
   if (error !== null) logger.warn(`Could not read ${what}.`, { error: error.message });
-  return [];
+  const kind =
+    error?.code !== undefined && FORBIDDEN_CODES.has(error.code)
+      ? 'forbidden'
+      : 'unavailable';
+  return { ok: false, kind, what };
 }
 
 // ---------------------------------------------------------------------------
 // 1. Float balances by provider and till
 // ---------------------------------------------------------------------------
 
-export async function getAgencyFloatBalances(): Promise<AgencyFloatRow[]> {
+export async function getAgencyFloatBalances(): Promise<AgencyRows<AgencyFloatRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_float_balances')
@@ -82,22 +133,26 @@ export async function getAgencyFloatBalances(): Promise<AgencyFloatRow[]> {
     .order('provider_name')
     .order('till_name');
 
-  if (error !== null || data === null) return empty('agency float balances', error);
+  if (error !== null || data === null)
+    return failed('the float and till balances', error);
 
-  return data.map((r) => ({
-    floatAccountId: str(r.float_account_id),
-    providerId: str(r.provider_id),
-    providerCode: str(r.provider_code),
-    providerName: str(r.provider_name),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    tillName: str(r.till_name),
-    tillIsActive: r.till_is_active === true,
-    ledgerAccountCode: str(r.ledger_account_code),
-    balance: ugx(r.balance),
-    providerIsActive: r.provider_is_active === true,
-    providerIsProvisional: r.provider_is_provisional === true,
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      floatAccountId: str(r.float_account_id),
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      tillName: str(r.till_name),
+      tillIsActive: r.till_is_active === true,
+      ledgerAccountCode: str(r.ledger_account_code),
+      balance: ugx(r.balance),
+      providerIsActive: r.provider_is_active === true,
+      providerIsProvisional: r.provider_is_provisional === true,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +163,7 @@ export async function getAgencyTransactions(options?: {
   readonly statuses?: readonly AgencyStatus[];
   readonly providerId?: string;
   readonly limit?: number;
-}): Promise<AgencyTransactionRow[]> {
+}): Promise<AgencyRows<AgencyTransactionRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('agency_transaction_history')
@@ -124,14 +179,24 @@ export async function getAgencyTransactions(options?: {
   }
 
   const { data, error } = await query;
-  if (error !== null || data === null) return empty('agency transactions', error);
+  if (error !== null || data === null) return failed('the transaction register', error);
 
-  return data.map(mapTransaction);
+  return { ok: true, rows: data.map(mapTransaction) };
 }
 
+/**
+ * One transaction, nothing, or the reason neither could be determined.
+ *
+ * The three are different answers and the screen shows three different
+ * things. `null` means the row is not there or not this officer's to see -
+ * deliberately indistinguishable, which is why the page answers both with
+ * "not found". A failure is neither, and a page that treated it as "not
+ * found" would tell an officer their transaction does not exist because a
+ * query timed out.
+ */
 export async function getAgencyTransaction(
   id: string,
-): Promise<AgencyTransactionRow | null> {
+): Promise<AgencyMaybeRow<AgencyTransactionRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_transaction_history')
@@ -139,11 +204,8 @@ export async function getAgencyTransaction(
     .eq('id', id)
     .maybeSingle();
 
-  if (error !== null) {
-    logger.warn('Could not read the agency transaction.', { error: error.message });
-    return null;
-  }
-  return data === null ? null : mapTransaction(data);
+  if (error !== null) return failed('this transaction', error);
+  return { ok: true, row: data === null ? null : mapTransaction(data) };
 }
 
 /**
@@ -192,52 +254,58 @@ function mapTransaction(r: Record<string, unknown>): AgencyTransactionRow {
 // 3. Commission earned, received and outstanding
 // ---------------------------------------------------------------------------
 
-export async function getAgencyCommission(): Promise<AgencyCommissionRow[]> {
+export async function getAgencyCommission(): Promise<AgencyRows<AgencyCommissionRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_commission_summary')
     .select('*')
     .order('provider_name');
 
-  if (error !== null || data === null) return empty('agency commission', error);
+  if (error !== null || data === null) return failed('the commission position', error);
 
-  return data.map((r) => ({
-    providerId: str(r.provider_id),
-    providerCode: str(r.provider_code),
-    providerName: str(r.provider_name),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    earned: ugx(r.commission_earned),
-    received: ugx(r.commission_received),
-    returned: ugx(r.commission_returned),
-    outstanding: ugx(r.commission_outstanding),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      earned: ugx(r.commission_earned),
+      received: ugx(r.commission_received),
+      returned: ugx(r.commission_returned),
+      outstanding: ugx(r.commission_outstanding),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
 // 4. Provider payables and remittances
 // ---------------------------------------------------------------------------
 
-export async function getAgencyPayables(): Promise<AgencyPayableRow[]> {
+export async function getAgencyPayables(): Promise<AgencyRows<AgencyPayableRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_payable_summary')
     .select('*')
     .order('provider_name');
 
-  if (error !== null || data === null) return empty('agency payables', error);
+  if (error !== null || data === null) return failed('what is owed to providers', error);
 
-  return data.map((r) => ({
-    providerId: str(r.provider_id),
-    providerCode: str(r.provider_code),
-    providerName: str(r.provider_name),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    collected: ugx(r.collected_on_behalf),
-    remitted: ugx(r.remitted),
-    remittanceReversed: ugx(r.remittance_reversed),
-    outstanding: ugx(r.payable_outstanding),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      collected: ugx(r.collected_on_behalf),
+      remitted: ugx(r.remitted),
+      remittanceReversed: ugx(r.remittance_reversed),
+      outstanding: ugx(r.payable_outstanding),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -248,7 +316,7 @@ export async function getAgencyVariances(options?: {
   readonly kind?: 'cash' | 'float';
   readonly status?: 'open' | 'reconciled';
   readonly limit?: number;
-}): Promise<AgencyVarianceRow[]> {
+}): Promise<AgencyRows<AgencyVarianceRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('agency_variance_report')
@@ -260,25 +328,29 @@ export async function getAgencyVariances(options?: {
   if (options?.status !== undefined) query = query.eq('status', options.status);
 
   const { data, error } = await query;
-  if (error !== null || data === null) return empty('agency variances', error);
+  if (error !== null || data === null)
+    return failed('the reconciliation variances', error);
 
-  return data.map((r) => ({
-    kind: r.reconciliation_kind === 'float' ? 'float' : 'cash',
-    id: str(r.id),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    providerName: strOrNull(r.provider_name),
-    reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
-    systemClosingBalance: ugx(r.system_closing_balance),
-    countedOrStatement: ugx(r.counted_or_statement_balance),
-    variance: num(r.variance),
-    varianceMeans: str(r.variance_means),
-    varianceWrittenOff: num(r.variance_written_off),
-    status: r.status === 'reconciled' ? 'reconciled' : 'open',
-    createdBy: strOrNull(r.created_by),
-    reconciledBy: strOrNull(r.reconciled_by),
-    statementRef: strOrNull(r.provider_statement_ref),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      kind: r.reconciliation_kind === 'float' ? 'float' : 'cash',
+      id: str(r.id),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      providerName: strOrNull(r.provider_name),
+      reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
+      systemClosingBalance: ugx(r.system_closing_balance),
+      countedOrStatement: ugx(r.counted_or_statement_balance),
+      variance: num(r.variance),
+      varianceMeans: str(r.variance_means),
+      varianceWrittenOff: num(r.variance_written_off),
+      status: r.status === 'reconciled' ? 'reconciled' : 'open',
+      createdBy: strOrNull(r.created_by),
+      reconciledBy: strOrNull(r.reconciled_by),
+      statementRef: strOrNull(r.provider_statement_ref),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -287,7 +359,7 @@ export async function getAgencyVariances(options?: {
 
 export async function getAgencyCashMovement(options?: {
   readonly limit?: number;
-}): Promise<AgencyCashMovementRow[]> {
+}): Promise<AgencyRows<AgencyCashMovementRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_daily_cash_movement')
@@ -295,49 +367,55 @@ export async function getAgencyCashMovement(options?: {
     .order('entry_date', { ascending: false })
     .limit(options?.limit ?? 60);
 
-  if (error !== null || data === null) return empty('agency cash movement', error);
+  if (error !== null || data === null) return failed("the day's cash movement", error);
 
-  return data.map((r) => ({
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    entryDate: toBusinessDate(str(r.entry_date)),
-    cashAccountCode: str(r.cash_account_code),
-    sourceType: str(r.source_type),
-    cashIn: ugx(r.cash_in),
-    cashOut: ugx(r.cash_out),
-    netMovement: num(r.net_movement),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      entryDate: toBusinessDate(str(r.entry_date)),
+      cashAccountCode: str(r.cash_account_code),
+      sourceType: str(r.source_type),
+      cashIn: ugx(r.cash_in),
+      cashOut: ugx(r.cash_out),
+      netMovement: num(r.net_movement),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
 // 7. End-of-day exceptions
 // ---------------------------------------------------------------------------
 
-export async function getAgencyExceptions(): Promise<AgencyExceptionRow[]> {
+export async function getAgencyExceptions(): Promise<AgencyRows<AgencyExceptionRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_end_of_day_exceptions')
     .select('*')
     .order('exception_kind');
 
-  if (error !== null || data === null) return empty('agency exceptions', error);
+  if (error !== null || data === null) return failed('the outstanding exceptions', error);
 
-  return data.map((r) => ({
-    kind: str(r.exception_kind),
-    branchId: str(r.branch_id),
-    asOfDate: r.as_of_date === null ? null : toBusinessDate(str(r.as_of_date)),
-    subjectId: str(r.subject_id),
-    providerName: strOrNull(r.provider_name),
-    amount: num(r.amount),
-    detail: str(r.detail),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      kind: str(r.exception_kind),
+      branchId: str(r.branch_id),
+      asOfDate: r.as_of_date === null ? null : toBusinessDate(str(r.as_of_date)),
+      subjectId: str(r.subject_id),
+      providerName: strOrNull(r.provider_name),
+      amount: num(r.amount),
+      detail: str(r.detail),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Configuration: providers and the services they offer
 // ---------------------------------------------------------------------------
 
-export async function getAgencyProviders(): Promise<AgencyProviderRow[]> {
+export async function getAgencyProviders(): Promise<AgencyRows<AgencyProviderRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_service_providers')
@@ -346,26 +424,29 @@ export async function getAgencyProviders(): Promise<AgencyProviderRow[]> {
     )
     .order('name');
 
-  if (error !== null || data === null) return empty('agency providers', error);
+  if (error !== null || data === null) return failed('the registered providers', error);
 
-  return data.map((r) => ({
-    id: str(r.id),
-    code: str(r.code),
-    name: str(r.name),
-    category: str(r.category),
-    floatModel: r.float_model === 'cash_payable' ? 'cash_payable' : 'provider_float',
-    commissionModel: r.commission_model === 'immediate' ? 'immediate' : 'deferred',
-    commissionRateBps:
-      typeof r.commission_rate_bps === 'number' ? r.commission_rate_bps : null,
-    commissionFixed: ugxOrNull(r.commission_fixed),
-    isActive: r.is_active === true,
-    isProvisional: r.is_provisional === true,
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      code: str(r.code),
+      name: str(r.name),
+      category: str(r.category),
+      floatModel: r.float_model === 'cash_payable' ? 'cash_payable' : 'provider_float',
+      commissionModel: r.commission_model === 'immediate' ? 'immediate' : 'deferred',
+      commissionRateBps:
+        typeof r.commission_rate_bps === 'number' ? r.commission_rate_bps : null,
+      commissionFixed: ugxOrNull(r.commission_fixed),
+      isActive: r.is_active === true,
+      isProvisional: r.is_provisional === true,
+    })),
+  };
 }
 
 export async function getAgencyServiceTypes(options?: {
   readonly providerId?: string;
-}): Promise<AgencyServiceTypeRow[]> {
+}): Promise<AgencyRows<AgencyServiceTypeRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('agency_transaction_types')
@@ -379,22 +460,25 @@ export async function getAgencyServiceTypes(options?: {
   }
 
   const { data, error } = await query;
-  if (error !== null || data === null) return empty('agency service types', error);
+  if (error !== null || data === null) return failed('the service types', error);
 
-  return data.map((r) => {
-    const provider = r.agency_service_providers as { name?: unknown } | null;
-    return {
-      id: str(r.id),
-      providerId: str(r.provider_id),
-      providerName: str(provider?.name),
-      code: str(r.code),
-      name: str(r.name),
-      direction: isAgencyDirection(r.direction) ? r.direction : 'deposit',
-      maxSingleTransaction: ugxOrNull(r.max_single_transaction),
-      requiresApprovalAbove: ugxOrNull(r.requires_approval_above),
-      isActive: r.is_active === true,
-    };
-  });
+  return {
+    ok: true,
+    rows: data.map((r) => {
+      const provider = r.agency_service_providers as { name?: unknown } | null;
+      return {
+        id: str(r.id),
+        providerId: str(r.provider_id),
+        providerName: str(provider?.name),
+        code: str(r.code),
+        name: str(r.name),
+        direction: isAgencyDirection(r.direction) ? r.direction : 'deposit',
+        maxSingleTransaction: ugxOrNull(r.max_single_transaction),
+        requiresApprovalAbove: ugxOrNull(r.requires_approval_above),
+        isActive: r.is_active === true,
+      };
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -408,7 +492,7 @@ export async function getAgencyServiceTypes(options?: {
 export async function getAgencyCashCounts(options?: {
   readonly statuses?: readonly AgencyReconciliationStatus[];
   readonly limit?: number;
-}): Promise<AgencyCashCountRow[]> {
+}): Promise<AgencyRows<AgencyCashCountRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('agency_cash_reconciliation_register')
@@ -422,35 +506,38 @@ export async function getAgencyCashCounts(options?: {
   }
 
   const { data, error } = await query;
-  if (error !== null || data === null) return empty('agency cash counts', error);
+  if (error !== null || data === null) return failed('the physical cash counts', error);
 
-  return data.map((r) => ({
-    id: str(r.id),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    cashAccountId: str(r.cash_account_id),
-    accountCode: str(r.account_code),
-    accountName: str(r.account_name),
-    reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
-    status: isAgencyReconciliationStatus(r.status) ? r.status : 'open',
-    systemClosingBalance: ugx(r.system_closing_balance),
-    physicalCount: ugx(r.physical_count),
-    variance: ugx(r.variance),
-    varianceMeans: str(r.variance_means),
-    varianceWrittenOff: ugx(r.variance_written_off),
-    varianceJournalEntryId: strOrNull(r.variance_journal_entry_id),
-    notes: strOrNull(r.notes),
-    createdBy: strOrNull(r.created_by),
-    reconciledBy: strOrNull(r.reconciled_by),
-    currentSystemBalance: ugx(r.current_system_balance),
-    balanceMoved: r.balance_moved === true,
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      cashAccountId: str(r.cash_account_id),
+      accountCode: str(r.account_code),
+      accountName: str(r.account_name),
+      reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
+      status: isAgencyReconciliationStatus(r.status) ? r.status : 'open',
+      systemClosingBalance: ugx(r.system_closing_balance),
+      physicalCount: ugx(r.physical_count),
+      variance: ugx(r.variance),
+      varianceMeans: str(r.variance_means),
+      varianceWrittenOff: ugx(r.variance_written_off),
+      varianceJournalEntryId: strOrNull(r.variance_journal_entry_id),
+      notes: strOrNull(r.notes),
+      createdBy: strOrNull(r.created_by),
+      reconciledBy: strOrNull(r.reconciled_by),
+      currentSystemBalance: ugx(r.current_system_balance),
+      balanceMoved: r.balance_moved === true,
+    })),
+  };
 }
 
 export async function getAgencyFloatStatements(options?: {
   readonly statuses?: readonly AgencyReconciliationStatus[];
   readonly limit?: number;
-}): Promise<AgencyFloatStatementRow[]> {
+}): Promise<AgencyRows<AgencyFloatStatementRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('agency_float_reconciliation_register')
@@ -464,39 +551,43 @@ export async function getAgencyFloatStatements(options?: {
   }
 
   const { data, error } = await query;
-  if (error !== null || data === null) return empty('agency float statements', error);
+  if (error !== null || data === null)
+    return failed('the provider float statements', error);
 
-  return data.map((r) => ({
-    id: str(r.id),
-    floatAccountId: str(r.float_account_id),
-    tillName: str(r.till_name),
-    accountCode: str(r.account_code),
-    accountName: str(r.account_name),
-    providerId: strOrNull(r.provider_id),
-    providerCode: strOrNull(r.provider_code),
-    providerName: strOrNull(r.provider_name),
-    branchId: strOrNull(r.branch_id),
-    branchCode: strOrNull(r.branch_code),
-    reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
-    status: isAgencyReconciliationStatus(r.status) ? r.status : 'open',
-    systemClosingBalance: ugx(r.system_closing_balance),
-    providerStatementBalance: ugx(r.provider_statement_balance),
-    providerStatementRef: strOrNull(r.provider_statement_ref),
-    variance: ugx(r.variance),
-    varianceMeans: str(r.variance_means),
-    varianceWrittenOff: ugx(r.variance_written_off),
-    varianceJournalEntryId: strOrNull(r.variance_journal_entry_id),
-    notes: strOrNull(r.notes),
-    createdBy: strOrNull(r.created_by),
-    reconciledBy: strOrNull(r.reconciled_by),
-    currentSystemBalance: ugx(r.current_system_balance),
-    balanceMoved: r.balance_moved === true,
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      floatAccountId: str(r.float_account_id),
+      tillName: str(r.till_name),
+      accountCode: str(r.account_code),
+      accountName: str(r.account_name),
+      providerId: strOrNull(r.provider_id),
+      providerCode: strOrNull(r.provider_code),
+      providerName: strOrNull(r.provider_name),
+      branchId: strOrNull(r.branch_id),
+      branchCode: strOrNull(r.branch_code),
+      reconciliationDate: toBusinessDate(str(r.reconciliation_date)),
+      status: isAgencyReconciliationStatus(r.status) ? r.status : 'open',
+      systemClosingBalance: ugx(r.system_closing_balance),
+      providerStatementBalance: ugx(r.provider_statement_balance),
+      providerStatementRef: strOrNull(r.provider_statement_ref),
+      variance: ugx(r.variance),
+      varianceMeans: str(r.variance_means),
+      varianceWrittenOff: ugx(r.variance_written_off),
+      varianceJournalEntryId: strOrNull(r.variance_journal_entry_id),
+      notes: strOrNull(r.notes),
+      createdBy: strOrNull(r.created_by),
+      reconciledBy: strOrNull(r.reconciled_by),
+      currentSystemBalance: ugx(r.current_system_balance),
+      balanceMoved: r.balance_moved === true,
+    })),
+  };
 }
 
 export async function getAgencyCommissionSettlements(options?: {
   readonly limit?: number;
-}): Promise<AgencyCommissionSettlementRow[]> {
+}): Promise<AgencyRows<AgencyCommissionSettlementRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_commission_settlement_register')
@@ -506,31 +597,34 @@ export async function getAgencyCommissionSettlements(options?: {
     .limit(options?.limit ?? 50);
 
   if (error !== null || data === null) {
-    return empty('agency commission settlements', error);
+    return failed('the commission remittances received', error);
   }
 
-  return data.map((r) => ({
-    id: str(r.id),
-    providerId: str(r.provider_id),
-    providerCode: str(r.provider_code),
-    providerName: str(r.provider_name),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    settlementDate: toBusinessDate(str(r.settlement_date)),
-    settlementAmount: ugx(r.settlement_amount),
-    settlementAccountCode: str(r.settlement_account_code),
-    settlementAccountName: str(r.settlement_account_name),
-    providerStatementRef: strOrNull(r.provider_statement_ref),
-    status: isAgencySettlementStatus(r.status) ? r.status : 'posted',
-    journalEntryId: strOrNull(r.journal_entry_id),
-    reversalEntryId: strOrNull(r.reversal_entry_id),
-    reversalReason: strOrNull(r.reversal_reason),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      settlementDate: toBusinessDate(str(r.settlement_date)),
+      settlementAmount: ugx(r.settlement_amount),
+      settlementAccountCode: str(r.settlement_account_code),
+      settlementAccountName: str(r.settlement_account_name),
+      providerStatementRef: strOrNull(r.provider_statement_ref),
+      status: isAgencySettlementStatus(r.status) ? r.status : 'posted',
+      journalEntryId: strOrNull(r.journal_entry_id),
+      reversalEntryId: strOrNull(r.reversal_entry_id),
+      reversalReason: strOrNull(r.reversal_reason),
+    })),
+  };
 }
 
 export async function getAgencyPayableSettlements(options?: {
   readonly limit?: number;
-}): Promise<AgencyPayableSettlementRow[]> {
+}): Promise<AgencyRows<AgencyPayableSettlementRow>> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('agency_payable_settlement_register')
@@ -540,32 +634,46 @@ export async function getAgencyPayableSettlements(options?: {
     .limit(options?.limit ?? 50);
 
   if (error !== null || data === null) {
-    return empty('agency payable settlements', error);
+    return failed('the remittances paid to providers', error);
   }
 
-  return data.map((r) => ({
-    id: str(r.id),
-    providerId: str(r.provider_id),
-    providerCode: str(r.provider_code),
-    providerName: str(r.provider_name),
-    branchId: str(r.branch_id),
-    branchCode: str(r.branch_code),
-    settlementDate: toBusinessDate(str(r.settlement_date)),
-    settlementAmount: ugx(r.settlement_amount),
-    cashAccountCode: str(r.cash_account_code),
-    cashAccountName: str(r.cash_account_name),
-    providerReceiptRef: strOrNull(r.provider_receipt_ref),
-    status: isAgencySettlementStatus(r.status) ? r.status : 'posted',
-    journalEntryId: strOrNull(r.journal_entry_id),
-    reversalEntryId: strOrNull(r.reversal_entry_id),
-    reversalReason: strOrNull(r.reversal_reason),
-  }));
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      settlementDate: toBusinessDate(str(r.settlement_date)),
+      settlementAmount: ugx(r.settlement_amount),
+      cashAccountCode: str(r.cash_account_code),
+      cashAccountName: str(r.cash_account_name),
+      providerReceiptRef: strOrNull(r.provider_receipt_ref),
+      status: isAgencySettlementStatus(r.status) ? r.status : 'posted',
+      journalEntryId: strOrNull(r.journal_entry_id),
+      reversalEntryId: strOrNull(r.reversal_entry_id),
+      reversalReason: strOrNull(r.reversal_reason),
+    })),
+  };
 }
 
-/** The tills a signed-in officer may actually post against, for a form. */
-export async function getPostableFloatTills(): Promise<AgencyFloatRow[]> {
+/**
+ * The tills a signed-in officer may actually post against, for a form.
+ *
+ * A failed read is passed through rather than filtered into an empty list.
+ * "No till is available" and "we could not read the tills" look identical on
+ * a form - both offer nothing to choose - and only one of them means the
+ * officer should wait and try again.
+ */
+export async function getPostableFloatTills(): Promise<AgencyRows<AgencyFloatRow>> {
   const all = await getAgencyFloatBalances();
-  return all.filter(
-    (f) => f.tillIsActive && f.providerIsActive && !f.providerIsProvisional,
-  );
+  if (!all.ok) return all;
+  return {
+    ok: true,
+    rows: all.rows.filter(
+      (f) => f.tillIsActive && f.providerIsActive && !f.providerIsProvisional,
+    ),
+  };
 }

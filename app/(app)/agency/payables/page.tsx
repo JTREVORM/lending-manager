@@ -1,5 +1,7 @@
 import { Landmark } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { PayableSettlementRegister } from '@/components/agency/settlement-registers';
 import { PayableSettlementForm } from '@/components/agency/settlement-forms';
 import { Alert } from '@/components/ui/alert';
@@ -41,19 +43,34 @@ export default async function AgencyPayablesPage() {
       branchId: a.branchId,
     }));
 
-  const collected = rows.reduce((sum, r) => sum + r.collected, 0);
-  const remitted = rows.reduce((sum, r) => sum + r.remitted, 0);
-  const outstanding = rows.reduce((sum, r) => sum + r.outstanding, 0);
+  const header = (
+    <PageHeader
+      eyebrow="Agency Banking"
+      icon={Landmark}
+      title="Provider remittances"
+      description="Collected at the counter on somebody else's behalf, and owed out."
+      back={{ href: ROUTES.agency, label: 'Agency Services' }}
+    />
+  );
+
+  // What is owed out drives every figure here and the remittance form's
+  // choice of provider. A failed read must not render as "nothing is owed".
+  if (!rows.ok) {
+    return (
+      <div className="min-w-0 space-y-4">
+        {header}
+        <AgencyReadError failure={rows} />
+      </div>
+    );
+  }
+
+  const collected = rows.rows.reduce((sum, r) => sum + r.collected, 0);
+  const remitted = rows.rows.reduce((sum, r) => sum + r.remitted, 0);
+  const outstanding = rows.rows.reduce((sum, r) => sum + r.outstanding, 0);
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        eyebrow="Agency Banking"
-        icon={Landmark}
-        title="Provider remittances"
-        description="Collected at the counter on somebody else's behalf, and owed out."
-        back={{ href: ROUTES.agency, label: 'Agency Services' }}
-      />
+      {header}
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-3">
         <MoneyStat
@@ -89,13 +106,13 @@ export default async function AgencyPayablesPage() {
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {rows.rows.length === 0 ? (
             <EmptyTableRow colSpan={6}>
               Nothing has been collected on a provider&rsquo;s behalf at a branch you can
               see.
             </EmptyTableRow>
           ) : (
-            rows.map((r) => (
+            rows.rows.map((r) => (
               <TableRow key={`${r.providerId}-${r.branchId}`}>
                 <TableCell header>{r.providerName}</TableCell>
                 <TableCell>{r.branchCode}</TableCell>
@@ -126,17 +143,21 @@ export default async function AgencyPayablesPage() {
       </DataTable>
 
       {contextCan(context, 'agency:settlements') ? (
-        <PayableSettlementForm rows={rows} accounts={paying} />
+        <PayableSettlementForm rows={rows.rows} accounts={paying} />
       ) : (
         <Alert tone="info">
           Handing collections over needs the settlement capability.
         </Alert>
       )}
 
-      <PayableSettlementRegister
-        rows={settlements}
-        canReverse={contextCan(context, 'agency:reverse')}
-      />
+      {settlements.ok ? (
+        <PayableSettlementRegister
+          rows={settlements.rows}
+          canReverse={contextCan(context, 'agency:reverse')}
+        />
+      ) : (
+        <AgencyReadError failure={settlements} />
+      )}
     </div>
   );
 }

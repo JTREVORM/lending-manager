@@ -1,5 +1,7 @@
 import { TriangleAlert } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -61,19 +63,37 @@ const KIND: Readonly<
 
 export default async function AgencyExceptionsPage() {
   await guardPermission(ROUTES.agencyExceptions, 'agency:reports');
-  const rows = await getAgencyExceptions();
+  const read = await getAgencyExceptions();
 
+  const header = (
+    <PageHeader
+      eyebrow="Agency Banking"
+      icon={TriangleAlert}
+      title="End-of-day exceptions"
+      description="Outstanding agency work, by kind, at the branches you can see."
+      back={{ href: ROUTES.agency, label: 'Agency Services' }}
+    />
+  );
+
+  // This screen's whole purpose is to say whether anything is outstanding,
+  // so a failed read is the one thing it must never render as "nothing is".
+  // A day closed on a green panel produced by a timed-out query is a day
+  // closed on nothing at all.
+  if (!read.ok) {
+    return (
+      <div className="min-w-0 space-y-4">
+        {header}
+        <AgencyReadError failure={read} />
+      </div>
+    );
+  }
+
+  const rows = read.rows;
   const kinds = Object.keys(KIND).filter((kind) => rows.some((r) => r.kind === kind));
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        eyebrow="Agency Banking"
-        icon={TriangleAlert}
-        title="End-of-day exceptions"
-        description="Outstanding agency work, by kind, at the branches you can see."
-        back={{ href: ROUTES.agency, label: 'Agency Services' }}
-      />
+      {header}
 
       {rows.length === 0 ? (
         <Alert tone="success">

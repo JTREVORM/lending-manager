@@ -1,5 +1,7 @@
 import { Settings2 } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { ProviderReadinessBadge } from '@/components/agency/badges';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -56,17 +58,35 @@ export default async function AgencyProvidersPage() {
     getAgencyServiceTypes(),
   ]);
 
-  const thresholded = types.filter((t) => t.requiresApprovalAbove !== null);
+  const header = (
+    <PageHeader
+      eyebrow="Agency Banking"
+      icon={Settings2}
+      title="Providers and services"
+      description="The terms every commission figure is computed from."
+      back={{ href: ROUTES.agency, label: 'Agency Services' }}
+    />
+  );
+
+  // "No provider is registered" is a claim about the configuration every
+  // commission figure is computed from. It is not something to say because
+  // a query failed.
+  const failure = [providers, types].find((read) => !read.ok);
+  if (failure !== undefined && !failure.ok) {
+    return (
+      <div className="min-w-0 space-y-4">
+        {header}
+        <AgencyReadError failure={failure} />
+      </div>
+    );
+  }
+  if (!providers.ok || !types.ok) return null;
+
+  const thresholded = types.rows.filter((t) => t.requiresApprovalAbove !== null);
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        eyebrow="Agency Banking"
-        icon={Settings2}
-        title="Providers and services"
-        description="The terms every commission figure is computed from."
-        back={{ href: ROUTES.agency, label: 'Agency Services' }}
-      />
+      {header}
 
       <Alert tone="info">
         Read-only. Registering a provider, approving its commercial terms or making it
@@ -90,10 +110,10 @@ export default async function AgencyProvidersPage() {
               </tr>
             </thead>
             <tbody>
-              {providers.length === 0 ? (
+              {providers.rows.length === 0 ? (
                 <EmptyTableRow colSpan={6}>No provider is registered.</EmptyTableRow>
               ) : (
-                providers.map((p) => {
+                providers.rows.map((p) => {
                   const blocked = providerBlockedReason(p);
                   return (
                     <TableRow key={p.id}>
@@ -177,10 +197,10 @@ export default async function AgencyProvidersPage() {
               </tr>
             </thead>
             <tbody>
-              {types.length === 0 ? (
+              {types.rows.length === 0 ? (
                 <EmptyTableRow colSpan={7}>No service type is configured.</EmptyTableRow>
               ) : (
-                types.map((t) => (
+                types.rows.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell header>
                       <span className="font-mono text-xs">{t.code}</span>

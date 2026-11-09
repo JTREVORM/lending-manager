@@ -1,5 +1,7 @@
 import { HandCoins } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import { CommissionSettlementRegister } from '@/components/agency/settlement-registers';
 import { CommissionSettlementForm } from '@/components/agency/settlement-forms';
 import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
@@ -42,20 +44,38 @@ export default async function AgencyCommissionPage() {
       branchId: a.branchId,
     }));
 
-  const earned = rows.reduce((sum, r) => sum + r.earned, 0);
-  const received = rows.reduce((sum, r) => sum + r.received, 0);
-  const outstanding = rows.reduce((sum, r) => sum + r.outstanding, 0);
   const canSettle = contextCan(context, 'agency:settlements');
+
+  const header = (
+    <PageHeader
+      eyebrow="Agency Banking"
+      icon={HandCoins}
+      title="Commission"
+      description="What the providers owe us, what they have remitted, and what is still due."
+      back={{ href: ROUTES.agency, label: 'Agency Services' }}
+    />
+  );
+
+  // The position drives the three figures, the table and the form's choice
+  // of provider. Without it there is nothing to show and nothing to settle
+  // against: a form offering "no provider has commission outstanding" would
+  // be stating a position that was never read.
+  if (!rows.ok) {
+    return (
+      <div className="min-w-0 space-y-4">
+        {header}
+        <AgencyReadError failure={rows} />
+      </div>
+    );
+  }
+
+  const earned = rows.rows.reduce((sum, r) => sum + r.earned, 0);
+  const received = rows.rows.reduce((sum, r) => sum + r.received, 0);
+  const outstanding = rows.rows.reduce((sum, r) => sum + r.outstanding, 0);
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        eyebrow="Agency Banking"
-        icon={HandCoins}
-        title="Commission"
-        description="What the providers owe us, what they have remitted, and what is still due."
-        back={{ href: ROUTES.agency, label: 'Agency Services' }}
-      />
+      {header}
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-3">
         <MoneyStat label="Earned" amount={toUgx(earned)} note="Recognised at posting" />
@@ -83,12 +103,12 @@ export default async function AgencyCommissionPage() {
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {rows.rows.length === 0 ? (
             <EmptyTableRow colSpan={6}>
               No commission has accrued at a branch you can see.
             </EmptyTableRow>
           ) : (
-            rows.map((r) => (
+            rows.rows.map((r) => (
               <TableRow key={`${r.providerId}-${r.branchId}`}>
                 <TableCell header>{r.providerName}</TableCell>
                 <TableCell>{r.branchCode}</TableCell>
@@ -119,7 +139,7 @@ export default async function AgencyCommissionPage() {
       </DataTable>
 
       {canSettle ? (
-        <CommissionSettlementForm rows={rows} accounts={receiving} />
+        <CommissionSettlementForm rows={rows.rows} accounts={receiving} />
       ) : (
         <Alert tone="info">
           Recording a remittance needs the settlement capability. You can see what is
@@ -127,10 +147,14 @@ export default async function AgencyCommissionPage() {
         </Alert>
       )}
 
-      <CommissionSettlementRegister
-        rows={settlements}
-        canReverse={contextCan(context, 'agency:reverse')}
-      />
+      {settlements.ok ? (
+        <CommissionSettlementRegister
+          rows={settlements.rows}
+          canReverse={contextCan(context, 'agency:reverse')}
+        />
+      ) : (
+        <AgencyReadError failure={settlements} />
+      )}
     </div>
   );
 }

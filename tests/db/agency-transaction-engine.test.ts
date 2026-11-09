@@ -1477,6 +1477,71 @@ describeDb('Phase 4B — agency transaction engine', () => {
       expect(Number(n.n)).toBe(1);
     });
 
+    it('refuses a reused key that describes a different transaction', async () => {
+      // Phase 4D-F. The retry contract has two halves and only one of them
+      // was built. "The same submission, asked again" must come back with the
+      // first transaction. "A different submission wearing the same key" must
+      // not: returning the first one tells the counter that the second
+      // customer's money was recorded when nothing of the sort happened.
+      //
+      // This is not hypothetical. The recording form minted one key per
+      // mounted page, so a secretary who recorded one customer and then typed
+      // the next without reloading sent the second transaction under the
+      // first one's key - and was shown a success.
+      const key = `IDEMX-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await asUserCommitted(secretary, [
+        {
+          sql: `select public.create_agency_transaction($1, 15000, $2, '+256770000011', 'First customer', $3, 0, null, null, null, $4) as id`,
+          params: [mtnDeposit.typeId, mtnDeposit.tillId, `R1-${key}`, key],
+        },
+      ]);
+      expect(first.ok, first.message).toBe(true);
+      const firstId = (first.rows[0] as { id: string }).id;
+
+      // A different customer, a different amount, the same key.
+      const second = await asUserCommitted(secretary, [
+        {
+          sql: `select public.create_agency_transaction($1, 90000, $2, '+256770000012', 'Second customer', $3, 0, null, null, null, $4) as id`,
+          params: [mtnDeposit.typeId, mtnDeposit.tillId, `R2-${key}`, key],
+        },
+      ]);
+      expect(second.ok).toBe(false);
+      expect(second.message).toMatch(/different transaction|already recorded/i);
+
+      // And nothing was written for the second attempt.
+      const n = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.agency_transactions
+          where idempotency_key = $1`,
+        [key],
+      );
+      expect(Number(n.n)).toBe(1);
+      const kept = await queryOne<{ amount: string }>(
+        `select principal_amount::text as amount
+           from public.agency_transactions where id = $1`,
+        [firstId],
+      );
+      expect(Number(kept.amount)).toBe(15_000);
+    });
+
+    it('still returns the first transaction for a genuine retry', async () => {
+      // The other half, asserted beside it so a future tightening cannot
+      // quietly turn every retry into a refusal. Same arguments, same key:
+      // the officer who never saw the first response gets the first
+      // transaction, not a second one and not an error.
+      const key = `IDEMR-${Math.random().toString(36).slice(2, 10)}`;
+      const call = {
+        sql: `select public.create_agency_transaction($1, 22000, $2, '+256770000013', 'Retrying customer', $3, 500, null, 'note', null, $4) as id`,
+        params: [mtnDeposit.typeId, mtnDeposit.tillId, `RR-${key}`, key],
+      };
+      const first = await asUserCommitted(secretary, [call]);
+      const again = await asUserCommitted(secretary, [call]);
+      expect(first.ok, first.message).toBe(true);
+      expect(again.ok, again.message).toBe(true);
+      expect((again.rows[0] as { id: string }).id).toBe(
+        (first.rows[0] as { id: string }).id,
+      );
+    });
+
     it('lets only one of two concurrent verifications post', async () => {
       // Two connections verify the same transaction at the same time. The row
       // lock in post_agency_transaction decides: one posts, the other finds it

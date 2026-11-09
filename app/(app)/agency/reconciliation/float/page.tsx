@@ -1,5 +1,7 @@
 import { Smartphone } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import {
   FloatStatementForm,
   FloatStatementRegister,
@@ -49,13 +51,26 @@ export default async function AgencyFloatReconciliationPage() {
         adjust the reading.
       </Alert>
 
-      <FloatStatementForm tills={tills} />
+      {/*
+        Each half stands or falls on its own read. A form with no tills to
+        choose and a register with no rows look the same whether the
+        database answered or not, so each says which it was.
+      */}
+      {tills.ok ? (
+        <FloatStatementForm tills={tills.rows} />
+      ) : (
+        <AgencyReadError failure={tills} />
+      )}
 
-      <FloatStatementRegister
-        rows={rows}
-        profileId={context.profileId}
-        canAdjust={canAdjust}
-      />
+      {rows.ok ? (
+        <FloatStatementRegister
+          rows={rows.rows}
+          profileId={context.profileId}
+          canAdjust={canAdjust}
+        />
+      ) : (
+        <AgencyReadError failure={rows} />
+      )}
     </div>
   );
 }

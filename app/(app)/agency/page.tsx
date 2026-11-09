@@ -1,5 +1,6 @@
 import { Network } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
 import { Card } from '@/components/ui/card';
 import { MoneyStat } from '@/components/ui/money';
 import { ActionLink, PageHeader } from '@/components/ui/page-header';
@@ -27,6 +28,23 @@ export const metadata = { title: 'Agency Services' };
  * GL 1310 and the 2200-series accounts are shared between providers, so a
  * total computed here over whatever rows came back would mix them.
  */
+/**
+ * A headline with no figure, because the figure was not read.
+ *
+ * Shaped like the `MoneyStat` beside it so the row does not jump, and
+ * deliberately carrying no number at all - not a zero, not a dash that could
+ * be read as one.
+ */
+function UnavailableStat({ label }: { readonly label: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-text-muted text-sm">{label}</p>
+      <p className="text-danger text-lg font-semibold">Not available</p>
+      <p className="text-text-muted mt-0.5 text-xs">This read failed. It is not zero.</p>
+    </div>
+  );
+}
+
 export default async function AgencyPage() {
   const context = await guardPermission(ROUTES.agency, 'agency:reports');
 
@@ -38,9 +56,13 @@ export default async function AgencyPage() {
     getAgencyTransactions({ statuses: ['awaiting_verification'], limit: 10 }),
   ]);
 
-  const outstandingCommission = commission.reduce((sum, r) => sum + r.outstanding, 0);
-  const outstandingPayable = payables.reduce((sum, r) => sum + r.outstanding, 0);
-  const floatHeld = floats.reduce((sum, r) => sum + r.balance, 0);
+  // A headline figure is only shown when the read behind it happened. A
+  // dashboard that answers "how much is outstanding?" with UGX 0 because a
+  // query failed is worse than one that answers nothing: the officer acts on
+  // the first and reloads on the second.
+  const failures = [commission, payables, floats, exceptions, pending].filter(
+    (read) => !read.ok,
+  );
 
   return (
     <div className="min-w-0 space-y-4">
@@ -56,28 +78,48 @@ export default async function AgencyPage() {
         }
       />
 
+      {failures.map((failure) =>
+        failure.ok ? null : <AgencyReadError key={failure.what} failure={failure} />,
+      )}
+
       {/*
         These three are sums across the rows the caller may see, which is a
         presentation of per-provider figures rather than a financial total:
         each row was totalled by the database, and the only arithmetic here is
         adding independent per-provider balances for a headline.
+
+        Each is rendered only if its own read succeeded. One failed query
+        leaves its own figure absent and the other two intact, rather than
+        taking down a screen that can still tell the officer something true.
       */}
       <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-        <MoneyStat
-          label="Commission outstanding"
-          amount={toUgx(outstandingCommission)}
-          note={`${String(commission.length)} provider${commission.length === 1 ? '' : 's'}`}
-        />
-        <MoneyStat
-          label="Held on providers' behalf"
-          amount={toUgx(outstandingPayable)}
-          note="Owed out, not ours"
-        />
-        <MoneyStat
-          label="Electronic float held"
-          amount={toUgx(floatHeld)}
-          note={`${String(floats.length)} till${floats.length === 1 ? '' : 's'}`}
-        />
+        {commission.ok ? (
+          <MoneyStat
+            label="Commission outstanding"
+            amount={toUgx(commission.rows.reduce((sum, r) => sum + r.outstanding, 0))}
+            note={`${String(commission.rows.length)} provider${commission.rows.length === 1 ? '' : 's'}`}
+          />
+        ) : (
+          <UnavailableStat label="Commission outstanding" />
+        )}
+        {payables.ok ? (
+          <MoneyStat
+            label="Held on providers' behalf"
+            amount={toUgx(payables.rows.reduce((sum, r) => sum + r.outstanding, 0))}
+            note="Owed out, not ours"
+          />
+        ) : (
+          <UnavailableStat label="Held on providers' behalf" />
+        )}
+        {floats.ok ? (
+          <MoneyStat
+            label="Electronic float held"
+            amount={toUgx(floats.rows.reduce((sum, r) => sum + r.balance, 0))}
+            note={`${String(floats.rows.length)} till${floats.rows.length === 1 ? '' : 's'}`}
+          />
+        ) : (
+          <UnavailableStat label="Electronic float held" />
+        )}
       </div>
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -113,14 +155,19 @@ export default async function AgencyPage() {
 
         <Card>
           <h2 className="text-sm font-semibold">Needs attention today</h2>
-          {exceptions.length === 0 ? (
+          {!exceptions.ok ? (
+            <p className="text-danger mt-2 text-sm">
+              This list could not be read, so it is not a statement that nothing is
+              outstanding.
+            </p>
+          ) : exceptions.rows.length === 0 ? (
             <p className="text-text-muted mt-2 text-sm">
               Nothing outstanding. No unverified transaction, no reconciliation awaiting a
               second officer, no empty float till.
             </p>
           ) : (
             <ul className="mt-2 space-y-1 text-sm">
-              {exceptions.slice(0, 6).map((e) => (
+              {exceptions.rows.slice(0, 6).map((e) => (
                 <li key={`${e.kind}-${e.subjectId}`} className="min-w-0">
                   <span className="font-medium">{e.detail}</span>
                   {e.providerName === null ? null : (
@@ -141,11 +188,15 @@ export default async function AgencyPage() {
 
       <section className="min-w-0 space-y-2">
         <h2 className="text-sm font-semibold">Awaiting verification</h2>
-        <AgencyTransactionRegister
-          rows={pending}
-          caption="Agency transactions awaiting verification"
-          emptyMessage="Nothing is waiting for a second officer."
-        />
+        {pending.ok ? (
+          <AgencyTransactionRegister
+            rows={pending.rows}
+            caption="Agency transactions awaiting verification"
+            emptyMessage="Nothing is waiting for a second officer."
+          />
+        ) : (
+          <AgencyReadError failure={pending} />
+        )}
       </section>
     </div>
   );

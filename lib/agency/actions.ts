@@ -96,7 +96,34 @@ async function authorize(
   return { ok: true };
 }
 
-/** The shared tail: map the refusal, or revalidate and report. */
+/**
+ * The shared tail: map the refusal, or revalidate and report.
+ *
+ * ## Why a `P0001` keeps its own words here
+ *
+ * `mapDatabaseError` replaces every database message with a sentence of its
+ * own, and it is right to: PostgreSQL's own errors carry table names, column
+ * names, constraint names and row values, none of which belong in a browser.
+ *
+ * But `P0001` is not PostgreSQL's. It is the SQLSTATE of an explicit
+ * `raise exception`, so every one of them is a sentence this project wrote -
+ * and in the agency engine they are written for the officer at the counter:
+ *
+ *   "The financial details of this transaction changed since your screen
+ *    loaded (you reviewed revision 1, it is now revision 2). Reload and
+ *    review the current values before verifying."
+ *
+ * The generic mapping turns that into "That action is not permitted on this
+ * record", which tells a manager they lack permission when what actually
+ * happened is that an Owner changed the commission while their screen was
+ * open. They would ask for a capability they already have, and the
+ * transaction would sit unposted. Phase 4D-F found this with a browser, and
+ * it is the difference between a refusal that teaches and one that misleads.
+ *
+ * Everything else still goes through the mapper, so a unique violation, a
+ * check constraint or an RLS denial never reaches a user in the database's
+ * words.
+ */
 function settle(
   error: { code?: string; message: string } | null,
   what: string,
@@ -105,6 +132,9 @@ function settle(
 ): AgencyActionResult {
   if (error !== null) {
     logger.warn(`${what} was refused.`, { code: error.code });
+    if (error.code === 'P0001' && error.message.trim() !== '') {
+      return { ok: false, message: error.message };
+    }
     return { ok: false, message: mapDatabaseError(error).message };
   }
   revalidateAgency();

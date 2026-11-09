@@ -1,5 +1,7 @@
 import { Banknote } from 'lucide-react';
 
+import { AgencyReadError } from '@/components/agency/read-failure';
+
 import {
   CashCountForm,
   CashCountRegister,
@@ -69,11 +71,15 @@ export default async function AgencyCashReconciliationPage() {
 
       <CashCountForm accounts={countable} />
 
-      <CashCountRegister
-        rows={rows}
-        profileId={context.profileId}
-        canAdjust={canAdjust}
-      />
+      {rows.ok ? (
+        <CashCountRegister
+          rows={rows.rows}
+          profileId={context.profileId}
+          canAdjust={canAdjust}
+        />
+      ) : (
+        <AgencyReadError failure={rows} />
+      )}
     </div>
   );
 }

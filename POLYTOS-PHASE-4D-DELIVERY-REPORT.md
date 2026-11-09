@@ -57,10 +57,19 @@ one page and its limits on another.
 **Fourteen feature items. Fourteen routes.** Items 13 and 14 share one route;
 `/agency` is the fourteenth route and is not one of the fourteen items.
 
-Nine of the fourteen ship no JavaScript at all. That is the reason the whole
-section cost 34 KB gzipped: a register that reads a view and renders a table
-is a Server Component, and only the seven components that take input cross
-into the browser.
+**Seven of the fourteen routes render no client component of their own** —
+the dashboard, the pending queue, the transaction history, the float
+balances, the reports, the exceptions list and the provider configuration.
+Each reads a view and renders a table, so nothing of theirs crosses into the
+browser; the other seven take input, and only those do. That is why the whole
+section cost 34 KB gzipped.
+
+> **Corrected in Phase 4D-F.** This report, the pull request and the
+> bundle-budget comment all said *nine*, and they said it from memory rather
+> than from the import graph. The graph says seven, and it is listed above so
+> the next reader can check it rather than trust it. "Ships no JavaScript" was
+> also the wrong phrase for any of them: every page carries the application
+> shell's own client code.
 
 ---
 
@@ -257,6 +266,146 @@ conventions — a cash variance is the count less the books, a float variance is
 the books less the provider — and the first draft of this interface stated the
 float one backwards from memory. The seeded figures caught it; carrying the
 database's own sentence means a screen cannot state it backwards again.
+
+---
+
+## 8A. Phase 4D-F — what the independent review sent back
+
+Three operational issues, closed on this branch. Each was reproduced before
+it was fixed, and each fix is pinned by a test that fails without it.
+
+### F1 — One key per submission, and a database that checks
+
+**The defect.** The recording form minted one idempotency key per *mounted
+page*. That is right for a double tap and wrong for the thing a counter
+actually does next: serve the following customer. The second submission
+carried the first one's key, `create_agency_transaction` returned the first
+transaction — correctly, because that is what an idempotency key means — and
+the form reported success. The second customer's money was never recorded.
+
+**The database's half** (`20261114000100`). A reused key now has to describe
+the same transaction. The service, the amount, the fee, any supplied
+commission, the till, the customer's identifier and the provider's reference
+are compared against the row that holds the key; if any differs, the call is
+refused with a sentence telling the officer to reload and record it again,
+and nothing is written. Deliberately not compared: the customer's name and
+the description, which are labels on the same transaction, and the
+transaction date when the caller passed none — the default is today and a
+retry either side of midnight would otherwise be refused for a difference
+nobody expressed.
+
+A genuine retry — same arguments, same key — still returns the first
+transaction. Both halves are asserted side by side so a future tightening
+cannot quietly turn every retry into a refusal.
+
+**The interface's half.** The key is now `mount nonce + attempt`, and the
+attempt advances on a confirmed success and on nothing else. Pending: the
+button is disabled, so a double tap cannot submit twice. Failed or never
+answered: the key is unchanged, so the retry is the same submission asked
+again. Succeeded: a new key, and the customer's fields are cleared.
+
+**A second defect found while fixing the first.** React resets an
+uncontrolled form after a form action completes, whatever the action
+returned — so a submission that failed, or that the counter's connection
+never answered, left the officer staring at a blank form with the customer
+still in front of them. Every field an officer types is now controlled, kept
+through a failure and cleared deliberately on success.
+
+| Before | After |
+|---|---|
+| Second customer from one open form → first transaction returned, "Recorded" shown | Two transactions, two keys, both in the register |
+| Reused key with different details → earlier transaction returned silently | Refused; nothing written; the earlier transaction untouched |
+| Reused key, same details → earlier transaction returned | Unchanged — still returns it |
+| Failed submission → every typed field wiped | Every field kept; only a success clears them |
+
+Pinned by: `tests/db/agency-transaction-engine.test.ts` (two new tests),
+`tests/integration/agency-ui.test.tsx` (four), and
+`tests/e2e/specs/agency.write.spec.ts` in a real browser.
+
+### F2 — A failed read is reported, never rendered as a figure
+
+**The defect.** Every reader in `lib/data/agency.ts` answered a failed query
+with `[]`. On a register that reads as "nothing yet"; on a screen that totals
+a column it reads as `UGX 0`. The sentences the agency screens were capable
+of producing from a query that never ran included *"Nothing outstanding. No
+unverified transaction, no reconciliation awaiting a second officer, no empty
+float till"* — on the screen an officer closes the day from.
+
+This is the same defect Phase 19 found on the lending dashboard, rebuilt from
+scratch in a new module.
+
+**The fix.** Every reader returns an outcome: rows, or a failure that says
+what could not be read and whether the database *refused* the caller
+(`42501` and PostgREST's own codes) or simply could not answer. Row Level
+Security is deliberately **not** a third kind: it refuses by returning no
+rows rather than by erroring, so "this officer may not see this branch" and
+"this branch has nothing" are indistinguishable at this layer — that
+distinction is made before the read, by `guardPermission` on the route.
+Detecting it afterwards would mean inventing a signal the database does not
+send.
+
+Every one of the fourteen screens handles both arms. Where a read drives the
+whole page the screen renders its header and the explanation and nothing
+else; where reads are independent, one failure leaves a gap that says so and
+the rest of the screen stands. No failed read renders a figure, an empty
+register or a reassurance.
+
+| Screen | Before, on a failed read | After |
+|---|---|---|
+| `/agency` | `UGX 0` outstanding, `UGX 0` held, "Nothing outstanding" | Each headline says "Not available. This read failed. It is not zero." |
+| `/agency/commission`, `/agency/payables` | `UGX 0` earned, received, outstanding | Header and an explanation; no figure at all |
+| `/agency/float` | "No float till is registered" | Header and an explanation |
+| `/agency/exceptions` | "Nothing outstanding… no empty float till" | Header and an explanation |
+| `/agency/reports` | Four empty tables and two zeros | A panel per failed section; the sections that read still render |
+| `/agency/history/[id]` | The not-found page | An explanation — a timed-out query is not a missing transaction |
+
+Pinned by: `tests/unit/agency-read-failures.test.ts` (19 tests over all
+fifteen readers) and three browser tests that revoke the signed-in role's
+`SELECT` on a view for the length of one page load — a real refusal from the
+real database, not a stubbed client.
+
+**A third defect found here.** Every `P0001` the agency engine raises was
+being flattened by `mapDatabaseError` into *"That action is not permitted on
+this record."* So a manager whose verification was refused because an Owner
+had just changed the commission was told they lacked permission. `P0001` is
+only ever raised by an explicit `raise exception` — PostgreSQL never raises
+it — so in the agency module those sentences now reach the officer as
+written. Everything else still goes through the mapper, so a unique
+violation or an RLS denial never reaches a user in the database's words.
+
+### F3 — The counter, driven through a browser, verified in the ledger
+
+`tests/e2e/specs/agency.write.spec.ts`: ten tests, desktop project only —
+which is what the `.write.spec.ts` suffix means in this repository, so no
+financial flow runs twice. Every test builds its own transaction through the
+interface; the harness's seeded fixtures are read by `agency.spec.ts` and
+never consumed here.
+
+After every financial action it reads the database directly: the journal
+entry and its lines, the transaction's status and revision, the audit rows
+and who wrote them.
+
+| # | Proof | How it is verified |
+|---|---|---|
+| 1 | Two customers from one open form are two transactions | Two rows, two amounts, two idempotency keys |
+| 2 | A draft is submitted | Status `awaiting_verification`, no journal |
+| 3 | A second officer verifies the current revision | Status `posted`, one journal, debits = credits, commission 240 on 20,000 at 1.20% |
+| 4 | A stale screen is refused after an Owner authorises an exception | Revision advanced; verification refused; nothing posted |
+| 5 | The reload posts exactly once | One journal entry, commission 2,500, audit carries `commission_exception` |
+| 6 | The exception needs evidence | Required field; no exception recorded without it |
+| 7 | A settlement is recorded and reversed | Row posted with a journal; outstanding falls; reversal adds a contra entry and restores it |
+| 8 | Cash reconciliation, maker-checker | A manager counts, is told they may not certify their own, and an Owner certifies |
+| 9 | Unauthorized roles are refused | A Secretary is redirected from four write screens and offered no Verify |
+| 10 | Balances and registers update | The commission position moves by the settled amount and back on reversal |
+
+**Three things this suite had to learn**, each written into it as a comment
+so the next person does not relearn them: waiting on a success alert is a
+trap, because the alert from the previous customer is still on screen when
+the next submission starts; a lifecycle action replaces the control that
+carried its message, so the proof is the state, not the sentence; and a
+suite that posts against a till another suite reads as a fixture will break
+that suite — this one posts against the Airtel demonstration till precisely
+because `agency.spec.ts` reads the MTN one.
 
 ---
 
