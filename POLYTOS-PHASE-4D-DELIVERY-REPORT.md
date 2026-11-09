@@ -375,11 +375,11 @@ violation or an RLS denial never reaches a user in the database's words.
 
 ### F3 — The counter, driven through a browser, verified in the ledger
 
-`tests/e2e/specs/agency.write.spec.ts`: ten tests, desktop project only —
-which is what the `.write.spec.ts` suffix means in this repository, so no
-financial flow runs twice. Every test builds its own transaction through the
-interface; the harness's seeded fixtures are read by `agency.spec.ts` and
-never consumed here.
+`tests/e2e/specs/agency.write.spec.ts`: fifteen tests, desktop project only
+— which is what the `.write.spec.ts` suffix means in this repository, so no
+financial flow runs twice. Every test builds its own transaction, statement
+or settlement through the interface; the harness's seeded fixtures are read
+by `agency.spec.ts` and never consumed here.
 
 After every financial action it reads the database directly: the journal
 entry and its lines, the transaction's status and revision, the audit rows
@@ -398,14 +398,26 @@ and who wrote them.
 | 9 | Unauthorized roles are refused | A Secretary is redirected from four write screens and offered no Verify |
 | 10 | Balances and registers update | The commission position moves by the settled amount and back on reversal |
 
-**Three things this suite had to learn**, each written into it as a comment
+**The three workflows the 4D-F review found missing**, added in the same
+suite and the same way:
+
+| Workflow | What is verified |
+|---|---|
+| **Electronic float reconciliation** | An Owner records a statement 3,000 short of the books on a free date; the register and the database agree on a variance of **+3,000** — the books less the provider, the opposite sign to a cash count, which is why both registers carry the database's own sentence about it. Recording moves no money. A second statement for the same till and day is refused with *"That float till has already been reconciled for …"* and writes nothing. The Owner who recorded it is told they may not certify it and is offered no button. A Manager is offered certification and told the difference is the Owner's to write off, because they hold no `agency:variance_adjustment`. Certifying sets `reconciled`, stamps a different officer, writes **no** journal and leaves `variance_written_off` at zero — so the difference is still outstanding, which is where the end-of-day exceptions screen then shows it. |
+| **Payable settlement and reversal** | An Owner remits 1,000 of what is held; the row is `posted` with a balanced journal, the provider's outstanding falls by 1,000 and Cash at Hand falls by 1,000. The same receipt reference again is refused with *"… already records receipt reference …"*; more than is held is refused with *"… may not go into net debit"*; neither refusal writes anything. The reversal takes a reason, sets `reversed`, adds a **contra entry distinct from the original**, keeps both, and restores the outstanding figure and the drawer exactly. A Secretary sees the register, no settlement button, no reversal control, and the sentence saying the capability is a manager's. |
+| **Float replenishment** | An Owner moves 50,000 from the drawer into the till; the row carries a journal of **exactly two balanced lines**, the till rises by 50,000 and Cash at Hand falls by 50,000. The same provider reference against the same till is refused with *"A replenishment of that float till already records reference …"*, and neither balance moves. A Secretary is redirected away from the screen. |
+
+**Four things this suite had to learn**, each written into it as a comment
 so the next person does not relearn them: waiting on a success alert is a
 trap, because the alert from the previous customer is still on screen when
 the next submission starts; a lifecycle action replaces the control that
 carried its message, so the proof is the state, not the sentence; and a
 suite that posts against a till another suite reads as a fixture will break
 that suite — this one posts against the Airtel demonstration till precisely
-because `agency.spec.ts` reads the MTN one.
+because `agency.spec.ts` reads the MTN one; and `getByLabel` matches a
+substring, so a `DataTable`'s own `aria-label` ("Provider payables by
+provider and branch") collides with a form's ("Provider and branch") and
+every such lookup here is `{ exact: true }`.
 
 ---
 

@@ -74,7 +74,9 @@ async function recordOne(
 ): Promise<Recorded> {
   const ref = reference();
 
-  await page.getByLabel('Service').selectOption({ label: await optionFor(page) });
+  await page
+    .getByLabel('Service', { exact: true })
+    .selectOption({ label: await optionFor(page) });
   await page.getByLabel(/amount \(ugx\)/i).fill(String(details.amount));
   await page.getByLabel(/customer identifier/i).fill(details.customer);
   await page.getByLabel(/provider reference/i).fill(ref);
@@ -118,7 +120,10 @@ const AIRTEL_DEPOSIT = 'Airtel Money (demonstration) — Cash in to a wallet';
 
 /** The exact option label for the demonstration deposit service. */
 async function optionFor(page: Page): Promise<string> {
-  const labels = await page.getByLabel('Service').locator('option').allTextContents();
+  const labels = await page
+    .getByLabel('Service', { exact: true })
+    .locator('option')
+    .allTextContents();
   const match = labels.find((label) => label.includes(AIRTEL_DEPOSIT));
   if (match === undefined) {
     throw new Error(`No Airtel demonstration deposit service in: ${labels.join(' | ')}`);
@@ -656,6 +661,548 @@ async function cashAtHand(): Promise<number> {
       order by a.code limit 1`,
   );
   return Number(row.balance);
+}
+
+// ===========================================================================
+test.describe('reconciling a provider float statement', () => {
+  test('an Owner records it, a Manager certifies it, and neither does both', async ({
+    browser,
+  }) => {
+    const owner = await asRole(browser, 'owner');
+    const manager = await asRole(browser, 'manager');
+
+    try {
+      const till = await demonstrationTill();
+      const booksSay = await floatBalance(till.ledgerAccountId);
+      const date = (await freeStatementDate(till.id)).toISOString().slice(0, 10);
+      const statementRef = `AIRSTMT-${reference()}`;
+
+      // A statement 3,000 short of our books. A reconciliation that agreed
+      // would prove the screen works and nothing about what it is for.
+      await owner.page.goto('/agency/reconciliation/float');
+      await expectNoErrorBoundary(owner.page);
+      await owner.page
+        .getByLabel('Float till', { exact: true })
+        .selectOption({ label: till.option });
+      await owner.page
+        .getByLabel(/provider statement balance/i)
+        .fill(String(booksSay - 3_000));
+      await owner.page.getByLabel(/statement reference/i).fill(statementRef);
+      await owner.page.getByLabel(/statement date/i).fill(date);
+      await owner.page.getByLabel(/notes/i).fill('Recorded by the write suite.');
+      await owner.page.getByRole('button', { name: /record statement/i }).click();
+      await expect(
+        owner.page
+          .getByText(/statement recorded/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+
+      const recorded = await queryHarnessOne<{
+        id: string;
+        status: string;
+        variance: string;
+        system: string;
+        statement: string;
+        created_by: string;
+        entry: string | null;
+      }>(
+        `select id::text as id, status, variance::text as variance,
+                system_closing_balance::text as system,
+                provider_statement_balance::text as statement,
+                created_by::text as created_by,
+                variance_journal_entry_id::text as entry
+           from public.agency_float_reconciliations
+          where provider_statement_ref = $1`,
+        [statementRef],
+      );
+      expect(recorded.status).toBe('open');
+      expect(Number(recorded.system)).toBe(booksSay);
+      expect(Number(recorded.statement)).toBe(booksSay - 3_000);
+      // The float convention: the books less the provider's figure. The
+      // opposite sign to a cash count, which is why both registers carry the
+      // database's own sentence about it rather than one written here.
+      expect(Number(recorded.variance)).toBe(3_000);
+      expect(recorded.entry).toBeNull();
+
+      // Recording a reading moves no money.
+      expect(await floatBalance(till.ledgerAccountId)).toBe(booksSay);
+
+      // Error handling: the same till, the same day, twice.
+      await owner.page.reload();
+      await owner.page
+        .getByLabel('Float till', { exact: true })
+        .selectOption({ label: till.option });
+      await owner.page
+        .getByLabel(/provider statement balance/i)
+        .fill(String(booksSay - 4_000));
+      await owner.page.getByLabel(/statement date/i).fill(date);
+      await owner.page.getByRole('button', { name: /record statement/i }).click();
+      await expect(
+        owner.page
+          .getByText(/has already been reconciled for/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+      expect(await countStatements(statementRef)).toBe(1);
+
+      // Maker-checker, said in words rather than by a missing control.
+      const ownRow = owner.page.locator('tr', { hasText: statementRef });
+      await expect(
+        ownRow.getByText(/you recorded this reading/i).filter({ visible: true }),
+      ).toBeVisible();
+      await expect(ownRow.getByRole('button', { name: /^certify$/i })).toHaveCount(0);
+
+      // The second officer. A Manager holds no `agency:variance_adjustment`,
+      // so the screen offers certification and explains that the difference
+      // itself is the Owner's to write off.
+      await manager.page.goto('/agency/reconciliation/float');
+      const row = manager.page.locator('tr', { hasText: statementRef });
+      await expect(
+        row.getByText(/Writing a difference off is the Owner/i).filter({
+          visible: true,
+        }),
+      ).toBeVisible();
+      await row.getByRole('button', { name: /^certify$/i }).click();
+      await expect(row.getByText(/^Certified$/)).toBeVisible();
+
+      const certified = await queryHarnessOne<{
+        status: string;
+        reconciled_by: string | null;
+        entry: string | null;
+        written_off: string;
+      }>(
+        `select status, reconciled_by::text as reconciled_by,
+                variance_journal_entry_id::text as entry,
+                variance_written_off::text as written_off
+           from public.agency_float_reconciliations where id = $1`,
+        [recorded.id],
+      );
+      expect(certified.status).toBe('reconciled');
+      expect(certified.reconciled_by).not.toBeNull();
+      expect(certified.reconciled_by).not.toBe(recorded.created_by);
+
+      // Certifying without writing off posts nothing and leaves the
+      // difference outstanding - which is what puts it on the end-of-day
+      // exceptions screen.
+      expect(certified.entry).toBeNull();
+      expect(Number(certified.written_off)).toBe(0);
+      expect(await floatBalance(till.ledgerAccountId)).toBe(booksSay);
+
+      await manager.page.goto('/agency/exceptions');
+      await expect(
+        manager.page
+          .getByText(/Unexplained difference/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+    } finally {
+      await owner.context.close();
+      await manager.context.close();
+    }
+  });
+});
+
+// ===========================================================================
+test.describe('remitting collections to a provider', () => {
+  test('records the remittance, then reverses it without deleting it', async ({
+    page,
+    browser,
+  }) => {
+    await page.context().addCookies([]); // no-op: keeps the fixture page in scope
+    const owner = await asRole(browser, 'owner');
+
+    try {
+      const provider = await providerWithPayable();
+      const heldBefore = await payableOutstanding(provider.id);
+      const cashBefore = await cashAtHand();
+      expect(heldBefore).toBeGreaterThan(2_000);
+
+      const amount = 1_000;
+      const receiptRef = `NWREC-${reference()}`;
+
+      await owner.page.goto('/agency/payables');
+      await expectNoErrorBoundary(owner.page);
+      await owner.page
+        .getByLabel('Provider and branch', { exact: true })
+        .selectOption({ label: provider.option });
+      await owner.page.getByLabel(/amount handed over/i).fill(String(amount));
+      await owner.page.getByLabel(/receipt reference/i).fill(receiptRef);
+      await owner.page.getByRole('button', { name: /record remittance/i }).click();
+      await expect(
+        owner.page
+          .getByText(/remittance recorded/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+
+      const settlement = await queryHarnessOne<{
+        id: string;
+        status: string;
+        journal: string | null;
+        amount: string;
+      }>(
+        `select id::text as id, status, journal_entry_id::text as journal,
+                settlement_amount::text as amount
+           from public.agency_payable_settlements
+          where provider_receipt_ref = $1`,
+        [receiptRef],
+      );
+      expect(settlement.status).toBe('posted');
+      expect(settlement.journal).not.toBeNull();
+      expect(Number(settlement.amount)).toBe(amount);
+
+      // The journal: the liability down, the drawer down, and balanced.
+      const lines = await entryLines(settlement.journal);
+      expect(lines.reduce((t, l) => t + Number(l.debit), 0)).toBe(
+        lines.reduce((t, l) => t + Number(l.credit), 0),
+      );
+      expect(lines.some((l) => Number(l.debit) === amount)).toBe(true);
+      expect(lines.some((l) => Number(l.credit) === amount)).toBe(true);
+
+      expect(await payableOutstanding(provider.id)).toBe(heldBefore - amount);
+      expect(await cashAtHand()).toBe(cashBefore - amount);
+
+      // Error handling, twice over: the same receipt reference again, and
+      // more than is actually held.
+      await owner.page.reload();
+      await owner.page
+        .getByLabel('Provider and branch', { exact: true })
+        .selectOption({ label: await payableOptionFor(owner.page, provider.id) });
+      await owner.page.getByLabel(/amount handed over/i).fill('1000');
+      await owner.page.getByLabel(/receipt reference/i).fill(receiptRef);
+      await owner.page.getByRole('button', { name: /record remittance/i }).click();
+      await expect(
+        owner.page
+          .getByText(/already records receipt reference/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+
+      await owner.page.reload();
+      await owner.page
+        .getByLabel('Provider and branch', { exact: true })
+        .selectOption({ label: await payableOptionFor(owner.page, provider.id) });
+      await owner.page
+        .getByLabel(/amount handed over/i)
+        .fill(String(heldBefore + 1_000_000));
+      await owner.page.getByRole('button', { name: /record remittance/i }).click();
+      await expect(
+        owner.page
+          .getByText(/may not go into net debit/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+
+      // Neither refusal wrote anything.
+      expect(await payableOutstanding(provider.id)).toBe(heldBefore - amount);
+
+      // The reversal: a contra entry, not a deletion.
+      await owner.page.reload();
+      const row = owner.page.locator('tr', { hasText: receiptRef });
+      await row.locator('input[name="reason"]').fill('Paid against the wrong receipt.');
+      await row.getByRole('button', { name: /^reverse$/i }).click();
+      await expect(row.getByText(/^Reversed$/)).toBeVisible();
+
+      const reversed = await queryHarnessOne<{
+        status: string;
+        journal: string | null;
+        contra: string | null;
+        reason: string | null;
+      }>(
+        `select status, journal_entry_id::text as journal,
+                reversal_entry_id::text as contra, reversal_reason as reason
+           from public.agency_payable_settlements where id = $1`,
+        [settlement.id],
+      );
+      expect(reversed.status).toBe('reversed');
+      expect(reversed.journal).not.toBeNull();
+      expect(reversed.contra).not.toBeNull();
+      expect(reversed.contra).not.toBe(reversed.journal);
+      expect(reversed.reason).toBe('Paid against the wrong receipt.');
+
+      const contra = await entryLines(reversed.contra);
+      expect(contra.reduce((t, l) => t + Number(l.debit), 0)).toBe(
+        contra.reduce((t, l) => t + Number(l.credit), 0),
+      );
+
+      expect(await payableOutstanding(provider.id)).toBe(heldBefore);
+      expect(await cashAtHand()).toBe(cashBefore);
+    } finally {
+      await owner.context.close();
+    }
+  });
+
+  test('a Secretary may read it and settle nothing', async ({ browser }) => {
+    const secretary = await asRole(browser, 'secretary');
+    try {
+      const response = await secretary.page.goto('/agency/payables');
+      expect(response?.status()).toBe(200);
+      await expectNoErrorBoundary(secretary.page);
+
+      // `agency:settlements` and `agency:reverse` are a manager's upward.
+      await expect(
+        secretary.page.getByRole('button', { name: /record remittance/i }),
+      ).toHaveCount(0);
+      await expect(
+        secretary.page.getByRole('button', { name: /^reverse$/i }),
+      ).toHaveCount(0);
+      await expect(
+        secretary.page
+          .getByText(/needs the settlement capability/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+    } finally {
+      await secretary.context.close();
+    }
+  });
+});
+
+// ===========================================================================
+test.describe('topping up a float till', () => {
+  test('moves the money, writes one balanced journal, and refuses a repeat', async ({
+    browser,
+  }) => {
+    const owner = await asRole(browser, 'owner');
+
+    try {
+      const till = await demonstrationTill();
+      const floatBefore = await floatBalance(till.ledgerAccountId);
+      const cashBefore = await cashAtHand();
+      const topUpRef = `AIRTOP-${reference()}`;
+      const amount = 50_000;
+
+      await owner.page.goto('/agency/float/replenish');
+      await expectNoErrorBoundary(owner.page);
+      await owner.page
+        .getByLabel('Till', { exact: true })
+        .selectOption({ label: till.topUpOption });
+      await owner.page.getByLabel(/amount \(ugx\)/i).fill(String(amount));
+      await owner.page.getByLabel(/provider reference/i).fill(topUpRef);
+      await owner.page.getByRole('button', { name: /record top-up/i }).click();
+      await expect(
+        owner.page
+          .getByText(/float replenished/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+
+      const topUp = await queryHarnessOne<{
+        id: string;
+        amount: string;
+        journal: string | null;
+      }>(
+        `select id::text as id, amount::text as amount,
+                journal_entry_id::text as journal
+           from public.agency_float_replenishments
+          where provider_reference = $1`,
+        [topUpRef],
+      );
+      expect(Number(topUp.amount)).toBe(amount);
+      expect(topUp.journal).not.toBeNull();
+
+      // The company's own money moved from the drawer into the till. One
+      // journal, balanced, touching exactly those two accounts.
+      const lines = await entryLines(topUp.journal);
+      expect(lines).toHaveLength(2);
+      expect(lines.reduce((t, l) => t + Number(l.debit), 0)).toBe(amount);
+      expect(lines.reduce((t, l) => t + Number(l.credit), 0)).toBe(amount);
+
+      expect(await floatBalance(till.ledgerAccountId)).toBe(floatBefore + amount);
+      expect(await cashAtHand()).toBe(cashBefore - amount);
+
+      // Error handling: the same provider reference against the same till.
+      await owner.page.reload();
+      await owner.page
+        .getByLabel('Till', { exact: true })
+        .selectOption({ label: await topUpOptionFor(owner.page, till.id) });
+      await owner.page.getByLabel(/amount \(ugx\)/i).fill('1000');
+      await owner.page.getByLabel(/provider reference/i).fill(topUpRef);
+      await owner.page.getByRole('button', { name: /record top-up/i }).click();
+      await expect(
+        owner.page
+          .getByText(/already records reference/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+
+      // Refused, and nothing moved.
+      expect(await floatBalance(till.ledgerAccountId)).toBe(floatBefore + amount);
+      expect(await cashAtHand()).toBe(cashBefore - amount);
+    } finally {
+      await owner.context.close();
+    }
+  });
+
+  test('is not a Secretary\u2019s to do', async ({ browser }) => {
+    const secretary = await asRole(browser, 'secretary');
+    try {
+      await secretary.page.goto('/agency/float/replenish');
+      expect(
+        secretary.page.url(),
+        'the top-up screen must not open to a Secretary',
+      ).not.toContain('/agency/float/replenish');
+    } finally {
+      await secretary.context.close();
+    }
+  });
+});
+
+/**
+ * The Airtel demonstration till: the one this suite is allowed to spend.
+ *
+ * Returned with the exact option labels the two forms render, because each
+ * writes the till's balance into its own label and the balance moves as this
+ * suite runs.
+ */
+async function demonstrationTill(): Promise<{
+  readonly id: string;
+  readonly ledgerAccountId: string;
+  readonly option: string;
+  readonly topUpOption: string;
+}> {
+  const row = await queryHarnessOne<{
+    id: string;
+    ledger: string;
+    provider: string;
+    till: string;
+    branch: string;
+    balance: string;
+  }>(
+    `select f.id::text as id, f.ledger_account_id::text as ledger,
+            p.name as provider, f.till_name as till, b.branch_code as branch,
+            coalesce(bal.balance, 0)::text as balance
+       from public.agency_provider_float_accounts f
+       join public.agency_service_providers p on p.id = f.provider_id
+       join public.branches b on b.id = f.branch_id
+       left join public.ledger_account_balances bal
+              on bal.account_id = f.ledger_account_id
+      where p.code = 'DEMO_AIRTEL'`,
+  );
+
+  const held = Number(row.balance).toLocaleString('en-UG');
+  return {
+    id: row.id,
+    ledgerAccountId: row.ledger,
+    option: `${row.provider} — ${row.till} (${row.branch}), our books say ${held}`,
+    topUpOption: `${row.provider} — ${row.till} (${row.branch}, holds ${held})`,
+  };
+}
+
+/** The top-up form's current label for a till, read from the page itself. */
+async function topUpOptionFor(page: Page, tillId: string): Promise<string> {
+  const labels = await page
+    .getByLabel('Till', { exact: true })
+    .locator('option')
+    .allTextContents();
+  const values = await page
+    .getByLabel('Till', { exact: true })
+    .locator('option')
+    .evaluateAll((options) =>
+      options.map((option) => (option as HTMLOptionElement).value),
+    );
+  const at = values.indexOf(tillId);
+  if (at < 0) throw new Error(`No till ${tillId} in: ${values.join(' | ')}`);
+  return labels[at]!;
+}
+
+/** The payables form's current label for a provider, read from the page. */
+async function payableOptionFor(page: Page, providerId: string): Promise<string> {
+  const select = page.getByLabel('Provider and branch', { exact: true });
+  const labels = await select.locator('option').allTextContents();
+  const values = await select
+    .locator('option')
+    .evaluateAll((options) =>
+      options.map((option) => (option as HTMLOptionElement).value),
+    );
+  const at = values.findIndex((value) => value.startsWith(providerId));
+  if (at < 0) throw new Error(`No provider ${providerId} in: ${values.join(' | ')}`);
+  return labels[at]!;
+}
+
+/** A provider the counter is holding money for, and its form label. */
+async function providerWithPayable(): Promise<{
+  readonly id: string;
+  readonly option: string;
+}> {
+  const row = await queryHarnessOne<{
+    id: string;
+    name: string;
+    branch: string;
+    outstanding: string;
+  }>(
+    `select provider_id::text as id, provider_name as name,
+            branch_code as branch, payable_outstanding::text as outstanding
+       from public.agency_payable_summary
+      where payable_outstanding > 0
+      order by payable_outstanding desc limit 1`,
+  );
+  const held = Number(row.outstanding).toLocaleString('en-UG');
+  return { id: row.id, option: `${row.name} — ${row.branch} (held ${held})` };
+}
+
+/** What is still owed to one provider, as the database totals it. */
+async function payableOutstanding(providerId: string): Promise<number> {
+  const rows = await queryHarness<{ outstanding: string }>(
+    `select payable_outstanding::text as outstanding
+       from public.agency_payable_summary where provider_id = $1`,
+    [providerId],
+  );
+  return rows.reduce((total, r) => total + Number(r.outstanding), 0);
+}
+
+/** One ledger account's balance, right now. */
+async function floatBalance(accountId: string): Promise<number> {
+  const row = await queryHarnessOne<{ balance: string }>(
+    `select coalesce(b.balance, 0)::text as balance
+       from public.ledger_accounts a
+       left join public.ledger_account_balances b on b.account_id = a.id
+      where a.id = $1`,
+    [accountId],
+  );
+  return Number(row.balance);
+}
+
+/** The lines of one journal entry, whichever document wrote it. */
+async function entryLines(entryId: string | null) {
+  if (entryId === null) throw new Error('No journal entry to read.');
+  return queryHarness<{ code: string; debit: string; credit: string }>(
+    `select a.code, l.debit::text as debit, l.credit::text as credit
+       from public.journal_lines l
+       join public.ledger_accounts a on a.id = l.account_id
+      where l.entry_id = $1 order by a.code`,
+    [entryId],
+  );
+}
+
+async function countStatements(statementRef: string): Promise<number> {
+  const rows = await queryHarness(
+    `select 1 from public.agency_float_reconciliations
+      where provider_statement_ref = $1`,
+    [statementRef],
+  );
+  return rows.length;
+}
+
+/** The most recent day this till has no statement for. */
+async function freeStatementDate(tillId: string): Promise<Date> {
+  const taken = new Set(
+    (
+      await queryHarness<{ on: string }>(
+        `select to_char(reconciliation_date, 'YYYY-MM-DD') as on
+           from public.agency_float_reconciliations where float_account_id = $1`,
+        [tillId],
+      )
+    ).map((r) => r.on),
+  );
+
+  for (let back = 0; back <= 20; back += 1) {
+    const candidate = new Date();
+    candidate.setUTCDate(candidate.getUTCDate() - back);
+    if (!taken.has(candidate.toISOString().slice(0, 10))) return candidate;
+  }
+  throw new Error('No unreconciled day in the last twenty; the harness needs reseeding.');
 }
 
 // ===========================================================================
