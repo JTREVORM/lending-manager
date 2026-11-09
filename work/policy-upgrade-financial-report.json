@@ -57,163 +57,176 @@
     "20261113000100_agency_commission_exception_amount.sql",
     "20261113000200_agency_verification_revision.sql",
     "20261113000300_agency_operational_registers.sql",
-    "20261114000100_agency_idempotency_replay_guard.sql"
+    "20261114000100_agency_idempotency_replay_guard.sql",
+    "20261115000100_agency_money_chart_of_accounts.sql",
+    "20261115000200_agency_agent_line_identity.sql",
+    "20261115000300_agency_money_permissions_and_limits.sql",
+    "20261115000400_agency_reported_commission.sql",
+    "20261115000500_agency_customer_fee_mode.sql",
+    "20261115000600_agency_reported_basis_and_suspension.sql",
+    "20261115000700_agency_commission_payout.sql",
+    "20261115000800_agency_commission_recovery.sql",
+    "20261115000900_agency_float_trades.sql",
+    "20261115001000_agency_float_trade_functions.sql",
+    "20261115001100_agency_agent_line_administration.sql",
+    "20261115001200_agency_commission_reconciliation.sql",
+    "20261115001300_agency_money_views.sql"
   ],
   "comparisons": [
     {
       "table": "clients",
-      "before": "7d7a5e852ea4c7d2228612f90b791887763bb52ab4bc5246b9a176a6e90453ac",
-      "after": "7d7a5e852ea4c7d2228612f90b791887763bb52ab4bc5246b9a176a6e90453ac",
+      "before": "806a6729f0e168a5dffebe3b19e6c1f8a001040c50d0e6375d44026f840f13d9",
+      "after": "806a6729f0e168a5dffebe3b19e6c1f8a001040c50d0e6375d44026f840f13d9",
       "matches": true
     },
     {
       "table": "client_identities",
-      "before": "2544b99f976801757c6452738f2943a2c4d9fd0dfaa00b20de6f38ca6ad21ac5",
-      "after": "2544b99f976801757c6452738f2943a2c4d9fd0dfaa00b20de6f38ca6ad21ac5",
+      "before": "887e5c33a2f8e48558216f9f4bc6a00e0bf707a8db160d65cc2a78703a28e550",
+      "after": "887e5c33a2f8e48558216f9f4bc6a00e0bf707a8db160d65cc2a78703a28e550",
       "matches": true
     },
     {
       "table": "memberships",
-      "before": "bae1c78d81fcc3b63616ca5ac9298a55ca134bc336ffe0ae75b9f18ed262f980",
-      "after": "bae1c78d81fcc3b63616ca5ac9298a55ca134bc336ffe0ae75b9f18ed262f980",
+      "before": "7006c6651ff1c514c73a72db712845b246405c335e545781813515ca4f135019",
+      "after": "7006c6651ff1c514c73a72db712845b246405c335e545781813515ca4f135019",
       "matches": true
     },
     {
       "table": "membership_terms_acceptances",
-      "before": "e979fac6f3502ef9745dc8b6a13ed7a1e3b63b2cc6fa68bc8cdf36120b9baedb",
-      "after": "e979fac6f3502ef9745dc8b6a13ed7a1e3b63b2cc6fa68bc8cdf36120b9baedb",
+      "before": "d98ea71481c516dc09bae564a50947f40ea2d5aefcc66aac5b67f566d1c20b8a",
+      "after": "d98ea71481c516dc09bae564a50947f40ea2d5aefcc66aac5b67f566d1c20b8a",
       "matches": true
     },
     {
       "table": "membership_fee_receipts",
-      "before": "874f911e99e82eb33ded9ce21abaea30f32aabb019510d1aaedd809bb85eee12",
-      "after": "874f911e99e82eb33ded9ce21abaea30f32aabb019510d1aaedd809bb85eee12",
+      "before": "a18385f4673ed6dd3edfba750a4a1de02f0a8fa557f43e6fe599c87f2c31e696",
+      "after": "a18385f4673ed6dd3edfba750a4a1de02f0a8fa557f43e6fe599c87f2c31e696",
       "matches": true
     },
     {
       "table": "membership_cards",
-      "before": "600b0b576dd9a7b320a1e40e34089776c3c7ec0952742b23e047a9a6894dca17",
-      "after": "600b0b576dd9a7b320a1e40e34089776c3c7ec0952742b23e047a9a6894dca17",
+      "before": "8b4142174f7feb35ba69d6a146db1497d13dc8b1024bd4851709ee97781d6f5f",
+      "after": "8b4142174f7feb35ba69d6a146db1497d13dc8b1024bd4851709ee97781d6f5f",
       "matches": true
     },
     {
       "table": "savings_accounts",
-      "before": "44a3b3857a5ca46498dd74a1d67680e1ea7579d636b7d4a6d198b133570c01e4",
-      "after": "44a3b3857a5ca46498dd74a1d67680e1ea7579d636b7d4a6d198b133570c01e4",
+      "before": "c2af808c1021bb267a89de8e7d9512538e1af1d157ebae8cb2f8487b5df3d9b1",
+      "after": "c2af808c1021bb267a89de8e7d9512538e1af1d157ebae8cb2f8487b5df3d9b1",
       "matches": true
     },
     {
       "table": "savings_transactions",
-      "before": "c6e3e40dbaa94d28d70acb316a458addd082ef807796822066c190c7f041229a",
-      "after": "c6e3e40dbaa94d28d70acb316a458addd082ef807796822066c190c7f041229a",
+      "before": "d4d2e1fda856dd3192c07dc50b480019ad07f3dfbb29055df5b6043bad0f1ac8",
+      "after": "d4d2e1fda856dd3192c07dc50b480019ad07f3dfbb29055df5b6043bad0f1ac8",
       "matches": true
     },
     {
       "table": "savings_withdrawal_requests",
-      "before": "9891d84a1dcdb049c4a93af5fa980c75a22b83f2aaf59c4a2462119b91ffced4",
-      "after": "9891d84a1dcdb049c4a93af5fa980c75a22b83f2aaf59c4a2462119b91ffced4",
+      "before": "4a0d2870acdb1496e9c5fb08097f59d8b349432ae96fee6af776eeb5414c7b72",
+      "after": "4a0d2870acdb1496e9c5fb08097f59d8b349432ae96fee6af776eeb5414c7b72",
       "matches": true
     },
     {
       "table": "loans",
-      "before": "b62307e49b20c71067ef6b437aa3c91e66e4dd3673d5a8ce0ff2f66ef1bef9a0",
-      "after": "b62307e49b20c71067ef6b437aa3c91e66e4dd3673d5a8ce0ff2f66ef1bef9a0",
+      "before": "884eaf8295f617467cf5bed442fb578fb346eb8277706d792127d6e8b2e39018",
+      "after": "884eaf8295f617467cf5bed442fb578fb346eb8277706d792127d6e8b2e39018",
       "matches": true
     },
     {
       "table": "loan_periods",
-      "before": "f65b6903b9d6f05f5e2444f777ceae72808e65cee0e600e0446b1d280139d507",
-      "after": "f65b6903b9d6f05f5e2444f777ceae72808e65cee0e600e0446b1d280139d507",
+      "before": "c45a5cfc860640bc63b117e5fd1c08e9e95d3443b49e7cfd5f6766dc2b1eb2ac",
+      "after": "c45a5cfc860640bc63b117e5fd1c08e9e95d3443b49e7cfd5f6766dc2b1eb2ac",
       "matches": true
     },
     {
       "table": "loan_schedules",
-      "before": "152086e7a3f2fd501d8ee5d1367f5705506c62a5c6e6f685cb9d399a58513b23",
-      "after": "152086e7a3f2fd501d8ee5d1367f5705506c62a5c6e6f685cb9d399a58513b23",
+      "before": "b15727c98f2e1d66b4866c5328f2d2007802ec496af6eb762e5c63d5a38495ff",
+      "after": "b15727c98f2e1d66b4866c5328f2d2007802ec496af6eb762e5c63d5a38495ff",
       "matches": true
     },
     {
       "table": "loan_installments",
-      "before": "9c16fe3a5966dc4d118d25cbbce7c3c802745be8fb45d969fdcbf9ce8eac8872",
-      "after": "9c16fe3a5966dc4d118d25cbbce7c3c802745be8fb45d969fdcbf9ce8eac8872",
+      "before": "91f8a08604af0c201cb6b8ba75ffc13e82455edeff5c3e57be5abff5f52e4bbc",
+      "after": "91f8a08604af0c201cb6b8ba75ffc13e82455edeff5c3e57be5abff5f52e4bbc",
       "matches": true
     },
     {
       "table": "loan_payments",
-      "before": "1f13885643fb17abe9d88378a6dcd3c1db898d3f9c93e2634aa16e48c956d540",
-      "after": "1f13885643fb17abe9d88378a6dcd3c1db898d3f9c93e2634aa16e48c956d540",
+      "before": "9d09903158c25843cf71b9e25898f4faee5b7e791dd8313e42d95cef1421ff5c",
+      "after": "9d09903158c25843cf71b9e25898f4faee5b7e791dd8313e42d95cef1421ff5c",
       "matches": true
     },
     {
       "table": "payment_allocations",
-      "before": "4cefc1f4ed9f36f46f8aa5190d62c2073ff36fdb3638d9aef82aefac504ebca3",
-      "after": "4cefc1f4ed9f36f46f8aa5190d62c2073ff36fdb3638d9aef82aefac504ebca3",
+      "before": "2eeea818af5f08055b223fa66cd8fd5c6dd50bbb552552af585727dd2a69fbf6",
+      "after": "2eeea818af5f08055b223fa66cd8fd5c6dd50bbb552552af585727dd2a69fbf6",
       "matches": true
     },
     {
       "table": "loan_penalties",
-      "before": "2195a67c502b7f630ed08a09e4fb46c12a3554c8324910be67d32ab19f9c0ed8",
-      "after": "2195a67c502b7f630ed08a09e4fb46c12a3554c8324910be67d32ab19f9c0ed8",
+      "before": "eafd1f5170e7c58dafd9f229b116c81f5a27216d28ea00a557ef3ddd9400776f",
+      "after": "eafd1f5170e7c58dafd9f229b116c81f5a27216d28ea00a557ef3ddd9400776f",
       "matches": true
     },
     {
       "table": "member_loan_eligibility_snapshots",
-      "before": "7bf2ebe850890e0e0ec1acc16419c073f11ddd050413a359a76e6cef6c3e89c8",
-      "after": "7bf2ebe850890e0e0ec1acc16419c073f11ddd050413a359a76e6cef6c3e89c8",
+      "before": "4ddca25b34c87f967357c0a2405d12b53c1f3ac447c97fa0330c2e751b3b1ad9",
+      "after": "4ddca25b34c87f967357c0a2405d12b53c1f3ac447c97fa0330c2e751b3b1ad9",
       "matches": true
     },
     {
       "table": "member_loan_savings_pledges",
-      "before": "15ed4320c2f4a6f55ac7e401e2157c872ab124d961d22e3fb422eaff9c4a91b0",
-      "after": "15ed4320c2f4a6f55ac7e401e2157c872ab124d961d22e3fb422eaff9c4a91b0",
+      "before": "03216195d2bc7fe0de2ab519fa231bdab9746029ba387d84adca0e05444a759b",
+      "after": "03216195d2bc7fe0de2ab519fa231bdab9746029ba387d84adca0e05444a759b",
       "matches": true
     },
     {
       "table": "member_beneficiaries",
-      "before": "ce7ad9334fc82fcdab4919c2aa8aca3e1d18b4e084cb5de76a8970070d15df43",
-      "after": "ce7ad9334fc82fcdab4919c2aa8aca3e1d18b4e084cb5de76a8970070d15df43",
+      "before": "5dfd03126d446250f5da9dee60d3e1387ad8b8c2d0ff0b3b06bc9b3e9f56bd9e",
+      "after": "5dfd03126d446250f5da9dee60d3e1387ad8b8c2d0ff0b3b06bc9b3e9f56bd9e",
       "matches": true
     },
     {
       "table": "benefit_claims",
-      "before": "eda5c12c6f3a0c001b74bfbe49cb1c473c390a1c7ec543adb70da203d12df700",
-      "after": "eda5c12c6f3a0c001b74bfbe49cb1c473c390a1c7ec543adb70da203d12df700",
+      "before": "77fd4ceaf8498b3b7eb138c82e2d8ac1da39821389add67fab586eb9703835f4",
+      "after": "77fd4ceaf8498b3b7eb138c82e2d8ac1da39821389add67fab586eb9703835f4",
       "matches": true
     },
     {
       "table": "benefit_claim_documents",
-      "before": "5dbeb5ec738cce531ef05ea45ffe885189925b90ff2dda85d09962f35137d95e",
-      "after": "5dbeb5ec738cce531ef05ea45ffe885189925b90ff2dda85d09962f35137d95e",
+      "before": "94a1c1473a7dbaf2b5b73163aa7a2187b73b0d9e1eb0a41b3e511253bbc6b24b",
+      "after": "94a1c1473a7dbaf2b5b73163aa7a2187b73b0d9e1eb0a41b3e511253bbc6b24b",
       "matches": true
     },
     {
       "table": "benefit_assessment_snapshots",
-      "before": "cd393f539606cc1f5015c6e655a3e1f8354cff809989ef325c3a8d31ae98c3c5",
-      "after": "cd393f539606cc1f5015c6e655a3e1f8354cff809989ef325c3a8d31ae98c3c5",
+      "before": "c1aa90cce0bde1243341b479411846fa7238c392aad035f838366e1be3e6b14b",
+      "after": "c1aa90cce0bde1243341b479411846fa7238c392aad035f838366e1be3e6b14b",
       "matches": true
     },
     {
       "table": "benefit_payments",
-      "before": "6006dd37bfa52c21731885c78539fe8832fb2032b5ab49c2d7a7ab4a53928f2a",
-      "after": "6006dd37bfa52c21731885c78539fe8832fb2032b5ab49c2d7a7ab4a53928f2a",
+      "before": "df0e345dc155487fa0c5dd2c5ae8d3bf621b1aef3f8bf9821f7aebafe3b1e22e",
+      "after": "df0e345dc155487fa0c5dd2c5ae8d3bf621b1aef3f8bf9821f7aebafe3b1e22e",
       "matches": true
     },
     {
       "table": "journal_entries",
-      "before": "1ad3a8a8e7793ff66c08ac77ccda6859699980585cd61d3cfd2763b2ce2d72c1",
-      "after": "1ad3a8a8e7793ff66c08ac77ccda6859699980585cd61d3cfd2763b2ce2d72c1",
+      "before": "085906314cb5fa6fceb29c046050d9bb96b65c004e5ffc6e6a59ad8f061135ad",
+      "after": "085906314cb5fa6fceb29c046050d9bb96b65c004e5ffc6e6a59ad8f061135ad",
       "matches": true
     },
     {
       "table": "journal_lines",
-      "before": "ee946d7d830e2d16dad1c9158124c164e96ff1d6b4696382ee5614aa4ab9a04a",
-      "after": "ee946d7d830e2d16dad1c9158124c164e96ff1d6b4696382ee5614aa4ab9a04a",
+      "before": "3a1736450c9f0c05b5c67a1e32be89c0579cc67148876aeaedf23af9ee61b279",
+      "after": "3a1736450c9f0c05b5c67a1e32be89c0579cc67148876aeaedf23af9ee61b279",
       "matches": true
     },
     {
       "table": "reference_sequences",
-      "before": "1eb07a55fe4a5aa6a1daa941b17ef7e6067789dd3b082b8822471c058dba4c88",
-      "after": "1eb07a55fe4a5aa6a1daa941b17ef7e6067789dd3b082b8822471c058dba4c88",
+      "before": "d6e99fbc02547d2f4bda424bf19d39c7db53fa8dfa996e1713bb3c6934e71730",
+      "after": "d6e99fbc02547d2f4bda424bf19d39c7db53fa8dfa996e1713bb3c6934e71730",
       "matches": true
     }
   ],
@@ -222,30 +235,30 @@
     "loan_principal": "9600000",
     "loan_interest": "1290000",
     "scheduled_repayment": "8015000",
-    "loan_payments": "161",
+    "loan_payments": "167",
     "memberships": "8",
     "acceptances": "7",
     "savings_subledger": "1790000",
     "liability_2100": "1790000",
     "benefit_payments": "1",
     "historical_benefit_payments": "20000",
-    "ledger_debits": "17677886",
-    "ledger_credits": "17677886"
+    "ledger_debits": "17754230",
+    "ledger_credits": "17754230"
   },
   "after": {
     "loans": "17",
     "loan_principal": "9600000",
     "loan_interest": "1290000",
     "scheduled_repayment": "8015000",
-    "loan_payments": "161",
+    "loan_payments": "167",
     "memberships": "8",
     "acceptances": "7",
     "savings_subledger": "1790000",
     "liability_2100": "1790000",
     "benefit_payments": "1",
     "historical_benefit_payments": "20000",
-    "ledger_debits": "17677886",
-    "ledger_credits": "17677886"
+    "ledger_debits": "17754230",
+    "ledger_credits": "17754230"
   },
   "passed": true
 }

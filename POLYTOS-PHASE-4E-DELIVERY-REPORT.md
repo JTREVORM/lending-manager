@@ -148,6 +148,23 @@ Gates: `scripts/check-database-security.mjs` passes on a clean build;
 `scripts/audit-financial-arithmetic.mjs` passes; typecheck, lint and format
 clean.
 
+### Existing financial data is provably preserved across the upgrade
+
+`scripts/verify-membership-upgrade.mjs` applies the released schema, seeds a
+real book of loans, payments, memberships, savings and benefits, then applies
+every unreleased migration — all thirteen of this phase included — and compares
+28 financial figures before and after:
+
+> Upgrade verified: 97 existing migrations, a seeded book, then 114 new
+> migrations. Every one of 28 financial figures is identical, the 22
+> membership, savings, member loan, benefit and meeting tables exist and are
+> empty, and 2100 Member Savings is zero.
+
+The three new ledger accounts appear among "28 new account(s), all at zero",
+and the only new audit rows are configuration. Nothing this phase adds moves a
+shilling of existing money, which is the property that matters when these
+migrations are eventually applied to a database that holds real records.
+
 ### Three existing tests were rewritten, because an approved decision changed the behaviour they asserted
 
 Not because they were wrong. OD-10 replaced a refusal with an accounting
