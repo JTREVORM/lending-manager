@@ -66,6 +66,17 @@ const PAGES = [
   '/agency/pending',
   '/agency/reconciliation/cash',
   '/agency/reports',
+  // Polytos Phase 4E. Two more, for the same reason again: this phase raised
+  // the bundle-total ceiling from 670 to 676, so its routes go under the
+  // per-page budget rather than being taken on trust.
+  //
+  // `/agency/money/DEMO_AIRTEL` is the heaviest of the five Mobile Money
+  // screens — the float trade form, and a register with a verify, a refuse
+  // and a reverse form inside its cells. `/agency/lines` renders a card per
+  // agent line, each carrying three forms, so it is the one that grows with
+  // the data rather than with the code.
+  '/agency/money/DEMO_AIRTEL',
+  '/agency/lines',
 ] as const;
 
 interface PageCost {

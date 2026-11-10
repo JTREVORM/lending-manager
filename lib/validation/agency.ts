@@ -27,6 +27,7 @@ import { z } from 'zod';
 import {
   businessDateSchema,
   nonEmptyString,
+  optionalField,
   optionalString,
   ugxAmountFromText,
   uuidSchema,
@@ -280,7 +281,7 @@ export const commissionPayoutSchema = z.object({
   amount: amountSchema,
   /** Required, not optional: without it the duplicate index has nothing to bite on. */
   providerReference: providerReferenceSchema,
-  payoutDate: businessDateSchema.optional().nullable(),
+  payoutDate: optionalField(businessDateSchema),
   notes: optionalString(500),
 });
 
@@ -289,7 +290,7 @@ export const commissionRecoverySchema = z.object({
   amount: amountSchema,
   method: z.enum(['float_deduction', 'commission_offset']),
   providerReference: providerReferenceSchema,
-  recoveryDate: businessDateSchema.optional().nullable(),
+  recoveryDate: optionalField(businessDateSchema),
   notes: optionalString(500),
 });
 
@@ -333,7 +334,7 @@ export const agentLineRegistrationSchema = z.object({
   label: optionalString(80),
   lineMsisdn: msisdnSchema,
   agentCode: optionalString(40),
-  openedOn: businessDateSchema.optional().nullable(),
+  openedOn: optionalField(businessDateSchema),
   notes: optionalString(500),
 });
 
@@ -356,7 +357,7 @@ export const agentLineSuspensionSchema = z.object({
 export const agentLineClosureSchema = z.object({
   floatAccountId: uuidSchema,
   reason: reasonSchema,
-  closedOn: businessDateSchema.optional().nullable(),
+  closedOn: optionalField(businessDateSchema),
 });
 
 export const serviceLimitSchema = z.object({

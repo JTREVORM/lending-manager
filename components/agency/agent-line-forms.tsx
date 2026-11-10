@@ -64,13 +64,6 @@ export function AgentLineRegistrationForm({
   >(registerAgentLineAction, undefined);
   const formId = useId();
 
-  const [handled, setHandled] = useState(result);
-  const [attempt, setAttempt] = useState(0);
-  if (result !== handled) {
-    setHandled(result);
-    if (result?.ok === true) setAttempt((n) => n + 1);
-  }
-
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '');
   const [branchId, setBranchId] = useState(branches[0]?.id ?? '');
   const [tillName, setTillName] = useState('');
@@ -78,6 +71,23 @@ export function AgentLineRegistrationForm({
   const [msisdn, setMsisdn] = useState('');
   const [agentCode, setAgentCode] = useState('');
   const [openedOn, setOpenedOn] = useState('');
+
+  const [handled, setHandled] = useState(result);
+  const [attempt, setAttempt] = useState(0);
+  if (result !== handled) {
+    setHandled(result);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      // Controlled fields are not cleared by the remount the key triggers —
+      // that only resets the uncontrolled ones — so a successful submission
+      // clears them here. A refusal clears nothing, which is the whole point.
+      setTillName('');
+      setLabel('');
+      setMsisdn('');
+      setAgentCode('');
+      setOpenedOn('');
+    }
+  }
 
   if (providers.length === 0 || branches.length === 0) {
     return (
@@ -97,7 +107,12 @@ export function AgentLineRegistrationForm({
         provider, agree a commission rate or set a transaction ceiling.
       </p>
 
-      <form key={`line-${attempt}`} action={submit} className="mt-3 min-w-0 space-y-4">
+      <form
+        key={`line-${attempt}`}
+        action={submit}
+        aria-label="Open an agent line"
+        className="mt-3 min-w-0 space-y-4"
+      >
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-provider`}>Provider</Label>
           <select
@@ -142,7 +157,7 @@ export function AgentLineRegistrationForm({
           required
           value={tillName}
           onChange={(event) => setTillName(event.target.value)}
-          hint="Short, and unique for the provider — it names the ledger account."
+          hint="Lower-case letters, digits, hyphens and underscores. Short, and unique for the provider — it names the ledger account."
           error={result?.fieldErrors?.tillName?.[0]}
         />
 
@@ -208,7 +223,11 @@ export function AgentLineUpdateForm({
 
   return (
     <div className="min-w-0 space-y-2">
-      <form action={submit} className="min-w-0 space-y-2">
+      <form
+        action={submit}
+        aria-label={`Correct ${line.label ?? line.tillName}`}
+        className="min-w-0 space-y-2"
+      >
         <input type="hidden" name="floatAccountId" value={line.floatAccountId} />
         <Field
           label="Label"
@@ -278,7 +297,11 @@ export function AgentLineSuspension({
 
   return (
     <div className="min-w-0 space-y-3">
-      <form action={suspend} className="min-w-0 space-y-2">
+      <form
+        action={suspend}
+        aria-label={`${suspended ? 'Resume' : 'Suspend'} ${line.label ?? line.tillName}`}
+        className="min-w-0 space-y-2"
+      >
         <input type="hidden" name="floatAccountId" value={line.floatAccountId} />
         <input type="hidden" name="suspended" value={suspended ? 'false' : 'true'} />
         <Field
@@ -323,7 +346,11 @@ export function AgentLineSuspension({
         </div>
       ) : (
         <>
-          <form action={close} className="min-w-0 space-y-2">
+          <form
+            action={close}
+            aria-label={`Close ${line.label ?? line.tillName}`}
+            className="min-w-0 space-y-2"
+          >
             <input type="hidden" name="floatAccountId" value={line.floatAccountId} />
             <Field
               label="Reason for closing"
@@ -366,15 +393,21 @@ export function ServiceLimitForm({
   >(setServiceLimitAction, undefined);
   const formId = useId();
 
+  const [serviceId, setServiceId] = useState(services[0]?.id ?? '');
+  const [max, setMax] = useState('');
+
   const [handled, setHandled] = useState(result);
   const [attempt, setAttempt] = useState(0);
   if (result !== handled) {
     setHandled(result);
-    if (result?.ok === true) setAttempt((n) => n + 1);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      // Controlled fields are not cleared by the remount the key triggers —
+      // that only resets the uncontrolled ones — so a successful submission
+      // clears them here. A refusal clears nothing, which is the whole point.
+      setMax('');
+    }
   }
-
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? '');
-  const [max, setMax] = useState('');
 
   if (services.length === 0) {
     return (
@@ -395,7 +428,12 @@ export function ServiceLimitForm({
         each of its services has one.
       </p>
 
-      <form key={`limit-${attempt}`} action={submit} className="mt-3 min-w-0 space-y-4">
+      <form
+        key={`limit-${attempt}`}
+        action={submit}
+        aria-label="Transaction ceiling"
+        className="mt-3 min-w-0 space-y-4"
+      >
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-service`}>Service</Label>
           <select
@@ -487,7 +525,11 @@ export function CommissionSourceForm({
         reports on each transaction. This sets no rate and agrees no terms.
       </p>
 
-      <form action={submit} className="mt-3 min-w-0 space-y-4">
+      <form
+        action={submit}
+        aria-label="Where commission comes from"
+        className="mt-3 min-w-0 space-y-4"
+      >
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-provider`}>Provider</Label>
           <select

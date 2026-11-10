@@ -101,7 +101,16 @@ export default async function AgencyAgentLinesPage() {
       ) : (
         <div className="grid min-w-0 gap-3 lg:grid-cols-2">
           {lines.rows.map((l) => (
-            <Card key={l.floatAccountId}>
+            // `role="group"` with the line's own name: every control in
+            // this card acts on one agent line, and a reason field or a
+            // close button found by its label alone would otherwise be
+            // ambiguous between the lines on the screen — to a screen
+            // reader as much as to a test.
+            <Card
+              key={l.floatAccountId}
+              role="group"
+              aria-label={`Agent line ${l.label ?? l.tillName}`}
+            >
               <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">
                   {l.label ?? l.tillName}

@@ -85,6 +85,7 @@ describeDb('row level security', () => {
       'agency_cash_reconciliation_register:SELECT',
       'agency_cash_reconciliations:SELECT',
       'agency_commission_by_line:SELECT',
+      'agency_commission_line_balances:SELECT',
       'agency_commission_monthly:SELECT',
       'agency_commission_reconciliation_register:SELECT',
       // Phase 4E. SELECT only on the three new registers and the six new
@@ -946,6 +947,7 @@ describeDb('views', () => {
         // statement-period and float-trade registers, and the two Mobile
         // Money reports.
         'agency_commission_by_line',
+        'agency_commission_line_balances',
         'agency_commission_monthly',
         'agency_commission_reconciliation_register',
         'agency_commission_settlement_register',
@@ -1104,10 +1106,12 @@ describeDb('views', () => {
     // the variance report, the daily cash movement and the end-of-day
     // exceptions — and the four Phase 4D operational registers, which list
     // the records an officer has to act on rather than reporting a total.
-    // Six more from Phase 4E: commission per agent line and per calendar
-    // month, the statement-period and float-trade registers, and the two
-    // Mobile Money reports.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(65);
+    // Seven more from Phase 4E: commission per agent line and per calendar
+    // month, the statement-period and float-trade registers, the two Mobile
+    // Money reports, and the per-line commission balances the first and last
+    // of those are built from — a view rather than a DEFINER function call,
+    // so the reader's own ledger permission and branch rule apply.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(66);
   });
 });
 

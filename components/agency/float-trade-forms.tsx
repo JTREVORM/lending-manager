@@ -66,13 +66,6 @@ export function FloatTradeForm({
   // Advanced only when a trade is actually recorded, so a refused submission
   // keeps what was typed. Adjusted during render rather than in an effect,
   // which is what `react-hooks/set-state-in-effect` asks for.
-  const [handled, setHandled] = useState(result);
-  const [attempt, setAttempt] = useState(0);
-  if (result !== handled) {
-    setHandled(result);
-    if (result?.ok === true) setAttempt((n) => n + 1);
-  }
-
   const tradeable = lines.filter((l) => l.lineStatus !== 'closed');
   const [kind, setKind] = useState<'purchase' | 'sale' | 'transfer'>('purchase');
   const [lineId, setLineId] = useState(tradeable[0]?.floatAccountId ?? '');
@@ -84,6 +77,24 @@ export function FloatTradeForm({
   const [feeAmount, setFeeAmount] = useState('0');
   const [reference, setReference] = useState('');
   const [party, setParty] = useState('');
+
+  const [handled, setHandled] = useState(result);
+  const [attempt, setAttempt] = useState(0);
+  if (result !== handled) {
+    setHandled(result);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      // Controlled fields are not cleared by the remount the changed key
+      // triggers — that resets only the uncontrolled ones — so a success
+      // clears them here. A refusal clears nothing, which is the point: the
+      // officer keeps what they typed with the customer still waiting.
+      setFloatAmount('');
+      setCashAmount('');
+      setFeeAmount('0');
+      setReference('');
+      setParty('');
+    }
+  }
 
   if (tradeable.length === 0) {
     return (
@@ -107,7 +118,12 @@ export function FloatTradeForm({
         to check the figures before anything is posted.
       </p>
 
-      <form key={`trade-${attempt}`} action={submit} className="mt-3 min-w-0 space-y-4">
+      <form
+        key={`trade-${attempt}`}
+        action={submit}
+        aria-label="Record a float trade"
+        className="mt-3 min-w-0 space-y-4"
+      >
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-kind`}>What happened</Label>
           <select
@@ -327,7 +343,7 @@ export function FloatTradeDecision({
     }
     return (
       <div className="min-w-0 space-y-2">
-        <form action={verify} className="min-w-0">
+        <form action={verify} aria-label={`Check ${trade.reference}`} className="min-w-0">
           <input type="hidden" name="tradeId" value={trade.id} />
           <input type="hidden" name="expectedRevision" value={String(trade.revision)} />
           <Button type="submit" size="sm" variant="primary" loading={verifying}>
@@ -340,7 +356,11 @@ export function FloatTradeDecision({
           </Alert>
         ) : null}
 
-        <form action={reject} className="min-w-0 space-y-2">
+        <form
+          action={reject}
+          aria-label={`Refuse ${trade.reference}`}
+          className="min-w-0 space-y-2"
+        >
           <input type="hidden" name="tradeId" value={trade.id} />
           <Field
             label="Reason"
@@ -365,7 +385,11 @@ export function FloatTradeDecision({
   if (trade.status === 'posted' && canReverse) {
     return (
       <div className="min-w-0 space-y-2">
-        <form action={reverse} className="min-w-0 space-y-2">
+        <form
+          action={reverse}
+          aria-label={`Reverse ${trade.reference}`}
+          className="min-w-0 space-y-2"
+        >
           <input type="hidden" name="tradeId" value={trade.id} />
           <Field
             label="Reason"

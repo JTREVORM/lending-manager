@@ -590,6 +590,7 @@ describeDb('payment row level security', () => {
         // refusals use, so a screen cannot promise what a refusal denies.
         'agency_cash_reconciliation_register',
         'agency_commission_by_line',
+        'agency_commission_line_balances',
         'agency_commission_monthly',
         'agency_commission_reconciliation_register',
         'agency_commission_settlement_register',

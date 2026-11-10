@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 670 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 676 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -258,14 +258,44 @@ describeBundle('the browser bundle', () => {
     // the last raise, deliberately. A phase that needs room should have to
     // make its own case here, as this one did.
     //
-    // It is not what a page costs. No page loads all seventy: a measured
+    // ## 670 → 676, for Polytos Phase 4E Mobile Money
+    //
+    // Five screens for 6 KB, measured both ways on the same machine: the
+    // build with the five routes removed and nothing else changed is 104
+    // chunks and 665 KB, and the build with them is 107 chunks and 671 KB.
+    //
+    //   - **No new dependency,** again. `package.json` is untouched, and the
+    //     largest chunk did not move: 72 KB before and 72 KB after, well
+    //     inside the 120 KB ceiling above.
+    //   - **Three chunks for five routes.** `/agency/money` renders no
+    //     client component of its own — it is a Server Component reading two
+    //     views into tables — and the other four share the three new chunks
+    //     between them, because the float trade form, the commission forms
+    //     and the agent-line forms are built from the same `Field`, `Alert`,
+    //     `Card`, `DataTable` and `Money` primitives as the Phase 4D screens
+    //     and import nothing else.
+    //   - **Two kilobytes a chunk.** Lower than Phase 4D's five, for the
+    //     same reason: a register carrying three forms inside a table cell
+    //     costs what one form costs, because it is the same form.
+    //   - **The new routes are under the per-page budget.**
+    //     `/agency/money/DEMO_AIRTEL` and `/agency/lines` joined the
+    //     budgeted pages in `tests/e2e/specs/performance.spec.ts`, against
+    //     the same unchanged ceilings every other page is held to. Raising a
+    //     total without putting the new routes under a per-page budget would
+    //     be raising it on trust — the rule the last three raises set, and
+    //     the one that makes this number mean anything.
+    //
+    // 676 leaves five kilobytes over the measured 671, the same headroom the
+    // last raise left. A phase that needs room makes its own case here.
+    //
+    // It is not what a page costs. No page loads all of them: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
     // `tests/e2e/specs/performance.spec.ts`, because only a browser knows
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(670);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(676);
   });
 
   it('emits no source map for the browser', () => {

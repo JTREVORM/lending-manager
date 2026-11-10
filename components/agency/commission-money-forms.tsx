@@ -57,18 +57,26 @@ export function CommissionPayoutForm({
   >(recordCommissionPayoutAction, undefined);
   const formId = useId();
 
-  const [handled, setHandled] = useState(result);
-  const [attempt, setAttempt] = useState(0);
-  if (result !== handled) {
-    setHandled(result);
-    if (result?.ok === true) setAttempt((n) => n + 1);
-  }
-
   const payable = lines.filter((l) => l.commissionOutstanding > 0);
   const [lineId, setLineId] = useState(payable[0]?.floatAccountId ?? '');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [payoutDate, setPayoutDate] = useState('');
+
+  const [handled, setHandled] = useState(result);
+  const [attempt, setAttempt] = useState(0);
+  if (result !== handled) {
+    setHandled(result);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      // Controlled fields are not cleared by the remount the changed key
+      // triggers — that resets only the uncontrolled ones — so a success
+      // clears them here. A refusal clears nothing, which is the point.
+      setAmount('');
+      setReference('');
+      setPayoutDate('');
+    }
+  }
 
   if (payable.length === 0) {
     return (
@@ -91,7 +99,12 @@ export function CommissionPayoutForm({
         line&rsquo;s float and clears the same amount of what the provider owes us.
       </p>
 
-      <form key={`payout-${attempt}`} action={submit} className="mt-3 min-w-0 space-y-4">
+      <form
+        key={`payout-${attempt}`}
+        action={submit}
+        aria-label="Commission paid in"
+        className="mt-3 min-w-0 space-y-4"
+      >
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-line`}>Agent line</Label>
           <select
@@ -168,13 +181,6 @@ export function CommissionRecoveryForm({
   >(recordCommissionRecoveryAction, undefined);
   const formId = useId();
 
-  const [handled, setHandled] = useState(result);
-  const [attempt, setAttempt] = useState(0);
-  if (result !== handled) {
-    setHandled(result);
-    if (result?.ok === true) setAttempt((n) => n + 1);
-  }
-
   const owing = lines.filter((l) => l.recoveryOwed > 0);
   const [lineId, setLineId] = useState(owing[0]?.floatAccountId ?? '');
   const [method, setMethod] = useState<'float_deduction' | 'commission_offset'>(
@@ -182,6 +188,20 @@ export function CommissionRecoveryForm({
   );
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
+
+  const [handled, setHandled] = useState(result);
+  const [attempt, setAttempt] = useState(0);
+  if (result !== handled) {
+    setHandled(result);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      // Controlled fields are not cleared by the remount the changed key
+      // triggers — that resets only the uncontrolled ones — so a success
+      // clears them here. A refusal clears nothing, which is the point.
+      setAmount('');
+      setReference('');
+    }
+  }
 
   if (owing.length === 0) {
     return (
@@ -208,6 +228,7 @@ export function CommissionRecoveryForm({
       <form
         key={`recovery-${attempt}`}
         action={submit}
+        aria-label="Commission recovered by the provider"
         className="mt-3 min-w-0 space-y-4"
       >
         <div className="min-w-0 space-y-1">
@@ -305,19 +326,28 @@ export function CommissionReconciliationForm({
   >(submitCommissionReconciliationAction, undefined);
   const formId = useId();
 
-  const [handled, setHandled] = useState(result);
-  const [attempt, setAttempt] = useState(0);
-  if (result !== handled) {
-    setHandled(result);
-    if (result?.ok === true) setAttempt((n) => n + 1);
-  }
-
   const open = lines.filter((l) => l.lineStatus !== 'closed');
   const [lineId, setLineId] = useState(open[0]?.floatAccountId ?? '');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [reported, setReported] = useState('');
   const [statementRef, setStatementRef] = useState('');
+
+  const [handled, setHandled] = useState(result);
+  const [attempt, setAttempt] = useState(0);
+  if (result !== handled) {
+    setHandled(result);
+    if (result?.ok === true) {
+      setAttempt((n) => n + 1);
+      // Controlled fields are not cleared by the remount the changed key
+      // triggers — that resets only the uncontrolled ones — so a success
+      // clears them here. A refusal clears nothing, which is the point.
+      setStart('');
+      setEnd('');
+      setReported('');
+      setStatementRef('');
+    }
+  }
 
   if (open.length === 0) {
     return (
@@ -336,7 +366,12 @@ export function CommissionReconciliationForm({
         underlying transactions or the Owner authorises an adjustment.
       </p>
 
-      <form key={`recon-${attempt}`} action={submit} className="mt-3 min-w-0 space-y-4">
+      <form
+        key={`recon-${attempt}`}
+        action={submit}
+        aria-label="Reconcile a provider statement"
+        className="mt-3 min-w-0 space-y-4"
+      >
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-line`}>Agent line</Label>
           <select
@@ -441,7 +476,11 @@ export function CommissionReconciliationDecision({
 
   return (
     <div className="min-w-0 space-y-2">
-      <form action={submit} className="min-w-0 space-y-2">
+      <form
+        action={submit}
+        aria-label={`Certify ${row.statementRef}`}
+        className="min-w-0 space-y-2"
+      >
         <input type="hidden" name="reconciliationId" value={row.id} />
         <Field
           label="Note (optional)"

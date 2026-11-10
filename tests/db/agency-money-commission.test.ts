@@ -1021,4 +1021,136 @@ describeDb('Phase 4E — commission payout and recovery', () => {
       expect(err.ok).toBe(false);
     });
   });
+  // =========================================================================
+  describe('the views an officer actually reads', () => {
+    /**
+     * The defect this exists for.
+     *
+     * Migration 001300 built `agency_commission_by_line`, the dashboard and
+     * the reconciliation register on three SECURITY DEFINER helpers, and
+     * 000800 and 001200 revoked those helpers from `authenticated` — which is
+     * right, because a DEFINER function reachable by `authenticated` reads the
+     * ledger with the owner's rights for anybody who asks.
+     *
+     * But every view here is `security_invoker = true`, so a function called
+     * inside one runs as the caller as well. The revoke therefore refused the
+     * screens:
+     *
+     *     permission denied for function agency_commission_outstanding_by_line
+     *
+     * Each of the five Mobile Money screens reported that the commission owed
+     * to each agent line could not be read. Nothing in 114 database tests
+     * caught it, because they all run as the schema owner, and nothing in the
+     * security gate caught it either — it looks for grants that are too wide,
+     * and this one was too narrow. Only opening the page as a signed-in
+     * officer found it.
+     *
+     * Migration 001400 defines the attribution as a view instead, where the
+     * reader's own permissions and branch rule apply. These tests are the
+     * guard: the first that an officer can read each view at all, the second
+     * that the figures still agree with the engine's own helpers, which is
+     * what makes a screen and a refusal unable to disagree.
+     */
+    const VIEWS = [
+      'agency_commission_line_balances',
+      'agency_commission_by_line',
+      'agency_commission_monthly',
+      'agency_commission_reconciliation_register',
+      'agency_float_trade_register',
+      'agency_mobile_money_dashboard',
+      'agency_mobile_money_consolidated',
+    ] as const;
+
+    for (const view of VIEWS) {
+      it(`${view} can be read by a signed-in officer`, async () => {
+        const r = await asUser(owner, `select * from public.${view} limit 5`);
+        expect(r.ok, r.message).toBe(true);
+      });
+    }
+
+    it('reports the same per-line figures as the engine refuses on', async () => {
+      // Two lines of one provider, one owed commission and one owing it back
+      // after a reversal, so neither figure is zero for the wrong reason.
+      const { providerId, lines } = await liveProvider({
+        code: 'ECVIEW1',
+        tills: ['owed', 'back'],
+      });
+      const owed = at(lines, 0);
+      const back = at(lines, 1);
+
+      await post(owed, 100_000, 700);
+
+      const txId = await post(back, 100_000, 500);
+      expect((await payout(back.tillId, 500, 'VIEW-PAID')).ok).toBe(true);
+      const rev = await asUserCommitted(mgr, [
+        {
+          sql: `select public.reverse_agency_transaction($1, 'provider recalled it')`,
+          params: [txId],
+        },
+      ]);
+      expect(rev.ok, rev.message).toBe(true);
+
+      const rows = await query<{
+        id: string;
+        viewOutstanding: string;
+        fnOutstanding: string;
+        viewRecovery: string;
+        fnRecovery: string;
+      }>(
+        `select f.id::text as id,
+                cb.commission_outstanding::text as "viewOutstanding",
+                public.agency_commission_outstanding_by_line(f.id)::text
+                  as "fnOutstanding",
+                cb.recovery_owed::text as "viewRecovery",
+                public.agency_commission_recovery_outstanding_by_line(f.id)::text
+                  as "fnRecovery"
+           from public.agency_provider_float_accounts f
+           join public.agency_commission_line_balances cb
+             on cb.float_account_id = f.id
+          where f.provider_id = $1
+          order by f.till_name`,
+        [providerId],
+      );
+
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.viewOutstanding).toBe(row.fnOutstanding);
+        expect(row.viewRecovery).toBe(row.fnRecovery);
+      }
+
+      // And not vacuously: one line is owed something and the other owes
+      // something back.
+      expect(rows.some((r) => Number(r.viewOutstanding) > 0)).toBe(true);
+      expect(rows.some((r) => Number(r.viewRecovery) > 0)).toBe(true);
+    });
+
+    it('reports the same period figure as the reconciliation engine', async () => {
+      const { lines } = await liveProvider({ code: 'ECVIEW2' });
+      const line = at(lines);
+      await post(line, 100_000, 650);
+
+      const period = await queryOne<{ from: string; to: string }>(
+        `select (public.business_date() - 2)::text as from,
+                public.business_date()::text as to`,
+      );
+      const r = await asUserCommitted(mgr, [
+        {
+          sql: `select public.submit_agency_commission_reconciliation(
+                  $1, $2::date, $3::date, 650, 'VIEW-STMT') as id`,
+          params: [line.tillId, period.from, period.to],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      const row = await queryOne<{ current: string; fn: string }>(
+        `select reg.current_system_earned::text as current,
+                public.agency_commission_earned_by_line(
+                  reg.float_account_id, reg.period_start, reg.period_end)::text as fn
+           from public.agency_commission_reconciliation_register reg
+          where reg.statement_ref = 'VIEW-STMT'`,
+      );
+      expect(row.current).toBe(row.fn);
+      expect(Number(row.current)).toBe(650);
+    });
+  });
 });

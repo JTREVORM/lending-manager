@@ -148,9 +148,16 @@ jobs:
       - name: Build a local throwaway cluster and apply every migration
         run: npm run db:local:setup
 
-      # `test:db` runs eight vitest projects in sequence: the database suite,
-      # the three agency ones, the demonstration seeder's, the borrower-reuse
-      # one, the member loan demonstration's, then the benefits one. The
+      # `test:db` runs eleven vitest projects in sequence: the database suite,
+      # the four agency ones, the shared-till one, the demonstration seeder's,
+      # the borrower-reuse one, the member loan demonstration's, then the
+      # benefits one.
+      #
+      # Phase 4E: `agency-money` is the fourth agency project, and it was
+      # declared in `vitest.config.mts` without being added to `test:db`. Its
+      # 123 tests therefore ran on a developer's machine and nowhere else, and
+      # three CI runs reported the database job green without ever executing
+      # them. A project that is not in this script does not run. The
       # seeder's is separate because the policy version it publishes is global
       # state that would collide with every membership suite. Borrower reuse is
       # separate again because it needs a database the synthetic seeder has
@@ -162,7 +169,7 @@ jobs:
       # suite reading a cash position or a trial balance would be reading a
       # book it had written to. See the header of vitest.config.mts.
       # Each project's own globalSetup rebuilds the cluster the previous step
-      # created, so this one step covers all eight.
+      # created, so this one step covers all eleven.
       # Runs before the suites, deliberately. It reads the privileged surface
       # of the freshly migrated database and fails on any exposure the
       # reviewed baseline does not already account for, so a migration that

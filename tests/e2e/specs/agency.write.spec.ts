@@ -1078,8 +1078,16 @@ async function demonstrationTill(): Promise<{
        join public.branches b on b.id = f.branch_id
        left join public.ledger_account_balances bal
               on bal.account_id = f.ledger_account_id
-      where p.code = 'DEMO_AIRTEL'`,
+      where p.code = 'DEMO_AIRTEL'
+        and f.till_name = 'main'`,
   );
+
+  // Phase 4E. `and f.till_name = 'main'` is not a tidy-up: the seed opens one
+  // till per provider, so "the Airtel till" used to be unambiguous, and
+  // `agency-money.write.spec.ts` now opens agent lines of its own against the
+  // same provider — which is what a branch with two SIMs looks like, and what
+  // decision OD-3 exists for. This asks for the seeded till by name rather
+  // than assuming a provider has exactly one.
 
   const held = Number(row.balance).toLocaleString('en-UG');
   return {
