@@ -213,3 +213,161 @@ export const reconciliationApprovalSchema = z
     message: 'Say why the difference is being written off.',
     path: ['reason'],
   });
+
+// ---------------------------------------------------------------------------
+// Phase 4E — Mobile Money
+//
+// The same division as above: shape here, policy in the database. Whether a
+// line holds enough float to sell, whether a period overlaps one already
+// reconciled, whether the verifier is the person who recorded it, whether a
+// line can be closed — every one of those depends on state that can change
+// between the form rendering and the button being pressed.
+//
+// Two shapes deserve a note.
+//
+// A float trade's fields depend on its kind, and the schema does **not**
+// enforce that dependency: `record_agency_float_trade()` does, with messages
+// that name the kind. Encoding it twice would mean two sets of words for one
+// rule, and the database's set is the one that cannot be bypassed.
+//
+// A sale's fee allows zero, and that is the point of decision OD-6: "sell
+// without fee" is a stated zero rather than a blank, so a cashier who leaves
+// the field empty is asked rather than assumed about.
+// ---------------------------------------------------------------------------
+
+/** What was actually paid for float, which may differ from its face value. */
+const paidSchema = ugxAmountFromText({
+  empty: 'Enter what was paid for the float.',
+  malformed: 'Enter a whole number of shillings, with no decimals.',
+  nonPositive: 'Enter an amount greater than zero.',
+});
+
+export const floatTradeSchema = z.object({
+  kind: z.enum(['purchase', 'sale', 'transfer']),
+  floatAccountId: uuidSchema,
+  floatAmount: amountSchema,
+  reference: providerReferenceSchema,
+  counterFloatAccountId: uuidSchema.optional().nullable(),
+  settlementAccountId: uuidSchema.optional().nullable(),
+  cashAmount: paidSchema.optional().nullable(),
+  feeAmount: feeSchema.optional().nullable(),
+  sourceKind: z
+    .enum(['provider_service_centre', 'external_agent', 'bank', 'cash'])
+    .optional()
+    .nullable(),
+  counterpartyName: optionalString(160),
+  tradeDate: businessDateSchema.optional().nullable(),
+  notes: optionalString(500),
+});
+
+export const floatTradeVerificationSchema = z.object({
+  tradeId: uuidSchema,
+  /**
+   * The revision the officer was shown. Optional so a caller that cannot
+   * supply one still works, and sent by every screen, because a verifier who
+   * posts figures they never saw is the thing it prevents.
+   */
+  expectedRevision: z.coerce.number().int().positive().optional().nullable(),
+});
+
+export const floatTradeReasonSchema = z.object({
+  tradeId: uuidSchema,
+  reason: reasonSchema,
+});
+
+export const commissionPayoutSchema = z.object({
+  floatAccountId: uuidSchema,
+  amount: amountSchema,
+  /** Required, not optional: without it the duplicate index has nothing to bite on. */
+  providerReference: providerReferenceSchema,
+  payoutDate: businessDateSchema.optional().nullable(),
+  notes: optionalString(500),
+});
+
+export const commissionRecoverySchema = z.object({
+  floatAccountId: uuidSchema,
+  amount: amountSchema,
+  method: z.enum(['float_deduction', 'commission_offset']),
+  providerReference: providerReferenceSchema,
+  recoveryDate: businessDateSchema.optional().nullable(),
+  notes: optionalString(500),
+});
+
+export const commissionReconciliationSchema = z.object({
+  floatAccountId: uuidSchema,
+  /** The provider's own statement dates, copied off the statement. */
+  periodStart: businessDateSchema,
+  periodEnd: businessDateSchema,
+  /** A statement showing no commission is a real reading, so zero is allowed. */
+  providerReportedCommission: countSchema,
+  statementRef: providerReferenceSchema,
+  notes: optionalString(500),
+});
+
+export const commissionReconciliationDecisionSchema = z.object({
+  reconciliationId: uuidSchema,
+  notes: optionalString(500),
+});
+
+const tillNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Enter a till name.')
+  .max(31, 'A till name is at most 31 characters.')
+  .regex(
+    /^[a-z0-9][a-z0-9_-]*$/,
+    'A till name is lower-case letters, digits, hyphens and underscores.',
+  );
+
+const msisdnSchema = z
+  .string()
+  .trim()
+  .regex(/^\+256[0-9]{9}$/, 'Enter a Ugandan mobile number, as +256700000000.')
+  .optional()
+  .nullable();
+
+export const agentLineRegistrationSchema = z.object({
+  providerId: uuidSchema,
+  branchId: uuidSchema,
+  tillName: tillNameSchema,
+  label: optionalString(80),
+  lineMsisdn: msisdnSchema,
+  agentCode: optionalString(40),
+  openedOn: businessDateSchema.optional().nullable(),
+  notes: optionalString(500),
+});
+
+export const agentLineUpdateSchema = z.object({
+  floatAccountId: uuidSchema,
+  label: optionalString(80),
+  lineMsisdn: msisdnSchema,
+  agentCode: optionalString(40),
+  notes: optionalString(500),
+});
+
+export const agentLineSuspensionSchema = z.object({
+  floatAccountId: uuidSchema,
+  suspended: z
+    .union([z.literal('true'), z.literal('false')])
+    .transform((v) => v === 'true'),
+  reason: reasonSchema,
+});
+
+export const agentLineClosureSchema = z.object({
+  floatAccountId: uuidSchema,
+  reason: reasonSchema,
+  closedOn: businessDateSchema.optional().nullable(),
+});
+
+export const serviceLimitSchema = z.object({
+  transactionTypeId: uuidSchema,
+  /** A ceiling of zero is refused by the database: it means "nothing may be transacted". */
+  maxSingleTransaction: amountSchema,
+  reason: optionalString(500),
+});
+
+export const commissionSourceSchema = z.object({
+  providerId: uuidSchema,
+  source: z.enum(['configured', 'reported']),
+  reason: optionalString(500),
+});

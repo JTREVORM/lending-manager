@@ -38,17 +38,30 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { parseSafely } from '@/lib/validation/validate';
 import {
   agencyTransactionIdSchema,
+  agentLineClosureSchema,
+  agentLineRegistrationSchema,
+  agentLineSuspensionSchema,
+  agentLineUpdateSchema,
   verifyAgencyTransactionSchema,
   agencyTransactionReasonSchema,
   cashCountSchema,
   commissionExceptionSchema,
+  commissionPayoutSchema,
+  commissionReconciliationDecisionSchema,
+  commissionReconciliationSchema,
+  commissionRecoverySchema,
   commissionSettlementSchema,
+  commissionSourceSchema,
   correctReferenceSchema,
   floatReplenishmentSchema,
   floatStatementSchema,
+  floatTradeReasonSchema,
+  floatTradeSchema,
+  floatTradeVerificationSchema,
   payableSettlementSchema,
   reconciliationApprovalSchema,
   recordAgencyTransactionSchema,
+  serviceLimitSchema,
   settlementReversalSchema,
 } from '@/lib/validation/agency';
 import type { ActionResult } from '@/lib/auth/actions';
@@ -689,6 +702,486 @@ export async function approveFloatStatementAction(
     error,
     'Certifying a float statement',
     input.adjust ? 'Certified and the difference written off.' : 'Certified.',
+    data,
+  );
+}
+
+// ===========================================================================
+// Phase 4E — Mobile Money
+//
+// Thirteen more operations, each doing the same four things in the same
+// order, and each handing the decision to a database function that refuses
+// the same thing again. Three are worth a word.
+//
+// `recordFloatTradeAction` posts nothing. It writes a pending row, and a
+// pending row moves no balance because nothing writes a journal until
+// `verifyFloatTradeAction` — which is a *different* capability held by a
+// different person, and the data layer refuses the same person doing both.
+//
+// `verifyFloatTradeAction` sends the revision the officer was shown, for the
+// same reason `verifyAgencyTransactionAction` does: a verifier must not post
+// figures that changed while their screen was open.
+//
+// `certifyCommissionReconciliationAction` moves no money at all, by design.
+// Decision OD-2: a reconciliation never posts a financial change.
+// ===========================================================================
+
+export async function recordFloatTradeAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:float_trade', 'agency.float_trade');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(floatTradeSchema, {
+    kind: formData.get('kind'),
+    floatAccountId: formData.get('floatAccountId'),
+    floatAmount: formData.get('floatAmount'),
+    reference: formData.get('reference'),
+    counterFloatAccountId: formData.get('counterFloatAccountId') ?? null,
+    settlementAccountId: formData.get('settlementAccountId') ?? null,
+    cashAmount: formData.get('cashAmount') ?? null,
+    feeAmount: formData.get('feeAmount') ?? null,
+    sourceKind: formData.get('sourceKind') ?? null,
+    counterpartyName: formData.get('counterpartyName') ?? null,
+    tradeDate: formData.get('tradeDate') ?? null,
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('record_agency_float_trade', {
+    p_kind: input.kind,
+    p_float_account_id: input.floatAccountId,
+    p_float_amount: input.floatAmount,
+    p_reference: input.reference,
+    p_counter_float_account_id: input.counterFloatAccountId ?? null,
+    p_settlement_account_id: input.settlementAccountId ?? null,
+    p_cash_amount: input.cashAmount ?? null,
+    p_fee_amount: input.feeAmount ?? null,
+    p_source_kind: input.sourceKind ?? null,
+    p_counterparty_name: input.counterpartyName ?? null,
+    p_trade_date: input.tradeDate ?? null,
+    p_notes: input.notes ?? null,
+  });
+  return settle(
+    error,
+    'Recording a float trade',
+    'Recorded, and waiting for a second officer. Nothing has moved yet.',
+    data,
+  );
+}
+
+export async function verifyFloatTradeAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(floatTradeVerificationSchema, {
+    tradeId: formData.get('tradeId'),
+    expectedRevision: formData.get('expectedRevision') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('verify_agency_float_trade', {
+    p_trade_id: parsed.data.tradeId,
+    p_expected_revision: parsed.data.expectedRevision ?? null,
+  });
+  return settle(error, 'Posting a float trade', 'Float trade posted.', data);
+}
+
+export async function rejectFloatTradeAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(floatTradeReasonSchema, {
+    tradeId: formData.get('tradeId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('reject_agency_float_trade', {
+    p_trade_id: parsed.data.tradeId,
+    p_reason: parsed.data.reason,
+  });
+  return settle(
+    error,
+    'Rejecting a float trade',
+    'Refused, with your reason on the record. Nothing was posted.',
+  );
+}
+
+export async function reverseFloatTradeAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:reverse', 'agency.reverse');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(floatTradeReasonSchema, {
+    tradeId: formData.get('tradeId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('reverse_agency_float_trade', {
+    p_trade_id: parsed.data.tradeId,
+    p_reason: parsed.data.reason,
+  });
+  return settle(
+    error,
+    'Reversing a float trade',
+    'Reversed. Both entries are kept and the balances are restored.',
+    data,
+  );
+}
+
+export async function recordCommissionPayoutAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(commissionPayoutSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    amount: formData.get('amount'),
+    providerReference: formData.get('providerReference'),
+    payoutDate: formData.get('payoutDate') ?? null,
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('record_agency_commission_payout', {
+    p_float_account_id: input.floatAccountId,
+    p_amount: input.amount,
+    p_provider_reference: input.providerReference,
+    p_payout_date: input.payoutDate ?? null,
+    p_notes: input.notes ?? null,
+  });
+  return settle(
+    error,
+    'Recording a commission payout',
+    'Commission recorded against the line, and the receivable is cleared by that much.',
+    data,
+  );
+}
+
+export async function recordCommissionRecoveryAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(commissionRecoverySchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    amount: formData.get('amount'),
+    method: formData.get('method'),
+    providerReference: formData.get('providerReference'),
+    recoveryDate: formData.get('recoveryDate') ?? null,
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('record_agency_commission_recovery', {
+    p_float_account_id: input.floatAccountId,
+    p_amount: input.amount,
+    p_method: input.method,
+    p_provider_reference: input.providerReference,
+    p_recovery_date: input.recoveryDate ?? null,
+    p_notes: input.notes ?? null,
+  });
+  return settle(
+    error,
+    'Recording a commission recovery',
+    'Recovery recorded, and what was owed back is lower by that much.',
+    data,
+  );
+}
+
+export async function submitCommissionReconciliationAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:reconcile', 'agency.reconcile');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(commissionReconciliationSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    periodStart: formData.get('periodStart'),
+    periodEnd: formData.get('periodEnd'),
+    providerReportedCommission: formData.get('providerReportedCommission'),
+    statementRef: formData.get('statementRef'),
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('submit_agency_commission_reconciliation', {
+    p_float_account_id: input.floatAccountId,
+    p_period_start: input.periodStart,
+    p_period_end: input.periodEnd,
+    p_provider_reported_commission: input.providerReportedCommission,
+    p_statement_ref: input.statementRef,
+    p_notes: input.notes ?? null,
+  });
+  return settle(
+    error,
+    'Reconciling a commission statement',
+    'Statement recorded against the books. Nothing has been posted.',
+    data,
+  );
+}
+
+export async function certifyCommissionReconciliationAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:reconcile', 'agency.reconcile_decision');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(commissionReconciliationDecisionSchema, {
+    reconciliationId: formData.get('reconciliationId'),
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('certify_agency_commission_reconciliation', {
+    p_reconciliation_id: parsed.data.reconciliationId,
+    p_notes: parsed.data.notes ?? null,
+  });
+  return settle(
+    error,
+    'Certifying a commission statement',
+    'Certified. No balance changed: a difference is corrected at the transaction, not here.',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Agent line administration — the Owner's
+// ---------------------------------------------------------------------------
+
+export async function registerAgentLineAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agentLineRegistrationSchema, {
+    providerId: formData.get('providerId'),
+    branchId: formData.get('branchId'),
+    tillName: formData.get('tillName'),
+    label: formData.get('label') ?? null,
+    lineMsisdn: formData.get('lineMsisdn') ?? null,
+    agentCode: formData.get('agentCode') ?? null,
+    openedOn: formData.get('openedOn') ?? null,
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('register_agency_agent_line', {
+    p_provider_id: input.providerId,
+    p_branch_id: input.branchId,
+    p_till_name: input.tillName,
+    p_label: input.label ?? null,
+    p_line_msisdn: input.lineMsisdn ?? null,
+    p_agent_code: input.agentCode ?? null,
+    p_opened_on: input.openedOn ?? null,
+    p_notes: input.notes ?? null,
+  });
+  return settle(
+    error,
+    'Registering an agent line',
+    'Agent line registered, with its own float account.',
+    data,
+  );
+}
+
+export async function updateAgentLineAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agentLineUpdateSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    label: formData.get('label') ?? null,
+    lineMsisdn: formData.get('lineMsisdn') ?? null,
+    agentCode: formData.get('agentCode') ?? null,
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('update_agency_agent_line', {
+    p_float_account_id: input.floatAccountId,
+    p_label: input.label ?? null,
+    p_line_msisdn: input.lineMsisdn ?? null,
+    p_agent_code: input.agentCode ?? null,
+    p_notes: input.notes ?? null,
+  });
+  return settle(error, 'Editing an agent line', 'Agent line updated.');
+}
+
+export async function setAgentLineSuspendedAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agentLineSuspensionSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    suspended: formData.get('suspended'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('set_agency_agent_line_suspended', {
+    p_float_account_id: input.floatAccountId,
+    p_suspended: input.suspended,
+    p_reason: input.reason,
+  });
+  return settle(
+    error,
+    input.suspended ? 'Suspending an agent line' : 'Reinstating an agent line',
+    input.suspended
+      ? 'Suspended. New business stops at once; the float and the history remain, and can still be moved off.'
+      : 'Reinstated. The line is trading again.',
+  );
+}
+
+export async function closeAgentLineAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agentLineClosureSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    reason: formData.get('reason'),
+    closedOn: formData.get('closedOn') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('close_agency_agent_line', {
+    p_float_account_id: input.floatAccountId,
+    p_reason: input.reason,
+    p_closed_on: input.closedOn ?? null,
+  });
+  return settle(error, 'Closing an agent line', 'Agent line closed.');
+}
+
+export async function setServiceLimitAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(serviceLimitSchema, {
+    transactionTypeId: formData.get('transactionTypeId'),
+    maxSingleTransaction: formData.get('maxSingleTransaction'),
+    reason: formData.get('reason') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('set_agency_service_limit', {
+    p_transaction_type_id: input.transactionTypeId,
+    p_max_single_transaction: input.maxSingleTransaction,
+    p_reason: input.reason ?? null,
+  });
+  return settle(
+    error,
+    'Setting a service ceiling',
+    'Ceiling set. The service can now be posted against.',
+    data,
+  );
+}
+
+export async function setCommissionSourceAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(commissionSourceSchema, {
+    providerId: formData.get('providerId'),
+    source: formData.get('source'),
+    reason: formData.get('reason') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('set_agency_provider_commission_source', {
+    p_provider_id: input.providerId,
+    p_source: input.source,
+    p_reason: input.reason ?? null,
+  });
+  return settle(
+    error,
+    "Setting a provider's commission source",
+    input.source === 'reported'
+      ? 'Commission will be taken from each transaction’s confirmation message.'
+      : "Commission will be computed from the provider's configured terms.",
     data,
   );
 }

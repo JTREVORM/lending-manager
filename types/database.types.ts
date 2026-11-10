@@ -5651,6 +5651,165 @@ export type Database = {
       // rather than calling agency_commission_outstanding() or
       // agency_payable_outstanding(), which are revoked from `authenticated`
       // on purpose.
+      agency_commission_by_line: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          till_name: string | null;
+          label: string | null;
+          line_status: string | null;
+          ledger_account_code: string | null;
+          float_balance: number | null;
+          commission_outstanding: number | null;
+          recovery_owed: number | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_monthly: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          month_start: string | null;
+          transactions: number | null;
+          principal: number | null;
+          customer_fees: number | null;
+          commission_earned: number | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_reconciliation_register: {
+        Row: {
+          id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          period_start: string | null;
+          period_end: string | null;
+          system_commission_earned: number | null;
+          provider_reported_commission: number | null;
+          variance: number | null;
+          variance_means: string | null;
+          statement_ref: string | null;
+          status: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string | null;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          current_system_earned: number | null;
+        };
+        Relationships: [];
+      };
+      agency_float_trade_register: {
+        Row: {
+          id: string | null;
+          kind: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          counter_float_account_id: string | null;
+          counter_till_name: string | null;
+          counter_label: string | null;
+          counter_branch_id: string | null;
+          counter_branch_code: string | null;
+          settlement_account_id: string | null;
+          settlement_account_code: string | null;
+          settlement_account_name: string | null;
+          trade_date: string | null;
+          float_amount: number | null;
+          cash_amount: number | null;
+          fee_amount: number | null;
+          total_amount: number | null;
+          purchase_basis: string | null;
+          purchase_difference: number | null;
+          source_kind: string | null;
+          counterparty_name: string | null;
+          reference: string | null;
+          notes: string | null;
+          status: string | null;
+          revision: number | null;
+          created_by: string | null;
+          created_at: string | null;
+          verified_by: string | null;
+          verified_at: string | null;
+          rejected_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_by: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+        };
+        Relationships: [];
+      };
+      agency_mobile_money_consolidated: {
+        Row: {
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          agent_lines: number | null;
+          active_lines: number | null;
+          suspended_lines: number | null;
+          float_held: number | null;
+          commission_outstanding: number | null;
+          recovery_owed: number | null;
+          float_purchased: number | null;
+          purchase_premium: number | null;
+          purchase_discount: number | null;
+          float_sold: number | null;
+          sale_fee_income: number | null;
+          float_transferred_out: number | null;
+          float_transferred_in: number | null;
+        };
+        Relationships: [];
+      };
+      agency_mobile_money_dashboard: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          till_name: string | null;
+          label: string | null;
+          line_status: string | null;
+          ledger_account_code: string | null;
+          float_balance: number | null;
+          commission_outstanding: number | null;
+          recovery_owed: number | null;
+          deposits_today: number | null;
+          deposit_value_today: number | null;
+          withdrawals_today: number | null;
+          withdrawal_value_today: number | null;
+          commission_today: number | null;
+          customer_fees_today: number | null;
+          pending_trades: number | null;
+          transactions_in_flight: number | null;
+          open_commission_reconciliations: number | null;
+        };
+        Relationships: [];
+      };
       agency_float_balances: {
         Row: {
           float_account_id: string | null;

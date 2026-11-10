@@ -23,22 +23,33 @@ import { toBusinessDate } from '@/lib/domain/datetime';
 import { toUgx } from '@/lib/domain/money';
 import {
   isAgencyDirection,
+  isAgencyFloatSource,
+  isAgencyLineStatus,
   isAgencyReconciliationStatus,
   isAgencySettlementStatus,
   isAgencyStatus,
+  isAgencyTradeKind,
+  isAgencyTradeStatus,
   type AgencyCashCountRow,
   type AgencyCashMovementRow,
   type AgencyCommissionRow,
+  type AgencyCommissionMonthRow,
+  type AgencyCommissionReconciliationRow,
   type AgencyCommissionSettlementRow,
   type AgencyExceptionRow,
   type AgencyFloatRow,
   type AgencyFloatStatementRow,
+  type AgencyFloatTradeRow,
+  type AgencyLineCommissionRow,
+  type AgencyMoneyLineRow,
+  type AgencyMoneyProviderRow,
   type AgencyPayableRow,
   type AgencyPayableSettlementRow,
   type AgencyProviderRow,
   type AgencyReconciliationStatus,
   type AgencyServiceTypeRow,
   type AgencyStatus,
+  type AgencyTradeStatus,
   type AgencyTransactionRow,
   type AgencyVarianceRow,
 } from '@/lib/domain/agency';
@@ -676,4 +687,308 @@ export async function getPostableFloatTills(): Promise<AgencyRows<AgencyFloatRow
       (f) => f.tillIsActive && f.providerIsActive && !f.providerIsProvisional,
     ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4E — Mobile Money
+//
+// Six more views, read exactly as the seven before them: `security_invoker`,
+// so the signed-in person's capability and branch decide what comes back, and
+// never a sum this module performs itself. The per-line commission figures in
+// particular come from the same functions the posting refusals use, so a
+// screen cannot promise what a refusal would deny.
+// ---------------------------------------------------------------------------
+
+function mapLineCommission(r: Record<string, unknown>): AgencyLineCommissionRow {
+  return {
+    floatAccountId: str(r.float_account_id),
+    providerId: str(r.provider_id),
+    providerCode: str(r.provider_code),
+    providerName: str(r.provider_name),
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    tillName: str(r.till_name),
+    label: strOrNull(r.label),
+    lineStatus: isAgencyLineStatus(r.line_status) ? r.line_status : 'active',
+    ledgerAccountCode: str(r.ledger_account_code),
+    floatBalance: ugx(r.float_balance),
+    commissionOutstanding: ugx(r.commission_outstanding),
+    recoveryOwed: ugx(r.recovery_owed),
+  };
+}
+
+/** Commission owed to and by every agent line. */
+export async function getAgencyLineCommission(options?: {
+  readonly providerCode?: string;
+}): Promise<AgencyRows<AgencyLineCommissionRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_commission_by_line')
+    .select('*')
+    .order('provider_name')
+    .order('till_name');
+
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null)
+    return failed('the commission owed to each agent line', error);
+
+  return { ok: true, rows: data.map(mapLineCommission) };
+}
+
+/** One row per agent line: the provider-scoped operational dashboard. */
+export async function getAgencyMoneyDashboard(options?: {
+  readonly providerCode?: string;
+}): Promise<AgencyRows<AgencyMoneyLineRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_mobile_money_dashboard')
+    .select('*')
+    .order('provider_name')
+    .order('till_name');
+
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return failed('the Mobile Money dashboard', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      ...mapLineCommission(r),
+      depositsToday: num(r.deposits_today),
+      depositValueToday: ugx(r.deposit_value_today),
+      withdrawalsToday: num(r.withdrawals_today),
+      withdrawalValueToday: ugx(r.withdrawal_value_today),
+      commissionToday: ugx(r.commission_today),
+      customerFeesToday: ugx(r.customer_fees_today),
+      pendingTrades: num(r.pending_trades),
+      transactionsInFlight: num(r.transactions_in_flight),
+      openCommissionReconciliations: num(r.open_commission_reconciliations),
+    })),
+  };
+}
+
+/**
+ * One row per provider per branch.
+ *
+ * Transfers are their own two columns here because they are their own two
+ * columns in the view: adding them to the purchase or sale totals would
+ * report twice an amount that never left the provider.
+ */
+export async function getAgencyMoneyConsolidated(): Promise<
+  AgencyRows<AgencyMoneyProviderRow>
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('agency_mobile_money_consolidated')
+    .select('*')
+    .order('provider_name')
+    .order('branch_code');
+
+  if (error !== null || data === null)
+    return failed('the consolidated Mobile Money report', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      agentLines: num(r.agent_lines),
+      activeLines: num(r.active_lines),
+      suspendedLines: num(r.suspended_lines),
+      floatHeld: ugx(r.float_held),
+      commissionOutstanding: ugx(r.commission_outstanding),
+      recoveryOwed: ugx(r.recovery_owed),
+      floatPurchased: ugx(r.float_purchased),
+      purchasePremium: ugx(r.purchase_premium),
+      purchaseDiscount: ugx(r.purchase_discount),
+      floatSold: ugx(r.float_sold),
+      saleFeeIncome: ugx(r.sale_fee_income),
+      floatTransferredOut: ugx(r.float_transferred_out),
+      floatTransferredIn: ugx(r.float_transferred_in),
+    })),
+  };
+}
+
+/** Float purchases, sales and line-to-line transfers. */
+export async function getAgencyFloatTrades(options?: {
+  readonly providerCode?: string;
+  readonly statuses?: readonly AgencyTradeStatus[];
+  readonly limit?: number;
+}): Promise<AgencyRows<AgencyFloatTradeRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_float_trade_register')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(options?.limit ?? 50);
+
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+  if (options?.statuses !== undefined && options.statuses.length > 0) {
+    query = query.in('status', [...options.statuses]);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return failed('the float trade register', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      kind: isAgencyTradeKind(r.kind) ? r.kind : 'purchase',
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      floatAccountId: str(r.float_account_id),
+      tillName: str(r.till_name),
+      label: strOrNull(r.label),
+      counterFloatAccountId: strOrNull(r.counter_float_account_id),
+      counterTillName: strOrNull(r.counter_till_name),
+      counterLabel: strOrNull(r.counter_label),
+      counterBranchCode: strOrNull(r.counter_branch_code),
+      settlementAccountCode: strOrNull(r.settlement_account_code),
+      settlementAccountName: strOrNull(r.settlement_account_name),
+      tradeDate: str(r.trade_date),
+      floatAmount: ugx(r.float_amount),
+      cashAmount: ugxOrNull(r.cash_amount),
+      feeAmount: ugxOrNull(r.fee_amount),
+      totalAmount: ugx(r.total_amount),
+      purchaseBasis: strOrNull(r.purchase_basis),
+      purchaseDifference: ugxOrNull(r.purchase_difference),
+      sourceKind: isAgencyFloatSource(r.source_kind) ? r.source_kind : null,
+      counterpartyName: strOrNull(r.counterparty_name),
+      reference: str(r.reference),
+      notes: strOrNull(r.notes),
+      status: isAgencyTradeStatus(r.status) ? r.status : 'pending',
+      revision: num(r.revision),
+      createdBy: str(r.created_by),
+      createdAt: str(r.created_at),
+      verifiedBy: strOrNull(r.verified_by),
+      rejectedReason: strOrNull(r.rejected_reason),
+      reversalReason: strOrNull(r.reversal_reason),
+    })),
+  };
+}
+
+/** Provider statement periods reconciled against the books. */
+export async function getAgencyCommissionReconciliations(options?: {
+  readonly providerCode?: string;
+  readonly limit?: number;
+}): Promise<AgencyRows<AgencyCommissionReconciliationRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_commission_reconciliation_register')
+    .select('*')
+    .order('period_end', { ascending: false })
+    .limit(options?.limit ?? 50);
+
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null)
+    return failed('the commission reconciliation register', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      floatAccountId: str(r.float_account_id),
+      tillName: str(r.till_name),
+      label: strOrNull(r.label),
+      periodStart: str(r.period_start),
+      periodEnd: str(r.period_end),
+      systemCommissionEarned: ugx(r.system_commission_earned),
+      providerReportedCommission: ugx(r.provider_reported_commission),
+      variance: ugx(r.variance),
+      varianceMeans: str(r.variance_means),
+      statementRef: str(r.statement_ref),
+      status: r.status === 'certified' ? 'certified' : 'open',
+      notes: strOrNull(r.notes),
+      createdBy: str(r.created_by),
+      reconciledBy: strOrNull(r.reconciled_by),
+      currentSystemEarned: ugx(r.current_system_earned),
+    })),
+  };
+}
+
+/** Commission and volume per line per calendar month. */
+export async function getAgencyCommissionMonths(options?: {
+  readonly providerCode?: string;
+  readonly limit?: number;
+}): Promise<AgencyRows<AgencyCommissionMonthRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_commission_monthly')
+    .select('*')
+    .order('month_start', { ascending: false })
+    .order('till_name')
+    .limit(options?.limit ?? 60);
+
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null)
+    return failed('the monthly commission report', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      floatAccountId: str(r.float_account_id),
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      branchId: str(r.branch_id),
+      tillName: str(r.till_name),
+      label: strOrNull(r.label),
+      monthStart: str(r.month_start),
+      transactions: num(r.transactions),
+      principal: ugx(r.principal),
+      customerFees: ugx(r.customer_fees),
+      commissionEarned: ugx(r.commission_earned),
+    })),
+  };
+}
+
+/**
+ * The lines a float trade may name, and what stands in the way of closing
+ * each one.
+ *
+ * `obligations` comes from `agency_agent_line_obligations()`, the same
+ * function `close_agency_agent_line()` refuses with — so the screen offers the
+ * close button on exactly the lines the database would accept, rather than on
+ * a second implementation of the rule.
+ */
+export async function getAgencyAgentLineObligations(
+  floatAccountId: string,
+): Promise<AgencyMaybeRow<readonly string[]>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('agency_agent_line_obligations', {
+    p_float_account_id: floatAccountId,
+  });
+
+  if (error !== null) return failed('what stands in the way of closing this line', error);
+
+  return { ok: true, row: Array.isArray(data) ? data.map((v) => String(v)) : [] };
 }

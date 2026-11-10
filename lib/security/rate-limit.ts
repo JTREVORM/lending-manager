@@ -98,6 +98,7 @@ export type RateLimitedAction =
   | 'agency.replenish'
   | 'agency.reconcile'
   | 'agency.reconcile_decision'
+  | 'agency.float_trade'
   | 'agency.configure';
 
 export interface RateLimitRule {
@@ -426,6 +427,15 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 60,
     onStoreFailure: 'closed',
     message: 'Too many approvals at once. Wait a moment and try again.',
+  },
+  'agency.float_trade': {
+    // Its own bucket rather than sharing agency.replenish: a cashier
+    // recording trades and a manager topping float up are different people
+    // doing different work, and one should not exhaust the other's budget.
+    limit: 20,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many float trades at once. Wait a moment and try again.',
   },
   'agency.configure': {
     limit: 20,

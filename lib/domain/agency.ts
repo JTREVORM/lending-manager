@@ -346,3 +346,229 @@ export function providerBlockedReason(provider: {
   if (!provider.isActive) return 'Not active.';
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4E — Mobile Money
+// ---------------------------------------------------------------------------
+
+/** What an agent line is doing, as decision OD-4 distinguishes it. */
+export const AGENCY_LINE_STATUSES = ['active', 'suspended', 'closed'] as const;
+export type AgencyLineStatus = (typeof AGENCY_LINE_STATUSES)[number];
+
+export function isAgencyLineStatus(value: unknown): value is AgencyLineStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_LINE_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** The three things a float trade can be. */
+export const AGENCY_TRADE_KINDS = ['purchase', 'sale', 'transfer'] as const;
+export type AgencyTradeKind = (typeof AGENCY_TRADE_KINDS)[number];
+
+export function isAgencyTradeKind(value: unknown): value is AgencyTradeKind {
+  return (
+    typeof value === 'string' && (AGENCY_TRADE_KINDS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Where a float trade is in its maker-checker lifecycle.
+ *
+ * `pending` is the one that matters: it has moved no money, because nothing
+ * writes a journal until a second officer verifies it.
+ */
+export const AGENCY_TRADE_STATUSES = [
+  'pending',
+  'posted',
+  'rejected',
+  'reversed',
+] as const;
+export type AgencyTradeStatus = (typeof AGENCY_TRADE_STATUSES)[number];
+
+export function isAgencyTradeStatus(value: unknown): value is AgencyTradeStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_TRADE_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** Where a purchase's float came from. */
+export const AGENCY_FLOAT_SOURCES = [
+  'provider_service_centre',
+  'external_agent',
+  'bank',
+  'cash',
+] as const;
+export type AgencyFloatSource = (typeof AGENCY_FLOAT_SOURCES)[number];
+
+export function isAgencyFloatSource(value: unknown): value is AgencyFloatSource {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_FLOAT_SOURCES as readonly string[]).includes(value)
+  );
+}
+
+/** How a commission recovery payable was cleared (decision OD-10). */
+export const AGENCY_RECOVERY_METHODS = ['float_deduction', 'commission_offset'] as const;
+export type AgencyRecoveryMethod = (typeof AGENCY_RECOVERY_METHODS)[number];
+
+export function isAgencyRecoveryMethod(value: unknown): value is AgencyRecoveryMethod {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_RECOVERY_METHODS as readonly string[]).includes(value)
+  );
+}
+
+/** How a withdrawal's customer fee crossed the counter (decision OD-5). */
+export const AGENCY_FEE_MODES = ['deduct_from_payout', 'collect_separately'] as const;
+export type AgencyFeeMode = (typeof AGENCY_FEE_MODES)[number];
+
+export function isAgencyFeeMode(value: unknown): value is AgencyFeeMode {
+  return (
+    typeof value === 'string' && (AGENCY_FEE_MODES as readonly string[]).includes(value)
+  );
+}
+
+/** One row of `agency_commission_by_line`. */
+export interface AgencyLineCommissionRow {
+  readonly floatAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly tillName: string;
+  readonly label: string | null;
+  readonly lineStatus: AgencyLineStatus;
+  readonly ledgerAccountCode: string;
+  readonly floatBalance: UgxAmount;
+  readonly commissionOutstanding: UgxAmount;
+  readonly recoveryOwed: UgxAmount;
+}
+
+/**
+ * One row of `agency_mobile_money_dashboard`: one agent line, and everything
+ * a supervisor asks about it at once.
+ */
+export interface AgencyMoneyLineRow extends AgencyLineCommissionRow {
+  readonly depositsToday: number;
+  readonly depositValueToday: UgxAmount;
+  readonly withdrawalsToday: number;
+  readonly withdrawalValueToday: UgxAmount;
+  readonly commissionToday: UgxAmount;
+  readonly customerFeesToday: UgxAmount;
+  readonly pendingTrades: number;
+  readonly transactionsInFlight: number;
+  readonly openCommissionReconciliations: number;
+}
+
+/**
+ * One row of `agency_mobile_money_consolidated`.
+ *
+ * `floatTransferredIn` and `floatTransferredOut` are their own columns and are
+ * **not** part of `floatPurchased` or `floatSold`: a transfer moves float
+ * between two of one provider's own lines, so counting it on both sides would
+ * report twice an amount that never moved at all.
+ */
+export interface AgencyMoneyProviderRow {
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly agentLines: number;
+  readonly activeLines: number;
+  readonly suspendedLines: number;
+  readonly floatHeld: UgxAmount;
+  readonly commissionOutstanding: UgxAmount;
+  readonly recoveryOwed: UgxAmount;
+  readonly floatPurchased: UgxAmount;
+  readonly purchasePremium: UgxAmount;
+  readonly purchaseDiscount: UgxAmount;
+  readonly floatSold: UgxAmount;
+  readonly saleFeeIncome: UgxAmount;
+  readonly floatTransferredOut: UgxAmount;
+  readonly floatTransferredIn: UgxAmount;
+}
+
+/** One row of `agency_float_trade_register`. */
+export interface AgencyFloatTradeRow {
+  readonly id: string;
+  readonly kind: AgencyTradeKind;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly floatAccountId: string;
+  readonly tillName: string;
+  readonly label: string | null;
+  readonly counterFloatAccountId: string | null;
+  readonly counterTillName: string | null;
+  readonly counterLabel: string | null;
+  readonly counterBranchCode: string | null;
+  readonly settlementAccountCode: string | null;
+  readonly settlementAccountName: string | null;
+  readonly tradeDate: string;
+  readonly floatAmount: UgxAmount;
+  readonly cashAmount: UgxAmount | null;
+  readonly feeAmount: UgxAmount | null;
+  readonly totalAmount: UgxAmount;
+  /** 'face value' | 'premium paid' | 'discount received', on a purchase only. */
+  readonly purchaseBasis: string | null;
+  readonly purchaseDifference: UgxAmount | null;
+  readonly sourceKind: AgencyFloatSource | null;
+  readonly counterpartyName: string | null;
+  readonly reference: string;
+  readonly notes: string | null;
+  readonly status: AgencyTradeStatus;
+  readonly revision: number;
+  readonly createdBy: string;
+  readonly createdAt: string;
+  readonly verifiedBy: string | null;
+  readonly rejectedReason: string | null;
+  readonly reversalReason: string | null;
+}
+
+/** One row of `agency_commission_reconciliation_register`. */
+export interface AgencyCommissionReconciliationRow {
+  readonly id: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly floatAccountId: string;
+  readonly tillName: string;
+  readonly label: string | null;
+  readonly periodStart: string;
+  readonly periodEnd: string;
+  readonly systemCommissionEarned: UgxAmount;
+  readonly providerReportedCommission: UgxAmount;
+  readonly variance: UgxAmount;
+  readonly varianceMeans: string;
+  readonly statementRef: string;
+  readonly status: 'open' | 'certified';
+  readonly notes: string | null;
+  readonly createdBy: string;
+  readonly reconciledBy: string | null;
+  /** What the same period says now; a gap means something was reversed since. */
+  readonly currentSystemEarned: UgxAmount;
+}
+
+/** One row of `agency_commission_monthly`. */
+export interface AgencyCommissionMonthRow {
+  readonly floatAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly branchId: string;
+  readonly tillName: string;
+  readonly label: string | null;
+  readonly monthStart: string;
+  readonly transactions: number;
+  readonly principal: UgxAmount;
+  readonly customerFees: UgxAmount;
+  readonly commissionEarned: UgxAmount;
+}
