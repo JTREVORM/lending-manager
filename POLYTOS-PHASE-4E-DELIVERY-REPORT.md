@@ -2,7 +2,7 @@
 
 **Branch:** `phase4e/mobile-money-2026-11-09`, created from
 `phase4d/agency-banking-interface-2026-11-08` @ `38633d8` ·
-**Design accepted at:** `befac86` · **Code head:** `17a4877`, CI green ·
+**Design accepted at:** `befac86` · **Code head:** `b2bb0fe`, CI green ·
 **Status:**
 complete at the database, the application and the browser; the remaining
 release conditions are commercial and infrastructural, not code (§7, §8).
@@ -158,31 +158,32 @@ navigation and accessibility suites, against the real harness.
 
 ### CI on the final head
 
-**Run `42779918710`, commit `17a4877`, all four mandatory jobs green:**
+**Run `42811555657`, commit `b2bb0fe`, all four mandatory jobs green.**
+<https://github.com/JTREVORM/lending-manager/actions/runs/42811555657>
 
-| Job | Result |
-| --- | --- |
-| `checks, unit/integration, build` | ✅ |
-| `database (real PostgreSQL)` | ✅ |
-| `security release rehearsal (PostgreSQL 17, real Auth)` | ✅ |
-| `browser E2E (production build, fresh seed)` | ✅ |
+| Job | Result | What it ran |
+| --- | --- | --- |
+| `checks, unit/integration, build` | ✅ | 2,684 passed, 6 skipped; the bundle budget's 6; typecheck, lint, format, build |
+| `database (real PostgreSQL)` | ✅ | **2,390** across eleven projects: `db` 1,950 · `agency` 66 · `agency-engine` 64 · `agency-security` 21 · `agency-settlement` 78 · **`agency-money` 123** · `shared-till` 6 · `seed` 18 · `seed-reuse` 15 · `seed-member-loans` 24 · `seed-benefits` 25 |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | ✅ | the release rehearsal against PostgreSQL 17 |
+| `browser E2E (production build, fresh seed)` | ✅ | **1,015 passed**, 48 skipped, 19.4 minutes |
+
+The `agency-money` project, named in full because its absence from `test:db`
+is §6's second finding:
+
+```
+✓ agency-money tests/db/agency-money-foundation.test.ts  (54 tests)
+✓ agency-money tests/db/agency-money-commission.test.ts  (37 tests)
+✓ agency-money tests/db/agency-money-float.test.ts       (32 tests)
+```
 
 The browser job is the one worth naming. It applies every migration from zero
 to PostgreSQL, seeds a real book, builds for production and runs the whole
-browser suite — this phase's ten Mobile Money tests among them — on a database
-nothing has touched. The database job is also the first run in this phase's
-history that actually executed the `agency-money` project; the three before it
-reported green without it (§6).
+browser suite — this phase's twelve Mobile Money tests among them — on a
+database nothing has touched.
 
-The only commit after `17a4877` is this report, which changes no code, no
-migration and no test.
-
-Gates: `scripts/check-database-security.mjs` passes on a clean build;
-`scripts/audit-financial-arithmetic.mjs` passes; typecheck, lint and format
-clean. The browser bundle total moves 670 → 676 KB gzipped, measured both
-ways on one machine (104 chunks and 665 KB without the five new routes, 107
-and 671 KB with them), no new dependency, largest chunk unmoved at 72 KB, and
-the two heaviest new routes added to the per-page budget.
+Later commits on this branch are the delivery report and the pull request
+body. They change no code, no migration and no test.
 
 ### Existing financial data is provably preserved across the upgrade
 
