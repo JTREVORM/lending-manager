@@ -47,7 +47,7 @@ set that out; none of it was rebuilt.
 
 ## 2. Migration sequence
 
-Fourteen migrations, applied in filename order. Every one is re-runnable:
+Fifteen migrations, applied in filename order. Every one is re-runnable:
 re-applying the whole set to an already-migrated database is part of the
 local loop.
 
@@ -67,6 +67,7 @@ local loop.
 | 12 | `20261115001200_agency_commission_reconciliation` | the statement-period register, submit and certify |
 | 13 | `20261115001300_agency_money_views` | six views, the register extension, three new exception kinds |
 | 14 | `20261115001400_agency_money_view_readability` | the per-line commission balances as a view, so the three views built on them are readable by the officer rather than refused (§6) |
+| 15 | `20261115001500_agency_operating_branch` | the operating branch, named and validated instead of guessed — the correction in §10 |
 
 `PHASE_PREFIXES` in `scripts/verify-membership-upgrade.mjs` lists `20261115`.
 Without it the upgrade verifier would classify this whole phase as released
@@ -285,7 +286,7 @@ of the seven Phase 4E views, and that the view's per-line figures equal what
 the engine's own helpers refuse on — for a line owed commission and a line
 owing it back, so neither figure is zero for the wrong reason.
 
-### A finding this phase is not fixing, and why
+### A finding this phase reported, and then corrected
 
 Writing the cross-branch transfer test meant opening a second branch — the
 first time anything in this system has had two — and that exposed a defect in
@@ -295,7 +296,7 @@ Phase 4B's branch resolution that one branch could never show.
 officer's own branch, deliberately: it is never an argument, which is what
 stops one branch recording against another's till. But an officer who has no
 branch — Head Office, whose `profiles.branch_id` is null, which is both the
-Owner and the seeded Secretary — falls through to:
+Owner and the seeded Secretary — fell through to:
 
 ```sql
 if v_branch is null then
@@ -305,30 +306,18 @@ end if;
 ```
 
 **The alphabetically first active branch.** With one branch that is correct by
-accident. With two, a Head Office cashier who names a Head Office till is
+accident. With two, a Head Office cashier who names a Head Office till was
 refused with "That till belongs to a different branch", because the
-transaction was stamped with whichever branch sorts first by code — and which
-branch that is depends on a string.
+transaction had been stamped with whichever branch sorts first by code — and
+which branch that is depends on a string.
 
-The effect on a real business: as soon as a second branch is opened with a
-code sorting before the first, every head-office officer's agency
-transactions move to it, and they can post against no other branch's till.
-Nothing warns them; the refusal names the till, not the cause.
+It was reported rather than fixed on the spot, because
+`create_agency_transaction()` is shared with Agent Banking and this
+workstream was told not to change Agent Banking posting behaviour, and
+because the fix was a business decision rather than a tidy-up. The Product
+Owner has since approved the rule, and §10 is the correction.
 
-It is **not fixed here**, for one reason: `create_agency_transaction()` is
-shared with Agent Banking, and this workstream was told not to change Agent
-Banking posting behaviour. Changing how a null-branch actor's branch is
-resolved is exactly that. So it is written down, it is in §8 as a release
-condition, and the browser fixture gives its second branch a `Z…` code so
-the test exercises cross-branch transfers without provoking an unrelated
-defect — the test avoids it rather than papering over it.
-
-What a fix would need to decide, when it is authorised: whether a head-office
-officer records against the branch of the till they name, against a branch
-they choose explicitly, or not at all. That is a business question about who
-may transact where, not a code tidy-up.
-
-And one bug the tests caught that nothing else would have:
+And one bug the tests caught that nothing else would have:And one bug the tests caught that nothing else would have:
 `record_agency_float_trade` held the receiving line's branch as `c.branch_id`
 inside a `CASE` that would not have chosen it for a purchase or a sale.
 PL/pgSQL evaluates every parameter of an `INSERT` before the statement runs,
@@ -435,13 +424,10 @@ changes it:
   `requires_approval_above` is deliberately still not settable.
 - **Agent Banking** posting behaviour is untouched, pending the client's
   business explanation.
-- **A head-office officer's agency transactions are stamped with the
-  alphabetically first active branch** when their profile carries no branch.
-  Harmless with one branch, wrong with two, and the business has one today.
-  This must be decided and fixed before a second branch opens — §6 sets out
-  what the decision is. Found by this phase, not introduced by it, and
-  deliberately not changed here because the function is shared with Agent
-  Banking.
+- ~~A head-office officer's agency transactions are stamped with the
+  alphabetically first active branch.~~ **Resolved.** Approved and corrected
+  by `20261115001500`; the rule and its evidence are §10. This was the one
+  blocker this phase added to the list, and it is closed.
 
 ---
 
@@ -491,7 +477,69 @@ eleventh in `test:db`; §6 records what its earlier absence cost.
 
 ---
 
-## 10. Boundaries honoured
+## 10. The operating-branch correction
+
+Approved after the Phase 4E review, implemented by
+`20261115001500_agency_operating_branch`.
+
+### The rule, and where each part of it lives
+
+| Approved rule | Where it is enforced |
+| --- | --- |
+| A branch-less officer selects the operating branch | `create_agency_transaction()` refuses with "Choose the branch this transaction is being recorded at. Your account is not assigned to one, so the branch cannot be assumed." The form's Branch select opens on no branch — a pre-selected first option would be the same silent default under a new name |
+| A branch-assigned officer uses their own and may not pick another | The function refuses a different branch with "You may only record transactions at your own branch." The form shows them which branch they are at and offers no select |
+| The branch is validated against the officer's permissions | `user_can_see_branch(v_branch)`, the same helper every RLS policy uses, raising `42501` |
+| A Mobile Money transaction's line must belong to that branch | `agency_transaction_guard()`, unchanged — that check was always right; what was wrong was the branch it compared against. The form now lists only the chosen branch's tills |
+| Agent Banking is validated too, payable or not | The branch block runs **before** the float-or-payable split, so a water bill collected into 2290 is checked identically |
+| No alphabetical fallback, ever | The `order by branch_code limit 1` is gone. A branch is refused, never substituted |
+| Posting rules unchanged | No change to any cash, float, commission or payable leg. The function's body is the same code with the branch block replaced |
+
+The branch is stored on the transaction, as it always was, so it carries
+through submission, verification, reversal and every report without further
+change.
+
+### What the tests prove
+
+Ten in `tests/db/agency-transaction-engine.test.ts`, against real
+PostgreSQL:
+
+| Case | Assertion |
+| --- | --- |
+| Head Office names branch A | recorded, and `branch_id` is branch A |
+| the same account names branch B | recorded, and `branch_id` is branch B — impossible under the fallback |
+| Head Office names nothing | refused, the message says the account is not assigned to a branch, and no row is written |
+| the named branch and the till disagree | refused, no row written |
+| a branch cashier, branch named or omitted | recorded at their own branch both ways |
+| a branch cashier names another branch | refused with "only record transactions at your own branch" |
+| a payable provider with no till | refused without a branch, recorded at the named one with it |
+| a closed branch | refused |
+| a branch whose code sorts first appears | changes nothing, for the head-office officer or the cashier |
+| the posted journal | every line at the named branch or on an account with no branch, and the entry's own `branch_id` is the named one |
+
+Two in `tests/e2e/specs/agency-money.write.spec.ts`, through the counter
+screen: a Head Office account recording at each of two branches; the select
+opening empty with no till list behind it; a branch and till pushed out of
+agreement and refused; a branch-assigned cashier offered no choice, told
+where they are, and shown only their own branch's tills; and a bill payment
+with no till still requiring the branch.
+
+### What else changed, and what did not
+
+`create_agency_transaction()` takes `p_branch_id` last, so an existing
+positional call by a branch-assigned officer is unchanged. The server action
+passes it through and lets the database decide — the schema marks it
+optional rather than re-implementing the rule in two places. The record page
+reads where the officer may record; the form asks or states accordingly. The
+harness seeder and one existing database test name their branch, because both
+record as a Head Office officer.
+
+The security baseline's entry for the function was re-reviewed under its new
+signature, and its reason now records what the branch rule is rather than
+what it used to be.
+
+---
+
+## 11. Boundaries honoured
 
 No merge. No production deployment or migration. No hosted financial or
 demonstration record read for anything but the audit, and none changed. No
