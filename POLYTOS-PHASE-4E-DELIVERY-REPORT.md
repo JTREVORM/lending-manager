@@ -2,7 +2,7 @@
 
 **Branch:** `phase4e/mobile-money-2026-11-09`, created from
 `phase4d/agency-banking-interface-2026-11-08` @ `38633d8` ·
-**Design accepted at:** `befac86` · **Code head:** `b2bb0fe`, CI green ·
+**Design accepted at:** `befac86` · **Code head:** `0349055`, CI green ·
 **Status:**
 complete at the database, the application and the browser; the remaining
 release conditions are commercial and infrastructural, not code (§7, §8).
@@ -160,15 +160,19 @@ navigation and accessibility suites, against the real harness.
 
 ### CI on the final head
 
-**Run `42811555657`, commit `b2bb0fe`, all four mandatory jobs green.**
-<https://github.com/JTREVORM/lending-manager/actions/runs/42811555657>
+**Run `42825422491`, commit `0349055`, all four mandatory jobs green.**
+<https://github.com/JTREVORM/lending-manager/actions/runs/42825422491>
 
 | Job | Result | What it ran |
 | --- | --- | --- |
 | `checks, unit/integration, build` | ✅ | 2,684 passed, 6 skipped; the bundle budget's 6; typecheck, lint, format, build |
-| `database (real PostgreSQL)` | ✅ | **2,390** across eleven projects: `db` 1,950 · `agency` 66 · `agency-engine` 64 · `agency-security` 21 · `agency-settlement` 78 · **`agency-money` 123** · `shared-till` 6 · `seed` 18 · `seed-reuse` 15 · `seed-member-loans` 24 · `seed-benefits` 25 |
+| `database (real PostgreSQL)` | ✅ | **2,400** across eleven projects: `db` 1,950 · `agency` 66 · `agency-engine` 74 · `agency-security` 21 · `agency-settlement` 78 · **`agency-money` 123** · `shared-till` 6 · `seed` 18 · `seed-reuse` 15 · `seed-member-loans` 24 · `seed-benefits` 25 |
 | `security release rehearsal (PostgreSQL 17, real Auth)` | ✅ | the release rehearsal against PostgreSQL 17 |
-| `browser E2E (production build, fresh seed)` | ✅ | **1,015 passed**, 48 skipped, 19.4 minutes |
+| `browser E2E (production build, fresh seed)` | ✅ | **1,021 passed**, 48 skipped |
+
+The ten the `agency-engine` project gained are §10's correction; the six the
+browser job gained are the two operating-branch tests, the payout, the
+cross-branch transfer and the two new routes in the accessibility sweep.
 
 The `agency-money` project, named in full because its absence from `test:db`
 is §6's second finding:
@@ -522,6 +526,29 @@ opening empty with no till list behind it; a branch and till pushed out of
 agreement and refused; a branch-assigned cashier offered no choice, told
 where they are, and shown only their own branch's tills; and a bill payment
 with no till still requiring the branch.
+
+### Two things the correction's own tests found
+
+**`text-muted` is a surface colour.** `--color-muted` is defined as
+`var(--color-surface-sunken)` — the pale grey a sunken panel is *filled*
+with. Used as a text colour it is a WCAG AA contrast failure, and Phase 4E
+had copied it into every screen it added. The correction's new hint put it on
+`/agency/record`, which the accessibility suite actually checks, and the
+suite failed. Every Phase 4E component and page now uses `text-text-muted`,
+the token the rest of the application uses, and `/agency/money` and
+`/agency/lines` joined the accessibility sweep so the next one is caught
+without waiting for a neighbouring page to notice.
+
+The same wrong class remains in three Phase 4D components on screens the
+sweep does not cover. Reported rather than changed, because this correction
+was authorised for the branch rule.
+
+**A test that reads a default is not a test.** `recordOne` in the counter
+suite left the Branch and Float till selects alone and took whatever came
+first. That was unambiguous when the seed opened one till at one branch and
+became a silent dependency on sort order as soon as neither was true. It
+names both now, which is also how the suite stopped breaking when Phase 4E
+opened lines of its own.
 
 ### What else changed, and what did not
 
