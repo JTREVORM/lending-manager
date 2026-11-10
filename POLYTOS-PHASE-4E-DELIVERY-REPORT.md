@@ -2,7 +2,8 @@
 
 **Branch:** `phase4e/mobile-money-2026-11-09`, created from
 `phase4d/agency-banking-interface-2026-11-08` @ `38633d8` ·
-**Design accepted at:** `befac86` · **Head:** `f47d5fa` · **Status:**
+**Design accepted at:** `befac86` · **Code head:** `17a4877`, CI green ·
+**Status:**
 complete at the database, the application and the browser; the remaining
 release conditions are commercial and infrastructural, not code (§7, §8).
 
@@ -154,6 +155,27 @@ now; it was not, and §6 records what that cost.
 
 Browser: 10 Mobile Money tests, 27 performance, and the existing agency,
 navigation and accessibility suites, against the real harness.
+
+### CI on the final head
+
+**Run `42779918710`, commit `17a4877`, all four mandatory jobs green:**
+
+| Job | Result |
+| --- | --- |
+| `checks, unit/integration, build` | ✅ |
+| `database (real PostgreSQL)` | ✅ |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | ✅ |
+| `browser E2E (production build, fresh seed)` | ✅ |
+
+The browser job is the one worth naming. It applies every migration from zero
+to PostgreSQL, seeds a real book, builds for production and runs the whole
+browser suite — this phase's ten Mobile Money tests among them — on a database
+nothing has touched. The database job is also the first run in this phase's
+history that actually executed the `agency-money` project; the three before it
+reported green without it (§6).
+
+The only commit after `17a4877` is this report, which changes no code, no
+migration and no test.
 
 Gates: `scripts/check-database-security.mjs` passes on a clean build;
 `scripts/audit-financial-arithmetic.mjs` passes; typecheck, lint and format
@@ -338,7 +360,6 @@ other page is held to.
 | **Transfers across branches are not in the browser suite** | Covered by six database tests including the two-way deadlock race; the harness seeds one branch, so a cross-branch transfer cannot be driven through its screens |
 | **The reported-commission path is configuration, not data** | `commission_source` can be set to `reported` only by the Owner through an audited function. No provider is set to it, because that is a commercial decision (§8) |
 | **`requires_approval_above` is still not settable** | Decision L remains open. Unchanged by this phase, and deliberately still read-only |
-| **CI on the final head** | Run `42779517249` is in progress on `f47d5fa` at the time of writing, with all four mandatory jobs. Every gate it runs has been run locally first — `npm run test:db` across eleven projects, the security gate, the unit and integration suites, the build, the bundle budget, and the browser suites against the real harness — but a green run on this exact head is the record that counts, and it is the first thing to confirm |
 | **No pull request yet** | None is open for this branch. Every earlier phase ended with a draft PR stacked on the previous one; this one is not opened, because opening it is an integration step and the standing instruction is to stop for independent review first |
 
 ---
