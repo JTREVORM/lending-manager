@@ -77,6 +77,15 @@ async function recordOne(
   await page
     .getByLabel('Service', { exact: true })
     .selectOption({ label: await optionFor(page) });
+  // The seeded till, by name. Phase 4E opens agent lines of its own against
+  // this provider — which is what a branch with two SIMs looks like, and what
+  // decision OD-3 exists for — and the form's default is the first till in
+  // the list, so leaving it alone recorded these customers against whichever
+  // line happened to sort first. Five tests in this file then failed for
+  // insufficient float on a line they had never heard of.
+  await page
+    .getByLabel('Float till', { exact: true })
+    .selectOption({ label: await tillOptionFor(page) });
   await page.getByLabel(/amount \(ugx\)/i).fill(String(details.amount));
   await page.getByLabel(/customer identifier/i).fill(details.customer);
   await page.getByLabel(/provider reference/i).fill(ref);
@@ -117,6 +126,25 @@ async function recordOne(
  * suite's to spend.
  */
 const AIRTEL_DEPOSIT = 'Airtel Money (demonstration) — Cash in to a wallet';
+
+/**
+ * The exact option label for the seeded Airtel till.
+ *
+ * The label carries the balance it holds, so it cannot be written in advance;
+ * `main` is the name `ensure_agency_float_account()` gives the first till of
+ * a provider at a branch, and it is the one the harness funds.
+ */
+async function tillOptionFor(page: Page): Promise<string> {
+  const labels = await page
+    .getByLabel('Float till', { exact: true })
+    .locator('option')
+    .allTextContents();
+  const match = labels.find((label) => label.startsWith('main —'));
+  if (match === undefined) {
+    throw new Error(`No seeded "main" till in: ${labels.join(' | ')}`);
+  }
+  return match;
+}
 
 /** The exact option label for the demonstration deposit service. */
 async function optionFor(page: Page): Promise<string> {
