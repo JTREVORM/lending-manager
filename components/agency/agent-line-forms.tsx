@@ -102,7 +102,7 @@ export function AgentLineRegistrationForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Open an agent line</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         This creates the line&rsquo;s float account at a branch. It does not activate the
         provider, agree a commission rate or set a transaction ceiling.
       </p>
@@ -145,7 +145,7 @@ export function AgentLineRegistrationForm({
               </option>
             ))}
           </select>
-          <p className="text-muted text-xs">
+          <p className="text-text-muted text-xs">
             A line&rsquo;s branch and provider can never be changed afterwards. The float
             it holds belongs to that branch.
           </p>
@@ -290,7 +290,7 @@ export function AgentLineSuspension({
   >(closeAgentLineAction, undefined);
 
   if (line.lineStatus === 'closed') {
-    return <p className="text-muted text-xs">Closed.</p>;
+    return <p className="text-text-muted text-xs">Closed.</p>;
   }
 
   const suspended = line.lineStatus === 'suspended';
@@ -337,8 +337,8 @@ export function AgentLineSuspension({
         </Alert>
       ) : obligations.length > 0 ? (
         <div className="min-w-0">
-          <p className="text-muted text-xs">Closing this line is blocked by:</p>
-          <ul className="text-muted mt-1 list-disc space-y-0.5 pl-5 text-xs">
+          <p className="text-text-muted text-xs">Closing this line is blocked by:</p>
+          <ul className="text-text-muted mt-1 list-disc space-y-0.5 pl-5 text-xs">
             {obligations.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
@@ -422,7 +422,7 @@ export function ServiceLimitForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Transaction ceiling</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         The largest single transaction allowed on a service. There is no default: a
         service without a ceiling cannot be used, and a provider cannot be activated until
         each of its services has one.
@@ -454,7 +454,7 @@ export function ServiceLimitForm({
             ))}
           </select>
           {service?.maxSingleTransaction === null ? (
-            <p className="text-muted text-xs">
+            <p className="text-text-muted text-xs">
               This service has no ceiling and cannot be transacted on.
             </p>
           ) : null}
@@ -520,7 +520,7 @@ export function CommissionSourceForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Where commission comes from</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         Either we compute commission from an agreed rate, or we record what the provider
         reports on each transaction. This sets no rate and agrees no terms.
       </p>
@@ -563,7 +563,7 @@ export function CommissionSourceForm({
             </option>
             <option value="configured">Computed from an agreed rate</option>
           </select>
-          <p className="text-muted text-xs">
+          <p className="text-text-muted text-xs">
             {source === 'reported'
               ? 'Any configured rate is cleared. Each transaction carries the figure the provider reported, and that figure is what the ledger records.'
               : 'A rate or fixed amount has to be configured separately before the provider can be activated.'}

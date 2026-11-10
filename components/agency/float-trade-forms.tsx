@@ -113,7 +113,7 @@ export function FloatTradeForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Record a float trade</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         This records what happened and moves nothing. A different Manager or the Owner has
         to check the figures before anything is posted.
       </p>
@@ -161,7 +161,7 @@ export function FloatTradeForm({
             ))}
           </select>
           {line?.lineStatus === 'suspended' ? (
-            <p className="text-muted text-xs">
+            <p className="text-text-muted text-xs">
               This line is suspended. Float can be moved off it or sold, which is how it
               is recovered, but nothing may be bought into it.
             </p>
@@ -185,7 +185,7 @@ export function FloatTradeForm({
                 </option>
               ))}
             </select>
-            <p className="text-muted text-xs">
+            <p className="text-text-muted text-xs">
               Both lines must belong to {providerName}. A transfer into another branch
               needs authority over both.
             </p>
@@ -336,7 +336,7 @@ export function FloatTradeDecision({
   if (trade.status === 'pending') {
     if (!canPost) {
       return (
-        <p className="text-muted text-xs">
+        <p className="text-text-muted text-xs">
           Waiting for a Manager or the Owner. Recording it is not posting it.
         </p>
       );
@@ -413,13 +413,15 @@ export function FloatTradeDecision({
 
   if (trade.status === 'rejected') {
     return (
-      <p className="text-muted text-xs">Refused: {trade.rejectedReason ?? 'no reason'}</p>
+      <p className="text-text-muted text-xs">
+        Refused: {trade.rejectedReason ?? 'no reason'}
+      </p>
     );
   }
 
   if (trade.status === 'reversed') {
     return (
-      <p className="text-muted text-xs">
+      <p className="text-text-muted text-xs">
         Reversed: {trade.reversalReason ?? 'no reason'}
       </p>
     );

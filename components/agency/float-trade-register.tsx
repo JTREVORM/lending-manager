@@ -79,9 +79,9 @@ export function FloatTradeRegister({
               </TableCell>
               <TableCell header>
                 {t.label ?? t.tillName}
-                <span className="text-muted ml-2 text-xs">{t.branchCode}</span>
+                <span className="text-text-muted ml-2 text-xs">{t.branchCode}</span>
                 {t.counterTillName !== null ? (
-                  <span className="text-muted block text-xs">
+                  <span className="text-text-muted block text-xs">
                     into {t.counterLabel ?? t.counterTillName}
                     {t.counterBranchCode !== null && t.counterBranchCode !== t.branchCode
                       ? ` at ${t.counterBranchCode}`
@@ -92,7 +92,7 @@ export function FloatTradeRegister({
               <TableCell>
                 {KIND_LABEL[t.kind]}
                 {t.purchaseBasis !== null ? (
-                  <span className="text-muted block text-xs">
+                  <span className="text-text-muted block text-xs">
                     {t.purchaseBasis}
                     {t.purchaseDifference !== null && t.purchaseDifference !== 0 ? (
                       <>
@@ -103,7 +103,7 @@ export function FloatTradeRegister({
                   </span>
                 ) : null}
                 {t.feeAmount !== null && t.feeAmount > 0 ? (
-                  <span className="text-muted block text-xs">
+                  <span className="text-text-muted block text-xs">
                     fee <Money amount={t.feeAmount} />
                   </span>
                 ) : null}
@@ -115,7 +115,7 @@ export function FloatTradeRegister({
               </TableCell>
               <TableCell align="numeric">
                 {t.cashAmount === null ? (
-                  <span className="text-muted text-xs">no cash moved</span>
+                  <span className="text-text-muted text-xs">no cash moved</span>
                 ) : (
                   <span className="tabular-nums">
                     <Money amount={t.cashAmount} />

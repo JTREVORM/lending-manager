@@ -82,7 +82,7 @@ export function CommissionPayoutForm({
     return (
       <Card>
         <h2 className="text-sm font-semibold">Commission paid in</h2>
-        <p className="text-muted mt-1 text-sm">
+        <p className="text-text-muted mt-1 text-sm">
           No agent line you can see is owed commission, so there is nothing to pay in.
         </p>
       </Card>
@@ -94,7 +94,7 @@ export function CommissionPayoutForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Commission paid in</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         The provider pays commission as float on the line, not as cash. This raises the
         line&rsquo;s float and clears the same amount of what the provider owes us.
       </p>
@@ -207,7 +207,7 @@ export function CommissionRecoveryForm({
     return (
       <Card>
         <h2 className="text-sm font-semibold">Commission recovered by the provider</h2>
-        <p className="text-muted mt-1 text-sm">
+        <p className="text-text-muted mt-1 text-sm">
           Nothing is owed back to a provider. A reversal of a transaction whose commission
           was already paid in is what puts an amount here.
         </p>
@@ -220,7 +220,7 @@ export function CommissionRecoveryForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Commission recovered by the provider</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         A reversed transaction whose commission we had already been paid leaves us owing
         it back. Record here how the provider took it.
       </p>
@@ -264,7 +264,7 @@ export function CommissionRecoveryForm({
               Set against commission the provider still owes us
             </option>
           </select>
-          <p className="text-muted text-xs">
+          <p className="text-text-muted text-xs">
             {method === 'float_deduction'
               ? `Float falls by the amount. The line holds ${(line?.floatBalance ?? 0).toLocaleString('en-UG')}, and a deduction larger than that is refused.`
               : `What the provider owes us falls by the amount. That receivable stands at ${(line?.commissionOutstanding ?? 0).toLocaleString('en-UG')}.`}
@@ -360,7 +360,7 @@ export function CommissionReconciliationForm({
   return (
     <Card>
       <h2 className="text-sm font-semibold">Reconcile a provider statement</h2>
-      <p className="text-muted mt-1 text-sm">
+      <p className="text-text-muted mt-1 text-sm">
         This compares the provider&rsquo;s commission figure with ours and records the
         difference. It posts nothing. A variance stays visible until somebody corrects the
         underlying transactions or the Owner authorises an adjustment.
@@ -463,12 +463,12 @@ export function CommissionReconciliationDecision({
   >(certifyCommissionReconciliationAction, undefined);
 
   if (row.status === 'certified') {
-    return <p className="text-muted text-xs">Certified.</p>;
+    return <p className="text-text-muted text-xs">Certified.</p>;
   }
 
   if (!canCertify) {
     return (
-      <p className="text-muted text-xs">
+      <p className="text-text-muted text-xs">
         Waiting for a second officer. Whoever submitted it may not certify it.
       </p>
     );

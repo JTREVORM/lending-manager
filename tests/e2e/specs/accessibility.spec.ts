@@ -100,6 +100,13 @@ const SCREENS = [
   '/agency/reconciliation/cash',
   '/agency/reconciliation/float',
   '/agency/providers',
+  // Phase 4E. The five Mobile Money screens are a dashboard, a provider
+  // screen with a form and a register, two more form screens and the line
+  // administration; two of them cover every pattern the others use, and
+  // adding them found a real contrast failure — `text-muted` is a surface
+  // colour, and using it as text is a WCAG AA violation wherever it lands.
+  '/agency/money',
+  '/agency/lines',
 ] as const;
 
 test.describe('the staff application meets WCAG AA', () => {

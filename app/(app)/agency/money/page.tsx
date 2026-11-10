@@ -221,7 +221,9 @@ export default async function AgencyMoneyPage() {
                   <TableRow key={l.floatAccountId}>
                     <TableCell header>
                       {l.label ?? l.tillName}
-                      <span className="text-muted ml-2 text-xs">{l.providerName}</span>
+                      <span className="text-text-muted ml-2 text-xs">
+                        {l.providerName}
+                      </span>
                     </TableCell>
                     <TableCell>{l.branchCode}</TableCell>
                     <TableCell>
@@ -255,7 +257,7 @@ export default async function AgencyMoneyPage() {
                     </TableCell>
                     <TableCell align="numeric">
                       {waiting === 0 ? (
-                        <span className="text-muted text-xs">nothing</span>
+                        <span className="text-text-muted text-xs">nothing</span>
                       ) : (
                         <Badge tone="warning">{waiting}</Badge>
                       )}

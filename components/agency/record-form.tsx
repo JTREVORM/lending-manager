@@ -226,7 +226,7 @@ export function RecordForm({
         {ownBranch !== null ? (
           <>
             <input type="hidden" name="branchId" value={ownBranch.id} />
-            <p className="text-muted text-sm">
+            <p className="text-text-muted text-sm">
               Recording at <span className="font-semibold">{ownBranch.branchCode}</span> —{' '}
               {ownBranch.name}, the branch your account is assigned to. Transactions
               cannot be recorded at another branch from this account.
@@ -256,7 +256,7 @@ export function RecordForm({
                 </option>
               ))}
             </select>
-            <p className="text-muted text-xs">
+            <p className="text-text-muted text-xs">
               Your account is not assigned to a branch, so the branch has to be said. It
               decides which drawer the cash moves through and which tills are available
               below; it is never assumed.

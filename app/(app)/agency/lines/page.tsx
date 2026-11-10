@@ -114,7 +114,7 @@ export default async function AgencyAgentLinesPage() {
               <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">
                   {l.label ?? l.tillName}
-                  <span className="text-muted ml-2 text-xs font-normal">
+                  <span className="text-text-muted ml-2 text-xs font-normal">
                     {l.providerName} · {l.branchCode}
                   </span>
                 </h2>
@@ -131,7 +131,7 @@ export default async function AgencyAgentLinesPage() {
                 </Badge>
               </div>
 
-              <dl className="text-muted mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <dl className="text-text-muted mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <dt>Ledger account</dt>
                 <dd className="font-mono">{l.ledgerAccountCode}</dd>
                 <dt>Float held</dt>
@@ -149,7 +149,7 @@ export default async function AgencyAgentLinesPage() {
               </dl>
 
               {l.lineStatus === 'closed' ? (
-                <p className="text-muted mt-3 text-xs">
+                <p className="text-text-muted mt-3 text-xs">
                   Closed. Its history and its ledger account stay; it can never transact
                   again.
                 </p>

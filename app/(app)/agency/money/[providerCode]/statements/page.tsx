@@ -117,7 +117,7 @@ export default async function AgencyMoneyStatementsPage({
                   </TableCell>
                   <TableCell header>
                     {r.label ?? r.tillName}
-                    <span className="text-muted block text-xs">{r.branchCode}</span>
+                    <span className="text-text-muted block text-xs">{r.branchCode}</span>
                   </TableCell>
                   <TableCell>
                     <span className="font-mono text-xs">{r.statementRef}</span>
@@ -142,7 +142,9 @@ export default async function AgencyMoneyStatementsPage({
                     >
                       <Money amount={r.variance} />
                     </span>
-                    <span className="text-muted block text-xs">{r.varianceMeans}</span>
+                    <span className="text-text-muted block text-xs">
+                      {r.varianceMeans}
+                    </span>
                   </TableCell>
                   <TableCell align="numeric">
                     <span className="tabular-nums">

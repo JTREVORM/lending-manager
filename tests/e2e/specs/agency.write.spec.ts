@@ -77,12 +77,22 @@ async function recordOne(
   await page
     .getByLabel('Service', { exact: true })
     .selectOption({ label: await optionFor(page) });
-  // The seeded till, by name. Phase 4E opens agent lines of its own against
-  // this provider — which is what a branch with two SIMs looks like, and what
-  // decision OD-3 exists for — and the form's default is the first till in
-  // the list, so leaving it alone recorded these customers against whichever
-  // line happened to sort first. Five tests in this file then failed for
+  // The branch, then the till, both by name.
+  //
+  // The branch because Phase 4E's correction removed the fallback that used
+  // to pick one: the seeded Secretary is a Head Office account, and such an
+  // officer now names the branch — and until they do there is no till list
+  // at all, because a till belongs to a branch.
+  //
+  // The till because Phase 4E opens agent lines of its own against this
+  // provider, which is what a branch with two SIMs looks like and what
+  // decision OD-3 exists for. The form's default is the first till in the
+  // list, so leaving it alone recorded these customers against whichever line
+  // happened to sort first, and five tests in this file failed for
   // insufficient float on a line they had never heard of.
+  await page
+    .getByLabel('Branch', { exact: true })
+    .selectOption({ label: await branchOptionFor(page) });
   await page
     .getByLabel('Float till', { exact: true })
     .selectOption({ label: await tillOptionFor(page) });
@@ -126,6 +136,25 @@ async function recordOne(
  * suite's to spend.
  */
 const AIRTEL_DEPOSIT = 'Airtel Money (demonstration) — Cash in to a wallet';
+
+/**
+ * The exact option label for the branch the harness seeds.
+ *
+ * `BR2601` is the branch every seeded record belongs to, created by the
+ * `20261010000200` backfill. The label carries its name, so it is read off
+ * the select rather than written here.
+ */
+async function branchOptionFor(page: Page): Promise<string> {
+  const labels = await page
+    .getByLabel('Branch', { exact: true })
+    .locator('option')
+    .allTextContents();
+  const match = labels.find((label) => label.startsWith('BR2601'));
+  if (match === undefined) {
+    throw new Error(`No seeded branch in: ${labels.join(' | ')}`);
+  }
+  return match;
+}
 
 /**
  * The exact option label for the seeded Airtel till.

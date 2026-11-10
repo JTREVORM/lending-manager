@@ -180,7 +180,7 @@ export default async function AgencyMoneyProviderPage({
               <TableRow key={l.floatAccountId}>
                 <TableCell header>
                   {l.label ?? l.tillName}
-                  <span className="text-muted block font-mono text-xs">
+                  <span className="text-text-muted block font-mono text-xs">
                     {l.ledgerAccountCode}
                   </span>
                 </TableCell>
@@ -207,13 +207,15 @@ export default async function AgencyMoneyProviderPage({
                   <span className="tabular-nums">
                     <Money amount={l.depositValueToday} />
                   </span>
-                  <span className="text-muted block text-xs">{l.depositsToday}</span>
+                  <span className="text-text-muted block text-xs">{l.depositsToday}</span>
                 </TableCell>
                 <TableCell align="numeric">
                   <span className="tabular-nums">
                     <Money amount={l.withdrawalValueToday} />
                   </span>
-                  <span className="text-muted block text-xs">{l.withdrawalsToday}</span>
+                  <span className="text-text-muted block text-xs">
+                    {l.withdrawalsToday}
+                  </span>
                 </TableCell>
                 <TableCell align="numeric">
                   <span className="tabular-nums">
