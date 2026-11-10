@@ -336,7 +336,7 @@ It does not say the line is clear.
 
 ### The browser coverage
 
-`tests/e2e/specs/agency-money.write.spec.ts`, ten tests on the real harness:
+`tests/e2e/specs/agency-money.write.spec.ts`, twelve tests on the real harness:
 PostgreSQL with every migration applied from zero, real PostgREST, the
 production build. Each test opens its own agent line through the Owner's form
 and spends nothing another suite reads as a fixture.
@@ -347,6 +347,8 @@ and spends nothing another suite reads as a fixture.
 | a suspended agent line | `status = 'suspended'`, `is_active = false`, the reason stored, the float **unchanged**, a purchase into it refused, no row written, and the officer's typed figures still on screen |
 | certifying a provider statement | the variance recorded at 7,500, certified by a second officer, the variance still 7,500 afterwards, and `count(*)` over **every journal entry in the books** identical either side of the certification |
 | closing an agent line | offered on an empty line, withdrawn once it holds float, with the obligations the screen lists checked against the function's own answer |
+| commission paid into an agent line | commission earned through a real counter transaction, then a part payout: exactly two journal lines (1310 credited, the line's float debited), the float up and the receivable down by the same amount, the per-line figure reduced, GL 4510 **unchanged** so no income is recognised twice, a duplicate reference refused with one settlement row still on file, and a payout above the outstanding refused with every balance where the part payment left it |
+| a float transfer across two branches | two branches and two lines of one provider: recorded by a cashier and moving nothing; invisible to a Manager at the other branch while their own line is visible; verified by an officer with authority over both, then one journal of two lines, exact source and destination balances, **consolidated float unchanged** with the movement in the transfer columns and in neither the purchase nor the sale total; and a transfer the line cannot cover refused at the point of posting with nothing moved |
 
 `/agency/money/DEMO_AIRTEL` and `/agency/lines` also joined the per-page
 performance budget in `performance.spec.ts`, against the same ceilings every
@@ -356,8 +358,8 @@ other page is held to.
 
 | Outstanding | Note |
 | --- | --- |
-| **No per-line commission payout is driven through a browser** | The payout and the recovery have 28 database tests with exact journal lines, and the forms are covered by the unit and type layers, but the browser suite exercises the float-trade and reconciliation chains rather than the payout chain. Generating commission to pay out needs a counter transaction on the suite's own line first, which is a longer fixture than the four tests above |
-| **Transfers across branches are not in the browser suite** | Covered by six database tests including the two-way deadlock race; the harness seeds one branch, so a cross-branch transfer cannot be driven through its screens |
+| **The commission recovery has no browser test** | Decision OD-10's clearing side — a float deduction or a commission offset — has 12 database tests with exact journal lines, and the form is covered by the unit and type layers. Driving it through a browser needs a payout **and** a reversal before it, which is the longest fixture in the file; the payout half of that chain is now covered end to end |
+| **One unauthorised-branch refusal is asserted at the database, not the browser** | The browser test proves a Manager at the other branch is not shown the trade at all — RLS hides it, so there is no button to press. The function's own refusal when the call is made anyway is `agency-money-float.test.ts`, "refuses a transfer into a branch the officer does not administer", beside "moves float across branches when the officer administers both" |
 | **The reported-commission path is configuration, not data** | `commission_source` can be set to `reported` only by the Owner through an audited function. No provider is set to it, because that is a commercial decision (§8) |
 | **`requires_approval_above` is still not settable** | Decision L remains open. Unchanged by this phase, and deliberately still read-only |
 | **No pull request yet** | None is open for this branch. Every earlier phase ended with a draft PR stacked on the previous one; this one is not opened, because opening it is an integration step and the standing instruction is to stop for independent review first |
@@ -391,7 +393,53 @@ changes it:
 
 ---
 
-## 9. Boundaries honoured
+## 9. Final acceptance checks
+
+Asked for at the acceptance gate and answered from the live schema of a
+database built from the fourteen migrations, not from memory of what was
+written.
+
+### The twelve decisions, re-verified
+
+| Decision | Evidence read back from the database |
+| --- | --- |
+| **OD-1** | `2230=liability/credit, 4580=income/credit, 5970=expense/debit`; 15 shape constraints on `agency_float_trades` |
+| **OD-2** | `certify_agency_commission_reconciliation` contains no `post_journal` call anywhere in its body |
+| **OD-3** | `verify_agency_float_trade` takes both provider-balance locks through `least()`/`greatest()` on branch id — deterministic whichever direction the transfer runs; `agency_float_trade_transfer_shape` refuses a cross-provider transfer |
+| **OD-4** | `agency_float_status_valid`, `agency_float_status_matches_is_active`, `agency_float_inactive_states_reason`, `agency_float_closed_has_date`; `agency_agent_line_obligations()` present; `agency_transaction_guard` distinguishes `suspended` from `closed` |
+| **OD-5** | `customer_fee_mode = any(array['deduct_from_payout','collect_separately'])`, and a mode may not be stated without a fee |
+| **OD-6** | the sale shape: `fee_amount is not null and >= 0`, a settlement account required, `cash_amount`, `source_kind` and the counter columns all null — a credit sale cannot be expressed |
+| **OD-7** | `verified_by is null or verified_by <> created_by`; a pending row must have no journal, no verifier and no reversal; recording needs `agency:float_trade`, verification `agency:settlements` |
+| **OD-8** | `agency_commission_payout_reference_unique` on `(float_account_id, provider_statement_ref)`, partial on both being present |
+| **OD-9** | `submit_agency_commission_reconciliation` checks for an overlapping period under the provider lock; `agency_commission_monthly` exists as a separate report |
+| **OD-10** | `reverse_agency_transaction` references `2230` and splits with `least()`; `method = any(array['float_deduction','commission_offset'])` |
+| **OD-11** | `set_agency_service_limit` refuses `null` and `<= 0` — "A service ceiling must be a positive amount" — and needs `agency:providers`; `agency_transaction_live_readiness_guard` reads `max_single_transaction`, so a service without a ceiling cannot go live |
+| **OD-12** | `transaction_date date`, `transacted_at timestamptz`, `created_at timestamptz` |
+
+The manually entered commission source is a mechanism and nothing more:
+`commission_source = any(array['configured','reported'])`, and every
+mobile-money provider is still `configured` —
+`AIRTEL_MONEY=configured/active:false`, `MTN_MOMO=configured/active:false`,
+with the two demonstration providers active for the harness only. No
+commercial term has been set by this phase.
+
+### The database suite does execute `agency-money`
+
+From the database job of run `42779918710`:
+
+```
+> vitest run --project db && … && vitest run --project agency-money && …
+  ✓ agency-money tests/db/agency-money-foundation.test.ts (54 tests)
+  ✓ agency-money tests/db/agency-money-commission.test.ts (37 tests)
+  ✓ agency-money tests/db/agency-money-float.test.ts (32 tests)
+```
+
+123 tests, in CI, on a cluster built from the migrations. The project is
+eleventh in `test:db`; §6 records what its earlier absence cost.
+
+---
+
+## 10. Boundaries honoured
 
 No merge. No production deployment or migration. No hosted financial or
 demonstration record read for anything but the audit, and none changed. No

@@ -247,7 +247,14 @@ export default async function AgencyMoneyProviderPage({
       {trades.ok ? (
         <FloatTradeRegister
           rows={trades.rows}
-          canPost={contextCan(context, 'agency:verify')}
+          // `agency:settlements`, not `agency:verify`. Verifying a float trade
+          // is what posts it, and `verify_agency_float_trade()` asks for the
+          // settlement capability — the same one a commission remittance
+          // needs. No role holds one without the other today, so the two
+          // happen to agree; gating on the capability the function actually
+          // checks is what stops a future role being offered a button the
+          // database then refuses.
+          canPost={contextCan(context, 'agency:settlements')}
           canReverse={contextCan(context, 'agency:reverse')}
         />
       ) : (
