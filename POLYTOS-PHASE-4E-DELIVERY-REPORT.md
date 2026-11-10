@@ -283,6 +283,49 @@ of the seven Phase 4E views, and that the view's per-line figures equal what
 the engine's own helpers refuse on — for a line owed commission and a line
 owing it back, so neither figure is zero for the wrong reason.
 
+### A finding this phase is not fixing, and why
+
+Writing the cross-branch transfer test meant opening a second branch — the
+first time anything in this system has had two — and that exposed a defect in
+Phase 4B's branch resolution that one branch could never show.
+
+`create_agency_transaction()` stamps a transaction with the recording
+officer's own branch, deliberately: it is never an argument, which is what
+stops one branch recording against another's till. But an officer who has no
+branch — Head Office, whose `profiles.branch_id` is null, which is both the
+Owner and the seeded Secretary — falls through to:
+
+```sql
+if v_branch is null then
+  select b.id into v_branch from public.branches b
+   where b.status = 'active' order by b.branch_code limit 1;
+end if;
+```
+
+**The alphabetically first active branch.** With one branch that is correct by
+accident. With two, a Head Office cashier who names a Head Office till is
+refused with "That till belongs to a different branch", because the
+transaction was stamped with whichever branch sorts first by code — and which
+branch that is depends on a string.
+
+The effect on a real business: as soon as a second branch is opened with a
+code sorting before the first, every head-office officer's agency
+transactions move to it, and they can post against no other branch's till.
+Nothing warns them; the refusal names the till, not the cause.
+
+It is **not fixed here**, for one reason: `create_agency_transaction()` is
+shared with Agent Banking, and this workstream was told not to change Agent
+Banking posting behaviour. Changing how a null-branch actor's branch is
+resolved is exactly that. So it is written down, it is in §8 as a release
+condition, and the browser fixture gives its second branch a `Z…` code so
+the test exercises cross-branch transfers without provoking an unrelated
+defect — the test avoids it rather than papering over it.
+
+What a fix would need to decide, when it is authorised: whether a head-office
+officer records against the branch of the till they name, against a branch
+they choose explicitly, or not at all. That is a business question about who
+may transact where, not a code tidy-up.
+
 And one bug the tests caught that nothing else would have:
 `record_agency_float_trade` held the receiving line's branch as `c.branch_id`
 inside a `CASE` that would not have chosen it for a purchase or a sale.
@@ -390,6 +433,13 @@ changes it:
   `requires_approval_above` is deliberately still not settable.
 - **Agent Banking** posting behaviour is untouched, pending the client's
   business explanation.
+- **A head-office officer's agency transactions are stamped with the
+  alphabetically first active branch** when their profile carries no branch.
+  Harmless with one branch, wrong with two, and the business has one today.
+  This must be decided and fixed before a second branch opens — §6 sets out
+  what the decision is. Found by this phase, not introduced by it, and
+  deliberately not changed here because the function is shared with Agent
+  Banking.
 
 ---
 

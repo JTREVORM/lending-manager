@@ -877,7 +877,23 @@ async function secondBranch(): Promise<{
   readonly branchCode: string;
   readonly managerPhone: string;
 }> {
-  const branchCode = `B${run}`;
+  // `Z…` deliberately, so this branch sorts *after* Head Office.
+  //
+  // `create_agency_transaction()` stamps a transaction with the recording
+  // officer's own branch, and for an officer who has none — Head Office, whose
+  // `profiles.branch_id` is null — it falls back to "the alphabetically first
+  // active branch". That is harmless while a business has one branch and
+  // wrong as soon as it has two: a Head Office cashier naming a Head Office
+  // till is told "That till belongs to a different branch", because the
+  // transaction was stamped with the other one.
+  //
+  // It is a real finding and it is recorded as one (§6 and §8 of the delivery
+  // report). It is not this phase's to fix: `create_agency_transaction()` is
+  // shared with Agent Banking, whose posting behaviour this workstream was
+  // told to leave alone. So the fixture avoids provoking it rather than
+  // papering over it, and the finding is written down where the Product Owner
+  // will see it before a second branch opens.
+  const branchCode = `Z${run}`;
   const branch = await queryHarnessOne<{ id: string }>(
     `insert into public.branches
        (branch_code, name, location, district, status, opened_on, notes)
