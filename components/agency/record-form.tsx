@@ -13,13 +13,26 @@ import {
   type AgencyActionResult,
 } from '@/lib/agency/actions';
 import { toUgx } from '@/lib/domain/money';
-import type { AgencyFloatRow, AgencyServiceTypeRow } from '@/lib/domain/agency';
+import type {
+  AgencyFloatRow,
+  AgencyServiceTypeRow,
+  OperatingBranchOption,
+} from '@/lib/domain/agency';
 
 export interface RecordFormProps {
   /** Services the officer may post against: live providers only. */
   readonly services: readonly AgencyServiceTypeRow[];
   /** Tills available for a float-model provider. */
   readonly tills: readonly AgencyFloatRow[];
+  /**
+   * The branches this officer may record at.
+   *
+   * One entry, their own, for a branch-assigned officer. Every open branch
+   * for one with no branch of their own, who has to choose.
+   */
+  readonly branches: readonly OperatingBranchOption[];
+  /** Their own branch, or null for a Head Office account. */
+  readonly ownBranch: OperatingBranchOption | null;
   /**
    * Confirmed commission terms per provider, as basis points or a fixed
    * amount — whichever the provider actually has. Absent when a provider's
@@ -78,7 +91,13 @@ export interface RecordFormProps {
  * already recorded against materially different details instead of returning
  * the earlier transaction. This form is the convenience; that is the control.
  */
-export function RecordForm({ services, tills, terms }: RecordFormProps) {
+export function RecordForm({
+  services,
+  tills,
+  terms,
+  branches,
+  ownBranch,
+}: RecordFormProps) {
   const [result, submit, pending] = useActionState<
     AgencyActionResult | undefined,
     FormData
@@ -150,10 +169,25 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
   const service = services.find((s) => s.id === serviceId) ?? null;
   const providerTerms = service === null ? undefined : terms[service.providerId];
 
+  /**
+   * The operating branch.
+   *
+   * An officer with a branch of their own records at it and is told so
+   * rather than asked. One with none starts on no branch at all: a
+   * pre-selected first option would be the silent default this correction
+   * exists to remove, and the officer would never see the choice they were
+   * making.
+   */
+  const [branchId, setBranchId] = useState(ownBranch?.id ?? '');
+
   const providerTills = useMemo(
     () =>
-      service === null ? [] : tills.filter((t) => t.providerId === service.providerId),
-    [service, tills],
+      service === null
+        ? []
+        : tills.filter(
+            (t) => t.providerId === service.providerId && t.branchId === branchId,
+          ),
+    [service, tills, branchId],
   );
 
   /**
@@ -189,6 +223,50 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
       <form action={submit} className="min-w-0 space-y-4">
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
+        {ownBranch !== null ? (
+          <>
+            <input type="hidden" name="branchId" value={ownBranch.id} />
+            <p className="text-muted text-sm">
+              Recording at <span className="font-semibold">{ownBranch.branchCode}</span> —{' '}
+              {ownBranch.name}, the branch your account is assigned to. Transactions
+              cannot be recorded at another branch from this account.
+            </p>
+          </>
+        ) : branches.length === 0 ? (
+          <Alert tone="warning">
+            Your account is not assigned to a branch, and no open branch could be read, so
+            there is nowhere to record this transaction. This is not a statement that the
+            business has no branches.
+          </Alert>
+        ) : (
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor={`${formId}-branch`}>Branch</Label>
+            <select
+              id={`${formId}-branch`}
+              name="branchId"
+              required
+              value={branchId}
+              onChange={(event) => setBranchId(event.target.value)}
+              className="border-border bg-surface focus-visible:ring-brand h-11 w-full min-w-0 rounded-lg border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <option value="">Choose the branch</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.branchCode} — {b.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-muted text-xs">
+              Your account is not assigned to a branch, so the branch has to be said. It
+              decides which drawer the cash moves through and which tills are available
+              below; it is never assumed.
+            </p>
+            {result?.fieldErrors?.branchId?.[0] === undefined ? null : (
+              <p className="text-danger text-xs">{result.fieldErrors.branchId[0]}</p>
+            )}
+          </div>
+        )}
+
         <div className="min-w-0 space-y-1">
           <Label htmlFor={`${formId}-service`}>Service</Label>
           <select
@@ -211,6 +289,14 @@ export function RecordForm({ services, tills, terms }: RecordFormProps) {
             </p>
           )}
         </div>
+
+        {service !== null && branchId !== '' && providerTills.length === 0 ? (
+          <Alert tone="info">
+            {service.providerName} has no active till at the branch you have chosen. A
+            transaction settled from electronic float needs one, and the database refuses
+            a till belonging to another branch.
+          </Alert>
+        ) : null}
 
         {providerTills.length === 0 ? null : (
           <div className="min-w-0 space-y-1">

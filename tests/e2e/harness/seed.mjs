@@ -2496,13 +2496,32 @@ async function seedAgency() {
     return `E2E-AG-${String(keySeq).padStart(4, '0')}`;
   };
 
-  /** Records one transaction as the secretary. Returns its id. */
+  /**
+   * Records one transaction as the secretary. Returns its id.
+   *
+   * The branch is named. Phase 4E's correction removed the fallback that used
+   * to pick the alphabetically first active branch for an officer with no
+   * branch of their own, and the seeded Secretary is exactly that officer, so
+   * the seed says where the counter is rather than letting a string
+   * comparison decide.
+   */
   const record = async (typeId, amount, tillId, customer, reference, fee = 0) => {
     const key = nextKey();
     const row = await asUser(
       secretary,
-      `select public.create_agency_transaction($1,$2,$3,$4,$5,$6,$7,null,null,null,$8) as id`,
-      [typeId, amount, tillId, customer, 'Counter customer', reference, fee, key],
+      `select public.create_agency_transaction(
+         $1,$2,$3,$4,$5,$6,$7,null,null,null,$8,null,null,$9) as id`,
+      [
+        typeId,
+        amount,
+        tillId,
+        customer,
+        'Counter customer',
+        reference,
+        fee,
+        key,
+        branch.id,
+      ],
     );
     return row[0].id;
   };

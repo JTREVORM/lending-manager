@@ -572,3 +572,15 @@ export interface AgencyCommissionMonthRow {
   readonly customerFees: UgxAmount;
   readonly commissionEarned: UgxAmount;
 }
+
+/**
+ * A branch an officer may record an agency transaction at.
+ *
+ * In the domain module rather than the data layer because the recording form
+ * needs it, and `lib/data/*` is server-only.
+ */
+export interface OperatingBranchOption {
+  readonly id: string;
+  readonly branchCode: string;
+  readonly name: string;
+}

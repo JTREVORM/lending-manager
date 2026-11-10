@@ -69,6 +69,17 @@ const providerReferenceSchema = nonEmptyString('Provider reference', 120);
 export const recordAgencyTransactionSchema = z.object({
   transactionTypeId: uuidSchema,
   principalAmount: amountSchema,
+  /**
+   * The branch this transaction is recorded at.
+   *
+   * Optional here and decided by the database, deliberately. An officer
+   * assigned to a branch records at it and need send nothing; one who is not
+   * — Head Office — must name a branch, and
+   * `create_agency_transaction()` refuses the call when they do not. Making
+   * it required in this schema would mean the form deciding a rule the
+   * database owns, and getting a different answer when the two drift.
+   */
+  branchId: optionalField(uuidSchema),
   /** Absent for a `cash_payable` provider, which has no till of its own. */
   floatAccountId: uuidSchema.optional().nullable(),
   customerIdentifier: nonEmptyString('Customer identifier', 120),

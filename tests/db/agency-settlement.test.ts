@@ -3239,8 +3239,14 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
       const key = `P33-${Math.random().toString(36).slice(2, 12)}`;
       const c = await asUserCommitted(recorder, [
         {
-          sql: `select public.create_agency_transaction($1,$2,$3,'+256770011033','C',$4,0,null,null,null,$4) as id`,
-          params: [svc.typeId, 100_000, svc.tillId, key],
+          // The branch is named. This recorder is created without one, which
+          // makes them a Head Office officer, and Phase 4E's correction
+          // requires such an officer to say where they are recording — there
+          // is no longer a fallback that guesses. The test is about
+          // maker-checker, so it says branch A and gets on with it.
+          sql: `select public.create_agency_transaction(
+                  $1,$2,$3,'+256770011033','C',$4,0,null,null,null,$4,null,null,$5) as id`,
+          params: [svc.typeId, 100_000, svc.tillId, key, branchA],
         },
       ]);
       expect(c.ok, c.message).toBe(true);

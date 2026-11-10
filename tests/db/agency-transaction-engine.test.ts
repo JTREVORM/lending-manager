@@ -2063,4 +2063,298 @@ describeDb('Phase 4B — agency transaction engine', () => {
       expect(submitted.message).toMatch(/must be recorded before this is submitted/i);
     });
   });
+  // =========================================================================
+  describe('the operating branch', () => {
+    /**
+     * The correction, and what it replaced.
+     *
+     * Phase 4B stamped a transaction with the recording officer's own branch
+     * — never an argument, which is what stops one branch posting against
+     * another's till. For an officer whose profile carries no branch, which
+     * is every Head Office account, it fell through to the **alphabetically
+     * first active branch**:
+     *
+     *     select b.id into v_branch from public.branches b
+     *      where b.status = 'active' order by b.branch_code limit 1;
+     *
+     * One branch made that right by accident. Two made it wrong silently: a
+     * head-office cashier naming a head-office till was refused with "That
+     * till belongs to a different branch", because the transaction had been
+     * routed by a string comparison.
+     *
+     * The approved rule is that the branch is said, validated, and never
+     * substituted. These tests are that rule, case by case, and the last of
+     * them is the one that would have caught the original defect: the branch
+     * a transaction lands at must not change when a branch with an earlier
+     * code appears.
+     */
+    let headOffice: TestUser;
+    let headChecker: TestUser;
+    let branchCashier: TestUser;
+    let tillA: string;
+    let tillB: string;
+    let typeId: string;
+    let payableType: string;
+
+    beforeAll(async () => {
+      // An officer with no branch of their own, which is what Head Office is.
+      headOffice = await createTestUser('secretary_treasurer');
+      // A checker who can see both branches, which a branch manager cannot:
+      // the seeded `manager` belongs to branch A, so a branch-B transaction
+      // is correctly invisible to them. And a different person from the
+      // recorder, because maker ≠ checker holds here as everywhere.
+      headChecker = await createTestUser('manager');
+      branchCashier = await createTestUser('secretary_treasurer');
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branchA,
+        branchCashier.profileId,
+      ]);
+
+      const svc = await makeService({
+        code: 'TOPBRANCH',
+        name: 'Operating Branch MoMo',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 150,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      typeId = svc.typeId;
+      tillA = svc.tillId!;
+      await fund(svc.floatCode!, 50_000_000);
+
+      // The same provider's line at the second branch, and its float.
+      tillB = (
+        await queryOne<{ id: string }>(
+          `select public.ensure_agency_float_account($1, $2) as id`,
+          [svc.providerId, branchB],
+        )
+      ).id;
+      const codeB = (
+        await queryOne<{ code: string }>(
+          `select a.code from public.agency_provider_float_accounts f
+             join public.ledger_accounts a on a.id = f.ledger_account_id
+            where f.id = $1`,
+          [tillB],
+        )
+      ).code;
+      await fund(codeB, 50_000_000);
+
+      // Branch B needs its own drawer: a deposit there puts cash in it.
+      await query(
+        `insert into public.ledger_accounts
+           (code, name, account_type, normal_side, cash_kind, branch_id, parent_id, status)
+         select a.code || '.B', a.name || ' (B)', a.account_type, a.normal_side,
+                a.cash_kind, $1::uuid, a.parent_id, 'active'
+           from public.ledger_accounts a
+          where a.branch_id = $2 and a.cash_kind in ('cash_at_hand', 'bank')
+         on conflict (code) do nothing`,
+        [branchB, branchA],
+      );
+
+      // A payable provider, for the rule that holds where there is no till.
+      const payable = await makeService({
+        code: 'TOPBRANCHBILL',
+        name: 'Operating Branch Bills',
+        category: 'agency_banking',
+        floatModel: 'cash_payable',
+        incomeCode: '4520',
+        payableCode: '2290',
+        model: 'immediate',
+        fixed: 500,
+        direction: 'payment',
+        typeCode: 'PAYMENT',
+      });
+      payableType = payable.typeId;
+    });
+
+    /** Records one deposit, returning the attempt so a refusal can be read. */
+    async function record(
+      who: TestUser,
+      till: string | null,
+      branch: string | null,
+      reference: string,
+      type = typeId,
+    ) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.create_agency_transaction(
+                  $1, 20000, $2, '+256770012000', 'C', $3, 0,
+                  null, null, null, $3, null, null, $4) as id`,
+          params: [type, till, reference, branch],
+        },
+      ]);
+    }
+
+    async function branchOf(reference: string): Promise<string> {
+      const row = await queryOne<{ branch: string }>(
+        `select branch_id::text as branch from public.agency_transactions
+          where provider_reference = $1`,
+        [reference],
+      );
+      return row.branch;
+    }
+
+    it('records at branch A when a Head Office officer names branch A', async () => {
+      const r = await record(headOffice, tillA, branchA, 'OB-A1');
+      expect(r.ok, r.message).toBe(true);
+      expect(await branchOf('OB-A1')).toBe(branchA);
+    });
+
+    it('records at branch B when the same officer names branch B', async () => {
+      // The same account, the same provider, a different branch — and the
+      // transaction lands where it was told to. Under the fallback this was
+      // impossible: every one of this officer's transactions went to whichever
+      // branch sorted first.
+      const r = await record(headOffice, tillB, branchB, 'OB-B1');
+      expect(r.ok, r.message).toBe(true);
+      expect(await branchOf('OB-B1')).toBe(branchB);
+    });
+
+    it('refuses a Head Office officer who names no branch, and says why', async () => {
+      const r = await record(headOffice, tillA, null, 'OB-NONE');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/choose the branch/i);
+      expect(r.message).toMatch(/not assigned to one/i);
+
+      const rows = await query(
+        `select 1 from public.agency_transactions where provider_reference = 'OB-NONE'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('refuses a till that belongs to a different branch than the one named', async () => {
+      const r = await record(headOffice, tillB, branchA, 'OB-MISMATCH');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/different branch/i);
+
+      const rows = await query(
+        `select 1 from public.agency_transactions where provider_reference = 'OB-MISMATCH'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('lets a branch cashier record at their own branch, named or not', async () => {
+      const named = await record(branchCashier, tillA, branchA, 'OB-OWN1');
+      expect(named.ok, named.message).toBe(true);
+      expect(await branchOf('OB-OWN1')).toBe(branchA);
+
+      // Omitting it is the same answer: their branch is not a choice.
+      const silent = await record(branchCashier, tillA, null, 'OB-OWN2');
+      expect(silent.ok, silent.message).toBe(true);
+      expect(await branchOf('OB-OWN2')).toBe(branchA);
+    });
+
+    it('refuses a branch cashier who names another branch', async () => {
+      const r = await record(branchCashier, tillB, branchB, 'OB-OTHER');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/only record transactions at your own branch/i);
+
+      const rows = await query(
+        `select 1 from public.agency_transactions where provider_reference = 'OB-OTHER'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('requires the branch for a payable provider, which has no till at all', async () => {
+      // Rule 5. A water bill is collected into 2290 and never touches a
+      // float account, so nothing downstream would have noticed the branch
+      // being wrong — which is exactly why the check sits before the
+      // float-or-payable split rather than inside it.
+      const refused = await record(headOffice, null, null, 'OB-BILL0', payableType);
+      expect(refused.ok).toBe(false);
+      expect(refused.message).toMatch(/choose the branch/i);
+
+      const named = await record(headOffice, null, branchB, 'OB-BILL1', payableType);
+      expect(named.ok, named.message).toBe(true);
+      expect(await branchOf('OB-BILL1')).toBe(branchB);
+    });
+
+    it('refuses a branch that is not open', async () => {
+      const closed = (
+        await queryOne<{ id: string }>(
+          `insert into public.branches
+             (branch_code, name, location, status, opened_on, closed_on)
+           values ('BR9903', 'Closed Branch', 'Testing', 'closed',
+                   current_date - 10, current_date - 1)
+           on conflict (branch_code) do update set status = 'closed'
+           returning id`,
+        )
+      ).id;
+
+      const r = await record(headOffice, tillA, closed, 'OB-CLOSED');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/not open for business/i);
+    });
+
+    it('is not influenced by a branch whose code sorts first', async () => {
+      // The original defect, as a test. A new branch with an earlier code
+      // used to capture every head-office transaction; now it changes
+      // nothing, because nothing is inferred from a branch code.
+      await queryOne<{ id: string }>(
+        `insert into public.branches (branch_code, name, location, status, opened_on)
+         values ('AAA001', 'Alphabetically First', 'Testing', 'active', current_date)
+         on conflict (branch_code) do update set status = 'active'
+         returning id`,
+      );
+
+      const head = await record(headOffice, tillA, branchA, 'OB-SORT1');
+      expect(head.ok, head.message).toBe(true);
+      expect(await branchOf('OB-SORT1')).toBe(branchA);
+
+      const cashier = await record(branchCashier, tillA, null, 'OB-SORT2');
+      expect(cashier.ok, cashier.message).toBe(true);
+      expect(await branchOf('OB-SORT2')).toBe(branchA);
+
+      await query(`delete from public.branches where branch_code = 'AAA001'`);
+    });
+
+    it('posts the journal to the branch the transaction names, and nowhere else', async () => {
+      const r = await record(headOffice, tillB, branchB, 'OB-POST');
+      expect(r.ok, r.message).toBe(true);
+      const id = (r.rows[0] as { id: string }).id;
+
+      await asUserCommitted(headOffice, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      const rev = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const posted = await asUserCommitted(headChecker, [
+        {
+          sql: `select public.verify_agency_transaction($1, $2)`,
+          params: [id, Number(rev.revision)],
+        },
+      ]);
+      expect(posted.ok, posted.message).toBe(true);
+
+      // Every line of the journal belongs to branch B or to an account with
+      // no branch of its own. A single line at branch A would mean the money
+      // moved through the wrong drawer.
+      const lines = await query<{ branch: string | null; code: string }>(
+        `select a.branch_id::text as branch, a.code
+           from public.agency_transactions t
+           join public.journal_lines l on l.entry_id = t.journal_entry_id
+           join public.ledger_accounts a on a.id = l.account_id
+          where t.id = $1`,
+        [id],
+      );
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) {
+        expect(line.branch === null || line.branch === branchB, line.code).toBe(true);
+      }
+
+      const entry = await queryOne<{ branch: string }>(
+        `select e.branch_id::text as branch
+           from public.agency_transactions t
+           join public.journal_entries e on e.id = t.journal_entry_id
+          where t.id = $1`,
+        [id],
+      );
+      expect(entry.branch).toBe(branchB);
+    });
+  });
 });

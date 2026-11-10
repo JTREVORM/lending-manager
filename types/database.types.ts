@@ -7659,6 +7659,7 @@ export type Database = {
           p_idempotency_key?: string | null;
           p_customer_fee_mode?: string | null;
           p_transacted_at?: string | null;
+          p_branch_id?: string | null;
         };
         Returns: string;
       };

@@ -52,6 +52,7 @@ import {
   type AgencyTradeStatus,
   type AgencyTransactionRow,
   type AgencyVarianceRow,
+  OperatingBranchOption,
 } from '@/lib/domain/agency';
 
 /** A figure that may be absent, as shillings. */
@@ -991,4 +992,72 @@ export async function getAgencyAgentLineObligations(
   if (error !== null) return failed('what stands in the way of closing this line', error);
 
   return { ok: true, row: Array.isArray(data) ? data.map((v) => String(v)) : [] };
+}
+
+/**
+ * Where this officer may record an agency transaction, and whether they have
+ * to say.
+ *
+ * ## Why this read exists at all
+ *
+ * `create_agency_transaction()` used to work the branch out: the officer's
+ * own, or — for an officer whose profile carries none, which is every Head
+ * Office account — the alphabetically first active branch. One branch made
+ * that correct by accident. Two made it wrong silently, and the approved
+ * correction is that a branch-less officer **names** the branch.
+ *
+ * So the screen has to know two things the auth context does not carry: the
+ * officer's own branch, and the branches they may choose between.
+ *
+ * ## What each answer means
+ *
+ * `own` is the branch the officer is assigned to, or null for Head Office.
+ * When it is set, `choices` holds only it — the database refuses any other,
+ * and offering one would be offering a refusal. When it is null, `choices`
+ * holds the open branches, and the form makes the officer pick one with no
+ * pre-selection: a default here would be the same silent substitution this
+ * correction exists to remove.
+ *
+ * A failed read is reported, not rendered. "No branch is available" on a
+ * counter screen reads as a configuration fact, and an officer who believes
+ * it stops trying to record the customer in front of them.
+ */
+export async function getOperatingBranches(profileId: string): Promise<
+  | {
+      readonly ok: true;
+      readonly row: {
+        readonly own: OperatingBranchOption | null;
+        readonly choices: readonly OperatingBranchOption[];
+      };
+    }
+  | AgencyReadFailure
+> {
+  const supabase = await createSupabaseServerClient();
+
+  const [mine, branches] = await Promise.all([
+    supabase.from('profiles').select('branch_id').eq('id', profileId).maybeSingle(),
+    supabase
+      .from('branches')
+      .select('id, branch_code, name')
+      .eq('status', 'active')
+      .order('branch_code', { ascending: true }),
+  ]);
+
+  if (mine.error !== null) return failed('your branch', mine.error);
+  if (branches.error !== null) return failed('the open branches', branches.error);
+
+  const options: OperatingBranchOption[] = (branches.data ?? []).map((row) => ({
+    id: String(row.id),
+    branchCode: String(row.branch_code),
+    name: String(row.name),
+  }));
+
+  const ownId = mine.data?.branch_id ?? null;
+  const own = ownId === null ? null : (options.find((b) => b.id === ownId) ?? null);
+
+  // A branch-assigned officer whose own branch is not in the open list — it
+  // was closed, or they cannot see it — is not offered somebody else's. The
+  // database would refuse that anyway; an empty list is the honest answer and
+  // the form says what it means.
+  return { ok: true, row: { own, choices: own === null ? options : [own] } };
 }

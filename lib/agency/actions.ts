@@ -172,6 +172,7 @@ export async function recordAgencyTransactionAction(
   const parsed = parseSafely(recordAgencyTransactionSchema, {
     transactionTypeId: formData.get('transactionTypeId'),
     principalAmount: formData.get('principalAmount'),
+    branchId: formData.get('branchId') ?? null,
     floatAccountId: formData.get('floatAccountId') ?? null,
     customerIdentifier: formData.get('customerIdentifier'),
     customerName: formData.get('customerName'),
@@ -202,6 +203,10 @@ export async function recordAgencyTransactionAction(
     p_description: input.description ?? null,
     p_transaction_date: null,
     p_idempotency_key: input.idempotencyKey,
+    // Null when the officer has a branch of their own: the database uses it,
+    // and refuses any other. Named when they have none, and refused when
+    // they have none and name nothing — there is no fallback.
+    p_branch_id: input.branchId ?? null,
   });
 
   return settle(error, 'Recording an agency transaction', 'Transaction recorded.', data);

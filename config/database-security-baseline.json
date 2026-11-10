@@ -351,9 +351,9 @@
         "public_default_acl": false
       }
     },
-    "create_agency_transaction(p_transaction_type_id uuid, p_principal_amount bigint, p_float_account_id uuid, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_transaction_date date, p_idempotency_key text, p_customer_fee_mode text, p_transacted_at timestamp with time zone)": {
+    "create_agency_transaction(p_transaction_type_id uuid, p_principal_amount bigint, p_float_account_id uuid, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_transaction_date date, p_idempotency_key text, p_customer_fee_mode text, p_transacted_at timestamp with time zone, p_branch_id uuid)": {
       "classification": "A",
-      "reason": "Phase 4B agency RPC. Records a draft agency transaction. Refuses a caller without agency:write with SQLSTATE 42501, before it reads a single argument, via agency_actor(). The branch is taken from the officer's own profile and is never an argument, so one branch cannot record against another's till. Phase 4E re-signed it for the fee mode and the provider timestamp; the old eleven-argument signature was dropped so there is exactly one overload of the call that records money.",
+      "reason": "Phase 4B agency RPC. Records a draft agency transaction. Refuses a caller without agency:write with SQLSTATE 42501, before it reads a single argument, via agency_actor(). The operating branch is validated, never assumed: an officer assigned to a branch records at it and may name no other, an officer with none must name one, and the branch is checked with user_can_see_branch() and must be open. Phase 4B took it from the profile alone and fell back to the alphabetically first active branch for an officer who had none, which routed every Head Office transaction by a string comparison as soon as a second branch existed; 20261115001500 removed that fallback and made the branch an argument. Phase 4E also re-signed it for the fee mode and the provider timestamp, and each re-signing drops the previous signature so there is exactly one overload of the call that records money.",
       "surface": {
         "anon": false,
         "authenticated": true,

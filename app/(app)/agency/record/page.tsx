@@ -9,18 +9,24 @@ import { guardPermission } from '@/lib/auth/guard';
 import {
   getAgencyProviders,
   getAgencyServiceTypes,
+  getOperatingBranches,
   getPostableFloatTills,
 } from '@/lib/data/agency';
 
 export const metadata = { title: 'Record transaction' };
 
 export default async function RecordAgencyTransactionPage() {
-  await guardPermission(ROUTES.agencyRecord, 'agency:write');
+  const context = await guardPermission(ROUTES.agencyRecord, 'agency:write');
 
-  const [providers, allServices, tills] = await Promise.all([
+  const [providers, allServices, tills, branches] = await Promise.all([
     getAgencyProviders(),
     getAgencyServiceTypes(),
     getPostableFloatTills(),
+    // Where this officer may record. `create_agency_transaction()` no longer
+    // works the branch out for an officer who has none of their own — there
+    // was a fallback and it chose the alphabetically first branch — so the
+    // form has to ask, and this is what it asks from.
+    getOperatingBranches(context.profileId),
   ]);
 
   const header = (
@@ -37,7 +43,7 @@ export default async function RecordAgencyTransactionPage() {
   // say "every provider is still provisional" - a statement about the
   // configuration, made from a query that never ran. The officer needs to
   // know it is the screen that is broken, not the counter.
-  const failure = [providers, allServices, tills].find((read) => !read.ok);
+  const failure = [providers, allServices, tills, branches].find((read) => !read.ok);
   if (failure !== undefined && !failure.ok) {
     return (
       <div className="min-w-0 space-y-4">
@@ -46,7 +52,7 @@ export default async function RecordAgencyTransactionPage() {
       </div>
     );
   }
-  if (!providers.ok || !allServices.ok || !tills.ok) return null;
+  if (!providers.ok || !allServices.ok || !tills.ok || !branches.ok) return null;
 
   // Only services whose provider the posting engine would actually accept.
   // The readiness gate refuses a provisional or inactive provider in the
@@ -71,7 +77,13 @@ export default async function RecordAgencyTransactionPage() {
   return (
     <div className="min-w-0 space-y-4">
       {header}
-      <RecordForm services={services} tills={tills.rows} terms={terms} />
+      <RecordForm
+        services={services}
+        tills={tills.rows}
+        terms={terms}
+        branches={branches.row.choices}
+        ownBranch={branches.row.own}
+      />
     </div>
   );
 }

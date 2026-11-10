@@ -1158,3 +1158,253 @@ test.describe('a float transfer across two branches', () => {
     expect(await balanceOf(destination.ledgerAccountId)).toBe(destinationBefore + 30_000);
   });
 });
+
+// ===========================================================================
+// The operating branch, through the counter screen
+// ===========================================================================
+
+/**
+ * Records one deposit at the counter and returns the page, so a refusal can
+ * be read off the screen the officer is looking at.
+ *
+ * `branch` is the label to pick in the Branch select, or null for an officer
+ * who has one of their own and is therefore not offered the choice.
+ */
+async function recordDeposit(
+  page: Page,
+  options: {
+    readonly branchCode: string | null;
+    readonly tillName: string | null;
+    readonly amount: number;
+    readonly reference: string;
+    readonly service?: string;
+  },
+): Promise<void> {
+  await page.goto('/agency/record');
+  await expectNoErrorBoundary(page);
+
+  await chooseOption(
+    page,
+    'Service',
+    options.service ?? 'Airtel Money (demonstration) — Cash in to a wallet',
+  );
+  if (options.branchCode !== null) {
+    await chooseOption(page, 'Branch', options.branchCode);
+  }
+  if (options.tillName !== null) {
+    await chooseOption(page, 'Float till', options.tillName);
+  }
+  await page.getByLabel(/amount \(ugx\)/i).fill(String(options.amount));
+  await page.getByLabel(/customer identifier/i).fill('+256770099600');
+  await page.getByLabel(/provider reference/i).fill(options.reference);
+  await page.getByRole('button', { name: /record transaction/i }).click();
+}
+
+/** The branch a recorded transaction landed at, by its reference. */
+async function transactionBranch(reference: string): Promise<string | null> {
+  const rows = await queryHarness<{ branch: string }>(
+    `select b.branch_code as branch
+       from public.agency_transactions t
+       join public.branches b on b.id = t.branch_id
+      where t.provider_reference = $1`,
+    [reference],
+  );
+  return rows[0]?.branch ?? null;
+}
+
+test.describe('the operating branch', () => {
+  test('is named by a Head Office officer, fixed for a branch one, and never guessed', async ({
+    browser,
+  }) => {
+    const second = await secondBranch();
+
+    const owner = await asRole(browser, 'owner');
+    let lineA: Line;
+    let lineB: Line;
+    try {
+      lineA = await openLine(owner.page, { branchCode: HEAD_OFFICE });
+      lineB = await openLine(owner.page, { branchCode: second.branchCode });
+    } finally {
+      await owner.context.close();
+    }
+
+    await buyFloat(browser, lineA, { float: 30_000, paid: 30_000 });
+    await buyFloat(browser, lineB, { float: 30_000, paid: 30_000 });
+
+    // ---- the seeded Secretary is a Head Office account ---------------------
+    const cashier = await asRole(browser, 'secretary');
+    try {
+      // Branch A, named.
+      const refA = unique('BRA');
+      await recordDeposit(cashier.page, {
+        branchCode: HEAD_OFFICE,
+        tillName: lineA.tillName,
+        amount: 10_000,
+        reference: refA,
+      });
+      await expect(cashier.page.getByLabel(/provider reference/i)).toHaveValue('');
+      expect(await transactionBranch(refA)).toBe(HEAD_OFFICE);
+
+      // Branch B, named — the same account, a different branch. Under the
+      // fallback this was impossible: every one of this officer's
+      // transactions went to whichever branch sorted first by code.
+      const refB = unique('BRB');
+      await recordDeposit(cashier.page, {
+        branchCode: second.branchCode,
+        tillName: lineB.tillName,
+        amount: 10_000,
+        reference: refB,
+      });
+      await expect(cashier.page.getByLabel(/provider reference/i)).toHaveValue('');
+      expect(await transactionBranch(refB)).toBe(second.branchCode);
+
+      // ---- no branch chosen -----------------------------------------------
+      await cashier.page.goto('/agency/record');
+      await expectNoErrorBoundary(cashier.page);
+      await chooseOption(
+        cashier.page,
+        'Service',
+        'Airtel Money (demonstration) — Cash in to a wallet',
+      );
+      // The select opens on no branch at all. A pre-selected first option
+      // would be the silent default this correction removed, and the officer
+      // would never see the choice they were making.
+      await expect(cashier.page.getByLabel('Branch', { exact: true })).toHaveValue('');
+      // And with no branch there is no till list, because a till belongs to
+      // a branch.
+      await expect(cashier.page.getByLabel('Float till', { exact: true })).toHaveCount(0);
+
+      const refNone = unique('BRN');
+      await cashier.page.getByLabel(/amount \(ugx\)/i).fill('10000');
+      await cashier.page.getByLabel(/customer identifier/i).fill('+256770099601');
+      await cashier.page.getByLabel(/provider reference/i).fill(refNone);
+      await cashier.page.getByRole('button', { name: /record transaction/i }).click();
+
+      // The browser's own required-field validation stops it before the
+      // server is asked, which is the right place for it — and nothing was
+      // written either way.
+      expect(await transactionBranch(refNone)).toBeNull();
+
+      // ---- the branch and the till disagree -------------------------------
+      //
+      // The screen will not offer branch A's till while branch B is chosen,
+      // so this is driven past the screen: the select is set directly, which
+      // is what a stale page or a hand-made request would do. The database
+      // refuses it.
+      const refMix = unique('BRM');
+      await cashier.page.goto('/agency/record');
+      await expectNoErrorBoundary(cashier.page);
+      await chooseOption(
+        cashier.page,
+        'Service',
+        'Airtel Money (demonstration) — Cash in to a wallet',
+      );
+      await chooseOption(cashier.page, 'Branch', second.branchCode);
+      await chooseOption(cashier.page, 'Float till', lineB.tillName);
+      await cashier.page.getByLabel(/amount \(ugx\)/i).fill('10000');
+      await cashier.page.getByLabel(/customer identifier/i).fill('+256770099602');
+      await cashier.page.getByLabel(/provider reference/i).fill(refMix);
+      // Now move the branch back to Head Office without touching the till,
+      // which React would normally re-render away.
+      await cashier.page
+        .getByLabel('Branch', { exact: true })
+        .evaluate((select, value) => {
+          const field = select as HTMLSelectElement;
+          const option = [...field.options].find((o) => o.text.startsWith(value));
+          if (option !== undefined) field.value = option.value;
+        }, HEAD_OFFICE);
+      await cashier.page.getByRole('button', { name: /record transaction/i }).click();
+
+      await expect(
+        cashier.page
+          .getByText(/different branch|no active till/i)
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+      expect(await transactionBranch(refMix)).toBeNull();
+    } finally {
+      await cashier.context.close();
+    }
+
+    // ---- a branch-assigned cashier is not offered the choice --------------
+    const assigned = await browser.newContext();
+    try {
+      const page = await assigned.newPage();
+      await page.goto('/login');
+      await page.getByLabel('Phone number').fill(second.managerPhone);
+      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByRole('button', { name: /sign in/i }).click();
+      await page.waitForURL((url) => !url.pathname.startsWith('/login'), {
+        timeout: 20_000,
+      });
+
+      await page.goto('/agency/record');
+      await expectNoErrorBoundary(page);
+
+      // No select: the branch is theirs and the screen says so.
+      await expect(page.getByLabel('Branch', { exact: true })).toHaveCount(0);
+      await expect(page.getByText(/recording at/i).first()).toBeVisible();
+      await expect(page.getByText(second.branchCode).first()).toBeVisible();
+
+      // And the only tills offered are their own branch's.
+      await chooseOption(
+        page,
+        'Service',
+        'Airtel Money (demonstration) — Cash in to a wallet',
+      );
+      const tills = await page
+        .getByLabel('Float till', { exact: true })
+        .locator('option')
+        .allTextContents();
+      expect(tills.some((t) => t.includes(lineB.tillName))).toBe(true);
+      expect(tills.some((t) => t.includes(lineA.tillName))).toBe(false);
+
+      const refOwn = unique('BRO');
+      await chooseOption(page, 'Float till', lineB.tillName);
+      await page.getByLabel(/amount \(ugx\)/i).fill('10000');
+      await page.getByLabel(/customer identifier/i).fill('+256770099603');
+      await page.getByLabel(/provider reference/i).fill(refOwn);
+      await page.getByRole('button', { name: /record transaction/i }).click();
+      await expect(page.getByLabel(/provider reference/i)).toHaveValue('');
+      expect(await transactionBranch(refOwn)).toBe(second.branchCode);
+    } finally {
+      await assigned.close();
+    }
+  });
+
+  test('is required for a bill payment, which has no till at all', async ({
+    browser,
+  }) => {
+    // Rule 5. A water bill is collected into a payable and never touches a
+    // float account, so nothing downstream would notice the branch being
+    // wrong — which is why the check sits before the float-or-payable split.
+    const second = await secondBranch();
+
+    const cashier = await asRole(browser, 'secretary');
+    try {
+      await cashier.page.goto('/agency/record');
+      await expectNoErrorBoundary(cashier.page);
+      await chooseOption(
+        cashier.page,
+        'Service',
+        'National Water bills (demonstration) — Water bill',
+      );
+
+      // No till for this provider, and still a branch to choose.
+      await expect(cashier.page.getByLabel('Float till', { exact: true })).toHaveCount(0);
+      await expect(cashier.page.getByLabel('Branch', { exact: true })).toHaveValue('');
+
+      const reference = unique('BIL');
+      await chooseOption(cashier.page, 'Branch', second.branchCode);
+      await cashier.page.getByLabel(/amount \(ugx\)/i).fill('15000');
+      await cashier.page.getByLabel(/customer identifier/i).fill('+256770099604');
+      await cashier.page.getByLabel(/provider reference/i).fill(reference);
+      await cashier.page.getByRole('button', { name: /record transaction/i }).click();
+      await expect(cashier.page.getByLabel(/provider reference/i)).toHaveValue('');
+
+      expect(await transactionBranch(reference)).toBe(second.branchCode);
+    } finally {
+      await cashier.context.close();
+    }
+  });
+});

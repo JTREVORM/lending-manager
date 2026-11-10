@@ -68,6 +68,15 @@ const TILL: AgencyFloatRow = {
   providerIsProvisional: false,
 };
 
+/**
+ * The officer's own branch, which is the ordinary case at a counter.
+ *
+ * Phase 4E's correction: the branch is never assumed. A branch-assigned
+ * officer records at theirs and the form says so; one with no branch has to
+ * choose, which `agency-money.write.spec.ts` drives in a real browser.
+ */
+const OWN_BRANCH = { id: 'branch-1', branchCode: 'BR2601', name: 'Head Office' };
+
 /** The key the form would send if it were submitted right now. */
 function currentKey(container: HTMLElement): string {
   const field = container.querySelector<HTMLInputElement>('input[name="idempotencyKey"]');
@@ -102,6 +111,8 @@ describe('the agency recording form carries one key per submission', () => {
         services={[SERVICE]}
         tills={[TILL]}
         terms={{ 'provider-1': { rateBps: 150, fixed: null } }}
+        branches={[OWN_BRANCH]}
+        ownBranch={OWN_BRANCH}
       />,
     );
 
@@ -162,6 +173,8 @@ describe('the agency recording form carries one key per submission', () => {
         services={[SERVICE]}
         tills={[TILL]}
         terms={{ 'provider-1': { rateBps: 150, fixed: null } }}
+        branches={[OWN_BRANCH]}
+        ownBranch={OWN_BRANCH}
       />,
     );
 
@@ -199,6 +212,8 @@ describe('the agency recording form carries one key per submission', () => {
         services={[SERVICE]}
         tills={[TILL]}
         terms={{ 'provider-1': { rateBps: 150, fixed: null } }}
+        branches={[OWN_BRANCH]}
+        ownBranch={OWN_BRANCH}
       />,
     );
 
@@ -246,6 +261,8 @@ describe('the agency recording form carries one key per submission', () => {
         services={[SERVICE]}
         tills={[TILL]}
         terms={{ 'provider-1': { rateBps: 150, fixed: null } }}
+        branches={[OWN_BRANCH]}
+        ownBranch={OWN_BRANCH}
       />,
     );
 
