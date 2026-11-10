@@ -681,6 +681,10 @@ async function earnCommission(
       'Service',
       'Airtel Money (demonstration) — Cash in to a wallet',
     );
+    // The branch first. The seeded Secretary is a Head Office account, and
+    // Phase 4E's correction means such an officer names the branch before
+    // there is a till list at all — a till belongs to a branch.
+    await chooseOption(cashier.page, 'Branch', line.branchCode);
     await chooseOption(cashier.page, 'Float till', line.tillName);
     await cashier.page.getByLabel(/amount \(ugx\)/i).fill(String(amount));
     await cashier.page.getByLabel(/customer identifier/i).fill('+256770099500');
@@ -893,7 +897,7 @@ async function secondBranch(): Promise<{
   // told to leave alone. So the fixture avoids provoking it rather than
   // papering over it, and the finding is written down where the Product Owner
   // will see it before a second branch opens.
-  const branchCode = `Z${run}`;
+  const branchCode = `Z${run}${randomDigits(2)}`;
   const branch = await queryHarnessOne<{ id: string }>(
     `insert into public.branches
        (branch_code, name, location, district, status, opened_on, notes)
@@ -933,9 +937,17 @@ async function secondBranch(): Promise<{
   );
   const profile = await queryHarnessOne<{ id: string }>(
     `insert into public.profiles (auth_user_id, full_name, phone, email, status, branch_id)
-     values ($1, 'Ntinda Branch Manager', $2, $3, 'active', $4)
+     values ($1, $5, $2, $3, 'active', $4)
      returning id::text as id`,
-    [user.id, phone, `ntinda-${run.toLowerCase()}@kyanja.invalid`, branch.id],
+    [
+      user.id,
+      phone,
+      // Unique per branch, not per run: two tests open a branch of their own
+      // now, and `profiles.email` is unique.
+      `${branchCode.toLowerCase()}@kyanja.invalid`,
+      branch.id,
+      `${branchCode} Branch Manager`,
+    ],
   );
   await queryHarness(
     `insert into public.user_roles (profile_id, role_key) values ($1, 'manager')`,
@@ -1212,6 +1224,34 @@ async function transactionBranch(reference: string): Promise<string | null> {
   return rows[0]?.branch ?? null;
 }
 
+/**
+ * Puts float on a line directly, as fixture setup.
+ *
+ * `buyFloat` drives the float-trade screens, which is the right thing when
+ * the trade is what is being tested. It is the wrong thing here: a purchase
+ * settles from a cash account, the counter screen's branch rule is what this
+ * test is about, and a refusal about settlement accounts would say nothing
+ * either way. So this posts an opening balance the way the database tests'
+ * own fixtures do — one balanced journal, against equity.
+ */
+async function fundLine(line: Line, amount: number): Promise<void> {
+  await queryHarness(
+    `select public.post_journal(
+        (select branch_id from public.agency_provider_float_accounts where id = $1),
+        current_date, $3, 'opening_balance', null, null, null,
+        jsonb_build_array(
+          jsonb_build_object('account_id', $2::uuid, 'debit', $4::bigint, 'credit', 0),
+          jsonb_build_object('account_id', public.ledger_account_by_code('3000'),
+            'debit', 0, 'credit', $4::bigint)),
+        now(),
+        (select p.id from public.profiles p
+           join public.user_roles r on r.profile_id = p.id
+          where r.role_key = 'owner_admin' order by p.created_at limit 1),
+        'browser suite fixture')`,
+    [line.floatAccountId, line.ledgerAccountId, `Fixture: fund ${line.tillName}`, amount],
+  );
+}
+
 test.describe('the operating branch', () => {
   test('is named by a Head Office officer, fixed for a branch one, and never guessed', async ({
     browser,
@@ -1228,8 +1268,8 @@ test.describe('the operating branch', () => {
       await owner.context.close();
     }
 
-    await buyFloat(browser, lineA, { float: 30_000, paid: 30_000 });
-    await buyFloat(browser, lineB, { float: 30_000, paid: 30_000 });
+    await fundLine(lineA, 30_000);
+    await fundLine(lineB, 30_000);
 
     // ---- the seeded Secretary is a Head Office account ---------------------
     const cashier = await asRole(browser, 'secretary');
