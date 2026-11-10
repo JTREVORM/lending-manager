@@ -175,6 +175,8 @@ const ROUTE_PERMISSIONS: readonly {
   { prefix: ROUTES.agencyFloatCount, permission: 'agency:reconcile' },
   { prefix: ROUTES.agencyReplenish, permission: 'agency:settlements' },
   { prefix: ROUTES.agencyProviders, permission: 'agency:providers' },
+  { prefix: ROUTES.agencyLines, permission: 'agency:providers' },
+  { prefix: ROUTES.agencyMoney, permission: 'agency:reports' },
   { prefix: ROUTES.agencyPending, permission: 'agency:reports' },
   { prefix: ROUTES.agencyHistory, permission: 'agency:reports' },
   { prefix: ROUTES.agencyFloat, permission: 'agency:reports' },

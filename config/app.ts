@@ -239,6 +239,25 @@ export const ROUTES = {
   agencyExceptions: '/agency/exceptions',
   agencyProviders: '/agency/providers',
   /**
+   * Phase 4E. The Mobile Money screens.
+   *
+   * `/agency/money` is the provider-and-line view of the same postings the
+   * rest of the module already shows: it reads the Phase 4E views and adds
+   * the float trades, the per-line commission and the statement
+   * reconciliations. It is deliberately not a second transaction counter —
+   * a deposit or a withdrawal is still recorded at `/agency/record`, by the
+   * engine that was already there.
+   *
+   * `/agency/lines` is the Owner's administration of the lines themselves:
+   * opening one, correcting its identifiers, suspending it, closing it, and
+   * the two commercial controls (the transaction ceiling and where the
+   * commission figure comes from). It needs `agency:providers`, the same
+   * capability as the provider register, because that is what it is — the
+   * configuration behind the counter rather than the counter.
+   */
+  agencyMoney: '/agency/money',
+  agencyLines: '/agency/lines',
+  /**
    * Phase 18. The trial balance.
    *
    * Under `/finance` rather than `/reports`, which is where a treasurer looks

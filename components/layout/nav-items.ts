@@ -963,8 +963,20 @@ export const NAV_MODULES: readonly NavModule[] = [
         phase: 4,
       },
       {
+        href: ROUTES.agencyMoney,
+        label: 'Mobile Money',
+        permission: 'agency:reports',
+        phase: 4,
+      },
+      {
         href: ROUTES.agencyProviders,
         label: 'Providers & services',
+        permission: 'agency:providers',
+        phase: 4,
+      },
+      {
+        href: ROUTES.agencyLines,
+        label: 'Agent lines',
         permission: 'agency:providers',
         phase: 4,
       },
