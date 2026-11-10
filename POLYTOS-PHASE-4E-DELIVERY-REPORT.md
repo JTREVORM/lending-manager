@@ -2,8 +2,9 @@
 
 **Branch:** `phase4e/mobile-money-2026-11-09`, created from
 `phase4d/agency-banking-interface-2026-11-08` @ `38633d8` ·
-**Design accepted at:** `befac86` · **Status:** database engine complete and
-tested; application layer and browser coverage outstanding (§7).
+**Design accepted at:** `befac86` · **Head:** `f47d5fa` · **Status:**
+complete at the database, the application and the browser; the remaining
+release conditions are commercial and infrastructural, not code (§7, §8).
 
 No pull request has been merged. No production deployment, no hosted
 migration, no change to any hosted financial or demonstration record. No
@@ -44,7 +45,7 @@ set that out; none of it was rebuilt.
 
 ## 2. Migration sequence
 
-Thirteen migrations, applied in filename order. Every one is re-runnable:
+Fourteen migrations, applied in filename order. Every one is re-runnable:
 re-applying the whole set to an already-migrated database is part of the
 local loop.
 
@@ -63,6 +64,7 @@ local loop.
 | 11 | `20261115001100_agency_agent_line_administration` | register, update, suspend/reinstate, close, obligations |
 | 12 | `20261115001200_agency_commission_reconciliation` | the statement-period register, submit and certify |
 | 13 | `20261115001300_agency_money_views` | six views, the register extension, three new exception kinds |
+| 14 | `20261115001400_agency_money_view_readability` | the per-line commission balances as a view, so the three views built on them are readable by the officer rather than refused (§6) |
 
 `PHASE_PREFIXES` in `scripts/verify-membership-upgrade.mjs` lists `20261115`.
 Without it the upgrade verifier would classify this whole phase as released
@@ -129,7 +131,7 @@ on each run.
 | Suite | Tests | Covers |
 | --- | --- | --- |
 | `tests/db/agency-money-foundation.test.ts` (new) | 54 | the three accounts; agent-line identity and immutability; suspension and closure; service ceilings; reported commission; fee modes; timestamps; the Owner's five controls |
-| `tests/db/agency-money-commission.test.ts` (new) | 28 | payout, partial payout, over-payout, duplicates, per-line attribution, suspension and closure rules; the OD-10 split and both recovery methods; the statement-period reconciliation and its silence |
+| `tests/db/agency-money-commission.test.ts` (new) | 37 | payout, partial payout, over-payout, duplicates, per-line attribution, suspension and closure rules; the OD-10 split and both recovery methods; the statement-period reconciliation and its silence; and that each of the seven Phase 4E views can be read by a signed-in officer and reports the same figures the engine refuses on |
 | `tests/db/agency-money-float.test.ts` (new) | 32 | a pending trade moving nothing; all four purchase and sale journals; transfers within and across branches; maker-checker; stale revisions; rejection; reversal; suspension rules; and four concurrency races — a sale behind a held line, two sales of the same float where only one may win, two opposing cross-branch transfers that must not deadlock, and a payout behind the line it pays into |
 
 Existing suites, all still passing with every behaviour change above:
@@ -142,20 +144,32 @@ Existing suites, all still passing with every behaviour change above:
 | `agency-security` (4B-S closure) | 21 |
 | `agency-settlement` (Phase 4C) | 78 |
 | `shared-till` (Workstream A) | 6 |
-| `unit` + `integration` | 2,682 |
+| `seed`, `seed-reuse`, `seed-member-loans`, `seed-benefits` | 18, 15, 24, 25 |
+| `unit` + `integration` | 2,690 |
+
+**2,390 database tests across eleven vitest projects**, each on a cluster the
+project's own `globalSetup` rebuilds from the migrations, run exactly as CI
+runs them (`npm run test:db`). The `agency-money` project is in that script
+now; it was not, and §6 records what that cost.
+
+Browser: 10 Mobile Money tests, 27 performance, and the existing agency,
+navigation and accessibility suites, against the real harness.
 
 Gates: `scripts/check-database-security.mjs` passes on a clean build;
 `scripts/audit-financial-arithmetic.mjs` passes; typecheck, lint and format
-clean.
+clean. The browser bundle total moves 670 → 676 KB gzipped, measured both
+ways on one machine (104 chunks and 665 KB without the five new routes, 107
+and 671 KB with them), no new dependency, largest chunk unmoved at 72 KB, and
+the two heaviest new routes added to the per-page budget.
 
 ### Existing financial data is provably preserved across the upgrade
 
 `scripts/verify-membership-upgrade.mjs` applies the released schema, seeds a
 real book of loans, payments, memberships, savings and benefits, then applies
-every unreleased migration — all thirteen of this phase included — and compares
+every unreleased migration — all fourteen of this phase included — and compares
 28 financial figures before and after:
 
-> Upgrade verified: 97 existing migrations, a seeded book, then 114 new
+> Upgrade verified: 97 existing migrations, a seeded book, then 115 new
 > migrations. Every one of 28 financial figures is identical, the 22
 > membership, savings, member loan, benefit and meeting tables exist and are
 > empty, and 2100 Member Savings is zero.
@@ -228,6 +242,25 @@ formality.
 | the lock-and-resource matrix | four new posting functions unclassified |
 | `tests/integration/migrations.test.ts` | a bare `timestamp` cast in a view, and the generated types out of step with the schema |
 
+### The four the database could not catch, and the browser did
+
+Opening `/agency/money` as a signed-in officer was the first time this phase's
+work was looked at through the application. It found four defects in ten
+minutes, and not one of them was reachable from a database test, because every
+database test runs as the schema owner.
+
+| What was wrong | Why nothing else found it |
+| --- | --- |
+| Every Mobile Money screen reported "the commission owed to each agent line could not be read". `agency_commission_by_line`, the dashboard and the reconciliation register were built on three SECURITY DEFINER helpers that 000800 and 001200 revoke from `authenticated` — correctly. But these views are `security_invoker = true`, which is the whole point of them, and a function called inside such a view runs as the **caller**, so the revoke was a refusal. Migration 001400 defines the attribution as a view instead, following the precedent Phase 4C set when it met this question with `agency_commission_outstanding` | 123 database tests run as the owner, for whom the grant is irrelevant. `check-database-security.mjs` looks for grants that are too **wide**; this one was too narrow, which is the direction no gate watches |
+| The `agency-money` vitest project was declared in `vitest.config.mts` and never added to the `test:db` script CI runs. Its tests ran on a developer's machine and nowhere else — and **three CI runs reported the database job green without executing one of them** | Nothing checks that every declared project is in the script. The comment in `ci.yml` now says what a missing project costs, and the project is eleventh in the sequence |
+| Four optional date fields refused an empty input. `businessDateSchema.optional().nullable()` describes a shape no browser sends: an untouched date arrives as `''`, not `null` | `lib/validation/common.ts` already names the idiom `optionalField`, in a comment ending "only the browser suite caught it". It caught it again |
+| Every form kept its typed values after a successful submission. Changing the `key` remounts the form and resets the **uncontrolled** fields; the controlled ones are parent state, which the remount does not touch | A unit test calling the action never renders a form twice |
+
+Three database tests now pin the first of those: that an officer can read each
+of the seven Phase 4E views, and that the view's per-line figures equal what
+the engine's own helpers refuse on — for a line owed commission and a line
+owing it back, so neither figure is zero for the wrong reason.
+
 And one bug the tests caught that nothing else would have:
 `record_agency_float_trade` held the receiving line's branch as `c.branch_id`
 inside a `CASE` that would not have chosen it for a purchase or a sale.
@@ -237,19 +270,76 @@ non-transfer trade failed.
 
 ---
 
-## 7. What is not done
+## 7. The application layer, and what is still not done
 
-Stated plainly, because the brief asked for it and it is outstanding.
+### The five screens
+
+| Route | Capability | What it does |
+| --- | --- | --- |
+| `/agency/money` | `agency:reports` | every provider and branch: float held, commission owed each way, float bought, sold and moved; then every agent line's day. Renders no client component of its own |
+| `/agency/money/[providerCode]` | `agency:reports` | one provider: its lines, their float and today's activity, the float-trade form and the register with its verify, refuse and reverse controls |
+| `/agency/money/[providerCode]/commission` | `agency:reports`, forms need `agency:settlements` | commission per line, the payout, the recovery, and the calendar-month report |
+| `/agency/money/[providerCode]/statements` | `agency:reports`, forms need `agency:reconcile` | the statement-period register, submission and certification |
+| `/agency/lines` | `agency:providers` | opening a line, correcting its identifiers, suspending it, closing it, the transaction ceiling and the commission source |
+
+One screen per provider, driven by the provider's own row. MTN and Airtel
+differ in their commission source, their fee handling and their ceilings, and
+every one of those differences is a column the database already holds; they do
+not differ in what the accounting does. Two screens would have been two sets
+of figures that could disagree with the ledger — which §4 of the brief asked
+us not to build.
+
+Behind them: seven data readers that answer `{ ok: false }` rather than a
+figure when a query fails (the Phase 4D-F rule, extended by eight unit tests),
+fourteen server actions, sixteen validation schemas, a rate-limit bucket for
+float trading, and the `agency:float_trade` capability in the application's
+permission matrix.
+
+Three things the screens say out loud, because each is a belief that costs
+money when it is wrong:
+
+  * **recording a float trade moves nothing.** Said above the fields, in the
+    button, in the success message and in the register's status column. An
+    officer who believes the money has moved records it again when the
+    balance does not change.
+  * **a commission payout arrives as float on the line, not as cash.** An
+    officer expecting the drawer to rise will count it as missing.
+  * **certifying a statement changes no balance.** Decision OD-2 settled
+    that, and a button reading "certify" invites the opposite belief.
+
+Closing an agent line is offered only when `agency_agent_line_obligations()`
+— the same function the close refuses on — comes back empty. When that read
+fails the button is withheld and the screen says the check could not be made.
+It does not say the line is clear.
+
+### The browser coverage
+
+`tests/e2e/specs/agency-money.write.spec.ts`, ten tests on the real harness:
+PostgreSQL with every migration applied from zero, real PostgREST, the
+production build. Each test opens its own agent line through the Owner's form
+and spends nothing another suite reads as a fixture.
+
+| Test | What it reads back from the database |
+| --- | --- |
+| a float purchase at a premium | pending: status `pending`, `journal_entry_id` null, the line's ledger balance unmoved, and no decision offered to its own maker. Posted by a Manager: three journal lines, debits equal credits at 205,000, `5970` debited 5,000, the line up exactly 200,000 |
+| a suspended agent line | `status = 'suspended'`, `is_active = false`, the reason stored, the float **unchanged**, a purchase into it refused, no row written, and the officer's typed figures still on screen |
+| certifying a provider statement | the variance recorded at 7,500, certified by a second officer, the variance still 7,500 afterwards, and `count(*)` over **every journal entry in the books** identical either side of the certification |
+| closing an agent line | offered on an empty line, withdrawn once it holds float, with the obligations the screen lists checked against the function's own answer |
+
+`/agency/money/DEMO_AIRTEL` and `/agency/lines` also joined the per-page
+performance budget in `performance.spec.ts`, against the same ceilings every
+other page is held to.
+
+### What is still not done
 
 | Outstanding | Note |
 | --- | --- |
-| **Application layer** | No new route, component, data reader or server action. The screens for recording a float trade, verifying one, paying commission in, recovering it, reconciling a statement and administering an agent line do not exist. §7 of the gap analysis at `befac86` sets out the plan: a provider-scoped route template under `app/(app)/agency/money/[providerCode]/`, driven by the provider table rather than hardcoded MTN and Airtel sections |
-| **Browser-to-database coverage** | `tests/e2e/specs/agency-money.write.spec.ts` is not written. The existing 1,005 browser tests pass against the new schema, which proves the Phase 4D screens are unaffected, but no new workflow has been driven through a browser |
-| **The MTN and Airtel dashboards** | The data behind them exists — `agency_mobile_money_dashboard` and `agency_mobile_money_consolidated` — but nothing renders them |
-| **CI on the final head** | CI ran on each push. At `64aacfb` the browser E2E and the PostgreSQL 17 release rehearsal both passed; the other two jobs failed on the inventory tests this slice fixes. A green run on the final head is needed and is the first thing to confirm |
-
-Everything in §1 through §6 is complete and tested at the database level. What
-is missing is the interface over it.
+| **No per-line commission payout is driven through a browser** | The payout and the recovery have 28 database tests with exact journal lines, and the forms are covered by the unit and type layers, but the browser suite exercises the float-trade and reconciliation chains rather than the payout chain. Generating commission to pay out needs a counter transaction on the suite's own line first, which is a longer fixture than the four tests above |
+| **Transfers across branches are not in the browser suite** | Covered by six database tests including the two-way deadlock race; the harness seeds one branch, so a cross-branch transfer cannot be driven through its screens |
+| **The reported-commission path is configuration, not data** | `commission_source` can be set to `reported` only by the Owner through an audited function. No provider is set to it, because that is a commercial decision (§8) |
+| **`requires_approval_above` is still not settable** | Decision L remains open. Unchanged by this phase, and deliberately still read-only |
+| **CI on the final head** | Run `42779517249` is in progress on `f47d5fa` at the time of writing, with all four mandatory jobs. Every gate it runs has been run locally first — `npm run test:db` across eleven projects, the security gate, the unit and integration suites, the build, the bundle budget, and the browser suites against the real harness — but a green run on this exact head is the record that counts, and it is the first thing to confirm |
+| **No pull request yet** | None is open for this branch. Every earlier phase ended with a draft PR stacked on the previous one; this one is not opened, because opening it is an integration step and the standing instruction is to stop for independent review first |
 
 ---
 
