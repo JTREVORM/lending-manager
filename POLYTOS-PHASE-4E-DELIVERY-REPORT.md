@@ -47,7 +47,7 @@ set that out; none of it was rebuilt.
 
 ## 2. Migration sequence
 
-Fifteen migrations, applied in filename order. Every one is re-runnable:
+Sixteen migrations, applied in filename order. Every one is re-runnable:
 re-applying the whole set to an already-migrated database is part of the
 local loop.
 
@@ -68,6 +68,7 @@ local loop.
 | 13 | `20261115001300_agency_money_views` | six views, the register extension, three new exception kinds |
 | 14 | `20261115001400_agency_money_view_readability` | the per-line commission balances as a view, so the three views built on them are readable by the officer rather than refused (§6) |
 | 15 | `20261115001500_agency_operating_branch` | the operating branch, named and validated instead of guessed — the correction in §10 |
+| 16 | `20261115001600_agency_idempotent_operating_branch` | the branch is resolved before the idempotency key is answered, and is part of what makes a key describe a different transaction — §10 |
 
 `PHASE_PREFIXES` in `scripts/verify-membership-upgrade.mjs` lists `20261115`.
 Without it the upgrade verifier would classify this whole phase as released
@@ -527,7 +528,53 @@ agreement and refused; a branch-assigned cashier offered no choice, told
 where they are, and shown only their own branch's tills; and a bill payment
 with no till still requiring the branch.
 
-### Two things the correction's own tests found
+### The review finding, and the second correction
+
+Independent review of the correction found a residual ordering fault, and it
+is the kind that reads as harmless until it is written down.
+
+`20261115001500` put the branch check where the old fallback had been: after
+the idempotency lookup. That lookup returns early. Given a key it already
+held, it checked that the caller could *see* that transaction's branch,
+compared the amount, the customer, the reference, the float account and the
+fee mode, and returned the id. The branch the caller had just named was not
+in that comparison and had not yet been resolved.
+
+| Retry | What it did | What it should do |
+| --- | --- | --- |
+| key K, same details, **different branch** | returned the first transaction, so the officer was told their money was at a branch it was not | refuse: a different branch is a different transaction |
+| key K, **no branch**, by a Head Office officer | answered rather than asked, so the mandatory rule quietly did not apply | refuse: the branch is mandatory, key or no key |
+| key K, **another branch**, by a branch cashier | returned an id, or refused for the wrong reason with the wrong message | refuse on the branch rule |
+
+Nothing double-posted. The key did its job — one transaction, one journal —
+and that held in every case. What was wrong was the **answer**.
+
+Reproduced first, as four tests against the unfixed function: three failed,
+and the sharpest of them is the retry that changes nothing except the branch,
+which every field the old comparison looked at says is identical.
+
+The correction is two changes and nothing else:
+
+1. the branch block moves to the top of the function, before the key is
+   consulted — so a refusal about the branch happens whether or not a key is
+   in hand, and it now covers Agent Banking from the first line rather than
+   from the float-or-payable split;
+2. `v_existing.branch_id is distinct from v_branch` joins the comparison that
+   decides whether a key describes a different transaction, which refuses the
+   retry with the message that already exists for that case.
+
+A genuine retry — same submission, same branch — is answered exactly as
+before. The signature does not change, so no caller needed editing.
+
+**Four regression tests** in `agency-transaction-engine.test.ts`: a genuine
+retry returning the same id with one row on file; a retry naming another
+branch refused, with the branch-B till untouched; a Head Office retry with no
+branch refused on the mandatory rule; a branch cashier's own-branch retry
+answered and their other-branch retry refused on the branch rule; and a key
+retried after posting, from both sides, leaving exactly one transaction and
+exactly one journal entry.
+
+### Two things the first correction's own tests found
 
 **`text-muted` is a surface colour.** `--color-muted` is defined as
 `var(--color-surface-sunken)` — the pale grey a sunken panel is *filled*

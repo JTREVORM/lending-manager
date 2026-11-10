@@ -2311,6 +2311,173 @@ describeDb('Phase 4B — agency transaction engine', () => {
       await query(`delete from public.branches where branch_code = 'AAA001'`);
     });
 
+    /**
+     * Records with the key and the reference given separately, so a retry can
+     * change one thing at a time.
+     */
+    async function recordKeyed(
+      who: TestUser,
+      branch: string | null,
+      key: string,
+      reference: string,
+      till: string | null = tillA,
+    ) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.create_agency_transaction(
+                  $1, 20000, $2, '+256770012100', 'C', $3, 0,
+                  null, null, null, $4, null, null, $5) as id`,
+          params: [typeId, till, reference, key, branch],
+        },
+      ]);
+    }
+
+    async function rowsForKey(key: string) {
+      return query<{ id: string; branch: string }>(
+        `select t.id::text as id, b.branch_code as branch
+           from public.agency_transactions t
+           join public.branches b on b.id = t.branch_id
+          where t.idempotency_key = $1`,
+        [key],
+      );
+    }
+
+    /**
+     * The idempotency key is answered **after** the branch is resolved.
+     *
+     * Found in independent review of the correction above, and it is the kind
+     * of ordering bug that reads as harmless until it is written down. The
+     * key lookup used to run first: it found the earlier transaction, checked
+     * only that the caller could *see* that transaction's branch, compared the
+     * amount, the customer, the reference and the fee mode — and returned the
+     * id. The branch the caller had just asked for was never part of the
+     * comparison and had not yet been validated.
+     *
+     * So a Head Office officer who retried key K while naming a different
+     * branch was handed branch A's transaction and told it was theirs; one
+     * who retried naming no branch at all was answered rather than asked to
+     * choose, which is the mandatory rule from the correction above going
+     * quietly missing; and a branch cashier naming somebody else's branch got
+     * an id instead of a refusal.
+     *
+     * Nothing double-posted — that is what the key is for, and it held. What
+     * failed was the *answer*: "yes, recorded" for a transaction that was
+     * never recorded where the caller said.
+     *
+     * The fix is ordering plus one comparison: resolve and validate the
+     * branch first, then let the key decide, and treat a different branch as
+     * what it is — a different transaction.
+     */
+    it('answers a retry only for the branch the retry names', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+
+      const first = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-1');
+      expect(first.ok, first.message).toBe(true);
+      const id = (first.rows[0] as { id: string }).id;
+
+      // A genuine retry: the same submission, asked again. One transaction,
+      // the same id, still at branch A.
+      const again = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-1');
+      expect(again.ok, again.message).toBe(true);
+      expect((again.rows[0] as { id: string }).id).toBe(id);
+      expect(await rowsForKey(key)).toHaveLength(1);
+
+      // The same key and *the same till*, naming a different branch — every
+      // field the old comparison looked at is identical, so this is the case
+      // it answered with branch A's transaction. It is not that submission,
+      // and it must not be answered as if it were.
+      const elsewhere = await recordKeyed(headOffice, branchB, key, 'OB-IDEM-1', tillA);
+      expect(elsewhere.ok).toBe(false);
+      expect(elsewhere.message).toMatch(/already recorded for a different transaction/i);
+
+      // And with the other branch's till too, which differs in one more
+      // field but must be refused on the same ground.
+      const bothChanged = await recordKeyed(headOffice, branchB, key, 'OB-IDEM-1', tillB);
+      expect(bothChanged.ok).toBe(false);
+
+      // Still one transaction, still at branch A, and the branch-B till is
+      // untouched.
+      const rows = await rowsForKey(key);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.id).toBe(id);
+      expect(rows[0]?.branch).not.toBe('BR9902');
+    });
+
+    it('still demands the branch from a Head Office officer retrying a key', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-2');
+      expect(first.ok, first.message).toBe(true);
+
+      // The mandatory rule does not stop applying because a key is in hand.
+      // Before the fix this returned the transaction and said nothing.
+      const silent = await recordKeyed(headOffice, null, key, 'OB-IDEM-2');
+      expect(silent.ok).toBe(false);
+      expect(silent.message).toMatch(/choose the branch/i);
+
+      expect(await rowsForKey(key)).toHaveLength(1);
+    });
+
+    it('refuses a branch cashier who retries a key against another branch', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await recordKeyed(branchCashier, branchA, key, 'OB-IDEM-3');
+      expect(first.ok, first.message).toBe(true);
+      const id = (first.rows[0] as { id: string }).id;
+
+      // Their own branch: a real retry, same answer.
+      const own = await recordKeyed(branchCashier, branchA, key, 'OB-IDEM-3');
+      expect(own.ok, own.message).toBe(true);
+      expect((own.rows[0] as { id: string }).id).toBe(id);
+
+      // Somebody else's: refused on the branch rule, before the key is
+      // consulted at all.
+      const other = await recordKeyed(branchCashier, branchB, key, 'OB-IDEM-3', tillB);
+      expect(other.ok).toBe(false);
+      expect(other.message).toMatch(/only record transactions at your own branch/i);
+
+      expect(await rowsForKey(key)).toHaveLength(1);
+    });
+
+    it('writes one journal for a key, however many times it is retried', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-4');
+      expect(first.ok, first.message).toBe(true);
+      const id = (first.rows[0] as { id: string }).id;
+
+      await asUserCommitted(headOffice, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      const rev = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const posted = await asUserCommitted(headChecker, [
+        {
+          sql: `select public.verify_agency_transaction($1, $2)`,
+          params: [id, Number(rev.revision)],
+        },
+      ]);
+      expect(posted.ok, posted.message).toBe(true);
+
+      // Retried after posting, from both sides of the branch rule.
+      const retry = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-4');
+      expect(retry.ok, retry.message).toBe(true);
+      expect((retry.rows[0] as { id: string }).id).toBe(id);
+      const wrong = await recordKeyed(headOffice, branchB, key, 'OB-IDEM-4', tillB);
+      expect(wrong.ok).toBe(false);
+
+      // One transaction, one journal entry, and the entry is the one the
+      // transaction points at.
+      expect(await rowsForKey(key)).toHaveLength(1);
+      const entries = await query<{ id: string }>(
+        `select e.id::text as id
+           from public.journal_entries e
+           join public.agency_transactions t on t.journal_entry_id = e.id
+          where t.idempotency_key = $1`,
+        [key],
+      );
+      expect(entries).toHaveLength(1);
+    });
+
     it('posts the journal to the branch the transaction names, and nowhere else', async () => {
       const r = await record(headOffice, tillB, branchB, 'OB-POST');
       expect(r.ok, r.message).toBe(true);
