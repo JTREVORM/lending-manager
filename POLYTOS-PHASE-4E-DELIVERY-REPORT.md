@@ -7,7 +7,8 @@
 complete at the database, the application and the browser; the remaining
 release conditions are commercial and infrastructural, not code (§7, §8).
 
-No pull request has been merged. No production deployment, no hosted
+Draft pull request: [#27](https://github.com/JTREVORM/lending-manager/pull/27),
+stacked on #26. No pull request has been merged. No production deployment, no hosted
 migration, no change to any hosted financial or demonstration record. No
 provider activated. Policy 2.0 not published. PRs #19–#26 untouched at their
 audited SHAs, #19 still an independent merge. The integrated production
@@ -406,7 +407,7 @@ other page is held to.
 | **One unauthorised-branch refusal is asserted at the database, not the browser** | The browser test proves a Manager at the other branch is not shown the trade at all — RLS hides it, so there is no button to press. The function's own refusal when the call is made anyway is `agency-money-float.test.ts`, "refuses a transfer into a branch the officer does not administer", beside "moves float across branches when the officer administers both" |
 | **The reported-commission path is configuration, not data** | `commission_source` can be set to `reported` only by the Owner through an audited function. No provider is set to it, because that is a commercial decision (§8) |
 | **`requires_approval_above` is still not settable** | Decision L remains open. Unchanged by this phase, and deliberately still read-only |
-| **No pull request yet** | None is open for this branch. Every earlier phase ended with a draft PR stacked on the previous one; this one is not opened, because opening it is an integration step and the standing instruction is to stop for independent review first |
+| **The pull request is a draft and stays one** | [#27](https://github.com/JTREVORM/lending-manager/pull/27), `phase4e/mobile-money-2026-11-09` → `phase4d/agency-banking-interface-2026-11-08`. It must not be merged before #26 → #25 → #24 → #23 → #22 → #21 → #20, and #19 stays independent |
 
 ---
 
