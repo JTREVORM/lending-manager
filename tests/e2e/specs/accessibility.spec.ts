@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
-import { expect, stateFile, test } from './fixtures';
+import { expect, queryHarness, stateFile, test } from './fixtures';
 
 /**
  * WCAG 2.1 AA, measured rather than asserted by eye.
@@ -122,6 +122,79 @@ test.describe('the staff application meets WCAG AA', () => {
       );
 
       expect(described, `${path} has accessibility violations`).toEqual([]);
+    });
+  }
+});
+
+/**
+ * The agency transaction detail screen, which the list above cannot name.
+ *
+ * ## Why it was not swept, and why that mattered
+ *
+ * `SCREENS` is a list of paths, and this screen's path contains a
+ * transaction id. So the densest screen the agency module has — the figures
+ * table, the commission-exception authorisation, the reference correction and
+ * the lifecycle controls, four panels of small print and tinted surfaces —
+ * was the one screen none of this suite had ever looked at.
+ *
+ * Three components live only here or mostly here:
+ * `commission-exception-form.tsx`, `lifecycle-controls.tsx` and the
+ * reference-correction form. Phase 4E reported them as carrying a contrast
+ * fault; on inspection they do not — every one uses `text-text-muted`, the
+ * approved token, and `tests/unit/colour-contrast.test.ts` holds that token
+ * to AA on every ground it lands on, in both the light and the dark palette.
+ * But "we looked and it seemed fine" is what this suite exists to replace,
+ * and the fact that the claim could be made at all is the argument for
+ * sweeping the screen rather than reasoning about it.
+ *
+ * ## Why these two statuses
+ *
+ * The panels are conditional on status, so one URL does not render them all:
+ *
+ *   * **awaiting verification** renders every panel at once — the exception
+ *     form (draft or awaiting), the reference correction (posted or
+ *     awaiting) and the lifecycle controls (always). It is the fullest the
+ *     screen ever gets;
+ *   * **posted** renders the lifecycle controls in their reversal state,
+ *     which is different markup — a reason field and a destructive button —
+ *     and the only state in which it appears.
+ *
+ * The ids come from the seeded book rather than being written here: the
+ * harness posts and submits real transactions, and a hard-coded id would be
+ * a fixture that rots.
+ */
+test.describe('the agency transaction detail screen meets WCAG AA', () => {
+  test.use({ storageState: stateFile('owner') });
+
+  for (const status of ['awaiting_verification', 'posted'] as const) {
+    test(`/agency/history/[id] — ${status}`, async ({ page }) => {
+      const rows = await queryHarness<{ id: string }>(
+        `select id::text as id from public.agency_transactions
+          where status = $1 order by created_at limit 1`,
+        [status],
+      );
+      const id = rows[0]?.id;
+      expect(
+        id,
+        `the harness seeds no ${status} agency transaction to sweep`,
+      ).toBeDefined();
+
+      await page.goto(`/agency/history/${id ?? ''}`);
+      await expect(page.locator('main')).toBeVisible();
+
+      const { violations } = await new AxeBuilder({ page }).withTags(WCAG_AA).analyze();
+
+      const described = violations.map(
+        (v) =>
+          `${v.id} (${v.impact ?? 'unknown'}): ${v.help} — ${
+            v.nodes[0]?.target.join(' ') ?? '?'
+          }`,
+      );
+
+      expect(
+        described,
+        `/agency/history/[id] (${status}) has accessibility violations`,
+      ).toEqual([]);
     });
   }
 });
