@@ -292,6 +292,14 @@ of the seven Phase 4E views, and that the view's per-line figures equal what
 the engine's own helpers refuse on — for a line owed commission and a line
 owing it back, so neither figure is zero for the wrong reason.
 
+The fourth of those four — the contrast failure — is also where this report
+over-reached. The failure in *this phase's* files was real and is fixed. The
+claim that three Phase 4D components shared it was not, and §10 withdraws it:
+the three already used the approved token, and the finding came from a grep
+whose word boundary matched inside `text-text-muted`. A gate catching a real
+defect is not evidence about the code next to it, and this report treated it
+as though it were.
+
 ### A finding this phase reported, and then corrected
 
 Writing the cross-branch transfer test meant opening a second branch — the
@@ -587,9 +595,9 @@ the token the rest of the application uses, and `/agency/money` and
 `/agency/lines` joined the accessibility sweep so the next one is caught
 without waiting for a neighbouring page to notice.
 
-The same wrong class remains in three Phase 4D components on screens the
-sweep does not cover. Reported rather than changed, because this correction
-was authorised for the branch rule.
+This report then claimed the same wrong class remained in three Phase 4D
+components. **That claim was wrong, and is withdrawn** — see "The Phase 4D
+claim, withdrawn" below.
 
 **A test that reads a default is not a test.** `recordOne` in the counter
 suite left the Branch and Float till selects alone and took whatever came
@@ -597,6 +605,72 @@ first. That was unambiguous when the seed opened one till at one branch and
 became a silent dependency on sort order as soon as neither was true. It
 names both now, which is also how the suite stopped breaking when Phase 4E
 opened lines of its own.
+
+### The Phase 4D claim, withdrawn
+
+Having found a real contrast failure in its own files, this report went on to
+name three Phase 4D components as carrying it, and listed them as outstanding
+cleanup. They were investigated on the Phase 4D branch before anything was
+changed, and **every one of them already used the correct token**:
+
+| Component | What it actually uses |
+| --- | --- |
+| `components/agency/reconciliation-forms.tsx` | `text-text-muted`, nine times |
+| `components/agency/commission-exception-form.tsx` | `text-text-muted`, three times |
+| `components/agency/lifecycle-controls.tsx` | `text-text-muted`, once |
+
+A search of that whole branch for the bare class —
+`grep -rP "(?<![\w-])text-muted(?![\w-])"` over every file — returns nothing
+outside git metadata. There was no defect to fix, and nothing in those three
+components has been changed.
+
+**The finding was an artefact of the search that produced it.** It was
+counted with `grep -c "text-muted\b"`. `\b` is a word boundary, and in
+`text-text-muted` there is one immediately before the final `text-muted` — so
+the pattern matched the *correct* class, and the counts 9, 3 and 1 were counts
+of code that was already right. Phase 4E had just found a genuine fault in
+its own files and inferred, without checking, that its neighbours shared it.
+
+What is **not** withdrawn is the Phase 4E half above. That failure was real:
+axe failed `/agency/record` on `color-contrast`, the cause was `text-muted`
+in files this phase wrote, the fix stands, and `/agency/money` and
+`/agency/lines` remain in the accessibility sweep.
+
+### The genuine Phase 4D improvement the investigation produced
+
+Behind the false finding sat a real gap, and closing it is what the Phase 4D
+work delivered.
+
+`SCREENS` in `accessibility.spec.ts` is a list of paths, and the agency
+transaction detail screen's path carries a transaction id — so the densest
+screen in the module, four panels of small print and tinted surfaces, was the
+one screen the sweep had never looked at. Two of the three components named
+above render **only** there, which is why "we looked and it seemed fine" was
+the best anyone could say about them.
+
+It is now swept in both states that matter:
+
+| State | What renders |
+| --- | --- |
+| `awaiting_verification` | every panel at once — the commission-exception authorisation, the reference correction and the lifecycle controls |
+| `posted` | the lifecycle controls in their reversal state: a reason field and a destructive button, markup that appears nowhere else |
+
+Four new tests, two states on each of the desktop and mobile profiles, zero
+violations. The accessibility suite went 104 → 108, and those components are
+measured rather than reasoned about for the first time.
+
+Both themes are covered, and were before: light as rendered by the axe sweep,
+dark as defined by `tests/unit/colour-contrast.test.ts`, which reads
+`--color-text-muted` against `--color-surface` from the light *and* the dark
+palette and holds each to the AA floor. There is also no dark theme to sweep
+in a browser — `app/layout.tsx` declares `colorScheme: 'light'` and nothing
+sets `data-theme` — so a dark sweep would test a state no user can reach.
+
+That work is on the Phase 4D branch, where **all four mandatory jobs pass at
+`6cbda77`**, CI run
+[43013873769](https://github.com/JTREVORM/lending-manager/actions/runs/43013873769).
+`git merge-tree` confirms this branch still merges cleanly against it,
+`accessibility.spec.ts` included.
 
 ### What else changed, and what did not
 
