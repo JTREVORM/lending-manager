@@ -490,6 +490,27 @@ Four new tests — two states on each of the desktop and mobile profiles — and
 zero violations, which is the first time these components have been measured
 rather than reasoned about.
 
+### Certified, and the effect on the stacked PR #27
+
+All four mandatory jobs pass at **`6cbda77`** — CI run
+[43013873769](https://github.com/JTREVORM/lending-manager/actions/runs/43013873769):
+1,923 `db` tests plus the agency and seeder projects, 2,675 unit and
+integration, the PostgreSQL 17 release rehearsal, and 1,009 browser tests on
+a production build against a fresh seed.
+
+PR #27 was not touched. The effect on it was assessed with `git merge-tree`:
+the first attempt at this change also carried a regenerated
+`tests/e2e/harness/fixtures.json` — 56 fresh UUIDs the seeder writes on every
+run — which put a conflict in a generated artefact between the branches. It
+was reverted in a follow-up commit rather than by rewriting a branch another
+PR is based on, and `git merge-tree` now reports #27 merging cleanly against
+this head, `accessibility.spec.ts` included: the two branches changed
+different regions of it.
+
+One thing is left for the Phase 4E branch and is not done here: its delivery
+report still carries the withdrawn finding, in §6 and §10. Correcting it
+means committing to that branch, which this authorisation does not cover.
+
 ---
 
 ## 9. Evidence
