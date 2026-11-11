@@ -2,7 +2,7 @@
 
 **Branch:** `phase4e/mobile-money-2026-11-09`, created from
 `phase4d/agency-banking-interface-2026-11-08` @ `38633d8` ·
-**Design accepted at:** `befac86` · **Code head:** `0349055`, CI green ·
+**Design accepted at:** `befac86` · **Code head:** `5a47ae4`, CI green ·
 **Status:**
 complete at the database, the application and the browser; the remaining
 release conditions are commercial and infrastructural, not code (§7, §8).
@@ -161,17 +161,18 @@ navigation and accessibility suites, against the real harness.
 
 ### CI on the final head
 
-**Run `42825422491`, commit `0349055`, all four mandatory jobs green.**
-<https://github.com/JTREVORM/lending-manager/actions/runs/42825422491>
+**Run `42838033916`, commit `5a47ae4`, all four mandatory jobs green.**
+<https://github.com/JTREVORM/lending-manager/actions/runs/42838033916>
 
 | Job | Result | What it ran |
 | --- | --- | --- |
 | `checks, unit/integration, build` | ✅ | 2,684 passed, 6 skipped; the bundle budget's 6; typecheck, lint, format, build |
-| `database (real PostgreSQL)` | ✅ | **2,400** across eleven projects: `db` 1,950 · `agency` 66 · `agency-engine` 74 · `agency-security` 21 · `agency-settlement` 78 · **`agency-money` 123** · `shared-till` 6 · `seed` 18 · `seed-reuse` 15 · `seed-member-loans` 24 · `seed-benefits` 25 |
+| `database (real PostgreSQL)` | ✅ | **2,404** across eleven projects: `db` 1,950 · `agency` 66 · `agency-engine` 78 · `agency-security` 21 · `agency-settlement` 78 · **`agency-money` 123** · `shared-till` 6 · `seed` 18 · `seed-reuse` 15 · `seed-member-loans` 24 · `seed-benefits` 25 |
 | `security release rehearsal (PostgreSQL 17, real Auth)` | ✅ | the release rehearsal against PostgreSQL 17 |
 | `browser E2E (production build, fresh seed)` | ✅ | **1,021 passed**, 48 skipped |
 
-The ten the `agency-engine` project gained are §10's correction; the six the
+The fourteen the `agency-engine` project gained are §10's two corrections —
+ten for the operating branch, four for the idempotency ordering. The six the
 browser job gained are the two operating-branch tests, the payout, the
 cross-branch transfer and the two new routes in the accessibility sweep.
 
