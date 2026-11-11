@@ -1,217 +1,325 @@
 # POLYTOS — Decision A Technical Review Report
 
-**Revision:** v2, reconciled against the Product Owner's policy corrections of
-2026-11-11. Supersedes v1 (commit `38a7e3d`).
-**Verdict: CHANGES ACCEPTED AND APPLIED — development authorization still
-withheld**, on two grounds stated in §6: one unresolved policy question that
-governs a financial control, and one input I still do not have.
+**Revision:** v3. Supersedes v2 (`30bc027`) and v1 (`38a7e3d`).
+**Verdict: CHANGES APPLIED — development authorization withheld for three named
+dependencies** (§7). The previously blocking policy question is **resolved** by
+the Product Owner's booking-error ruling of 2026-11-11.
+**Comparison status: PERFORMED.** Both review-package documents were received,
+extracted and compared clause by clause — 71 clauses across the two of them.
+§3 and §4 carry the result. Nothing is recorded as compared that was not.
 **Type:** documentation only. No migration, application code, test, financial
 record, deployment configuration or PR branch touched.
-**Reviewed at:** PR #27 head (`phase4e/mobile-money-2026-11-09`, 214 migrations),
-against PR #25 (194) and the audited base `64ea09c` (161).
-**Plan:** `docs/POLYTOS-DECISION-A-IMPLEMENTATION-PLAN.md` v2.
+**Compared against:** `docs/POLYTOS-DECISION-A-IMPLEMENTATION-PLAN.md` (v2 at
+`30bc027`, now v3), `docs/POLYTOS-DECISION-A-TECHNICAL-REVIEW.md` (v2) and
+`docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` (`4739d0d`).
+**Code state:** PR #27 head (`phase4e/mobile-money-2026-11-09`, 214 migrations).
 **Production:** NO-GO.
 
 ---
 
-## 1. The two documents did not arrive
+## 1. The booking-error ruling resolves the blocking question
 
-`POLYTOS_DECISION_A_IMPLEMENTATION_PLAN_REVIEW.md` and
-`POLYTOS_DECISION_A_REVIEW_RESPONSE_v2.md` are not in the working tree, not on
-any of the 30 remote branches, not in a pull request, not in an issue, not in
-the session upload directories (`/mnt/user-data/uploads`, `working`, `outputs`
-are all empty) and nowhere on the filesystem — searched by name across the whole
-mounted tree. Nothing was attached. This is the second time the transfer has
-failed.
+v2 withheld authorization on one item: whether a proven booking-error correction
+may take a cash account's booked balance below zero. The Product Owner has ruled
+that it may, under seven conditions.
 
-**What this does and does not prevent.** It prevents only one thing: the
-line-by-line comparison against your two documents. It prevents nothing else,
-because your message states the five policy corrections and the four
-instructions explicitly, and those are authoritative on their own. **All nine
-have been applied in full** — §2 lists each with the exact edit.
+**This is the "fresh explicit Owner approval" that the review package itself
+required.** Its §2 H6 rejected the override "as currently stated" and said *"Any
+exceptional financial rule requires fresh explicit Owner approval."* Its Gate P3
+required an error-correction design that creates **no** negative balance. The
+ruling supersedes P3 by granting a bounded exception instead, and the plan
+implements all seven conditions (plan §1.2, §5.3).
 
-So this revision is complete with respect to your instructions and incomplete
-with respect to one deliverable: the diff pass. If you can paste the two
-documents inline, or commit them to any branch, that pass is quick now that the
-findings and the corrected plan both exist.
+**Two consequences worth naming.**
 
----
-
-## 2. Policy corrections applied
-
-| Correction | v1 said | v2 says | Where |
-| --- | --- | --- | --- |
-| **A-3** — verified MTN/Airtel float is immediately available; no wait for daily reconciliation | wallet inflows `pending`, with a reconciliation dependency implied by gap analysis §9.3 | verification is the only gate; **no availability function reads `account_reconciliations`**, asserted on a database holding no reconciliation row | plan §4.2, §4.3, §4.5; test `cash-availability.test.ts :: verified wallet float is available before any reconciliation exists` |
-| **A-4** — no sufficient-funds override, Owner included; no `allow_negative_available` | proposed `allow_negative_available` **and** an Owner-only correction override | **both deleted.** Decision A adds **no settings column at all**, because a switch that made unconfirmed or uncleared money available would be that override renamed. `allow_negative_cash` and `allow_negative_agency_float` are left alone and read by nothing new | plan §4.4, §5.3; tests `no actor, Owner included, can post a short payout` and `allow_negative_cash … do not relax availability` |
-| **A-5** — account-specific, never branch aggregate | carried as an assumption | ruled and tested: availability reads one account, consults no sibling and no branch total | plan §4.3, §5.1; tests `a sibling account's balance never funds this one`, `no availability function consults a branch total` |
-| **A-6** — value dates may be historical; entries must not be backdated into closed periods | conflated `cleared_on` with the journal's `entry_date` | **two dates, separated.** `cleared_on` is evidence and may be historical; the clearance journal's `entry_date` is always `business_date()`. Nothing this plan adds can post into a past period | plan §6.5; tests `a historical value date posts to today, never to the value date`, `refuses a value date in the future` |
-| **A-13** — deposit `cleared` and loan `cleared` are distinct context-specific statuses | proposed avoiding the word for deposits (gap analysis D14) | **reversed.** Both keep the word; the mitigation is context separation — separate columns and CHECKs, no shared enum or domain, no view reading a bare `cleared` across both subjects, qualified labels | plan §6.7; tests `deposit clearance does not alter any loan status`, `loan clearance does not alter any deposit status` |
-| **Instruction** — the Owner-only correction override is not approved; design a sound alternative that does not bypass sufficiency | override on paths 4–7 gated by `finance:correction` | **withdrawn.** Replaced by `correct_misrecorded_receipt`: it can only contra an entry it names line for line, is refused on every outflow source type, requires a second actor, and hands a resulting negative balance to **reconciliation** — not to an override — by flagging the account and blocking every outgoing path from it until a count is approved | plan §5.3; `receipt-correction.test.ts` |
-| **Instruction** — treat the deposit-loss account and write-off as separate review | `5960 Deposit Losses Under Investigation` plus a `written_off` outcome | **removed from scope.** `written_off` is absent from the status domain, and a test asserts it does not exist so the parked decision cannot be used by accident. Two notes handed to that review, including that **`5960` is already taken** (finding N2) | plan §6.6; test `a write-off outcome does not exist` |
-| **Instruction** — traceability matrix | absent | 17-row decision → rule → design → migration step → exact test matrix | plan §2 |
-| **Instruction** — exact tests per critical control | test plan by theme | named cases per control, nine suites, each mapped from the matrix | plan §13 |
+- **The exception is narrower than v2's withdrawn override, not wider.** Condition
+  C6 — *a genuine customer payment must never be reversed merely because staff
+  subsequently lost or misappropriated the cash* — splits one function into two
+  workflows. v2 had a single correction path for all four reversal routes;
+  the plan now refuses correction whenever the payment actually occurred and
+  routes that to a cash-loss investigation that leaves the borrower's record
+  intact (plan §5.3.2, §5.4). That is a real tightening, and it is the condition
+  most likely to be got wrong in implementation.
+- **C2 forecloses the suspense design the package floated.** §2 H6 invited a
+  "truthful, balanced suspense/receivable/non-cash reclassification". C2 requires
+  the correction to *exactly reverse* the original entry, and a suspense posting
+  is not an exact reverse. So the suspense route is now closed by the ruling, and
+  the negative-balance-plus-block route is the approved one.
 
 ---
 
-## 3. Status of the v1 findings
+## 2. What the comparison covered
 
-All sixteen are resolved in the plan. Nothing was dropped.
-
-| ID | Finding | Status |
-| --- | --- | --- |
-| **B1** | Five outgoing paths missing from the inventory; eight exist, not three | **Resolved.** Full 22-row inventory, plan §8; ten named sufficiency cases |
-| **B2** | A sixth `cash_kind` breaks two certified identities and three suites | **Resolved.** `in_transit` is a named component **inside** `total_liquidity`, same migration; availability gets its own columns; the certification script's sum identity is listed for extension. Supersedes gap analysis D12 and §4.3 |
-| **B3** | Without hardening `assert_cash_account`, the clearance control is bypassable by `transfers:create` | **Resolved.** Hardening ships in the same indivisible migration as the kind; test `refuses a transfer out of 1050` |
-| **B4** | Receipt confirmation must not touch `loan_payments` | **Resolved.** One journal at receipt plus a restriction record; `receipt-confirmation.test.ts` asserts loan figures bit-identical |
-| **B5** | Refusal logging cannot be done inside the database | **Resolved.** Application-layer, post-rollback, with the four stated properties, plan §9 |
-| **H1** | `payment_method` does not identify a funding account | **Resolved.** Explicit account argument on all three payout paths, plan §5.2 |
-| **H2** | Signature changes must DROP then CREATE | **Resolved.** Stated with the precedent and the five-file blast radius |
-| **H3** | Head Office branch selection already exists; depend on #27 | **Resolved.** The operating-branch rule is called, not re-derived; branch point is #27 |
-| **H4** | `allow_negative_cash` must not govern availability | **Resolved, and strengthened by A-4.** v1 proposed a separate column; v2 has **no column at all** |
-| **H5** | Lending reconciliation contradicts its agency twin | **Resolved.** Path 8 gains the assert and the lock |
-| **H6** | Reversal versus correction is a genuine contradiction | **Resolved differently.** v1's override is withdrawn; plan §5.3 separates the correction path structurally. The residual policy question is N5 |
-| **M1** | Bounced deposit needs a money location and a loss account | **Split.** The location is resolved — money stays in `1050`, the investigation posts nothing. The loss account is **referred to separate review** |
-| **M2** | `in_transit` uniqueness | **Resolved.** Step 2 of the migration order |
-| **M3** | Query live constraint names, do not transcribe | **Resolved.** Plan §11.4 |
-| **M4** | Transition states to name | **Resolved.** Five named; cutover is clean by design |
-| **M5** | Test gaps | **Resolved.** Plan §13 names every case, including the lock-order probe and the no-confirmation-row history proof |
-
----
-
-## 4. New findings from this reconciliation
-
-Five, from reading the code against the corrected rulings.
-
-### N1 — Closed accounting periods do not exist, and A-6 requires them
-
-**Severity: high. Scope larger than Decision A.**
-
-A-6 forbids backdating an accounting entry into a closed period. The schema has
-no such concept, at 214 migrations:
-
-- no `financial_period`, `period_close`, `closed_period` or equivalent table —
-  zero matches across the migrations and `lib/`;
-- no constraint on `journal_entries.entry_date` in either direction, and the
-  column's own comment records that *"a back-dated correction posts to the day it
-  happened"* — backdating is a **designed** property of this ledger;
-- three existing paths already accept an unbounded caller-supplied date:
-  `record_transfer(p_transfer_date)`, `record_expense(p_expense_date)` and
-  `record_other_income(p_income_date)`, each `coalesce`d to `business_date()`
-  with no bound.
-
-So A-6 is not a clearance rule; it is a system-wide rule that today has nothing
-to enforce it and three open paths to enforce it on.
-
-**How the plan handles it.** Inside Decision A's own scope, A-6 is satisfied
-absolutely and cheaply: the clearance journal's `entry_date` is always
-`business_date()`, so nothing this plan adds is ever backdated, whatever the
-bank's value date says. That needs no period subsystem.
-
-**What is left.** Enforcing A-6 across the system needs period close — what
-closes, who closes and reopens it, hard lock or soft warning, and what becomes
-of the three unbounded-date paths. **Recommended as its own workstream, not
-folded into Decision A.** Plan §15.1.
-
-### N2 — The proposed deposit-loss code is already taken
-
-`5960` is **`Agency Float Over and Short`** at the PR #27 head, and `5970` is
-**`Agency Float Purchase Premium`**. v1's `5960 Deposit Losses Under
-Investigation` would have collided with an account that already exists on the
-branch Decision A builds from.
-
-Handed to the separate review along with the account itself, and noted in the
-plan so the code is chosen against the chart as it will then stand. A second
-note for that review: the choice between an expense and a receivable naming an
-individual is HR-sensitive and is not a chart question.
-
-### N3 — Three existing paths accept unbounded dates
-
-Named above under N1. Flagged separately because it is a finding about the
-existing system rather than about Decision A, and because whoever takes the
-period-close workstream needs it as a starting inventory.
-
-### N4 — The settings flags v1 proposed would themselves have been overrides
-
-A-4 forbids a sufficient-funds override. v1 proposed three `finance_settings`
-columns, two of which — `require_cash_receipt_confirmation` and
-`require_bank_clearance` — would have made unconfirmed or uncleared money
-available when switched off. That is the override under another name, and it
-would have been one Owner checkbox away from disabling A-1, A-5, A-8 and A-10.
-
-**All three are removed.** Decision A adds no settings column. This is stricter
-than v1 and strictly what A-4 asks for. Recorded as a finding because it is a
-correction I made to my own design, not something your brief had to tell me.
-
-### N5 — The correction/sufficiency boundary is a genuine policy question
-
-**This is the one item I will not decide, and it governs a financial control.**
-
-The plan's position: a booking-error correction is not a payout. No value
-leaves, so rule 1 is not engaged, and where the contra takes a cash account's
-booked balance below zero the account is flagged, **blocked from every outgoing
-path**, and queued for a count — which is where `5950` and the existing
-maker-checker already live.
-
-The alternative: refuse the correction until the account is funded. That keeps
-every cash balance non-negative at all times, and leaves the borrower's ledger
-showing a repayment the business never received until somebody finds the money.
-
-Neither is obviously right. The first prefers a correct subsidiary ledger and an
-explicitly flagged cash account; the second prefers a never-negative cash
-account and a knowingly wrong borrower record. **The Product Owner should
-choose.** Plan §15.2.
-
----
-
-## 5. Corrections to my own earlier documents
-
-Recorded here because `POLYTOS-DECISION-A-GAP-ANALYSIS.md` is left as the
-historical record and is not edited.
-
-| Superseded statement | Correct position |
+| Document | Clauses compared |
 | --- | --- |
-| Gap analysis **D12** / §4.3 — in-transit money must **not** be folded into `total_liquidity` | **Wrong.** The certified identity requires every cash-kinded account to appear in `total_liquidity`, and money in transit is an asset the business holds. The figure that excludes it is *available* funds, in its own columns. D12's real content is a **UI** finding: a screen must not present liquidity as spendable (finding B2) |
-| Gap analysis **D14** / §9.13 — avoid `cleared` for deposits, because loans own the word | **Reversed by A-13.** Both contexts keep the word; separation is structural and in the labels (plan §6.7) |
-| Gap analysis **§9.3** — wallet inflows may be pending until the float is reconciled | **Reversed by A-3.** Verification is the only gate; reconciliation is never a precondition |
-| Gap analysis **§9.4**, plan v1 **§4.4** — keep `allow_negative_cash` as an escape hatch and add `allow_negative_available` | **Reversed by A-4.** No override exists and no new flag is added (finding N4) |
-| Plan v1 **§5.3** — Owner-only correction override | **Withdrawn.** Replaced by the structural design in plan §5.3 |
-| Plan v1 **§6.4** — `5960 Deposit Losses Under Investigation` and a `written_off` outcome | **Removed to separate review**, and the code collides (finding N2) |
+| `POLYTOS_DECISION_A_IMPLEMENTATION_PLAN_REVIEW.md` — §1 policy table (13), §1 invariants (7), §2.1–2.4 (4), §3 (5), §4 gates (8), §5 test groups (6), §6 (2), §7 (7), §8 (1) | **53** |
+| `POLYTOS_DECISION_A_REVIEW_RESPONSE_v2.md` — §1 rulings (13, folded into the above), §2 findings (16), §3 corrections (8), §4 gates (4) | **28**, of which 10 overlap |
+| **Total distinct** | **71** |
+
+Outcome: **49 already addressed**, **14 needed an edit to my documents**,
+**3 conflicted with approved policy** (all three in *my* plan), **5 open design
+decisions**. §3 and §4 enumerate the non-trivial 22.
 
 ---
 
-## 6. Why authorization is still withheld
+## 3. Conflicts with approved policy — all three were mine
 
-Not because anything in §3 is open — all sixteen findings are resolved — but
-because of two things:
+These are the findings the comparison existed to produce. Each was a defect in
+plan v2, not in the package.
 
-1. **N5 is a policy question that governs a financial control.** Whether a
-   booking-error correction may take a cash account's booked balance below zero
-   decides whether `correct_misrecorded_receipt` can exist in the form planned.
-   Building it either way before the ruling risks building the wrong one.
-2. **The line-by-line comparison against your two documents has not been
-   done**, because they did not arrive (§1). Everything you stated in the brief
-   is applied, but I cannot certify that your plan contains no finding I have
-   not seen.
+### C-1 — v2 returned bounced-deposit cash to the till automatically. A-8 forbids it.
 
-Items 1–8 of plan §15 are the remaining open decisions; only N5/§15.2 blocks.
-The rest can be settled during A-I and A-II, which are zero-behaviour-change
-phases.
+Plan v2 §6.3 defined `reject_bank_deposit` as: *"only from `submitted`;
+distinct-actor; contra of the deposit entry; money returns to the till;
+`rejected`."* That posts a till credit on rejection, with no verification that
+any cash came back.
+
+A-8 is explicit: *"Cash moves back to till only after independently verified
+physical receipt."* The original plan says the same twice — its §2.2
+`Physical Cash Returned` state requires *"authenticated, separately verified
+return to till. Post Dr till / Cr transit only at confirmed actual return"*, and
+its §1 A-8 row states it **supersedes** the audit's preliminary
+automatic-return-on-rejection proposal. My v2 had carried that superseded
+proposal forward.
+
+**Resolved.** `rejected` is removed from the status domain entirely. A refused
+deposit goes to `under_investigation`, which **posts nothing** and leaves the
+money in `1050` where it honestly is; a new
+`confirm_physical_cash_return(deposit_id, evidence_path, notes)` posts
+Dr till / Cr `1050` only on documented, independently verified physical receipt,
+and refuses the deposit's own recorder. Plan §6.3, §6.4; tests
+`rejection writes no journal and does not return cash to the till` and
+`the deposit recorder cannot confirm its own physical return`.
+
+### C-2 — v2's refusal logging was best-effort. A-11 says fail closed.
+
+Plan v2 §9.2–9.3 logged refusals **after** the rollback, best-effort, and stated
+as a virtue that *"the refusal is returned to the user whether or not the log
+write succeeded."*
+
+A-11's design consequence in the original plan is *"nonfinancial attempt log
+outside an aborted posting transaction; **fail closed**"*, and its §3 gives the
+architecture: *"a durable attempt record in a separate committed transaction
+**before** the financial RPC… If the initial durable audit write fails, do not
+execute the payout."*
+
+My reading of A-11's sentence — *a logging failure cannot turn a refusal into a
+success* — was literal and too narrow: it rules out one failure mode but does
+not deliver the completeness fail-closed gives. Under v2's design a refusal
+occurring while the log was down left no record at all.
+
+**Resolved.** Adopted as specified: pre-write the attempt in its own committed
+transaction; **if that write fails, do not attempt the payout**; write the
+outcome separately; treat an attempt with no outcome as a monitored anomaly.
+Plan §9.2. The safety argument is that the attempt log can only ever *prevent* a
+payout, never permit one.
+
+**And the cost is stated rather than hidden:** the attempt log becomes an
+availability dependency of every payout, so an outage stops the counter. The
+package anticipated this (its §6 asks for *"continuity during system outages"*),
+and plan §15.7 carries it as an operational requirement. The plan makes **no**
+claim of exactly-once delivery under arbitrary infrastructure failure, which the
+package expressly warned against.
+
+### C-3 — v2 sequenced branch security after enforcement. The package requires the reverse.
+
+Plan v2 §13 put branch scoping at phase A-VI, after universal enforcement at
+A-III. The original plan pulls branch security **forward** (its gate A5 precedes
+A2), and the response §3.8 states why: *"Keep branch-scoped RLS ahead of or at
+least inseparable from activation of universal funding-account selectors, so
+bank account IDs cannot access another branch."*
+
+That is correct and the reasoning is sharp: an explicit funding-account
+parameter is itself an access vector. Shipping the selectors before branch
+scoping would briefly let a caller name another branch's account by id.
+
+**Resolved.** Branch authorization becomes step **5a**, a precondition of the
+signature changes at step 6. Plan §11.2.
 
 ---
 
-## 7. Preserved, and not done
+## 4. Clauses that needed an edit
+
+| # | Package clause | My v2 | Resolution in v3 |
+| --- | --- | --- | --- |
+| E-1 | A-9: *"source bank must have sufficient available funds"* | used `assert_cash_available` — the **booked** helper | now `assert_cash_funds_available`; test `a reversal is refused when the bank's available funds are short`. Plan §6.3 |
+| E-2 | A-9: *"Manager may request"* | only an Owner-only reversal function | added `request_clearance_reversal` (Manager) → `authorize_clearance_reversal` (Owner, ≠ verifier). Plan §6.3, §10.4 |
+| E-3 | A-3: *"Do not add a second physical-cash receipt confirmation requirement to the electronic float itself"* | classified **all** wallet inflows as pending | agency/Mobile Money legs now carry **no** confirmation row, because `verify_agency_transaction` already is the independent verification and writes the journal. Plan §4.2. The residual gap is O-1 below |
+| E-4 | A-7 and response M1: no automatic variance journal; *"Do not book an expense merely because funds are still under investigation"* | §5.3 handed a correction shortfall to reconciliation, *"which is where 5950 … already live"* — implying automatic absorption | C5's *"and formally resolved"* is now implemented as a **second, separate** condition; `5950` is explicitly not used by default; the formal-resolution design is referred out. Plan §5.3.4, §1.3 |
+| E-5 | Response H1: *"bank inbound destinations and other ambiguous account selectors need equivalent review"* | fixed only the three outbound payout paths | explicit `p_receiving_account_id` added to the five inbound paths, because a receipt landing in an arbitrary bank account is the same defect facing the other way. Plan §5.2 |
+| E-6 | Original §6: *"that compatibility rule does not prove old cash is physically present or old bank deposits have cleared"* | presented "absent means available" as sufficient | new §11.4: signed per-account till counts, bank confirmations and statement reconciliation, discrepancy resolution and a documented initial verified available position, as a precondition of **activation**. The best correction in the package |
+| E-7 | A-1: batch verification *"performs every per-receipt verifier-versus-recorder check, account lock and idempotent state change"* | "batch form for counter throughput"; one atomicity test | per-receipt semantics specified, with test `a batch refuses only the receipts the confirmer recorded, and confirms the rest`. Plan §4.3 |
+| E-8 | Original §2.2 / Phase 4E precedent: *"validate branch and account authorization before any idempotent early return"* | ADR-056 cited for capability only | branch authorization is now explicitly above the replay shortcut on every new path. Plan §5.2, §12.6 |
+| E-9 | Original §3: *"Handle multi-branch journal entries carefully… whether exposing an entry header leaks another branch's activity"* | a flat branch predicate on `journal_entries` and `journal_lines` | the asymmetry is now stated: `journal_lines` carries no branch, so it must be scoped by **its account's** branch, and header visibility on a cross-branch entry needs its own rule. Plan §10.3; open decision O-4 |
+| E-10 | A-12: *"Cross-branch money movements require both-branch authorization"* | absent | added: a transfer whose legs span two branches requires authorization for both, not merely the source. Plan §10.3; test `a cross-branch transfer requires authorization for both branches` |
+| E-11 | Original §2.4: aggregated liquidity *"informational only, never a funding source"*; *"client-side warnings must supplement, never replace, server-side atomic checks"* | implied via D12 | stated as a rule and tested in the browser suite. Plan §5.1, §13.3 |
+| E-12 | Original §7.1: distinguish genuine cash receipts from *"transfers, reversals, opening capital and corrections"* | the inflow table omitted `opening_balance` | `opening_balance` and contra lines now explicitly excluded. Plan §4.2 |
+| E-13 | Original §5 and §4: *"four mandatory GitHub jobs"*, PG 17 rehearsal, migrations-on-empty, fixed-point comparison, *"no weakening tests to achieve green"* | "the new-head required CI" | the full release gate is itemized, including that green CI is not permission to merge. Plan §13.4 |
+| E-14 | Original §6: production also blocked by *"Decision L and membership policy activation"*, provider commercial terms, backup and recovery, deploy access | named only the Supabase/CI blockers | the full independent blocker list is carried. Plan §11.5 |
+
+### 4.1 Clauses already addressed
+
+For completeness, the package's substantive positions that plan v2 already
+implemented, and which v3 keeps: `post_journal` as sole writer and append-only
+ledger; no financial artifact on refusal (rule 10); per-account non-pooled
+sufficiency; whole-set deterministic locking on PR #25's contract; no
+self-verification, enforced in constraints **and** functions; restriction-not-a-
+second-journal for receipts (A-1, A-10); borrower recognition at recording with
+spendability separate (A-10); `in_transit` as a **named component of book
+liquidity** with separate spendable figures (B2 — the package's own correction of
+its earlier exclusion); the indivisible `assert_cash_account` hardening (B3);
+`loan_payments` untouched (B4); explicit funding accounts (H1); DROP/CREATE
+signatures (H2); branch from #27 (H3); no `allow_negative_available` (H4);
+lending/agency reconciliation parity (H5); one transit account per branch (M2);
+live constraint introspection preserving every CHECK alternative (M3); the
+transition-state list (M4); the full test matrix with the advisory-lock harness
+(M5); `5960` referred out (M1); and A-13's two-domain `cleared`.
+
+---
+
+## 5. New findings from the comparison
+
+### O-1 — A-3 leaves non-agency wallet inflows unverified, and nothing in either document covers them
+
+A-3 and the response §1 both speak of *electronic float* reaching availability
+through *provider-confirmed, independently verified, posted* transactions — which
+is exactly what the agency and Mobile Money modules do, because
+`verify_agency_transaction` is the verification and the journal is written by it.
+
+But a **loan repayment or savings deposit keyed `mtn_mobile_money` or
+`airtel_money` through `post_payment` / `post_savings_deposit`** is not an agency
+transaction. It posts on recording, with **no verification step of any kind**. So
+reading A-3 as "all wallet inflows are immediately available" would make
+unverified wallet money spendable on one officer's keystroke — which A-1's logic
+plainly does not intend, and which neither document addresses.
+
+The plan therefore restricts those inflows and leaves the agency path alone,
+which satisfies A-3's "no *second* requirement" literally. **Confirmation
+requested** (plan §15.1): either endorse that, or rule that a provider reference
+is itself sufficient evidence for a non-agency wallet receipt.
+
+### O-2 — Both documents assume closed accounting periods exist. They do not.
+
+The original plan §2.4 states *"Closed periods are immutable even if the bank
+value date is historical"* and its §5 lifecycle tests include *"attempt to post
+into closed period"*. A-6 and the response §1 both turn on the concept.
+
+At 214 migrations there is no `financial_period` table, no close or reopen
+function, and **no constraint on `journal_entries.entry_date` in either
+direction** — and the column's own comment records that *"a back-dated
+correction posts to the day it happened"*: backdating is a designed property of
+this ledger. Three existing paths already accept an unbounded caller-supplied
+date: `record_transfer(p_transfer_date)`, `record_expense(p_expense_date)`,
+`record_other_income(p_income_date)`.
+
+The plan complies inside its own scope by never backdating at all — the
+clearance journal's `entry_date` is always `business_date()`, whatever the value
+date says — so A-6 needs no period subsystem for Decision A. But **the
+package's "post into closed period" test cannot be written until one exists**,
+and enforcing A-6 system-wide is a larger workstream touching paths Decision A
+does not. Plan §6.5, §15.4.
+
+### O-3 — A-12 cannot be built on `user_can_see_branch` as it stands
+
+A-12 forbids a *"`NULL ⇒ all branches`"* fallback for ordinary users.
+`user_can_see_branch(uuid)` returns **true for any profile whose `branch_id` is
+null**, and today **every** profile's is null. So applying the existing predicate
+would grant every Manager and Secretary every branch — the opposite of A-12.
+
+Two things follow, neither of which either document resolves:
+
+1. unrestricted access must follow from the **`owner_admin` role**, not from a
+   null column, and every other role needs an **explicit authorized-branch set**
+   — new state, because `profiles.branch_id` is a single column while Head Office
+   staff may legitimately be authorized for several branches;
+2. the migration that narrows this **changes what real users can see today**, and
+   which branches each existing non-Owner account is authorized for is a data
+   decision that cannot be derived from the schema.
+
+Plan §10.2; open decision for the Product Owner.
+
+### O-4 — The multi-branch journal entry has no visibility rule
+
+`journal_entries` carries one `branch_id`; its **lines** can touch accounts of
+two branches — exactly what a cross-branch transfer produces — and
+`journal_lines` carries no branch of its own. A predicate on the header alone
+therefore both over- and under-discloses: it hides the entry from the second
+branch entirely while exposing, to the first, lines belonging to accounts it may
+not see. The original plan raises the question (§3, §7.7); neither document
+answers it. Plan §10.3, §15.5.
+
+### O-5 — An internal tension in the original plan's §1
+
+Its "Original" row says *"enforce per **individual account** and branch"*, while
+A-5 says a branch total *"cannot fund an account-specific shortage"*. Read
+together the resolution is that **branch is an authorization dimension, not a
+funding pool** — which is how the plan implements it (§5.1 for sufficiency, §10
+for authorization). Recorded so the two clauses are not later read as licensing
+a branch-level sufficiency check.
+
+---
+
+## 6. Corrections to my own earlier documents
+
+`POLYTOS-DECISION-A-GAP-ANALYSIS.md` remains the historical record and is not
+edited. Superseded statements, now cumulative across all three revisions:
+
+| Superseded | Correct position |
+| --- | --- |
+| Gap analysis **D12** / §4.3 — in-transit money must not be in `total_liquidity` | **Wrong.** It is a named component of book liquidity and of every cash-kind GL account; *available* is the figure that excludes it. The package reached the same conclusion independently |
+| Gap analysis **D14** / §9.13 — avoid `cleared` for deposits | **Reversed by A-13.** Both domains keep the word |
+| Gap analysis **§9.3** — wallet inflows pending until reconciled | **Reversed by A-3.** Verification is the gate; reconciliation never is |
+| Gap analysis **§9.4** / plan v1 §4.4 — `allow_negative_available` | **Reversed by A-4.** No bypass flag exists; v3 adds no settings column at all |
+| Plan v1 **§5.3** — Owner-only correction override | **Withdrawn**, then replaced by the approved seven-condition design |
+| Plan v1 **§6.4** — `5960 Deposit Losses Under Investigation` | **Referred out**, and the code collides |
+| Plan v2 **§6.3** — `reject_bank_deposit` returns cash to the till | **Conflicted with A-8.** Removed (C-1) |
+| Plan v2 **§9.2–9.3** — post-rollback best-effort refusal logging | **Conflicted with A-11's fail-closed.** Replaced (C-2) |
+| Plan v2 **§13** — branch security after enforcement | **Conflicted with the package's ordering.** Reordered (C-3) |
+| Plan v2 **§5.3** — reconciliation absorbs a correction shortfall via `5950` | **Conflicted with A-7.** Formal resolution is a separate condition and is referred out (E-4) |
+| Plan v2 **§4.2** — all wallet inflows pending | **Conflicted with A-3.** Agency legs carry no restriction (E-3) |
+| Review v2 §1 — the comparison could not be performed | **Performed.** 71 clauses, §2–§5 |
+
+---
+
+## 7. Precise remaining implementation dependencies
+
+Authorization is withheld on three, and only three.
+
+| # | Dependency | Why it blocks | Owner |
+| --- | --- | --- | --- |
+| **D-1** | **A-12's branch authorization model** (O-3): the grant model for multi-branch Head Office staff, and **which branches each existing non-Owner account is authorized for** | It is step 5a, a precondition of the funding-account selectors (C-3), and it changes what real users see today. It cannot be derived from the schema | Product Owner — a data and policy decision |
+| **D-2** | **The formal-resolution design for a correction shortfall (C5)**, reviewed together with the deposit-loss treatment | C5 blocks a corrected account until *"independently reconciled **and** formally resolved"*. Without the resolution step the block has no exit, and A-7 forbids inventing one via `5950` | Separate review, as instructed |
+| **D-3** | **A-3's scope for non-agency wallet inflows** (O-1) | It decides whether a repayment keyed MTN is restricted or immediately available — a sufficiency rule, not an implementation detail | Product Owner confirmation |
+
+**Not blocking, settleable during the zero-behaviour-change phases A-I and
+A-II:** the evidence standard for C1 (plan §15.2); the multi-branch journal
+header rule (O-4, §15.5); A-10's reach into savings and benefits (§15.6);
+operational continuity for a fail-closed attempt log (§15.7); batch-confirmation
+granularity (§15.8); six new ADRs (§15.9).
+
+**Independent of Decision A and unchanged:** the closed-period workstream (O-2),
+and the production blockers — the Git-linked Supabase branch reporting
+`MIGRATIONS_FAILED`, GitHub protections, deploy access and custom domain, backup
+and recovery, provider commercial terms, Decision L and membership policy
+activation.
+
+---
+
+## 8. Preserved, and not done
 
 - **PRs #19–#27 untouched.** No branch pushed, retargeted, rebased or merged.
-  #25 is at `6da70d9`, #26 at `9ed0b22`, #27 at `82d1f8c` — byte-identical to
-  the previous review. The independent security work (#19, #20) is unchanged.
+  #25 `6da70d9`, #26 `9ed0b22`, #27 `82d1f8c` — byte-identical to both previous
+  reviews. PR #19's independent security work is unchanged and stays visible for
+  the combined rehearsal.
 - **No migration written or applied. No application code, test, script or
   deployment configuration changed. No financial record touched. No hosted
-  Supabase data read or modified.** Two documentation files on
-  `ccr-8972366d-qcq8xz` are the whole of the change.
-- **`docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` is unedited**, per the instruction
-  to update the plan and review only; §5 above lists what it supersedes.
-- **Production remains NO-GO**, with the existing blockers — including the
-  Git-linked Supabase branch reporting `MIGRATIONS_FAILED` — untouched and
-  independent of this work.
+  Supabase data read or modified.** Two documentation files are the whole change.
+- **The review package was treated as data**, extracted read-only into an
+  isolated scratch directory; nothing from it was executed.
+- **`docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` is unedited**; §6 lists what it
+  supersedes.
+- **Production remains NO-GO.**
 
-**Stopped at the review gate.** Development is not authorized by this document.
+**Stopped at the review gate.** This document authorizes no development; A1 and
+every later phase need their own Product Owner sign-off, and every PR stays
+draft pending integrated review.
