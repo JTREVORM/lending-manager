@@ -228,7 +228,18 @@ test.describe('a new loan', () => {
     // stand. The heading is "Approve this loan"; the control is "Approve…".
     await page.getByRole('button', { name: /^approve/i }).click();
     await page.getByRole('button', { name: /yes, approve this loan/i }).click();
-    await expect(page.getByText(/approved/i).first()).toBeVisible({ timeout: 20_000 });
+    // The status DESCRIPTION, not the word. `/approved/i` matched the
+    // breakdown table's own empty state — "No breakdown has been calculated.
+    // It is created when the loan is approved." — which is on the page while
+    // the loan is still pending. So it resolved immediately, waited for
+    // nothing, and the `page.goto` below abandoned the approval mid-flight;
+    // the disbursement heading was then absent and the failure pointed at
+    // disbursement rather than here. Only the approved state carries this
+    // sentence (LOAN_STATUS_DESCRIPTIONS in lib/domain/loan.ts), so the
+    // assertion now waits for the decision to be committed.
+    await expect(
+      page.getByText('Approved. The money has not been released yet.').first(),
+    ).toBeVisible({ timeout: 20_000 });
 
     // --- release the money ----------------------------------------------
     // Two steps as well, and the most deliberate of the three: handing cash
