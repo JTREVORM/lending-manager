@@ -1,10 +1,13 @@
 # POLYTOS — Decision A Technical Review Report
 
-**Revision:** v4. Supersedes v3 (`944e00c`), v2 (`30bc027`) and v1 (`38a7e3d`).
-**Verdict: CHANGES APPLIED — development authorization withheld for ONE
-dependency, D-2** (§7). D-1 and D-3 are **approved and recorded** in plan v4;
-D-2 is now **reviewed** in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` and
-closes when its five business decisions are taken.
+**Revision:** v5. Supersedes v4 (`17a54f9`), v3 (`944e00c`), v2 (`30bc027`) and
+v1 (`38a7e3d`).
+**Verdict: ARCHITECTURE REVIEW COMPLETE — every business decision is approved,
+and development authorization is withheld on two named blockers**, one
+accounting and one technical (§7.6). All thirteen A decisions, seven C
+conditions, three D dependencies and five DD decisions are settled; no policy
+question remains open. The final requirement-to-test traceability report is
+§8.
 **Comparison status: PERFORMED.** Both review-package documents were received,
 extracted and compared clause by clause — 71 clauses across the two of them.
 §3 and §4 carry the result. Nothing is recorded as compared that was not.
@@ -279,6 +282,7 @@ edited. Superseded statements, now cumulative across all three revisions:
 | Plan v2 **§5.3** — reconciliation absorbs a correction shortfall via `5950` | **Conflicted with A-7.** Formal resolution is a separate condition and is referred out (E-4) |
 | Plan v2 **§4.2** — all wallet inflows pending | **Conflicted with A-3.** Agency legs carry no restriction (E-3) |
 | Review v2 §1 — the comparison could not be performed | **Performed.** 71 clauses, §2–§5 |
+| D-2 review v1 §6.2 — `Dr 1190` for the first three findings | **Wrong twice over.** Those findings park in `2900` as a credit, and debiting `1190` would have **increased** the investigation balance it was meant to extinguish. Corrected in the D-2 certification §1 and §4.2, with a named regression test |
 
 ---
 
@@ -318,7 +322,7 @@ the verification **reuses** the agency module's own maker-checker rather than
 layering a second one, and it **posts nothing** — it releases a restriction.
 Recorded in plan §1, §2 and §4.2.
 
-### 7.3 D-2 — reviewed; one dependency remains
+### 7.3 D-2 — business decisions approved; certified with two blockers
 
 `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` covers all ten requested
 areas. Its central finding changes the shape of the problem:
@@ -336,10 +340,58 @@ Differences Under Investigation` — with no time limit and no automatic exit.
 Loss recognition (`5110`) and a receivable (`1195`) each need an explicit Owner
 act on top.
 
-**D-2 closes when five business decisions are taken** (that review's §10): the
-variance tolerance, the deposit ageing threshold, partial physical returns, what
-constitutes an enforceable claim, and who authorizes a loss. Each has options and
-a recommendation; none is decided in the document.
+**All five business decisions are now approved**, and DD-1 is **stricter than I
+recommended**: no tolerance at all, so every unexplained variance is
+investigated whatever its size. That closes defect D2-a decisively — `5950` and
+`5960` receive no new variance posting on any of the **three** approval paths —
+and it removes the last amount-based bypass anywhere in Decision A.
+
+**The certification found one error of my own.** v1 of the D-2 review proposed
+`Dr 1190` for the three most common findings. Those findings arise where the
+books *understate* cash, which parks the amount in `2900` as a credit — and
+`1190` carries a debit balance, so debiting it would have **increased the very
+investigation balance it was meant to extinguish**, doubling the unexplained
+amount. The cause was a taxonomy error: the finding set is determined by the
+**sign of the variance**, and v1 wrote four findings as though all four resolved
+one account. v2 rebuilds it as eight findings across two accounts, proves every
+posting against seven fully worked examples, and adds the regression test.
+Verification item 2 anticipated exactly this failure.
+
+### 7.4 What the certification establishes
+
+- **A booking-error correction cannot by itself create a shortage.** The contra
+  nets to zero unless more has been recorded as leaving the account than ever
+  legitimately entered it — a second, independent irregularity.
+- **Seven of the eight findings involve no loss**, which is why the resolution
+  posting is classification-free and never touches the income statement.
+- **`5110 Cash and Deposit Losses` is the loss account**, `5960` and `5970`
+  being taken by agency float. `1190`, `1195`, `2900` and `5110` are all free
+  and **none carries a `cash_kind`**, so both certified liquidity identities
+  hold untouched.
+- **No money is lost, owed by any person, or owed by any borrower** by default.
+  An unexplained amount stays unexplained, with no automatic exit in either
+  direction.
+
+### 7.5 Two defects found in the existing system
+
+| | Finding | Status |
+| --- | --- | --- |
+| **D2-a** | `approve_reconciliation` posts every approved variance to `5950` unconditionally; both agency approval paths offer an opt-in `5950`/`5960` write-off | **Closed by DD-1.** All three must stop, in one change |
+| **D2-b** | the lending reconciliation path takes no account lock and has no staleness guard, while its agency twins have both | Open; fixed at plan step 7a |
+
+### 7.6 Why authorization is still withheld
+
+No policy question remains. Two blockers do.
+
+| | Blocker | Owner |
+| --- | --- | --- |
+| **B-1** | **Accounting.** `1190` is not supportable as an asset at a reporting date — an unexplained shortage is neither a controlled resource nor an enforceable right — and an unidentifiable overage in `2900` generally requires income recognition, for which no destination account or authorization exists. DD-1 and DD-2 make long-open balances ordinary, so a reporting date will fall inside an investigation window. Needs a qualified accountant's determination of the presentation, a period-end resolution policy, the overage treatment and the DD-4 recognition test. **Compounded by the absence of any closed-period concept in the schema.** A financial-reporting blocker, not an architecture defect | A qualified accountant, with the Product Owner |
+| **B-2** | **Technical.** The three reconciliation approval paths and the missing lock and staleness guard must all be addressed in the single change at plan step 7a. Leaving any one undone leaves an automatic write-off or an unlocked read in place | Implementation, once authorized |
+
+Five non-blocking items remain in the D-2 certification §11.3 and plan §15: the
+blocking policy for a plain shortage, the S2 ordering rule, DD-5's materiality
+figure, the absent `finance-evidence` storage bucket, and the `1190`/`2900`
+ageing report.
 
 ### 7.4 Two defects found in the existing system while reviewing D-2
 
@@ -348,19 +400,23 @@ a recommendation; none is decided in the document.
 | **D2-a** | `approve_reconciliation` posts **every** approved variance to `5950` unconditionally — a 700,000 shortage becomes an expense on one approval | Contradicts A-7's "no automatic variance or loss journal" and the standing constraint. Closed by the tolerance of DD-1 and a second destination |
 | **D2-b** | the lending reconciliation path takes **no account lock**, while its agency twin takes both a lock and a sufficiency assertion | Already recorded as H5; repeated because D-2's resolution posting runs on that path and would inherit the gap |
 
-### 7.5 Still open, not blocking
+### 7.7 Still open, not blocking
 
-Plan §15: the evidence standard for C1; the cross-branch journal header rule;
-**a `finance-evidence` storage bucket, which does not exist** — the six existing
-buckets are client, guarantor, loan, membership-consent, benefit and
-company-assets, and the clearance slip, physical-return and correction evidence
-all need one; A-10's reach into savings and benefits; fail-closed continuity;
-batch-confirmation granularity; six ADRs.
+Plan §15 and the D-2 certification §11.3: the evidence standard for C1; the
+cross-branch journal header rule; **a `finance-evidence` storage bucket, which
+does not exist** — the six existing buckets are client, guarantor, loan,
+membership-consent, benefit and company-assets, and the clearance slip,
+physical-return, reclassification, correction, claim and loss evidence all need
+one; A-10's reach into savings and benefits; fail-closed continuity;
+batch-confirmation granularity; the blocking policy for a plain shortage; the S2
+ordering rule; DD-5's materiality figure; the `1190`/`2900` ageing report; seven
+ADRs.
 
-**Independent of Decision A:** the closed-period workstream, and the production
-blockers — the Git-linked Supabase branch reporting `MIGRATIONS_FAILED`, GitHub
-protections, deploy access and custom domain, backup and recovery, provider
-commercial terms, Decision L and membership policy activation.
+**Independent of Decision A:** the closed-period workstream — which B-1 now
+compounds — and the production blockers: the Git-linked Supabase branch
+reporting `MIGRATIONS_FAILED`, GitHub protections, deploy access and custom
+domain, backup and recovery, provider commercial terms, Decision L and
+membership policy activation.
 
 **Not blocking, settleable during the zero-behaviour-change phases A-I and
 A-II:** the evidence standard for C1 (plan §15.2); the multi-branch journal
@@ -376,7 +432,102 @@ activation.
 
 ---
 
-## 8. Preserved, and not done
+## 8. Final Decision A requirement-to-test traceability report
+
+Every approved decision, its control, and the named test that proves it. Test
+cases are specified in plan §13 and in the D-2 certification §10. **None is
+written** under the documentation-only authorization.
+
+### 8.1 The original financial controls
+
+| Rule | Control | Test |
+| --- | --- | --- |
+| 1 — sufficient available funds in the selected funding account | `assert_cash_funds_available` on all 24 outgoing paths; explicit account arguments | `cash-sufficiency.test.ts :: refuses path <n> when the funding account is short` ×12 |
+| 2 — Cash at Hand and every bank account independently controlled | per-account availability; explicit account selection; no aggregate consulted | `cash-availability.test.ts :: a sibling account's balance never funds this one` |
+| 3 — no automatic cross-account or cross-branch borrowing | nothing nets; refusal is the outcome; D-1 branch grants | `cash-sufficiency.test.ts :: refuses a funding account from another branch` |
+| 4 — physical cash confirmed received | `cash_receipt_confirmations`; `confirm_cash_receipt` | `receipt-confirmation.test.ts :: refuses the recorder as confirmer, at both layers` |
+| 5 — bank deposits cleared before spendable | `1050 Cash in Transit`; `verify_bank_deposit` | `bank-clearance.test.ts :: a short credit blocks all clearance and posts nothing` |
+| 6 — clearance evidence recorded | evidence columns, CHECK-required when cleared | `bank-clearance.test.ts :: requires a bank reference, a value date and a verifier` |
+| 7 — a different authorized Manager/Owner verifies | distinct-actor at function **and** constraint layer | `bank-clearance.test.ts :: the verifier cannot be the recorder` |
+| 8 — pending and uncleared funds cannot support payouts | availability = booked − pending; `1050` non-spendable | `cash-sufficiency.test.ts :: refuses when booked is sufficient but available is not` |
+| 9 — atomic posting, concurrency-safe locking | PR #25's `post_journal` lock; the lock-order contract | `cash-sufficiency-concurrency.test.ts` (whole file) |
+| 10 — refused payouts move nothing | single-transaction refusal | `cash-sufficiency.test.ts :: a refusal writes no journal, line, document or status` |
+| 11 — approvals, corrections and reversals auditable | `record_audit_event`; append-only ledger | `refusal-audit.test.ts`, `receipt-correction.test.ts` |
+
+### 8.2 A-1 … A-13
+
+| ID | Control | Test |
+| --- | --- | --- |
+| A-1 | per-receipt restriction; batch performing every per-receipt check | `receipt-confirmation.test.ts :: a batch refuses only the receipts the confirmer recorded, and confirms the rest` |
+| A-2 | the 24-path inventory, enumerated by scanning every `post_journal` call site | `cash-sufficiency.test.ts` ×12 |
+| A-3 | agency-verified float reuses its verification, carries no restriction | `cash-availability.test.ts :: verified agency float is available on posting, with no confirmation row` |
+| A-4 | no flag, no argument, no capability | `cash-sufficiency.test.ts :: no actor, Owner included, can post a short genuine payout` |
+| A-5 | one account; no aggregate, no reconciliation | `cash-availability.test.ts :: no availability function consults a branch total` |
+| A-6 | `bank_value_date` evidence vs `entry_date` = `business_date()` | `bank-clearance.test.ts :: a historical value date posts to today, never to the value date` |
+| A-7 | full clearance only; no automatic variance journal | `bank-clearance.test.ts`; `cash-difference-resolution.test.ts :: no variance posting reaches 5950` |
+| A-8 | rejection posts nothing; till contra only on verified physical receipt | `deposit-investigation.test.ts :: rejection writes no journal and does not return cash to the till` |
+| A-9 | Manager requests; Owner authorizes; not the verifier; **available** funds | `bank-clearance.test.ts :: the verifier cannot authorize reversal of their own clearance` |
+| A-10 | one journal at receipt; confirmation off `loan_payments` | `receipt-confirmation.test.ts :: loan figures are identical before and after confirmation` |
+| A-11 | pre-write attempt record, fail closed | `refusal-audit.test.ts :: a failed attempt-log write prevents the payout` |
+| A-12 | branch-scoped reads and writes; no fallback branch | `rls-deposits.test.ts :: an unassigned non-Owner profile has no branch financial access` |
+| A-13 | distinct status domains; qualified labels | `bank-clearance.test.ts :: deposit clearance does not alter any loan status` |
+
+### 8.3 C1 … C7 — the booking-error conditions
+
+| ID | Control | Test |
+| --- | --- | --- |
+| C1 | documented non-occurrence required | `receipt-correction.test.ts :: refuses a correction where the payment did occur` |
+| C2 | exact contra, read from `journal_lines` | `receipt-correction.test.ts :: corrects only the entry it names, line for line` |
+| C3 | second actor + evidence artifact | `receipt-correction.test.ts :: requires documented evidence and a second actor` |
+| C4 | no amount, account or recipient argument | `receipt-correction.test.ts :: accepts no amount, account or recipient` |
+| C5 | flag and block until reconciled **and** formally resolved | `receipt-correction.test.ts :: an approved count alone does not clear the block` |
+| C6 | a genuine payment is never reversed for a staff cash loss | `receipt-correction.test.ts :: a lost or misappropriated receipt leaves the borrower's record untouched` |
+| C7 | sufficiency mandatory for every genuine outgoing transaction | `cash-sufficiency.test.ts` (as A-4) |
+
+### 8.4 D-1 … D-3
+
+| ID | Control | Test |
+| --- | --- | --- |
+| D-1 | `profile_branch_grants`; `user_can_see_branch` refined to role-or-grant; deny by default; no back-filled grants | `rls-deposits.test.ts :: a Head Office officer reaches only granted branches` |
+| D-2 | the four accounts and their functions; §8.5 below | `cash-difference-resolution.test.ts`, `cash-investigation.test.ts` |
+| D-3 | a non-agency wallet receipt restricted until a different Manager/Owner verifies the provider confirmation | `receipt-confirmation.test.ts :: a wallet receipt stays restricted until its provider confirmation is independently verified` |
+
+### 8.5 DD-1 … DD-5
+
+| ID | Control | Test |
+| --- | --- | --- |
+| DD-1 | no tolerance; every variance investigated; `5950`/`5960` closed to new variance postings on **three** paths | `cash-difference-resolution.test.ts :: every variance opens an investigation, whatever its amount`; `:: no variance posting reaches 5950 or 5960 on either agency path` |
+| DD-2 | Owner-configurable threshold, 30 days initially; notification only; reclassification needs evidence and an independent actor | `deposit-ageing-and-recovery.test.ts :: nothing posts at the ageing threshold; a notification is raised` |
+| DD-3 | partial verified returns; remainder under investigation; duplicate recovery structurally impossible; A-7 unchanged | `deposit-ageing-and-recovery.test.ts :: cumulative verified returns can never exceed the deposit amount` |
+| DD-4 | receivable only on a documented, legally enforceable claim, Owner-authorized and independently reviewed; no salary deduction | `cash-investigation.test.ts :: no receivable is created by default, by inference or by a Manager`; `:: no salary-deduction path exists` |
+| DD-5 | loss by one Owner who did not open the investigation; completed investigation, evidence, reason, immutable audit, material-loss reporting | `cash-investigation.test.ts :: a loss requires a completed investigation, an Owner who did not open it, evidence and a reason`; `:: no automatic path reaches 5110` |
+
+### 8.6 The accounting integrity controls
+
+| Control | Test |
+| --- | --- |
+| An investigation posting moves its suspense balance **towards zero** | `cash-investigation.test.ts :: O1, O2, O3 each extinguish 2900 and recognize no expense` — the regression test for the v1 direction error |
+| A correction alone never creates a negative balance | `cash-difference-resolution.test.ts :: a correction with no intervening outflow leaves no negative balance` |
+| A correction-revealed negative is an **overage** | `:: a correction-revealed negative produces an overage, not a shortage` |
+| Resolution brings the cash account to the counted balance exactly | `:: resolution brings the cash account to the counted balance exactly` — the seven worked examples replayed as fixtures |
+| The four new accounts carry no `cash_kind`; both liquidity identities hold | `:: 1190, 1195, 2900 and 5110 carry no cash_kind` |
+| Borrower repayments preserved throughout a shortage | `borrower-protection.test.ts :: a cash shortage leaves every loan balance, arrears figure, installment outcome and deadline identical` |
+| Historical journals never move | `borrower-protection.test.ts :: every D-2 posting is a new entry; no historical line moves` |
+| Reconciliation locking and staleness | `cash-difference-concurrency.test.ts :: a count racing a posting`; `cash-difference-resolution.test.ts :: a stale system_balance is refused` |
+
+### 8.7 Release certification
+
+`npm run verify`, `npm run test:db`, `npm run audit:money`, the database
+security gate, `scripts/certify-financial-reconciliation.mjs` with its sum
+identity extended for `in_transit`, migrations-on-empty, the full historical
+replay with every tracked fixed point compared, the PostgreSQL 17 rehearsal,
+browser E2E on a fresh seed, and **all four required GitHub jobs green at the
+final audited code SHA**. Migration ordering verified independently against
+PR #19. No test weakened to achieve green; green CI is not permission to merge.
+
+---
+
+## 9. Preserved, and not done
 
 - **PRs #19–#27 untouched.** No branch pushed, retargeted, rebased or merged.
   #25 `6da70d9`, #26 `9ed0b22`, #27 `82d1f8c` — byte-identical to both previous

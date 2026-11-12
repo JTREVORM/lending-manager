@@ -1,12 +1,14 @@
 # POLYTOS — Decision A Implementation Plan
 
-**Revision:** v4. Records the Product Owner's approval of dependencies **D-1**
-(branch authorization) and **D-3** (Mobile Money receipts) of 2026-11-12, on top
-of v3's line-by-line reconciliation and the booking-error ruling of 2026-11-11.
-Supersedes v3 (`944e00c`), v2 (`30bc027`) and v1 (`38a7e3d`).
-**D-2** — the formal-resolution and loss-treatment design — is reviewed in
-`docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` and remains the one open
-dependency.
+**Revision:** v5. Records the Product Owner's approval of **DD-1 through DD-5**
+(2026-11-12), closing dependency D-2's business decisions, on top of v4's D-1 and
+D-3 approvals, v3's line-by-line reconciliation and the booking-error ruling.
+Supersedes v4 (`17a54f9`), v3 (`944e00c`), v2 (`30bc027`) and v1 (`38a7e3d`).
+**D-2 is certified** in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` v2,
+subject to two named blockers — one accounting (`1190`/`2900` presentation at a
+reporting date) and one technical (three reconciliation paths and a missing
+lock). All thirteen A decisions, seven C conditions, three D dependencies and
+five DD decisions are now approved.
 **Status:** awaiting development authorization. **Not authorized.**
 **Type:** documentation only. No migration, application code, test, financial
 record, deployment configuration or PR branch touched.
@@ -72,7 +74,7 @@ unwinding a receipt that never happened — which moves value to nobody.
 | Item | Disposition |
 | --- | --- |
 | Deposit-loss account and write-off procedure | **Separate review** (§6.7). `5960` and `5970` are already taken at the #27 head |
-| Formal resolution of a correction shortfall (C5), and loss treatment | **Reviewed in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md`** (dependency D-2), which proposes the accounts, the states and the authorization and seeks approval for five new business decisions. Reconciliation may *detect* a difference; it may not write it off automatically, and `5950` may not absorb it by default |
+| Formal resolution of a correction shortfall (C5), and loss treatment | **Certified in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` v2** under the approved DD-1…DD-5. The accounts are `1190` Cash Differences Under Investigation, `2900` Cash Overages Under Investigation, `1195` Cash Recovery Receivable and `5110` Cash and Deposit Losses — none carrying a `cash_kind`, so the liquidity identities hold. **DD-1 removes every tolerance: no variance reaches `5950` or `5960` automatically on any of the three approval paths.** Two blockers remain, §15.1 and §15.2 |
 | A-10's reach into savings qualification, member-loan capacity and benefit gates | **Separate Product Owner ruling** per the review response (§15.6) |
 
 ---
@@ -313,10 +315,15 @@ reconciled **and formally resolved**"*:
 off automatically.** In particular `5950 Cash Over and Short` is **not** used by
 default: A-7 forbids automatic variance journals, and the review response
 forbids booking an expense merely because funds are under investigation. The
-formal-resolution design — what the shortfall becomes, and who approves it — is
-**referred for separate review** (§1.3) and is the subject of §15.3. Until it
-exists, a corrected account stays flagged and blocked, which is the honest
-state: nothing is written off and nothing is spent.
+formal-resolution design is **certified** in the D-2 review, and its exit is:
+an independent count, approval of that count, and then a **classification-free**
+posting that moves the difference to `1190` (shortage) or `2900` (overage),
+bringing the cash account to the counted balance and clearing the flag. That
+posting decides **nothing** about cause or blame. Classification follows later
+and separately — eight possible findings, of which **seven involve no loss at
+all** — and only an explicit Owner act under DD-5 can reach the income
+statement. Until a flagged account is resolved, nothing is written off and
+nothing is spent.
 
 ### 5.4 Cash loss and misappropriation (C6)
 
@@ -465,14 +472,31 @@ period" cannot be written until that exists.
 | physical cash verified returned | Dr till / Cr `1050` | `returned_to_till` |
 | unresolved | **nothing** | stays `under_investigation` |
 
-### 6.7 Loss recognition is out of scope
+### 6.7 Loss recognition — approved under DD-2, DD-3 and DD-5
 
-`written_off` is absent from the status domain and a test asserts the outcome
-does not exist, so the parked decision cannot be used by accident. Two notes for
-that review: **`5960` is already `Agency Float Over and Short`** and `5970` is
-`Agency Float Purchase Premium` at the #27 head, so a new code must be chosen
-against the chart as it will then stand; and whether a loss becomes an expense
-or a receivable naming an individual is HR-sensitive, not a chart question.
+Certified in the D-2 review. In outline:
+
+- **Ageing (DD-2).** An Owner-configurable threshold, **initially 30 calendar
+  days** from `deposit_date`. Crossing it **posts nothing**: it notifies
+  management. Reclassification `Dr 1190 / Cr 1050` is a human act needing
+  evidence of the attempts made and an actor who is not the deposit's recorder.
+  Status `aged_unresolved`.
+- **Partial recovery (DD-3).** Permitted for **independently verified** amounts
+  only, crediting `1190` after reclassification or `1050` before it, so neither
+  account can go negative. Unrecovered amounts stay under investigation.
+  **Duplicate recoveries are prevented structurally** by a cumulative
+  verified-returns column with a CHECK against the deposit amount, plus a
+  per-return idempotency key. **A-7's full-or-nothing clearance is unchanged:**
+  recovering physical cash is not a bank clearance.
+- **Loss (DD-5).** `written_off` returns to the status domain, posting
+  `Dr 5110 / Cr 1190` (or `Cr 1195` for a failed claim), and requires a
+  completed investigation, **one Owner/Admin who did not open it**, supporting
+  evidence, a reason, immutable audit history and material-loss reporting. **No
+  Manager or Cashier authorization and no automatic write-off from any path.**
+
+The code collision that prompted the earlier referral is settled: `5960` and
+`5970` are taken by agency float accounts, so the loss account is **`5110`**,
+verified free at the #27 head.
 
 ### 6.8 A-13 — one word, two domains
 
@@ -717,6 +741,7 @@ combined rehearsal.
 | 5b | `bank_deposits` + its six functions | the UI |
 | 6 | `assert_cash_funds_available` wired into paths 1–8; the DROP/CREATE signature changes **including inbound destinations**; `correct_misrecorded_receipt`; the `requires_reconciliation` flag and its block | the UI |
 | 7 | paths 9–24 moved onto the availability assert | — |
+| **7a** | **D-2: the four accounts (`1190`, `2900`, `1195`, `5110`); the resolution, investigation, claim and loss functions; the DD-2 ageing threshold and notification; the cumulative verified-returns constraint. In the same change: remove the `5950` posting from `approve_reconciliation`, remove the opt-in `5950`/`5960` write-off from both agency approval paths, add `lock_ledger_balances` to the lending count and approval, and adopt the agency staleness guard on the lending path** | the UI |
 | 8 | `refused_financial_actions` + its RPC | the server actions |
 
 **Branch authorization moves ahead of the funding-account selectors**, per the
@@ -992,6 +1017,12 @@ permission to merge or deploy.
 | A logging failure never permits a payout | `refusal-audit.test.ts` (A-11) |
 | No cash-kind account is reachable by a generic transfer unless spendable | `assert_cash_account`, `bank-clearance.test.ts` |
 | Availability is derived, never stored | code review, ADR-052 |
+| No variance reaches `5950` or `5960` automatically, on any of three paths | `cash-difference-resolution.test.ts` (DD-1) |
+| An investigation posting moves its suspense balance **towards zero** | `cash-investigation.test.ts` — the regression test for the v1 direction error |
+| `1190`, `2900`, `1195` and `5110` carry no `cash_kind`, so both liquidity identities hold | `cash-difference-resolution.test.ts` |
+| No receivable is created by suspicion, and no salary-deduction path exists | `cash-investigation.test.ts` (DD-4) |
+| No automatic path reaches `5110` | `cash-investigation.test.ts` (DD-5) |
+| Cumulative verified returns never exceed a deposit's amount | `deposit-ageing-and-recovery.test.ts` (DD-3) |
 
 ---
 
@@ -1002,12 +1033,23 @@ Flagged, not decided.
 1. **What evidence establishes C1** — that a payment never occurred. An
    operational-policy question: which documents or system records must be
    attached before a correction may proceed.
-2. **Formal resolution of a correction shortfall (C5)** and the deposit-loss
-   treatment — **reviewed as dependency D-2** in
-   `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md`, which proposes the
-   accounts, the states, the authorization and the tests, and seeks approval for
-   five new business decisions. Until those are approved a corrected account
-   stays flagged and blocked and no deposit is written off.
+2. **`1190` and `2900` at a reporting date — accounting blocker B-1.** An
+   unexplained shortage is not a controlled resource or an enforceable right, so
+   `1190` is **not** supportable as an asset at a reporting date, and an
+   unidentifiable overage in `2900` generally requires income recognition for
+   which no destination account or authorization is yet specified. DD-1 and DD-2
+   make long-open balances ordinary, so a reporting date will fall inside an
+   investigation window. **A qualified accountant must determine** the
+   presentation, the period-end resolution policy, the treatment of an
+   unidentifiable overage, and the recognition test for each DD-4 claim.
+   Compounded by item 3. A financial-reporting blocker, not an architecture
+   defect.
+2a. **Three reconciliation paths and a missing lock — technical blocker B-2.**
+   `approve_reconciliation` posts every approved variance to `5950`
+   unconditionally; both agency approval paths offer an opt-in `5950`/`5960`
+   write-off; the lending path takes no account lock and has no staleness guard
+   while its agency twins have both. All four must be addressed in the single
+   change at step 7a, or an automatic write-off or an unlocked read survives.
 3. **Closed accounting periods do not exist** (§6.5). A-6 forbids backdating
    into one; the schema has no period, close, reopen or `entry_date` guard, and
    three existing paths accept unbounded dates. Decision A complies inside its
