@@ -52,6 +52,17 @@
 -- clients, creating, approving and disbursing loans, taking repayments,
 -- issuing receipts and reading reports all remain available to one person.
 --
+-- ## One trap worth naming
+--
+-- `submit_reconciliation` has two prior definitions: the original in
+-- 20261011000230 and a replacement in 20261016000100 that compares the count
+-- against `ledger_account_balance_as_of(account, date)` rather than the
+-- balance now — so a count entered for a past day is judged against that
+-- day. The first draft of this migration rebuilt the function from the
+-- ORIGINAL and silently reverted that, which is the standing hazard of
+-- CREATE OR REPLACE. `reconciliation-as-of.test.ts` caught it. The body here
+-- is the 20261016000100 one, with only the auto-approve branch removed.
+--
 -- Preserves every existing journal, ledger balance and borrower payment. No
 -- row is created, deleted or recalculated by this migration.
 -- ===========================================================================
@@ -101,7 +112,11 @@ begin
 
   select a.branch_id into v_branch from public.ledger_accounts a where a.id = p_account_id;
 
-  v_system := public.ledger_account_balance(p_account_id);
+  -- As of the date counted, not as of now. A count entered a few days late
+  -- is compared against the books as they stood on the day of the count;
+  -- reading the current balance would fold every movement since into the
+  -- variance, and `approve_reconciliation` would write that off as a loss.
+  v_system := public.ledger_account_balance_as_of(p_account_id, v_date);
   v_number := public.next_reference('reconciliation');
 
   select fs.reconciliation_requires_review into v_review
@@ -129,6 +144,9 @@ begin
   -- that governed it is editable by the same person. The count is recorded
   -- and the difference stays visible; closing it is a separate, authorised
   -- act by somebody else. See 20261112000100.
+  --
+  -- `v_review` is still read above: the column remains, and a later version
+  -- may want it for something that is not a self-approval.
 
   perform public.record_audit_event(
     'reconciliation.submitted', 'account_reconciliation', v_id::text, null,
