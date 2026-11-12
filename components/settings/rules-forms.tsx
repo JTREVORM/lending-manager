@@ -187,20 +187,26 @@ export function FinanceSettingsForm({
         <Field
           label="Transfers above"
           name="transferApprovalThreshold"
-          required
           inputMode="numeric"
-          defaultValue={String(settings.transferApprovalThreshold ?? 0)}
+          defaultValue={
+            settings.transferApprovalThreshold === null
+              ? ''
+              : String(settings.transferApprovalThreshold)
+          }
           error={errors.transferApprovalThreshold?.[0]}
-          hint="Zero means every transfer needs approval."
+          hint="Leave blank so no transfer needs a second person. Zero means every transfer does."
         />
         <Field
           label="Expenses above"
           name="expenseApprovalThreshold"
-          required
           inputMode="numeric"
-          defaultValue={String(settings.expenseApprovalThreshold ?? 0)}
+          defaultValue={
+            settings.expenseApprovalThreshold === null
+              ? ''
+              : String(settings.expenseApprovalThreshold)
+          }
           error={errors.expenseApprovalThreshold?.[0]}
-          hint="Zero means every expense needs approval."
+          hint="Leave blank so no expense needs a second person. Zero means every expense does."
         />
 
         <FullWidth>
