@@ -465,6 +465,62 @@ describe('financeSettingsSchema', () => {
         .success,
     ).toBe(false);
   });
+
+  // The regression these four guard: a sole operator holds every capability,
+  // and `approve_transfer`/`approve_expense` refuse the person who raised the
+  // movement. So a threshold they cannot clear strands the money. NULL is the
+  // documented way out, and the form could not express it: it rendered NULL as
+  // "0" in a required field, so the next save turned "never" into "always".
+  it('reads a blank threshold as null, which is "no second person needed"', () => {
+    const parsed = financeSettingsSchema.parse({
+      ...valid,
+      transferApprovalThreshold: '',
+      expenseApprovalThreshold: '   ',
+    });
+
+    expect(parsed.transferApprovalThreshold).toBeNull();
+    expect(parsed.expenseApprovalThreshold).toBeNull();
+  });
+
+  it('reads a missing threshold field as null rather than failing', () => {
+    const {
+      transferApprovalThreshold: _t,
+      expenseApprovalThreshold: _e,
+      ...rest
+    } = valid;
+    const parsed = financeSettingsSchema.parse(rest);
+
+    expect(parsed.transferApprovalThreshold).toBeNull();
+    expect(parsed.expenseApprovalThreshold).toBeNull();
+  });
+
+  it('keeps blank and zero as different answers', () => {
+    const blank = financeSettingsSchema.parse({
+      ...valid,
+      transferApprovalThreshold: '',
+    });
+    const zero = financeSettingsSchema.parse({
+      ...valid,
+      transferApprovalThreshold: '0',
+    });
+
+    expect(blank.transferApprovalThreshold).toBeNull();
+    expect(zero.transferApprovalThreshold).toBe(0);
+  });
+
+  it('still requires the low-balance figures, which are not nullable columns', () => {
+    for (const field of [
+      'lowBalanceCashAtHand',
+      'lowBalanceMtn',
+      'lowBalanceAirtel',
+      'lowBalanceBank',
+    ]) {
+      expect(
+        financeSettingsSchema.safeParse({ ...valid, [field]: '' }).success,
+        `${field} must stay required`,
+      ).toBe(false);
+    }
+  });
 });
 
 describe('toFieldErrors', () => {

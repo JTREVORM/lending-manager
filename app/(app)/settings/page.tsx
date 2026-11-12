@@ -439,22 +439,23 @@ export default async function SettingsPage({
                 label="Transfers above"
                 value={
                   finance.transferApprovalThreshold === null ? (
-                    'Every transfer'
+                    'No second person needed'
                   ) : (
                     <Money amount={finance.transferApprovalThreshold} />
                   )
                 }
-                hint="Need a second person before they post."
+                hint="Above this, a transfer waits for a second person before it posts."
               />
               <Setting
                 label="Expenses above"
                 value={
                   finance.expenseApprovalThreshold === null ? (
-                    'Every expense'
+                    'No second person needed'
                   ) : (
                     <Money amount={finance.expenseApprovalThreshold} />
                   )
                 }
+                hint="Above this, an expense waits for a second person before it posts."
               />
               <Setting
                 label="Overdrawing a cash account"
