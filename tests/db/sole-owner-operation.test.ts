@@ -302,21 +302,16 @@ describeDb('a sole Owner can run the business', () => {
     expect(row.status).toBe('posted');
   });
 
-  it('leaves the reconciliation path open to a single actor, which is the known gap', async () => {
-    // Not an endorsement: recorded so that the behaviour a sole Owner depends
-    // on cannot change unnoticed, and so the control gap stays visible. A cash
-    // count that disagrees with the ledger is approvable by whoever counted,
-    // because `approve_reconciliation` carries no distinct-actor rule. For one
-    // operator that is the only way to close a difference at all; once a second
-    // person handles cash it is a weakness to close in code.
-    const definition = await queryOne<{ def: string }>(
-      `select pg_get_functiondef(p.oid) as def
-         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = 'approve_reconciliation'`,
-    );
-    expect(definition.def).toMatch(/reconciliation:approve/);
-    expect(definition.def).not.toMatch(
-      /performed_by\s*=\s*public\.current_profile_id\(\)/,
-    );
-  });
+  // The reconciliation control gap used to be asserted here, as a reminder
+  // that `approve_reconciliation` had no distinct-actor rule. It is not
+  // asserted here any more, and the reason matters for whoever reads this
+  // next: 20261112000100 closes that gap, and an assertion that the gap
+  // EXISTS would then contradict the migration. Two independent pull
+  // requests cannot hold opposite assertions about the same function — the
+  // second to merge breaks — so the behaviour is asserted where it belongs,
+  // beside the migration, in `reconciliation-v1-exclusion.test.ts`.
+  //
+  // What this file is still about is unchanged: the ordinary lending cycle
+  // needs no second person, and the two cash-movement controls that do are
+  // intact and reachable through a configured threshold.
 });
