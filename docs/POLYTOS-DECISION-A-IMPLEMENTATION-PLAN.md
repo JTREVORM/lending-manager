@@ -5,10 +5,13 @@
 D-3 approvals, v3's line-by-line reconciliation and the booking-error ruling.
 Supersedes v4 (`17a54f9`), v3 (`944e00c`), v2 (`30bc027`) and v1 (`38a7e3d`).
 **D-2 is certified** in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` v2,
-subject to two named blockers — one accounting (`1190`/`2900` presentation at a
-reporting date) and one technical (three reconciliation paths and a missing
-lock). All thirteen A decisions, seven C conditions, three D dependencies and
-five DD decisions are now approved.
+subject to two named blockers, each now prepared as its own package:
+`docs/POLYTOS-DECISION-A-B1-ACCOUNTANT-REVIEW-PACKAGE.md` (nine determinations
+for the qualified accountant) and
+`docs/POLYTOS-DECISION-A-B2-TECHNICAL-ACCEPTANCE-CHECKLIST.md` (one indivisible
+security change). All thirteen A decisions, seven C conditions, three D
+dependencies and five DD decisions are approved; the consolidated blocker
+register is `POLYTOS-DECISION-A-TECHNICAL-REVIEW.md` §9.
 **Status:** awaiting development authorization. **Not authorized.**
 **Type:** documentation only. No migration, application code, test, financial
 record, deployment configuration or PR branch touched.
@@ -741,7 +744,7 @@ combined rehearsal.
 | 5b | `bank_deposits` + its six functions | the UI |
 | 6 | `assert_cash_funds_available` wired into paths 1–8; the DROP/CREATE signature changes **including inbound destinations**; `correct_misrecorded_receipt`; the `requires_reconciliation` flag and its block | the UI |
 | 7 | paths 9–24 moved onto the availability assert | — |
-| **7a** | **D-2: the four accounts (`1190`, `2900`, `1195`, `5110`); the resolution, investigation, claim and loss functions; the DD-2 ageing threshold and notification; the cumulative verified-returns constraint. In the same change: remove the `5950` posting from `approve_reconciliation`, remove the opt-in `5950`/`5960` write-off from both agency approval paths, add `lock_ledger_balances` to the lending count and approval, and adopt the agency staleness guard on the lending path** | the UI |
+| **7a** | **D-2: the four accounts (`1190`, `2900`, `1195`, `5110`, plus `1191` if B-1.2 chooses an allowance); the resolution, investigation, claim and loss functions; the DD-2 ageing threshold and notification; the cumulative verified-returns constraint. In the same indivisible change: the three reconciliation approval paths, the missing lock, the stale-balance guard, the lending path's absent maker-checker and its absent branch checks — specified in full in `POLYTOS-DECISION-A-B2-TECHNICAL-ACCEPTANCE-CHECKLIST.md`. Gated on B-1** | the UI |
 | 8 | `refused_financial_actions` + its RPC | the server actions |
 
 **Branch authorization moves ahead of the funding-account selectors**, per the

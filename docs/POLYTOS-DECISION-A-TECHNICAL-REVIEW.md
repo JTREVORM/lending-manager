@@ -1,7 +1,12 @@
 # POLYTOS — Decision A Technical Review Report
 
-**Revision:** v5. Supersedes v4 (`17a54f9`), v3 (`944e00c`), v2 (`30bc027`) and
-v1 (`38a7e3d`).
+**Revision:** v6. Supersedes v5 (`c203ac5`), v4 (`17a54f9`), v3 (`944e00c`),
+v2 (`30bc027`) and v1 (`38a7e3d`).
+**Blocker packages:** B-1 is prepared as
+`docs/POLYTOS-DECISION-A-B1-ACCOUNTANT-REVIEW-PACKAGE.md` (nine determinations
+for the qualified accountant); B-2 as
+`docs/POLYTOS-DECISION-A-B2-TECHNICAL-ACCEPTANCE-CHECKLIST.md` (one indivisible
+security change, with named tests). §10 is the consolidated blocker register.
 **Verdict: ARCHITECTURE REVIEW COMPLETE — every business decision is approved,
 and development authorization is withheld on two named blockers**, one
 accounting and one technical (§7.6). All thirteen A decisions, seven C
@@ -397,7 +402,7 @@ ageing report.
 
 | | Finding | Consequence |
 | --- | --- | --- |
-| **D2-a** | `approve_reconciliation` posts **every** approved variance to `5950` unconditionally — a 700,000 shortage becomes an expense on one approval | Contradicts A-7's "no automatic variance or loss journal" and the standing constraint. Closed by the tolerance of DD-1 and a second destination |
+| **D2-a** | `approve_reconciliation` posts **every** approved variance to `5950` unconditionally — a 700,000 shortage becomes an expense on one approval | Contradicts A-7's "no automatic variance or loss journal" and the standing constraint. **Closed by DD-1, which removes every tolerance**: no variance reaches `5950` or `5960` on any path, at any amount |
 | **D2-b** | the lending reconciliation path takes **no account lock**, while its agency twin takes both a lock and a sufficiency assertion | Already recorded as H5; repeated because D-2's resolution posting runs on that path and would inherit the gap |
 
 ### 7.7 Still open, not blocking
@@ -527,7 +532,58 @@ PR #19. No test weakened to achieve green; green CI is not permission to merge.
 
 ---
 
-## 9. Preserved, and not done
+## 9. Consolidated remaining-blocker register
+
+Every open item, in one place. Nothing below is approved, assumed or in progress.
+
+### 9.1 Blocking — development cannot start
+
+| ID | Blocker | Owner | Document |
+| --- | --- | --- | --- |
+| **B-1.1** | is `1190` acceptable as an interim suspense balance within a period? | accountant | B-1 §9 |
+| **B-1.2** | treatment of an open `1190` balance **at a reporting date** — Alternative A, B, C or D; if C, confirm `1191` and its presentation | accountant | B-1 §8.3, §9 |
+| **B-1.3** | is `2900` acceptable as a liability while a counterparty is only possible? | accountant | B-1 §9 |
+| **B-1.4** | when does an unidentifiable overage become income, **which account** receives it, and **who authorizes** it? No destination is proposed | accountant | B-1 §6.2, §9 |
+| **B-1.5** | do DD-4's criteria satisfy the receivable recognition test for `1195`? | accountant | B-1 §9 |
+| **B-1.6** | is DD-5's single-Owner authorization sufficient control for `5110`? | accountant | B-1 §9 |
+| **B-1.7** | is the period-end procedure sufficient, given its close step is a **manual control**? | accountant | B-1 §8, §9 |
+| **B-1.8** | should the reconciliation adjustment be dated **when posted** rather than back-dated to the count? | accountant | B-1 §8.2, §9 |
+| **B-1.9** | should **gain** recognition require authorization comparable to DD-5's for a loss? | accountant | B-1 §9 |
+| **B-2.1** | remove the variance write-off from all **three** approval paths | implementation | B-2 §2 |
+| **B-2.2** | add the missing account lock to both lending reconciliation functions (**D2-b**) | implementation | B-2 §2 |
+| **B-2.3** | add the missing stale-balance validation to the lending path | implementation | B-2 §2.2 |
+| **B-2.4** | **NEW: the lending `approve_reconciliation` has no maker-checker at all** — the officer who counted may approve their own count. The agency twin refuses it in two places; the lending path in neither | implementation | B-2 §2.2, §9 |
+| **B-2.5** | add branch authorization to both lending reconciliation functions | implementation | B-2 §2 |
+
+B-2.6 and B-2.7 are the same work gated on B-1.8 and B-1.1–B-1.4; B-2.8 is
+gated on plan step 5a.
+
+### 9.2 Required but not blocking the first phase
+
+| ID | Item | Document |
+| --- | --- | --- |
+| **B-1.E / B-2.9** | **no `finance-evidence` storage bucket exists.** The six existing buckets are client, guarantor, loan, membership-consent, benefit and company-assets; clearance slips, physical-return, reclassification, correction, claim and loss evidence all need one | B-1 §10, B-2 §9 |
+| **O-C1** | the evidence standard that establishes C1 — that a payment never occurred | plan §15 |
+| **O-HDR** | the header-visibility rule for a cross-branch journal entry whose lines span two branches | plan §15 |
+| **O-A10** | A-10's reach into savings qualification, member-loan capacity and benefit gates — **not** inferred | plan §15 |
+| **O-CONT** | operational continuity while the fail-closed attempt log is unavailable | plan §15 |
+| **O-BATCH** | batch-confirmation granularity | plan §15 |
+| **O-SHORT** | whether a plain count shortage blocks its account — this certification says **no**, because the account is physically accurate | D-2 §9.4 |
+| **O-S2** | the ordering rule that refuses a correction against an already-flagged account | D-2 §4.3 |
+| **O-MAT** | DD-5's materiality figure for loss reporting | D-2 §11.3 |
+| **O-AGE** | the `1190`/`2900` ageing report | D-2 §11.3 |
+| **O-ADR** | seven new ADRs, from ADR-072 | plan §15 |
+
+### 9.3 Independent of Decision A
+
+| Item | Note |
+| --- | --- |
+| **No accounting-period concept exists** — no period, no close, no reopen, no restriction on an entry's date; three existing paths accept an unbounded caller date | A separate, unscheduled workstream. **B-1.7 compounds it:** the period-end close is a manual control until it is built |
+| Production blockers | the Git-linked Supabase branch reporting `MIGRATIONS_FAILED`; GitHub protections; deploy access and custom domain; backup and recovery; provider commercial terms; Decision L; membership policy activation |
+
+---
+
+## 10. Preserved, and not done
 
 - **PRs #19–#27 untouched.** No branch pushed, retargeted, rebased or merged.
   #25 `6da70d9`, #26 `9ed0b22`, #27 `82d1f8c` — byte-identical to both previous
