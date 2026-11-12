@@ -1,0 +1,70 @@
+-- ===========================================================================
+-- `public.company_identity`: a reviewed, evidenced SECURITY DEFINER exemption.
+--
+-- This migration changes no behaviour. It records the outcome of the design
+-- review that 20261104000100's package deferred, so the next reader does not
+-- have to re-derive it — and so the database security gate has a documented
+-- justification to point at rather than a bare allowlist entry.
+--
+-- ## The advisor finding
+--
+-- Supabase's `security_definer_view` linter reports this view at ERROR level
+-- because it is declared `with (security_invoker = off)`: it reads
+-- `public.company_settings` with the view owner's privileges rather than the
+-- caller's, so Row Level Security on that table does not apply to the reader.
+--
+-- ## Why that is the intended design, not an oversight
+--
+-- The view exists so that every signed-in user — borrowers included — can read
+-- the company's own published identity, because a receipt has to say who
+-- issued it, and the forced-password recovery screen has to brand itself
+-- before the session has any business capability at all. `GET /company_identity`
+-- is in `enforce_password_change`'s allowlist for exactly that reason.
+--
+-- `company_settings` is capability-gated: its SELECT policy requires
+-- `settings:view`, which no borrower holds. So the caller's privileges are
+-- precisely the wrong privileges to read this with.
+--
+-- Measured rather than assumed, on a clean database built from these
+-- migrations, as a session holding no `settings:view`:
+--
+--     security_invoker = on   ->  0 rows
+--     security_invoker = off  ->  1 row
+--
+-- Flipping the mode therefore does not tighten this view; it empties it, and
+-- takes borrower receipts and the password-recovery branding with it. That is
+-- the breakage the task brief warned against.
+--
+-- ## Why the exemption is narrow
+--
+-- The control on a definer view is its projection, and this one is a
+-- fourteen-column allowlist of published facts: company name, currency,
+-- locale, timezone, logo path, brand colour, tagline, two phone numbers,
+-- postal address, two address lines, city, country. The registration number,
+-- the tax identification number and every other column of `company_settings`
+-- are deliberately absent and stay behind `settings:view`. `anon` holds
+-- nothing on it.
+--
+-- ## The one latent risk, now an invariant
+--
+-- The view is a simple single-table SELECT, so PostgreSQL reports it
+-- auto-updatable (`is_updatable = YES`). Combined with `security_invoker = off`,
+-- a write through it would execute as the owner and bypass `company_settings`
+-- RLS — skipping the `settings:update` capability entirely.
+--
+-- That is unreachable today, and only because of the grant: `authenticated`
+-- holds SELECT and nothing else. Since the grant is the whole control, it is
+-- restated here and asserted by regression tests
+-- (`tests/db/security-definer-surface.test.ts`) and by the database security
+-- gate, so a stray GRANT or a change in Supabase's default privileges fails
+-- CI instead of quietly opening a write path into company configuration.
+-- ===========================================================================
+
+COMMENT ON VIEW public.company_identity IS
+  'Phase 9, widened in Phase 12. The company''s own published identity, readable by every signed-in user including borrowers, because a receipt has to say who issued it and the forced-password recovery screen has to brand itself before the session holds any capability. The registration and tax numbers are deliberately absent and stay behind settings:view. SECURITY DEFINER (security_invoker = off) is deliberate and reviewed as of 20261106000300: company_settings requires settings:view to read, so invoker mode returns zero rows for every borrower and breaks receipts and password recovery — measured, not assumed. The control is the fourteen-column published projection plus a SELECT-only grant; both are asserted by the database security gate, because this view is auto-updatable and a write grant on it would bypass company_settings RLS.';
+
+-- Restated deliberately. `create or replace view` leaves existing grants
+-- alone, and this grant is the only thing standing between an auto-updatable
+-- definer view and a write path around the settings:update capability.
+REVOKE ALL ON TABLE public.company_identity FROM public, anon, authenticated;
+GRANT SELECT ON TABLE public.company_identity TO authenticated;
