@@ -294,23 +294,102 @@ checks and `resolve_cash_difference`, together.
 
 ---
 
-## 9. Remaining-blocker register — B-2
+## 9. B-2.4 — a significant existing security finding, and its interim safeguards
+
+**Classification: significant existing security finding.** Not a policy change,
+not a consequence of Decision A, and not introduced by anything in this
+specification. It is a control gap that exists in the code today and would exist
+if Decision A were abandoned.
+
+### 9.1 The finding
+
+`approve_reconciliation`
+(`supabase/migrations/20261011000230_money_movement_income.sql:285`) has **no
+distinct-actor rule of any kind.** It checks the `reconciliation:approve`
+capability and nothing else. So the officer who performed a cash count may
+approve their own count, and today that approval **also posts the variance write-off
+to `5950`** — which is how an unexplained shortage becomes an expense on one
+person's action, with no second pair of eyes anywhere in the sequence.
+
+Its agency counterpart refuses the same thing **twice**: a function raise —
+*"The officer who recorded a count cannot approve it. A second officer must
+certify it."* — and a CHECK constraint behind it, so the refusal survives even a
+`service_role` connection. The lending path has neither.
+
+`reconciliation:approve` is held by **`manager` and `owner_admin`**.
+
+### 9.2 Why it is significant
+
+| | |
+| --- | --- |
+| **What it permits** | one person to count a till, declare a difference, approve their own count, and have the difference expensed — a complete, self-certified path from cash shortfall to written-off expense |
+| **What it defeats** | the maker-checker control the module was built to provide. `account_reconciliations` carries `performed_by` **and** `reviewed_by` precisely so the two are different people; nothing enforces it |
+| **Blast radius** | every cash account, wallet and bank account reachable by a Manager — and, because tills are shared with the agency module, a till whose agency-side counts *are* properly controlled |
+| **Detectability** | **complete.** Both actors are recorded on the row and the approval writes a `reconciliation.approved` entry to `audit_log`. Nothing is hidden; nothing was being looked at |
+
+### 9.3 Current exposure
+
+**No production financial operation is authorized**, and production is NO-GO, so
+the live exposure today is bounded by the fact that the business is not posting
+through this path in production. The finding is nonetheless significant in
+principle and must not be deferred on that basis: the moment production
+operations are authorized, the gap is live, and it sits on the same code path
+Decision A is about to change.
+
+Demonstration, staging and any operator-run environment where reconciliation
+approvals have been exercised **are** in scope for §9.4.
+
+### 9.4 Temporary operational safeguards
+
+Procedural and detective only. **None involves a code change, a migration, a
+capability change, a configuration change or any write to financial data**, and
+nothing here has been applied — these are recommendations for the Product Owner
+to adopt.
+
+| # | Safeguard | Nature | Why it is available now |
+| --- | --- | --- | --- |
+| **S1** | **Detect, exhaustively.** Run a read-only query over `account_reconciliations` for rows where `performed_by = reviewed_by`, or where `reviewed_by` is null on an approved row, and review every hit. Both columns are recorded and one is indexed | detective, read-only | The data needed is already captured on every row. This is the strongest control available without code, and it is **complete** rather than sampled |
+| **S2** | **Corroborate against the audit log.** Cross-check each `reconciliation.approved` entry's actor against the matching `reconciliation.submitted` actor | detective, read-only | `record_audit_event` already writes both |
+| **S3** | **A paper second signature.** Require every count sheet to carry the counter's and a different approver's signatures, retained, and reconcile the paper file against S1's output on a fixed cycle | preventive, procedural | Does not depend on the system enforcing anything |
+| **S4** | **Narrow who may approve.** The Product Owner may choose to leave `reconciliation:approve` with `owner_admin` only until the fix lands. This reduces the population but **does not close the gap** — an Owner can still count and approve — so it is a reduction in exposure, not a control | preventive, configuration — **the Owner's decision, not applied here** | Role grants are the Owner's to set |
+| **S5** | **Prefer the controlled path where one exists.** For accounts also reconciled through the agency module, use that path, whose maker-checker is enforced in two places | procedural | Only covers agency reconciliations; lending counts have no alternative path |
+| **S6** | **Do not authorize production reconciliation approvals until the fix lands.** The simplest safeguard, and consistent with the standing NO-GO | preventive, procedural | Already the position; stated so it is a decision rather than a default |
+| **S7** | **Treat any S1 or S2 hit as an incident**, investigated under the §9.1 finding rather than as a routine variance — the amount re-examined and the write-off re-approved by a second person once the fix is in | procedural | — |
+
+**What no safeguard can do.** None of these prevents a single-actor approval; the
+system will accept one until B-2.4 is fixed in code. S1 and S2 guarantee that
+every instance is **visible**, which is the difference between an uncontrolled
+risk and a monitored one. That is the honest limit of what documentation can
+deliver here.
+
+### 9.5 Permanent fix
+
+§2.2: a function-level refusal of `performed_by = current_profile_id()` with
+`42501`, **and** a CHECK constraint on `account_reconciliations` so it holds
+independently of the function — matching the agency path's two-layer treatment.
+Delivered inside the one indivisible change of §8, where the write-off that
+makes a self-certified approval consequential is removed in the same migration.
+
+---
+
+## 10. Remaining-blocker register — B-2
 
 | ID | Blocker | Status | Owner |
 | --- | --- | --- | --- |
 | **B-2.1** | the three reconciliation paths' write-offs, §2.2–§2.4 | specified; **not implemented** | implementation, once authorized |
 | **B-2.2** | the missing account lock on both lending reconciliation functions (defect **D2-b**) | specified | same |
 | **B-2.3** | the missing stale-balance validation on the lending path | specified | same |
-| **B-2.4** | **NEW — the lending `approve_reconciliation` has no maker-checker at all.** The officer who counted may approve their own count. The agency twin refuses it in two places; the lending path in neither | specified; found while writing this checklist | same |
+| **B-2.4** | **Significant existing security finding — the lending `approve_reconciliation` has no maker-checker at all.** The officer who counted may approve their own count, and that approval currently posts the write-off. Agency twin refuses it in two places; the lending path in neither. **Interim safeguards: §9.4** | classified and documented; **not fixed** — the fix is code | same |
 | **B-2.5** | the missing branch authorization on both lending reconciliation functions | specified | same |
 | **B-2.6** | the entry-dating change in §2.2 | **blocked on B-1.8** | the qualified accountant |
 | **B-2.7** | the four chart rows `resolve_cash_difference` posts to | **blocked on B-1.1–B-1.4** | the qualified accountant |
 | **B-2.8** | the branch predicate every path must call | **blocked on plan step 5a (D-1)** | implementation, once authorized |
 | **B-2.9** | no `finance-evidence` storage bucket exists for the resolution's evidence reference | specified | implementation, once authorized |
 
-**B-2.4 is new and is the one finding in this checklist that is a live control
-gap rather than a policy change.** It is reported here rather than fixed,
-because fixing it is code.
+**B-2.4 is the one finding in this checklist that is a live control gap rather
+than a policy change**, and it is classified as a significant existing security
+finding in §9. It is reported and mitigated procedurally rather than fixed,
+because fixing it is code and no code is authorized.
 
 Everything in this document is a specification. **No code, migration or test has
 been written. Production remains NO-GO** and development remains unauthorized.

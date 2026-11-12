@@ -3,8 +3,9 @@
 **Revision:** v6. Supersedes v5 (`c203ac5`), v4 (`17a54f9`), v3 (`944e00c`),
 v2 (`30bc027`) and v1 (`38a7e3d`).
 **Blocker packages:** B-1 is prepared as
-`docs/POLYTOS-DECISION-A-B1-ACCOUNTANT-REVIEW-PACKAGE.md` (nine determinations
-for the qualified accountant); B-2 as
+`docs/POLYTOS-DECISION-A-B1-ACCOUNTANT-REVIEW-PACKAGE.md` (**twelve**
+determinations for the qualified accountant — the original nine preserved, plus
+three arising from the Alternative C correction); B-2 as
 `docs/POLYTOS-DECISION-A-B2-TECHNICAL-ACCEPTANCE-CHECKLIST.md` (one indivisible
 security change, with named tests). §10 is the consolidated blocker register.
 **Verdict: ARCHITECTURE REVIEW COMPLETE — every business decision is approved,
@@ -288,6 +289,7 @@ edited. Superseded statements, now cumulative across all three revisions:
 | Plan v2 **§4.2** — all wallet inflows pending | **Conflicted with A-3.** Agency legs carry no restriction (E-3) |
 | Review v2 §1 — the comparison could not be performed | **Performed.** 71 clauses, §2–§5 |
 | D-2 review v1 §6.2 — `Dr 1190` for the first three findings | **Wrong twice over.** Those findings park in `2900` as a credit, and debiting `1190` would have **increased** the investigation balance it was meant to extinguish. Corrected in the D-2 certification §1 and §4.2, with a named regression test |
+| B-1 v1 §8.3 — Alternative C "preserves both the policy and the framework: no asset is asserted and **no loss is asserted either**" | **Wrong.** An allowance cannot reduce an unsupported asset to nil without a matching debit, and that debit is a charge to profit or loss. Alternative C's P&L, equity and **net** balance-sheet effects are **identical to Alternative A's**; it differs only in presentation and in keeping the gross amount visible. The recommendation is **withdrawn** and no alternative is now recommended — B-1 §8.3.1–§8.3.4 |
 
 ---
 
@@ -541,6 +543,9 @@ Every open item, in one place. Nothing below is approved, assumed or in progress
 | ID | Blocker | Owner | Document |
 | --- | --- | --- | --- |
 | **B-1.1** | is `1190` acceptable as an interim suspense balance within a period? | accountant | B-1 §9 |
+| **B-1.10** | **which P&L account receives a reporting-date charge?** `5110` is reserved by DD-5 for Owner-authorized losses, so charging a mandatory adjustment there either breaches that control or requires it to be read as not applying | accountant | B-1 §8.4, §9 |
+| **B-1.11** | **how do IFRS's mandatory recognition requirements and DD-5's Owner-only authorization coexist?** No internal policy is presumed to override a reporting requirement | accountant | B-1 §8.4, §9 |
+| **B-1.12** | **period displacement** — under A, B and C the charge falls in one period and its release in another, so two periods are each misstated by the same amount in opposite directions | accountant | B-1 §9 |
 | **B-1.2** | treatment of an open `1190` balance **at a reporting date** — Alternative A, B, C or D; if C, confirm `1191` and its presentation | accountant | B-1 §8.3, §9 |
 | **B-1.3** | is `2900` acceptable as a liability while a counterparty is only possible? | accountant | B-1 §9 |
 | **B-1.4** | when does an unidentifiable overage become income, **which account** receives it, and **who authorizes** it? No destination is proposed | accountant | B-1 §6.2, §9 |
@@ -552,7 +557,7 @@ Every open item, in one place. Nothing below is approved, assumed or in progress
 | **B-2.1** | remove the variance write-off from all **three** approval paths | implementation | B-2 §2 |
 | **B-2.2** | add the missing account lock to both lending reconciliation functions (**D2-b**) | implementation | B-2 §2 |
 | **B-2.3** | add the missing stale-balance validation to the lending path | implementation | B-2 §2.2 |
-| **B-2.4** | **NEW: the lending `approve_reconciliation` has no maker-checker at all** — the officer who counted may approve their own count. The agency twin refuses it in two places; the lending path in neither | implementation | B-2 §2.2, §9 |
+| **B-2.4** | **Significant existing security finding: the lending `approve_reconciliation` has no maker-checker at all** — the officer who counted may approve their own count, and that approval currently posts the write-off. Not introduced by Decision A and present in the code today. **Seven interim safeguards, detective and procedural only, in B-2 §9.4**; every instance is fully detectable because both actor columns and an audit entry are already recorded | implementation (fix); Product Owner (interim safeguards) | B-2 §2.2, §9 |
 | **B-2.5** | add branch authorization to both lending reconciliation functions | implementation | B-2 §2 |
 
 B-2.6 and B-2.7 are the same work gated on B-1.8 and B-1.1–B-1.4; B-2.8 is
