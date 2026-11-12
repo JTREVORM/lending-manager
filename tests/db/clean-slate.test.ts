@@ -36,7 +36,12 @@ import {
   runCleanSlate,
   TRUNCATE_TABLES,
 } from '../../scripts/lib/clean-slate.mjs';
-import { asUserCommitted } from '../helpers/auth-fixtures';
+import {
+  asAnon,
+  asUser,
+  asUserCommitted,
+  createTestUser,
+} from '../helpers/auth-fixtures';
 import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
 import {
   approveLoan,
@@ -63,6 +68,8 @@ const db = {
 
 describeDb('the clean slate', () => {
   let ownerProfileId: string;
+  /** Enough of a TestUser for `asUser`: the Auth id the session presents. */
+  let ownerSession: { authUserId: string };
   let before: Record<string, number>;
 
   beforeAll(async () => {
@@ -127,6 +134,12 @@ describeDb('the clean slate', () => {
        returning profile_id as id`,
     );
     ownerProfileId = owner.id;
+
+    const authed = await queryOne<{ auth_user_id: string }>(
+      'select auth_user_id from public.profiles where id = $1',
+      [ownerProfileId],
+    );
+    ownerSession = { authUserId: authed.auth_user_id };
 
     before = await countBusinessRows(db);
   }, 120_000);
@@ -413,4 +426,262 @@ describeDb('the clean slate', () => {
     const second = await countBusinessRows(db);
     expect(second).toEqual(first);
   }, 120_000);
+
+  // ======================================================================
+  // The business, started from scratch on the database the cleanup left
+  // ======================================================================
+  //
+  // The point of a clean slate is that somebody can work on it. These run
+  // after the cleanup, against the emptied database, as the one Owner — so
+  // they prove the end state is not merely tidy but operable.
+
+  describe('the Owner starts the business on the cleaned database', () => {
+    let clientId: string;
+    let loanId: string;
+    let firstReceipt: string;
+
+    it('registers a client with identity, guarantor and the relationship', async () => {
+      // Next of kin is not a column on `clients`: for a borrower it is the
+      // guarantor's `relationship_to_client`, and for a member it is a
+      // beneficiary row. V1 lends, so the guarantor and the relationship are
+      // what a loan is actually assessed against.
+      const branch = await queryOne<{ id: string }>(
+        'select id from public.branches order by created_at limit 1',
+      );
+
+      const registered = await asUserCommitted(ownerSession, [
+        {
+          sql: `insert into public.clients
+                  (full_name, sex, date_of_birth, phone, occupation,
+                   village_area, district, status, branch_id)
+                values ('Launch Borrower', 'female', '1992-04-11', $1, 'Trader',
+                        'Kalerwe', 'Kampala', 'active', $2)
+                returning id`,
+          params: ['+256772900001', branch.id],
+        },
+      ]);
+      expect(registered.ok, registered.message).toBe(true);
+      clientId = registered.rows?.[0]?.id as string;
+
+      // Identity, guarantor and the link, each as the Owner.
+      const rest = await asUserCommitted(ownerSession, [
+        {
+          sql: `insert into public.client_identities (client_id, nin) values ($1, $2)`,
+          params: [clientId, 'CF90123456LAUN'],
+        },
+        {
+          sql: `insert into public.guarantors
+                  (full_name, sex, date_of_birth, phone, occupation, location, photo_path)
+                values ('Launch Guarantor', 'male', '1986-02-02', $1, 'Teacher',
+                        'Bweyogerere', 'guarantors/00000000-0000-4000-8000-00000000090a/photo/a.jpg')
+                returning id`,
+          params: ['+256772900003'],
+        },
+      ]);
+      expect(rest.ok, rest.message).toBe(true);
+      const guarantorId = rest.rows?.[0]?.id as string;
+
+      const linked = await asUserCommitted(ownerSession, [
+        {
+          sql: `insert into public.guarantor_identities (guarantor_id, nin) values ($1, $2)`,
+          params: [guarantorId, 'CM86020212GUAR'],
+        },
+        {
+          sql: `insert into public.client_guarantors
+                  (client_id, guarantor_id, relationship_to_client)
+                values ($1, $2, 'Brother')`,
+          params: [clientId, guarantorId],
+        },
+      ]);
+      expect(linked.ok, linked.message).toBe(true);
+
+      // The client number comes from the reset counter: the first one.
+      const client = await queryOne<{ client_number: string }>(
+        'select client_number from public.clients where id = $1',
+        [clientId],
+      );
+      expect(client.client_number).toMatch(/1$/);
+
+      // The guarantor is linked, with the relationship recorded.
+      const link = await queryOne<{ relationship_to_client: string }>(
+        `select relationship_to_client from public.client_guarantors
+          where client_id = $1 and active`,
+        [clientId],
+      );
+      expect(link.relationship_to_client).toBe('Brother');
+    });
+
+    it('creates, approves and disburses a loan, and gets a schedule', async () => {
+      loanId = await createDraftLoan(clientId, { principal: 600_000 });
+      const actors = {
+        secretary: { authUserId: ownerSession.authUserId },
+        manager: { authUserId: ownerSession.authUserId },
+        owner: { authUserId: ownerSession.authUserId },
+      } as never;
+
+      await submitLoan(loanId, actors);
+      await approveLoan(loanId, actors);
+      await disburseApprovedLoan(loanId, actors);
+
+      const loan = await queryOne<{ status: string; loan_number: string }>(
+        'select status, loan_number from public.loans where id = $1',
+        [loanId],
+      );
+      expect(loan.status).toBe('active');
+      expect(loan.loan_number).toMatch(/1$/);
+
+      const schedule = await queryOne<{ n: string }>(
+        'select count(*)::text as n from public.loan_schedules where loan_id = $1',
+        [loanId],
+      );
+      expect(Number(schedule.n)).toBeGreaterThan(0);
+    });
+
+    it('takes a partial repayment, issues a receipt and reduces the balance', async () => {
+      const owed = await readLedger(loanId);
+      expect(owed.totalOutstanding).toBeGreaterThan(0);
+
+      const part = Math.floor(owed.totalOutstanding / 3);
+      const posted = await asUserCommitted(ownerSession, [
+        {
+          sql: 'select public.post_payment($1, $2, $3, null, $4) as id',
+          params: [loanId, part, 'cash', newIdempotencyKey()],
+        },
+      ]);
+      expect(posted.ok, posted.message).toBe(true);
+
+      const receipt = await queryOne<{ payment_number: string }>(
+        'select payment_number from public.loan_payments where id = $1',
+        [posted.rows?.[0]?.id],
+      );
+      expect(receipt.payment_number).toMatch(/1$/);
+      firstReceipt = receipt.payment_number;
+
+      // Still owing, and owing exactly what it was less the payment.
+      const after = await readLedger(loanId);
+      expect(after.status).toBe('active');
+      expect(after.totalOutstanding).toBe(owed.totalOutstanding - part);
+      expect(after.totalCollected).toBe(part);
+    });
+
+    it('refuses a duplicate repayment without taking the money twice', async () => {
+      const before = await readLedger(loanId);
+      const key = newIdempotencyKey();
+
+      const first = await asUserCommitted(ownerSession, [
+        {
+          sql: 'select public.post_payment($1, $2, $3, null, $4) as id',
+          params: [loanId, 10_000, 'cash', key],
+        },
+      ]);
+      expect(first.ok, first.message).toBe(true);
+
+      // The same key again: the existing payment comes back, no second row.
+      const replay = await asUserCommitted(ownerSession, [
+        {
+          sql: 'select public.post_payment($1, $2, $3, null, $4) as id',
+          params: [loanId, 10_000, 'cash', key],
+        },
+      ]);
+      expect(replay.ok, replay.message).toBe(true);
+      expect(replay.rows?.[0]?.id).toBe(first.rows?.[0]?.id);
+
+      const after = await readLedger(loanId);
+      expect(after.totalCollected).toBe(before.totalCollected + 10_000);
+      expect(after.postedPaymentCount).toBe(before.postedPaymentCount + 1);
+    });
+
+    it('refuses an invalid repayment', async () => {
+      const owed = await readLedger(loanId);
+
+      // More than the loan owes.
+      const tooMuch = await asUser(
+        ownerSession,
+        'select public.post_payment($1, $2, $3, null, $4)',
+        [loanId, owed.totalOutstanding + 500_000, 'cash', newIdempotencyKey()],
+      );
+      expect(tooMuch.ok).toBe(false);
+
+      // Nothing at all.
+      const zero = await asUser(
+        ownerSession,
+        'select public.post_payment($1, $2, $3, null, $4)',
+        [loanId, 0, 'cash', newIdempotencyKey()],
+      );
+      expect(zero.ok).toBe(false);
+
+      // The loan is untouched by either refusal.
+      const after = await readLedger(loanId);
+      expect(after.totalCollected).toBe(owed.totalCollected);
+    });
+
+    it('reports balances and arrears, and the figures agree with the loan', async () => {
+      const ledger = await readLedger(loanId);
+
+      // The portfolio view and the loan agree on what is owed.
+      const portfolio = await queryOne<{ outstanding: string }>(
+        `select coalesce(sum(total_outstanding), 0)::text as outstanding
+           from public.loan_balances where loan_id = $1`,
+        [loanId],
+      );
+      expect(Number(portfolio.outstanding)).toBe(ledger.totalOutstanding);
+
+      // And the books balance, with real postings in them now.
+      const books = await queryOne<{ debits: string; credits: string; entries: string }>(
+        `select coalesce(sum(debit), 0)::text as debits,
+                coalesce(sum(credit), 0)::text as credits,
+                (select count(*)::text from public.journal_entries) as entries
+           from public.journal_lines`,
+      );
+      expect(Number(books.entries)).toBeGreaterThan(0);
+      expect(Number(books.debits)).toBe(Number(books.credits));
+    });
+
+    it('closes the loan on the final repayment', async () => {
+      const owed = await readLedger(loanId);
+      const settled = await asUserCommitted(ownerSession, [
+        {
+          sql: 'select public.post_payment($1, $2, $3, null, $4) as id',
+          params: [loanId, owed.totalOutstanding, 'cash', newIdempotencyKey()],
+        },
+      ]);
+      expect(settled.ok, settled.message).toBe(true);
+
+      const closed = await readLedger(loanId);
+      expect(closed.status).toBe('cleared');
+      expect(closed.totalOutstanding).toBe(0);
+      expect(closed.fullyRepaid).toBe(true);
+
+      // Every receipt issued is still readable, including the first.
+      const receipts = await query<{ payment_number: string }>(
+        `select payment_number from public.loan_payments
+          where loan_id = $1 order by payment_number`,
+        [loanId],
+      );
+      expect(receipts.map((r) => r.payment_number)).toContain(firstReceipt);
+    });
+
+    it('refuses an unauthorised session everything it should', async () => {
+      // A borrower with no capability over this loan.
+      const borrower = await createTestUser('client');
+
+      const readLoan = await asUser(
+        borrower,
+        'select count(*)::int as n from public.loans where id = $1',
+        [loanId],
+      );
+      expect(readLoan.ok).toBe(true);
+      expect(readLoan.rows?.[0]?.n).toBe(0);
+
+      const pay = await asUser(
+        borrower,
+        'select public.post_payment($1, $2, $3, null, $4)',
+        [loanId, 1_000, 'cash', newIdempotencyKey()],
+      );
+      expect(pay.ok).toBe(false);
+
+      const anonymous = await asAnon('select count(*)::int as n from public.clients');
+      expect(anonymous.ok === false || anonymous.rows?.[0]?.n === 0).toBe(true);
+    });
+  });
 });
