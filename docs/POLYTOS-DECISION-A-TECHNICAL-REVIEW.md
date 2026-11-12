@@ -1,9 +1,10 @@
 # POLYTOS — Decision A Technical Review Report
 
-**Revision:** v3. Supersedes v2 (`30bc027`) and v1 (`38a7e3d`).
-**Verdict: CHANGES APPLIED — development authorization withheld for three named
-dependencies** (§7). The previously blocking policy question is **resolved** by
-the Product Owner's booking-error ruling of 2026-11-11.
+**Revision:** v4. Supersedes v3 (`944e00c`), v2 (`30bc027`) and v1 (`38a7e3d`).
+**Verdict: CHANGES APPLIED — development authorization withheld for ONE
+dependency, D-2** (§7). D-1 and D-3 are **approved and recorded** in plan v4;
+D-2 is now **reviewed** in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` and
+closes when its five business decisions are taken.
 **Comparison status: PERFORMED.** Both review-package documents were received,
 extracted and compared clause by clause — 71 clauses across the two of them.
 §3 and §4 carry the result. Nothing is recorded as compared that was not.
@@ -281,15 +282,85 @@ edited. Superseded statements, now cumulative across all three revisions:
 
 ---
 
-## 7. Precise remaining implementation dependencies
+## 7. Dependency status
 
-Authorization is withheld on three, and only three.
+### 7.1 D-1 — approved and recorded
 
-| # | Dependency | Why it blocks | Owner |
-| --- | --- | --- | --- |
-| **D-1** | **A-12's branch authorization model** (O-3): the grant model for multi-branch Head Office staff, and **which branches each existing non-Owner account is authorized for** | It is step 5a, a precondition of the funding-account selectors (C-3), and it changes what real users see today. It cannot be derived from the schema | Product Owner — a data and policy decision |
-| **D-2** | **The formal-resolution design for a correction shortfall (C5)**, reviewed together with the deposit-loss treatment | C5 blocks a corrected account until *"independently reconciled **and** formally resolved"*. Without the resolution step the block has no exit, and A-7 forbids inventing one via `5950` | Separate review, as instructed |
-| **D-3** | **A-3's scope for non-agency wallet inflows** (O-1) | It decides whether a repayment keyed MTN is restricted or immediately available — a sufficiency rule, not an implementation detail | Product Owner confirmation |
+**Explicit per-staff branch grants.** Owner/Admin hold authorized cross-branch
+access; branch-assigned staff are restricted to their authorized branches; Head
+Office staff need explicit multi-branch grants; **existing non-Owner staff
+without an assignment receive no branch financial access until granted**;
+enforced in RLS **and** posting functions, with no fallback branch.
+
+Recorded in plan §1 and designed in plan §10.2. Two notes:
+
+- **The data decision I flagged as D-1's hard part has been dissolved, not
+  answered.** v3 asked which branches each existing non-Owner account should
+  get, and said it could not be derived. The ruling's deny-by-default answers it
+  structurally: **no grants are back-filled**, the table is created empty, and
+  access is granted deliberately afterwards. That removes a migration-time data
+  decision entirely, which is the better outcome.
+- **It creates an activation precondition instead.** Because the change is
+  deny-by-default, an Owner must issue grants to working staff at or before
+  activation or the counter stops. Carried in plan §10.2(4) and §11.4, with the
+  release notes stating the behaviour change plainly.
+
+### 7.2 D-3 — approved and recorded
+
+**Non-agency MTN/Airtel receipts require independently verified provider
+confirmation before their funds become spendable, verified by a different
+Manager/Owner. An already-verified Agency Banking transaction reuses that trusted
+verification without duplicate posting. Daily reconciliation stays mandatory and
+is not an availability gate.**
+
+This confirms the reading plan v3 adopted and adds the part v3 could not infer:
+the verification **reuses** the agency module's own maker-checker rather than
+layering a second one, and it **posts nothing** — it releases a restriction.
+Recorded in plan §1, §2 and §4.2.
+
+### 7.3 D-2 — reviewed; one dependency remains
+
+`docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` covers all ten requested
+areas. Its central finding changes the shape of the problem:
+
+> **A booking-error correction cannot by itself drive a cash account negative.**
+> A negative appears only when more has been recorded as leaving the account than
+> ever legitimately entered it — which is a *second, independent irregularity*
+> the correction has merely revealed. It is always one of four findings, and
+> **three of the four involve no loss at all**.
+
+So C5's "formal resolution" is not a decision about who bears a loss. It is a
+classification-free posting that restores the cash account to its counted balance
+and parks the unexplained amount on the **balance sheet** — `1190 Cash
+Differences Under Investigation` — with no time limit and no automatic exit.
+Loss recognition (`5110`) and a receivable (`1195`) each need an explicit Owner
+act on top.
+
+**D-2 closes when five business decisions are taken** (that review's §10): the
+variance tolerance, the deposit ageing threshold, partial physical returns, what
+constitutes an enforceable claim, and who authorizes a loss. Each has options and
+a recommendation; none is decided in the document.
+
+### 7.4 Two defects found in the existing system while reviewing D-2
+
+| | Finding | Consequence |
+| --- | --- | --- |
+| **D2-a** | `approve_reconciliation` posts **every** approved variance to `5950` unconditionally — a 700,000 shortage becomes an expense on one approval | Contradicts A-7's "no automatic variance or loss journal" and the standing constraint. Closed by the tolerance of DD-1 and a second destination |
+| **D2-b** | the lending reconciliation path takes **no account lock**, while its agency twin takes both a lock and a sufficiency assertion | Already recorded as H5; repeated because D-2's resolution posting runs on that path and would inherit the gap |
+
+### 7.5 Still open, not blocking
+
+Plan §15: the evidence standard for C1; the cross-branch journal header rule;
+**a `finance-evidence` storage bucket, which does not exist** — the six existing
+buckets are client, guarantor, loan, membership-consent, benefit and
+company-assets, and the clearance slip, physical-return and correction evidence
+all need one; A-10's reach into savings and benefits; fail-closed continuity;
+batch-confirmation granularity; six ADRs.
+
+**Independent of Decision A:** the closed-period workstream, and the production
+blockers — the Git-linked Supabase branch reporting `MIGRATIONS_FAILED`, GitHub
+protections, deploy access and custom domain, backup and recovery, provider
+commercial terms, Decision L and membership policy activation.
 
 **Not blocking, settleable during the zero-behaviour-change phases A-I and
 A-II:** the evidence standard for C1 (plan §15.2); the multi-branch journal

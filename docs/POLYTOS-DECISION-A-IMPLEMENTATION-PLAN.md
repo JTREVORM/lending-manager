@@ -1,8 +1,12 @@
 # POLYTOS — Decision A Implementation Plan
 
-**Revision:** v3, reconciled line by line against the Product Owner's review
-package and incorporating the booking-error correction ruling of 2026-11-11.
-Supersedes v2 (`30bc027`) and v1 (`38a7e3d`).
+**Revision:** v4. Records the Product Owner's approval of dependencies **D-1**
+(branch authorization) and **D-3** (Mobile Money receipts) of 2026-11-12, on top
+of v3's line-by-line reconciliation and the booking-error ruling of 2026-11-11.
+Supersedes v3 (`944e00c`), v2 (`30bc027`) and v1 (`38a7e3d`).
+**D-2** — the formal-resolution and loss-treatment design — is reviewed in
+`docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md` and remains the one open
+dependency.
 **Status:** awaiting development authorization. **Not authorized.**
 **Type:** documentation only. No migration, application code, test, financial
 record, deployment configuration or PR branch touched.
@@ -26,6 +30,7 @@ below is the Product Owner's.
 | **A-1** | A cash receipt is posted for its underlying business purpose, but its **proceeds are restricted until verified per receipt** by a different authorized Manager/Owner. Secure batch verification is permitted, performing every per-receipt check |
 | **A-2** | Sufficient available funds apply **universally** to every outgoing path: loans, withdrawals, benefits, transfers, expenses, genuine refunds, Agency Banking, Mobile Money, float movements and reversals. Financial-correction exceptions are not automatically authorized |
 | **A-3** | Incoming MTN/Airtel electronic float becomes spendable **after a provider-confirmed transaction has been independently verified and posted**. Daily reconciliation is mandatory but does not delay already-verified float. **No second physical-cash confirmation is added to electronic float itself** |
+| **D-3** (2026-11-12) | **Non-agency MTN/Airtel receipts require independently verified provider confirmation before their funds become spendable, verified by a different Manager/Owner.** An already-verified Agency Banking transaction **reuses that trusted verification without duplicate posting**. Daily reconciliation stays mandatory and is not an availability gate |
 | **A-4** | **Strict, no-override** sufficient-available-funds, including Owner/Admin. `allow_negative_cash` does not bypass it, and no `allow_negative_available` or other mutable bypass may exist |
 | **A-5** | Sufficiency is strictly **per individual account**. A branch's total cash or liquidity cannot fund an account-specific shortage |
 | **A-6** | `bank_value_date` is bank-evidenced, may precede verification and **may fall in a closed reporting period**; it must be on or after the deposit date. **Verification and journal posting use their actual current date and never backdate into a closed period.** No arbitrary maximum backdating window is invented |
@@ -35,6 +40,7 @@ below is the Product Owner's.
 | **A-10** | A borrower's cash repayment **counts immediately** for amount due, arrears and deadline when recorded, while the cash remains unavailable to the company until independently confirmed. Confirmation must never post the repayment twice; disputes are investigated separately |
 | **A-11** | Insufficient-funds refusals are recorded in a **secure, separate, nonfinancial log** with the minimum necessary actor, branch, account, amount, type, reason and time. A logging failure can never turn a refusal into a success. **Fail closed** |
 | **A-12** | Financial **reads and writes** are branch-scoped. Owner/Admin see all. Head Office users select an **expressly authorized operating branch**; no alphabetical or `NULL ⇒ all branches` fallback for ordinary users. Cross-branch movements need both-branch authorization, without leaking inaccessible journal data |
+| **D-1** (2026-11-12) | **Explicit per-staff branch grants.** Owner/Admin hold authorized cross-branch access; branch-assigned staff are restricted to their authorized branches; Head Office staff require **explicit multi-branch grants**. **Existing non-Owner staff without an assignment receive no branch financial access until granted.** Enforced in RLS **and** posting functions, with **no fallback branch** |
 | **A-13** | Context-specific vocabulary: cash `Pending Confirmation` / `Confirmed`; deposits `Submitted` / `In Transit`, `Cleared`, `Rejected` / `Under Investigation`, `Reversed`. `Cleared` is valid for **both** bank deposits and fully repaid loans, in distinct schema and status domains |
 
 ### 1.2 The booking-error correction ruling (2026-11-11)
@@ -66,7 +72,7 @@ unwinding a receipt that never happened — which moves value to nobody.
 | Item | Disposition |
 | --- | --- |
 | Deposit-loss account and write-off procedure | **Separate review** (§6.7). `5960` and `5970` are already taken at the #27 head |
-| Formal resolution of a correction shortfall (C5) | **Separate review** (§5.3.4). Reconciliation may *detect* it; it may not write it off automatically, and `5950` may not absorb it by default |
+| Formal resolution of a correction shortfall (C5), and loss treatment | **Reviewed in `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md`** (dependency D-2), which proposes the accounts, the states and the authorization and seeks approval for five new business decisions. Reconciliation may *detect* a difference; it may not write it off automatically, and `5950` may not absorb it by default |
 | A-10's reach into savings qualification, member-loan capacity and benefit gates | **Separate Product Owner ruling** per the review response (§15.6) |
 
 ---
@@ -79,7 +85,8 @@ unwinding a receipt that never happened — which moves value to nobody.
 | **A-1** batch | 4 | `confirm_cash_receipts(uuid[])` performing every per-receipt check, lock and idempotent transition | 1 | `receipt-confirmation.test.ts :: a batch refuses only the receipts the confirmer recorded, and confirms the rest` |
 | **A-1** | 8 | availability = booked − pending | 1 | `cash-availability.test.ts :: a pending receipt does not raise availability` |
 | **A-2** | 1 | `assert_cash_funds_available` on all 8 existing + 2 new outgoing paths | 6, 7 | `cash-sufficiency.test.ts :: refuses path <n> when the funding account is short` (×10) |
-| **A-3** | 5, 8 | agency-verified float carries **no** confirmation row and is available on posting; non-agency wallet inflows carry one | 1 | `cash-availability.test.ts :: verified agency float is available on posting, with no confirmation row` |
+| **A-3 / D-3** | 5, 8 | agency-verified float reuses its trusted verification, carries **no** confirmation row and is available on posting | 1 | `cash-availability.test.ts :: verified agency float is available on posting, with no confirmation row` |
+| **D-3** | 4, 8 | a non-agency wallet receipt is restricted until a **different** Manager/Owner verifies the provider confirmation | 1 | `receipt-confirmation.test.ts :: a wallet receipt stays restricted until its provider confirmation is independently verified` |
 | **A-3** | 8 | reconciliation is never a gate | 1 | `cash-availability.test.ts :: verified float is available before any reconciliation exists` |
 | **A-4 / C7** | 1 | no settings flag, no override argument, no capability | 1, 6 | `cash-sufficiency.test.ts :: no actor, Owner included, can post a short genuine payout` |
 | **A-5** | 2 | per-account availability; no aggregate consulted | 1 | `cash-availability.test.ts :: a sibling account's balance never funds this one` |
@@ -90,7 +97,8 @@ unwinding a receipt that never happened — which moves value to nobody.
 | **A-9** | 7 | `request_clearance_reversal` (Manager) → `authorize_clearance_reversal` (Owner, ≠ verifier), **available** funds in the bank | 4, 5 | `bank-clearance.test.ts :: the verifier cannot authorize reversal of their own clearance` |
 | **A-10** | 11 | one journal at receipt; confirmation off `loan_payments` | 1 | `receipt-confirmation.test.ts :: loan figures are identical before and after confirmation` |
 | **A-11** | 10 | pre-write attempt record in its own transaction, **fail closed**; outcome written after | 9 | `refusal-audit.test.ts :: a failed attempt-log write prevents the payout` |
-| **A-12** | 2, 3 | explicit branch authorization for non-Owner roles; both-branch authorization; line-level journal scoping | 8 | `rls-deposits.test.ts :: a NULL-branch non-Owner profile sees no branch` |
+| **A-12 / D-1** | 2, 3 | `profile_branch_grants`; `user_can_see_branch` refined to role-or-grant; both-branch authorization; line-level journal scoping; no fallback branch | 5a | `rls-deposits.test.ts :: an unassigned non-Owner profile has no branch financial access` |
+| **D-1** | 2 | Head Office multi-branch grants; Owner cross-branch | 5a | `rls-deposits.test.ts :: a Head Office officer reaches only granted branches` |
 | **A-13** | 5 | distinct status domains, qualified labels | 5 | `bank-clearance.test.ts :: deposit clearance does not alter any loan status` |
 | **C1, C6** | 11 | correction requires documented non-occurrence; a lost/misappropriated genuine payment is refused | 6 | `receipt-correction.test.ts :: refuses a correction where the payment did occur` |
 | **C2, C4** | 11 | exact contra only; no amount, account or recipient argument | 6 | `receipt-correction.test.ts :: corrects only the entry it names, line for line` |
@@ -169,7 +177,8 @@ handed — one place instead of eight, covering paths added later.
 | --- | --- | --- |
 | cash into a till — repayment, savings contribution, membership fee, meeting fine, other income | **pending until independently confirmed** | A-1 |
 | an **agency / Mobile Money** transaction's float or cash leg | **none.** `verify_agency_transaction` already is the independent verification, and the journal is written *by* it, so the float is available on posting | A-3 — "no second physical-cash confirmation is added to electronic float itself" |
-| a **non-agency** wallet inflow — a repayment or savings deposit keyed `mtn_mobile_money` / `airtel_money` through `post_payment` or `post_savings_deposit`, which post on recording with **no** verification step | **pending until independently verified** | A-1 by extension; **flagged for confirmation** at §15.1 |
+| a **non-agency** wallet inflow — a repayment or savings deposit keyed `mtn_mobile_money` / `airtel_money` through `post_payment` or `post_savings_deposit`, which post on recording with **no** verification step | **pending until the provider confirmation is independently verified by a different Manager/Owner** | **D-3, approved.** The verification records which provider confirmation was checked, and releases the restriction without posting anything |
+| an **agency / Mobile Money** transaction already verified through `verify_agency_transaction` | **none — the trusted verification is reused** | **D-3, approved:** "may reuse trusted verification without duplicate posting" |
 | a direct bank credit into a bank account | **pending until independently verified** | evidence-led, as a deposit is |
 | `opening_balance`, a transfer between own accounts, a deposit, a clearance, any reversal or contra line | **none** | already inside the business, or not a receipt |
 
@@ -592,26 +601,51 @@ other, the branch is validated against what the officer may see, and it must be
 open.* `p_branch_id uuid default null` goes **last**, so positional calls by
 branch-assigned officers stay valid.
 
-### 10.2 `NULL` must stop meaning "all branches" for ordinary users
+### 10.2 Explicit per-staff branch grants (D-1, approved)
 
-A-12 is explicit: *no `NULL ⇒ all branches` fallback for ordinary users.*
+A-12 forbids a `NULL ⇒ all branches` fallback, and D-1 settles what replaces it.
 
-`user_can_see_branch(uuid)` returns **true for any profile whose `branch_id` is
-null**, and today **every** profile's is null — so applying the existing
-predicate would grant every Manager and Secretary every branch, which is the
-opposite of A-12. The predicate must be refined so that unrestricted access
-follows from the **`owner_admin` role**, and every other role requires an
-explicit authorized-branch set.
+**The defect being closed.** `user_can_see_branch(uuid)` returns **true for any
+profile whose `branch_id` is null**, and today **every** profile's is null — so
+applying the existing predicate unchanged would grant every Manager and
+Secretary every branch, the opposite of A-12.
 
-Two consequences, both of which need decisions (§15.5):
+**The approved model.**
 
-- an explicit authorization set is new state — a `profile_branches` grant table
-  or an equivalent — because `profiles.branch_id` is a single column and Head
-  Office staff may legitimately be authorized for several branches;
-- existing staff accounts currently enjoy unrestricted access, so the migration
-  that narrows it **changes what real users can see**. Which branches each
-  existing non-Owner account is authorized for is a data decision the Product
-  Owner must make; it cannot be derived.
+| Who | Financial branch access |
+| --- | --- |
+| `owner_admin` | **authorized cross-branch access** — all branches |
+| branch-assigned staff | **only their authorized branches** |
+| Head Office staff | only the branches of an **explicit multi-branch grant** |
+| an existing non-Owner account with **no** assignment | **no branch financial access at all, until granted** |
+
+**No fallback branch**, in reads or in writes.
+
+**What this requires.**
+
+1. **A grant table.** `profile_branch_grants (profile_id, branch_id, granted_by,
+   granted_by_label, granted_at, revoked_at, revoked_by, reason)` — append-only
+   with revocation rather than deletion, so a past authorization stays auditable.
+   A single `profiles.branch_id` column cannot express a Head Office officer
+   authorized for several branches, which is why the grant is its own row.
+   Granting and revoking are Owner acts, audited through
+   `record_audit_event`, and sit behind a new `branches:grant` capability.
+2. **A refined predicate.** `user_can_see_branch(uuid)` becomes: true if the
+   caller holds `owner_admin`; else true if a live grant exists for that branch;
+   else **false**. The null-means-unrestricted arm is removed. Because the
+   function is `SECURITY DEFINER` and already used by RLS policies and
+   functions, one definition change carries everywhere — which is also why its
+   replacement must be in the same migration as the grant table.
+3. **Deny by default at cutover.** D-1 rules that unassigned non-Owner staff get
+   nothing until granted. So the migration needs **no data decision and no
+   back-filled grants**: it creates the table empty, replaces the predicate, and
+   every non-Owner account loses financial branch access until an Owner grants
+   it. That is a deliberate, approved, visible change of behaviour, and it is
+   stated in the release notes rather than softened.
+4. **An operational precondition.** Because the change is deny-by-default, the
+   Owner must issue grants to working staff **before or immediately at
+   activation**, or the counter stops. This belongs with the §11.4 activation
+   checklist, not with the migration.
 
 ### 10.3 Reads, writes and multi-branch entries
 
@@ -679,7 +713,7 @@ combined rehearsal.
 | 2 | `in_transit` kind **+** `branch_cash_position` component **+** `assert_cash_account` hardening **+** uniqueness — **one indivisible migration** | any `1050` row |
 | 3 | `1050-<branch>` chart rows, idempotently, including for branches created later | the deposit document |
 | 4 | the new `source_type` values, the `bank_deposit` reference scope, the new capabilities | the deposit functions |
-| **5a** | **branch authorization: the grant model, the refined predicate, write-path checks, line-level read scoping** | step 6 — see below |
+| **5a** | **branch authorization (D-1): `profile_branch_grants`, the refined `user_can_see_branch`, the `branches:grant` capability, write-path checks, line-level read scoping. Deny by default — no grants are back-filled** | step 6 — see below |
 | 5b | `bank_deposits` + its six functions | the UI |
 | 6 | `assert_cash_funds_available` wired into paths 1–8; the DROP/CREATE signature changes **including inbound destinations**; `correct_misrecorded_receipt`; the `requires_reconciliation` flag and its block | the UI |
 | 7 | paths 9–24 moved onto the availability assert | — |
@@ -965,30 +999,31 @@ permission to merge or deploy.
 
 Flagged, not decided.
 
-1. **Non-agency wallet inflows** (§4.2). A-3 forbids adding a second
-   confirmation to electronic float that the agency module already verifies. But
-   a repayment keyed `mtn_mobile_money` through `post_payment` has **no**
-   verification step at all. This plan restricts those, so unverified money is
-   not spendable. **Confirm**, or rule that a provider reference is itself
-   sufficient evidence.
-2. **What evidence establishes C1** — that a payment never occurred. An
+1. **What evidence establishes C1** — that a payment never occurred. An
    operational-policy question: which documents or system records must be
    attached before a correction may proceed.
-3. **Formal resolution of a correction shortfall (C5)** and the deposit-loss
-   treatment — both referred for **separate review**, together, since both
-   decide who bears a loss. Until then a corrected account stays flagged and
-   blocked and no deposit is written off. Note the `5960`/`5970` collision.
-4. **Closed accounting periods do not exist** (§6.5). A-6 forbids backdating
+2. **Formal resolution of a correction shortfall (C5)** and the deposit-loss
+   treatment — **reviewed as dependency D-2** in
+   `docs/POLYTOS-DECISION-A-D2-ACCOUNTING-REVIEW.md`, which proposes the
+   accounts, the states, the authorization and the tests, and seeks approval for
+   five new business decisions. Until those are approved a corrected account
+   stays flagged and blocked and no deposit is written off.
+3. **Closed accounting periods do not exist** (§6.5). A-6 forbids backdating
    into one; the schema has no period, close, reopen or `entry_date` guard, and
    three existing paths accept unbounded dates. Decision A complies inside its
    own scope by never backdating. **Enforcing A-6 system-wide is its own
    workstream**, and the review package's "post into closed period" test cannot
    be written until it exists.
-5. **A-12's branch authorization model** (§10.2, §10.3): the grant model for
-   multi-branch Head Office staff; **which branches each existing non-Owner
-   account is authorized for**, which cannot be derived and will change what
-   real users see; and the header-visibility rule for a cross-branch journal
-   entry whose lines span two branches.
+4. **The header-visibility rule for a cross-branch journal entry** whose lines
+   span two branches (§10.3). D-1 settles who may see a branch; it does not
+   settle what a two-branch entry discloses to someone authorized for one of
+   them. The grant model makes this reachable rather than theoretical.
+5. **A finance evidence bucket does not exist.** The clearance slip, the
+   physical-return evidence and the correction evidence all need object storage,
+   and the six existing buckets are `client-documents`, `guarantor-documents`,
+   `loan-documents`, `membership-consent`, `benefit-documents` and
+   `company-assets`. A `finance-evidence` bucket with its own RLS policies is
+   required, on the pattern of `20261022000300_benefit_document_storage.sql`.
 6. **A-10's reach beyond the loan book.** Expressly approved for borrower
    repayments. Savings qualification, contribution months, member-loan capacity
    and benefit eligibility are **not** inferred from it and need a separate
