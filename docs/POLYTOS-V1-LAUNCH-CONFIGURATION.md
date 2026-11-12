@@ -99,25 +99,41 @@ demonstration data in §A.
 The books reconcile exactly: debits = credits = 89,649,530, no individually
 unbalanced entry, and all 26 disbursed loans carry a disbursement journal.
 
-**The question only the Owner can answer.** Are these 35 loans and 470
-payments:
+**Classified by the Product Owner, 12 November 2026: this is demonstration
+data.** Not real business records. It must nonetheless **remain untouched**
+until a clean-slate rehearsal has been performed and deletion separately
+authorized.
 
-1. **Real business records** the client is already relying on — in which case
-   they must be preserved exactly, and launch proceeds on top of them; or
-2. **Acceptance-test or migration-rehearsal data** — in which case production
-   should be reset to reference data only before the first real client, as
-   `docs/LAUNCH-CHECKLIST.md` requires.
+That settles the open question and sets the launch position: production must
+be reset to migrations and reference data only before the first real client,
+as `docs/LAUNCH-CHECKLIST.md` requires. It is not a code change, and it is not
+authorized by the current instruction.
 
-- [ ] **C-1.** Owner classifies the book as (1) or (2).
-- [ ] **C-2.** If (1): record that decision, and confirm the figures above are
-      the figures the business recognises. The 3 pending-approval, 2 approved
-      and 2 draft loans need a disposition — they are mid-workflow.
-- [ ] **C-3.** If (2): a reset plan is written and authorized separately. It
-      requires a proven backup first, and it is not a code change.
-- [ ] **C-4.** Either way, confirm no synthetic client remains that staff
-      might mistake for a real borrower.
+- [x] **C-1.** Book classified — demonstration data (Product Owner,
+      12 November 2026).
+- [ ] **C-2.** A clean-slate rehearsal is performed against a **restored copy**
+      of the backup, never against production: apply the reset, then confirm
+      the schema still holds reference data only, that `npm run check:security`
+      still passes, and that a fresh loan can be taken from draft to cleared on
+      the emptied database.
+- [ ] **C-3.** The reset is separately authorized and scheduled, after
+      `docs/POLYTOS-V1-BACKUP-READINESS.md` §5 has passed. The backup taken
+      beforehand is the only route back.
+- [ ] **C-4.** After the reset, confirm zero clients, loans, payments and
+      journal entries, and that the reference data — roles, permissions,
+      repayment cadences, reference formats, the chart of accounts, company and
+      business settings — is intact.
+- [ ] **C-5.** Re-run the §4 figure capture. Every financial total should be
+      zero and the trial balance should balance at zero; a non-zero residue
+      means the reset was partial and must be investigated before launch.
 
-**Not authorized here:** deleting, resetting or recalculating any of it.
+Note for whoever writes the reset: the three pending-approval, two approved and
+two draft loans are mid-workflow, and the six demonstration memberships in §A
+share the same borrowers. The reset and the §A retirement should be planned
+together rather than in two passes.
+
+**Not authorized here, or by the instruction that produced this document:**
+deleting, resetting or recalculating any of it.
 
 ---
 
