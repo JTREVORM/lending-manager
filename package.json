@@ -34,6 +34,8 @@
     "db:local:migrate": "bash scripts/pg-local.sh migrate",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test:run && npm run build",
     "audit:money": "node scripts/audit-financial-arithmetic.mjs",
+    "check:security": "node scripts/check-database-security.mjs",
+    "check:security:update": "node scripts/check-database-security.mjs --update",
     "e2e:up": "bash tests/e2e/harness/stack.sh up",
     "e2e:down": "bash tests/e2e/harness/stack.sh down",
     "e2e:env": "bash tests/e2e/harness/stack.sh env",
