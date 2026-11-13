@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "Proposed branch protection for the production branch, claude/intelligent-knuth-2r8mpw.",
+    "Proposed branch protection for the production branch, main (the default branch since the November 2026 consolidation).",
     "Apply with: node scripts/apply-branch-protection.mjs --apply   (needs an admin token).",
     "Verify with: node scripts/apply-branch-protection.mjs           (read-only).",
     "",
@@ -24,7 +24,7 @@
     "step inside 'database (real PostgreSQL)', which is already required, so it is",
     "enforced without adding a context that could be skipped."
   ],
-  "branch": "claude/intelligent-knuth-2r8mpw",
+  "branch": "main",
   "protection": {
     "required_status_checks": {
       "strict": true,
