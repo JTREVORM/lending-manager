@@ -144,6 +144,37 @@ const zeroableAmountSchema = ugxAmountFromText({
   allowZero: true,
 });
 
+/**
+ * An approval threshold, which may be absent.
+ *
+ * `finance_settings.transfer_approval_threshold` and its expense counterpart
+ * are the only two nullable money columns on that table, and NULL is a real
+ * answer rather than a missing one: `request_transfer` and `record_expense`
+ * both test `v_threshold is not null and p_amount > v_threshold`, so NULL
+ * means *no movement ever waits for a second person*. The column comment says
+ * so — "a business of this size may reasonably run without a second
+ * signature, and saying so explicitly is better than a sentinel like 0 that
+ * reads as approve everything".
+ *
+ * A blank field is therefore that answer, not an omission, which is why this
+ * is separate from `zeroableAmountSchema`: the four low-balance columns are
+ * `not null`, so a blank there is still an error.
+ *
+ * Zero remains a distinct and allowed answer — every movement waits — and is
+ * the opposite of blank. The two must stay tellable apart, because confusing
+ * them either strands a sole operator with movements nobody can approve or
+ * silently removes the second signature from a business that wanted one.
+ */
+const optionalThresholdSchema = z.preprocess(
+  (value) =>
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && value.trim() === '')
+      ? null
+      : value,
+  z.union([z.null(), zeroableAmountSchema]),
+);
+
 const rateSchema = z
   .string({ error: 'Enter the rate.' })
   .trim()
@@ -246,8 +277,8 @@ export const lendingRulesSchema = z
  * functions read it themselves — no caller can opt out.
  */
 export const financeSettingsSchema = z.object({
-  transferApprovalThreshold: zeroableAmountSchema,
-  expenseApprovalThreshold: zeroableAmountSchema,
+  transferApprovalThreshold: optionalThresholdSchema,
+  expenseApprovalThreshold: optionalThresholdSchema,
   allowNegativeCash: checkbox,
   reconciliationRequiresReview: checkbox,
   lowBalanceCashAtHand: zeroableAmountSchema,
