@@ -29,10 +29,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   classify,
+  classifySequences,
   countBusinessRows,
   describeResidue,
   PRESERVE_PARTIAL,
+  PRESERVE_SEQUENCES,
   PRESERVE_WHOLE,
+  projectRefFromConnectionString,
+  RESET_SEQUENCES,
   runCleanSlate,
   TRUNCATE_TABLES,
 } from '../../scripts/lib/clean-slate.mjs';
@@ -184,6 +188,115 @@ describeDb('the clean slate', () => {
   });
 
   // --------------------------------------------------------------------
+  // The same guard, for the numbering counters
+  // --------------------------------------------------------------------
+
+  it('classifies every reference counter the database actually has', async () => {
+    // Against `reference_formats`, which is migration-managed and is the list
+    // of scopes that exist. `reference_sequences` is not the specification:
+    // `next_reference` creates its rows on demand, one per scope per year, so
+    // a scope has no row at all until a document of that kind is issued.
+    const rows = await query<{ scope: string }>(
+      `select scope from public.reference_formats order by scope`,
+    );
+    const { unclassified, missing } = classifySequences(rows.map((r) => r.scope));
+    expect(unclassified, 'counters in the database that no list names').toEqual([]);
+    expect(missing, 'counters named by a list but absent from reference_formats').toEqual(
+      [],
+    );
+  });
+
+  it('refuses a counter it has never been told about', () => {
+    const { unclassified } = classifySequences([
+      ...RESET_SEQUENCES,
+      ...PRESERVE_SEQUENCES,
+      'invoice',
+    ]);
+    expect(unclassified).toEqual(['invoice']);
+  });
+
+  it('keeps the reset list and the preserve list disjoint', () => {
+    const overlap = RESET_SEQUENCES.filter((scope) => PRESERVE_SEQUENCES.includes(scope));
+    expect(overlap, 'a counter cannot be both reset and preserved').toEqual([]);
+  });
+
+  it('resets a counter for every table it empties, and no others', () => {
+    // A counter whose table is emptied must restart; one whose table survives
+    // must not, or the next record would reuse a reference somebody holds.
+    expect(PRESERVE_WHOLE, 'branches is reference data').toContain('branches');
+    expect(PRESERVE_SEQUENCES).toContain('branch');
+    expect(RESET_SEQUENCES).not.toContain('branch');
+
+    // Every scope that is reset must number a table being emptied. The
+    // mapping is spelled out so that a new numbered document type has to be
+    // placed deliberately rather than inherited from a pattern.
+    const scopeTables: Record<string, string> = {
+      client: 'clients',
+      loan: 'loans',
+      payment: 'loan_payments',
+      journal: 'journal_entries',
+      expense: 'expenses',
+      other_income: 'other_income',
+      transfer: 'account_transfers',
+      reconciliation: 'account_reconciliations',
+      membership: 'memberships',
+      membership_fee: 'membership_fee_receipts',
+      membership_card: 'membership_cards',
+      membership_meeting: 'membership_meetings',
+      membership_policy_transition: 'membership_policy_transitions',
+      savings_account: 'savings_accounts',
+      savings_transaction: 'savings_transactions',
+      savings_withdrawal: 'savings_withdrawal_requests',
+      beneficiary: 'member_beneficiaries',
+      benefit_claim: 'benefit_claims',
+      benefit_payment: 'benefit_payments',
+      meeting_fine: 'meeting_fines',
+      meeting_fine_payment: 'meeting_fine_payments',
+    };
+    for (const scope of RESET_SEQUENCES) {
+      const table = scopeTables[scope];
+      expect(table, `no table mapped for the ${scope} counter`).toBeDefined();
+      expect(TRUNCATE_TABLES, `the ${scope} counter numbers ${String(table)}`).toContain(
+        table,
+      );
+    }
+
+    // And the preserved one numbers a table that survives.
+    for (const scope of PRESERVE_SEQUENCES) {
+      expect(scope).toBe('branch');
+    }
+  });
+
+  // --------------------------------------------------------------------
+  // Which database is this? The phrase does not say.
+  // --------------------------------------------------------------------
+
+  it('reads the Supabase project reference out of a connection string', () => {
+    // The direct host and the pooler spell it differently; both are used.
+    expect(
+      projectRefFromConnectionString(
+        'postgresql://postgres:pw@db.fszgwemtgyrbhngajpzm.supabase.co:5432/postgres',
+      ),
+    ).toBe('fszgwemtgyrbhngajpzm');
+    expect(
+      projectRefFromConnectionString(
+        'postgresql://postgres.fszgwemtgyrbhngajpzm:pw@aws-0-eu-west-1.pooler.supabase.com:6543/postgres',
+      ),
+    ).toBe('fszgwemtgyrbhngajpzm');
+  });
+
+  it('cannot name a project for a local cluster, and says so rather than guessing', () => {
+    // null is what makes a hosted run without --expect-project a refusal: an
+    // unconfirmable target is not treated as the intended one.
+    expect(
+      projectRefFromConnectionString('postgresql://lending@localhost:5433/lending_test'),
+    ).toBeNull();
+    expect(
+      projectRefFromConnectionString('postgresql://lending@127.0.0.1:5433/db'),
+    ).toBeNull();
+  });
+
+  // --------------------------------------------------------------------
   // The refusals that protect the Owner
   // --------------------------------------------------------------------
 
@@ -211,6 +324,48 @@ describeDb('the clean slate', () => {
     await expect(
       runCleanSlate(db, { ownerProfileId: other.id, dryRun: true }),
     ).rejects.toThrow(/does not hold owner_admin/);
+  });
+
+  it('refuses an Owner with no Auth identity to preserve', async () => {
+    // A profile with no `auth_user_id` presents no credential, so it could
+    // not sign in afterwards — and step 5 keeps exactly the Auth user this
+    // column names, so with it NULL there is no user to keep and every one of
+    // them goes. The end state passes a count of "at most one" while nobody
+    // at all can sign in, which is why this is refused up front.
+    //
+    // Checked through a stub connection rather than by inserting a profile:
+    // `runCleanSlate` takes the connection as an argument, and a real insert
+    // here would write to the append-only audit log, which no later test
+    // could undo and the dry-run assertion below would see.
+    const tables = await query<{ tablename: string }>(
+      `select tablename from pg_tables where schemaname = 'public' order by tablename`,
+    );
+    const unlinkedOwner = {
+      query: (sql: string) => {
+        if (sql.includes('pg_tables')) return Promise.resolve({ rows: tables });
+        if (sql.includes('from public.profiles p where p.id')) {
+          return Promise.resolve({
+            rows: [
+              {
+                id: '00000000-0000-4000-8000-00000000dead',
+                full_name: 'Unlinked Owner',
+                status: 'active',
+                auth_user_id: null,
+                roles: 'owner_admin',
+              },
+            ],
+          });
+        }
+        throw new Error(`the refusal should have come before: ${sql}`);
+      },
+    };
+
+    await expect(
+      runCleanSlate(unlinkedOwner, {
+        ownerProfileId: '00000000-0000-4000-8000-00000000dead',
+        dryRun: true,
+      }),
+    ).rejects.toThrow(/has no auth_user_id/);
   });
 
   // --------------------------------------------------------------------
@@ -314,11 +469,21 @@ describeDb('the clean slate', () => {
       expect(row.roles).toBeNull();
     }
 
-    // Exactly one Auth user remains: the Owner's.
+    // Exactly one Auth user remains, and it is the Owner's. "At most one"
+    // would also be satisfied by none, which is a database nobody can sign
+    // in to — a failed cleanup with the appearance of a thorough one.
     const users = await queryOne<{ n: string }>(
       'select count(*)::text as n from auth.users',
     );
-    expect(Number(users.n)).toBeLessThanOrEqual(1);
+    expect(Number(users.n)).toBe(1);
+
+    const survivor = await queryOne<{ id: string }>('select id from auth.users');
+    const ownerAuth = await queryOne<{ auth_user_id: string | null }>(
+      'select auth_user_id from public.profiles where id = $1',
+      [ownerProfileId],
+    );
+    expect(ownerAuth.auth_user_id).not.toBeNull();
+    expect(survivor.id).toBe(ownerAuth.auth_user_id);
   });
 
   it('leaves the Owner active and able to work', async () => {
@@ -359,14 +524,39 @@ describeDb('the clean slate', () => {
   });
 
   it('resets the reference counters, so the first real client is number one', async () => {
+    // Every counter whose table was emptied, not just the three the first
+    // version of this procedure reset. A counter left at its demonstration
+    // value numbers the client's first real document after a history that no
+    // longer exists: the first journal voucher would be JV2600598.
+    // Every row a reset scope has, across every period year. A scope with no
+    // row yet needs none: `next_reference` creates it at 1 on first use.
     const counters = await query<{ scope: string; last_value: string }>(
       `select scope, last_value from public.reference_sequences
-        where scope in ('client','loan','payment') order by scope`,
+        where scope = any ($1::text[]) order by scope`,
+      [RESET_SEQUENCES],
     );
-    expect(counters.length).toBe(3);
+    expect(counters.length, 'some reset counter must have existed').toBeGreaterThan(0);
     for (const row of counters) {
       expect(Number(row.last_value), `the ${row.scope} counter`).toBe(0);
     }
+
+    // Nothing in a reset scope is left carrying a demonstration value.
+    const stragglers = await query<{ scope: string }>(
+      `select scope from public.reference_sequences
+        where scope = any ($1::text[]) and last_value <> 0`,
+      [RESET_SEQUENCES],
+    );
+    expect(stragglers.map((r) => r.scope)).toEqual([]);
+
+    // And the one that must NOT restart has not: `branches` survives, so its
+    // codes are still taken.
+    const branch = await queryOne<{ last_value: string }>(
+      `select last_value from public.reference_sequences where scope = 'branch'`,
+    );
+    expect(
+      Number(branch.last_value),
+      'the branch counter must not restart',
+    ).toBeGreaterThan(0);
 
     // Proven by issuing one rather than by reading the column.
     const next = await queryOne<{ reference: string }>(
@@ -418,6 +608,119 @@ describeDb('the clean slate', () => {
         where status = 'active'`,
     );
     expect(Number(active.n)).toBe(0);
+  });
+
+  it('can retire an approved demonstration policy without breaking immutability', async () => {
+    // Launch item A-1. The hosted database carries version 999.0,
+    // "DEMONSTRATION ONLY", approved and active. The cleanup leaves it alone
+    // on purpose, so the question this proves is whether the schema offers a
+    // sanctioned way to retire it — because the alternative suggested in the
+    // Phase 2 notes was a whole new Supabase project.
+    //
+    // It does: `membership_policy_versions_guard` permits the one-way step
+    // active -> superseded, and `status` is not one of the contractual
+    // columns it freezes once a version is approved. So the demonstration
+    // terms stop governing anything without a trigger being disabled, a
+    // constraint dropped or a row deleted.
+    // Cloned from the version the migrations seed, so every contractual
+    // column this table requires is carried over rather than enumerated here.
+    const demo = await queryOne<{ id: string }>(
+      `insert into public.membership_policy_versions
+         (version, title, effective_from, status,
+          registration_fee, monthly_savings_minimum, savings_qualifying_months,
+          member_loan_interest_rate_bps, member_loan_max_term_months,
+          member_loan_weekly_cadence_max_months, non_member_loan_max_term_months,
+          medical_benefit_rate_bps, medical_benefit_min_admission_days,
+          family_condolence_benefit, member_bereavement_benefit)
+       select '999.1',
+              'DEMONSTRATION ONLY — retirement rehearsal',
+              public.business_date(),
+              'draft',
+              v.registration_fee, v.monthly_savings_minimum,
+              v.savings_qualifying_months, v.member_loan_interest_rate_bps,
+              v.member_loan_max_term_months,
+              v.member_loan_weekly_cadence_max_months,
+              v.non_member_loan_max_term_months, v.medical_benefit_rate_bps,
+              v.medical_benefit_min_admission_days,
+              v.family_condolence_benefit, v.member_bereavement_benefit
+         from public.membership_policy_versions v
+        where v.version = '1.0'
+       returning id`,
+    );
+
+    // draft -> active, which stamps the approval from the session.
+    await query(
+      `update public.membership_policy_versions
+          set status = 'active', approved_at = pg_catalog.now() where id = $1`,
+      [demo.id],
+    );
+    const active = await queryOne<{ status: string; approved_at: string | null }>(
+      `select status, approved_at::text from public.membership_policy_versions where id = $1`,
+      [demo.id],
+    );
+    expect(active.status).toBe('active');
+    expect(active.approved_at).not.toBeNull();
+
+    // DELETE is refused outright, which is why retiring is the only route.
+    await expect(
+      query(`delete from public.membership_policy_versions where id = $1`, [demo.id]),
+    ).rejects.toThrow();
+
+    // A contractual column is still frozen, so this is not a way in.
+    await expect(
+      query(
+        `update public.membership_policy_versions set registration_fee = 1 where id = $1`,
+        [demo.id],
+      ),
+    ).rejects.toThrow(/approved/i);
+
+    // Neither of the two steps the launch checklist originally prescribed can
+    // run, which is why this test exists and why that checklist was corrected.
+    //
+    // active -> draft is not in the guard's one-way sequence.
+    await expect(
+      query(`update public.membership_policy_versions set status = 'draft' where id = $1`, [
+        demo.id,
+      ]),
+    ).rejects.toThrow(/cannot move from active to draft/);
+
+    // And the readiness flags are GENERATED ALWAYS: they are derived from the
+    // policy's own figures, so there is no value to write to turn a module
+    // off. Postgres refuses the write itself.
+    await expect(
+      query(
+        `update public.membership_policy_versions
+            set is_enrolment_enabled = false where id = $1`,
+        [demo.id],
+      ),
+    ).rejects.toThrow(/can only be updated to DEFAULT/i);
+
+    // The sanctioned step.
+    await query(
+      `update public.membership_policy_versions set status = 'superseded' where id = $1`,
+      [demo.id],
+    );
+    const retired = await queryOne<{ status: string }>(
+      `select status from public.membership_policy_versions where id = $1`,
+      [demo.id],
+    );
+    expect(retired.status).toBe('superseded');
+
+    // And it no longer governs anything: the enrolment gate reads the version
+    // in force, which is now nothing, and fails shut.
+    const governing = await queryOne<{ id: string | null }>(
+      `select public.active_membership_policy_id() as id`,
+    );
+    expect(governing.id).toBeNull();
+    const allows = await queryOne<{ allowed: boolean }>(
+      `select public.membership_policy_allows(public.active_membership_policy_id(), 'enrolment') as allowed`,
+    );
+    expect(allows.allowed).toBe(false);
+
+    // The row is still there, still readable, still carrying what it promised.
+    const residue = await describeResidue(db);
+    expect(residue.demonstration_policies).toBeGreaterThan(0);
+    expect(residue.active_demonstration_policies).toBe(0);
   });
 
   it('is repeatable: running it again on an empty database is a no-op', async () => {

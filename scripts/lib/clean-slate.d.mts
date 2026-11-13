@@ -64,6 +64,7 @@ export declare const PRESERVE_PARTIAL: readonly PreservePartialEntry[];
 export declare const NEUTRALISE_PROFILES: NeutraliseProfiles;
 export declare const TRUNCATE_TABLES: readonly string[];
 export declare const RESET_SEQUENCES: readonly string[];
+export declare const PRESERVE_SEQUENCES: readonly string[];
 export declare const NULL_PRESERVED_ACTOR_REFERENCES: readonly ActorReference[];
 export declare const DEMONSTRATION_POLICY_MATCH: string;
 
@@ -76,6 +77,13 @@ export declare const DEMONSTRATION_POLICY_MATCH: string;
  * `missing` is the reverse: a table the lists name that the database lacks.
  */
 export declare function classify(actualTables: readonly string[]): {
+  unclassified: string[];
+  missing: string[];
+};
+
+export declare function projectRefFromConnectionString(value: string): string | null;
+
+export declare function classifySequences(actualScopes: readonly string[]): {
   unclassified: string[];
   missing: string[];
 };
