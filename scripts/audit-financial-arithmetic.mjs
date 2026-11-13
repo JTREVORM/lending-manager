@@ -121,6 +121,18 @@ const UNSAFE = [
   [/\bMath\.round\(/, 'Math.round on money'],
   [/\bMath\.(?:floor|ceil)\((?![^)]*length)/, 'Math.floor/ceil on money'],
   [/::\s*(?:float|double|real)/, 'a float cast in SQL'],
+  // `numeric` belongs here with the floats, and its absence was a hole. This
+  // schema admits no `numeric` *column* — `tests/db/schema.test.ts` fails the
+  // build on one — but a `::numeric` **cast** inside an expression is exactly
+  // the escape into decimal arithmetic that rule exists to prevent, and it was
+  // being scanned straight past. Found by injecting
+  // `round((p * bps)::numeric / 10000.0)` into the agency commission engine and
+  // watching this audit report no hazard.
+  [/::\s*numeric/, 'a numeric (decimal) cast in SQL'],
+  // And the division that usually accompanies it. The rule above caught only
+  // a divisor of 100 or 100.0, so `/ 10000.0` — the obvious way to turn basis
+  // points into a fraction — went unread.
+  [/\/\s*\d+\.\d+/, 'a decimal-literal division'],
   [/\btoFixed\(/, 'toFixed'],
 ];
 
@@ -160,6 +172,38 @@ const ACKNOWLEDGED = [
       'and no figure derived from it is ever stored, compared or quoted — the ' +
       'money beside it is formatted from the exact integers.',
   },
+
+  // The four below surfaced the moment this audit stopped enumerating date
+  // prefixes and began reading every migration. None computes an amount.
+  {
+    path: 'supabase/migrations/20261015000200_notification_triggers.sql',
+    snippet: "pg_catalog.to_char(new.penalty_rate_bps / 100.0, 'FM999990.0')",
+    reason:
+      'renders a basis-point rate as a percentage inside a notification ' +
+      'sentence. A rate is not an amount, the result is a string, and no ' +
+      'money is derived from it.',
+  },
+  {
+    path: 'supabase/migrations/20261015000300_notification_backfill.sql',
+    snippet: "pg_catalog.to_char(pen.penalty_rate_bps / 100.0, 'FM999990.0')",
+    reason:
+      'the same rate-to-percentage rendering as the trigger it backfills, ' +
+      'for the same notification text.',
+  },
+  {
+    path: 'supabase/migrations/20261022000500_benefit_claims.sql',
+    snippet: '/ 86400.0',
+    reason:
+      'seconds to days for admission_elapsed_days, floored to an integer. ' +
+      'A count of days, not an amount.',
+  },
+  {
+    path: 'supabase/migrations/20261028000600_condolence_family_eligibility.sql',
+    snippet: '/ 86400.0',
+    reason:
+      'the same seconds-to-days conversion, in the migration that restates ' +
+      'the admission trigger.',
+  },
 ];
 
 const findings = [];
@@ -197,16 +241,26 @@ function scan(path) {
 for (const file of FINANCIAL_FILES) scan(file);
 
 const migrations = readdirSync('supabase/migrations')
-  .filter(
-    (name) =>
-      // Phases 4 and 5 — the loan calculation and the schedule generator —
-      // and Polytos Phase 3, which adds the member interest engine, the
-      // eligibility ceiling and the pledge arithmetic to the same files'
-      // worth of risk.
-      (name.startsWith('20261004') ||
-        name.startsWith('20261005') ||
-        name.startsWith('20261021')) &&
-      name.endsWith('.sql'),
+  .filter((name) =>
+    // Phases 4 and 5 — the loan calculation and the schedule generator —
+    // and Polytos Phase 3, which adds the member interest engine, the
+    // eligibility ceiling and the pledge arithmetic to the same files'
+    // worth of risk.
+    //
+    // Every migration, with no date prefixes.
+    //
+    // This list used to enumerate prefixes — 20261004, 20261005, 20261021,
+    // and then 20261107 and 20261108 when the agency engine arrived. That
+    // design is why it went stale twice: Phase 4B-S added 20261109 and
+    // Phase 4C added 20261110, and neither was read, so the audit reported
+    // a pass over code it had never opened. An allowlist of dates cannot
+    // keep up with a repository that keeps adding dates.
+    //
+    // Reading everything cannot go stale. It surfaced four non-money
+    // divisions in older migrations on the first run; each is acknowledged
+    // above with its reason, and each acknowledgement is verified to still
+    // describe a real line, so none of them can quietly cover something new.
+    name.endsWith('.sql'),
   )
   .map((name) => join('supabase/migrations', name));
 

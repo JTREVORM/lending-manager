@@ -124,7 +124,14 @@ test.describe('approval', () => {
     await page.getByRole('button', { name: /^approve/i }).click();
     await page.getByRole('button', { name: /yes, approve this loan/i }).click();
 
-    await expect(page.getByText(/approved/i).first()).toBeVisible({ timeout: 20_000 });
+    // The approved status description, not a /approved/i match over the page:
+    // the breakdown table's empty state says "It is created when the loan is
+    // approved" while the loan is still pending, so the regex matched copy
+    // that is present either way and waited for nothing before the
+    // navigation below.
+    await expect(
+      page.getByText('Approved. The money has not been released yet.'),
+    ).toBeVisible({ timeout: 20_000 });
     await expectNoErrorBoundary(page);
 
     // --- what the database did in response --------------------------------

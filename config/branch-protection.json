@@ -1,0 +1,66 @@
+{
+  "$comment": [
+    "Proposed branch protection for the production branch, main (the default branch since the November 2026 consolidation).",
+    "Apply with: node scripts/apply-branch-protection.mjs --apply   (needs an admin token).",
+    "Verify with: node scripts/apply-branch-protection.mjs           (read-only).",
+    "",
+    "Every choice below is constrained by two facts about this repository that were",
+    "checked rather than assumed, and both of them are ways a well-meaning rule could",
+    "make releases impossible instead of safe:",
+    "",
+    "1. There is exactly ONE collaborator (JTREVORM, admin). GitHub does not let an",
+    "   author approve their own pull request, so required_approving_review_count must",
+    "   stay 0 until a second reviewer exists. At 1, no pull request on this repository",
+    "   could ever be merged. The count is the single value to raise the day a second",
+    "   maintainer is added, and nothing else here needs to change.",
+    "",
+    "2. Only the four CI jobs run on every pull request. 'Production public GET +",
+    "   anonymous-route protection' is path-filtered, and 'Supabase Preview' and",
+    "   'Vercel Preview Comments' are third-party and legitimately skip. A required",
+    "   context that does not always run leaves a pull request permanently pending, so",
+    "   only the four unconditional jobs are listed.",
+    "",
+    "The database security gate is deliberately NOT a separate context: it runs as a",
+    "step inside 'database (real PostgreSQL)', which is already required, so it is",
+    "enforced without adding a context that could be skipped."
+  ],
+  "branch": "main",
+  "protection": {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "checks, unit/integration, build",
+        "database (real PostgreSQL)",
+        "security release rehearsal (PostgreSQL 17, real Auth)",
+        "browser E2E (production build, fresh seed)"
+      ]
+    },
+    "enforce_admins": true,
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 0,
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "require_last_push_approval": false
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "block_creations": false,
+    "required_conversation_resolution": true,
+    "required_linear_history": false,
+    "lock_branch": false,
+    "allow_fork_syncing": false
+  },
+  "rationale": {
+    "required_status_checks.strict": "A branch must be up to date with the base before merging, so the four jobs are green against what will actually be on the branch rather than against an older base. With one developer the rebase cost is small; the alternative is merging a release whose CI never saw the code it lands on.",
+    "enforce_admins": "true. The point of the gate is that red CI stops a release, and an admin bypass is exactly how a release gets out at 2am without one. Because approvals are not required, the sole admin can still merge their own pull request once the four checks are green, so this does not deadlock. If CI is broken for an unrelated reason this is the one switch to toggle, deliberately and briefly.",
+    "required_pull_request_reviews": "Present with a count of 0. The object is what forbids a direct push to the branch, so every change arrives as a pull request and runs CI. The count is 0 only because of constraint 1 above, not because review is unwanted.",
+    "dismiss_stale_reviews": "true, so an approval does not survive a force-push of new commits onto the reviewed head. Harmless at a count of 0 and correct the moment the count rises.",
+    "allow_force_pushes": "false. Production is promoted from this branch, so its history must be append-only; a force-push would rewrite what was released.",
+    "allow_deletions": "false. Deleting the production branch would orphan every release reference.",
+    "required_conversation_resolution": "true. A review comment on a security change has to be answered rather than merged past.",
+    "required_linear_history": "false. Every release so far has been a merge commit, and the existing history is not linear, so requiring it would reject the established release shape for no security gain.",
+    "restrictions": "null. Push restrictions are an organization-and-team feature; on a user-owned repository with one collaborator they add nothing that required_pull_request_reviews does not already enforce.",
+    "allow_fork_syncing": "false. This is a public repository, so a fork sync is an untrusted write path into a protected branch."
+  }
+}

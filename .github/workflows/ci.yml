@@ -148,18 +148,28 @@ jobs:
       - name: Build a local throwaway cluster and apply every migration
         run: npm run db:local:setup
 
-      # `test:db` runs four vitest projects in sequence: the database suite,
-      # the demonstration seeder's, the borrower-reuse one, then the member
-      # loan demonstration's. The seeder's is separate because the policy
-      # version it publishes is global state that would collide with every
-      # membership suite. Borrower reuse is separate again because it needs a
-      # database the synthetic seeder has never touched — once those six fee
-      # and deposit keys are spent on synthetic clients, reuse correctly
-      # refuses to remap them. The member loan one is separate for both
-      # reasons at once: it publishes version 998.0 as the only version in
-      # force, and it reuses borrowers. See the header of vitest.config.mts.
+      # `test:db` runs twelve vitest projects in sequence: the database suite,
+      # the five agency ones, the shared-till one, the demonstration seeder's,
+      # the borrower-reuse one, the member loan demonstration's, the benefits
+      # one, then the clean-slate one.
+      #
+      # Phase 4E: `agency-money` is the fourth agency project, and it was
+      # declared in `vitest.config.mts` without being added to `test:db`. Its
+      # 123 tests therefore ran on a developer's machine and nowhere else, and
+      # three CI runs reported the database job green without ever executing
+      # them. A project that is not in this script does not run. The
+      # seeder's is separate because the policy version it publishes is global
+      # state that would collide with every membership suite. Borrower reuse is
+      # separate again because it needs a database the synthetic seeder has
+      # never touched — once those six fee and deposit keys are spent on
+      # synthetic clients, reuse correctly refuses to remap them. The member
+      # loan one is separate for both reasons at once: it publishes version
+      # 998.0 as the only version in force, and it reuses borrowers. The three
+      # agency projects are separate because they post real journals, and any
+      # suite reading a cash position or a trial balance would be reading a
+      # book it had written to. See the header of vitest.config.mts.
       # Each project's own globalSetup rebuilds the cluster the previous step
-      # created, so this one step covers all four.
+      # created, so this one step covers all twelve.
       # Runs before the suites, deliberately. It reads the privileged surface
       # of the freshly migrated database and fails on any exposure the
       # reviewed baseline does not already account for, so a migration that
@@ -172,7 +182,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test
 
-      - name: Database tests, the seeders, borrower reuse, member loans
+      - name: Database tests, the agency suites, the seeders, borrower reuse, member loans, clean slate
         run: npm run test:db
         env:
           DATABASE_URL: postgresql://lending@localhost:5433/lending_test
@@ -184,6 +194,29 @@ jobs:
 
       - name: Upgrade and existing-borrower demo integration
         run: node scripts/verify-membership-upgrade.mjs
+
+      # Phase 4, Task 0. Walks the 38 cross-subsystem identities that say "the
+      # books reconcile" — the portfolio against GL 1200, the cash position
+      # against the cash accounts, the savings sub-ledger against GL 2100 — and
+      # fails the job on any unexplained difference.
+      #
+      # It builds its own book rather than reusing `lending_test`, because the
+      # verdict depends entirely on what is in the database. The membership-only
+      # demonstration book has no loans, so eleven loan identities would have no
+      # subject rows and prove nothing; the harness calls those VACUOUS and
+      # `--require-complete` (set inside the script) refuses to exit 0 while any
+      # remain. So this step cannot pass by being pointed at an empty book.
+      - name: Financial reconciliation certification
+        run: bash scripts/certify-financial-book.sh
+
+      - name: Upload financial reconciliation certification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-financial-reconciliation-certification
+          path: work/financial-reconciliation.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Upload policy financial reconciliation
         if: always()
@@ -216,11 +249,25 @@ jobs:
       - name: Put PostgreSQL binaries on PATH
         run: echo "$(ls -d /usr/lib/postgresql/*/bin | tail -1)" >> "$GITHUB_PATH"
 
+      # `-f`, retries and a pinned digest, all for the same reason.
+      #
+      # `curl -sSL` without `-f` does not fail on an HTTP error: it writes the
+      # error page to the file and exits 0. Twice on 2026-11-09 the release
+      # CDN answered with something that was not an archive, and the step got
+      # as far as `tar: This does not look like a tar archive` - a message
+      # about the tarball, for a problem with the download.
+      #
+      # So the download now fails when it fails, retries a transient refusal,
+      # and is checked against the digest of the file this project has been
+      # running all along. The rehearsal job below has pinned its Auth binary
+      # this way from the start; this is the same thing for the other one.
       - name: Install the real PostgREST binary
         run: |
           mkdir -p .e2e
-          curl -sSL -o .e2e/pgrst.tar.xz \
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+            -o .e2e/pgrst.tar.xz \
             https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz
+          printf '%s  %s\n' 9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c .e2e/pgrst.tar.xz | sha256sum -c -
           tar -C .e2e -xf .e2e/pgrst.tar.xz
           chmod +x .e2e/postgrest
 
@@ -280,6 +327,33 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # The same thing again for Phase 4D's fourteen agency screens. A
+      # separate script and a separate artifact rather than more entries in
+      # the one above: the two phases are reviewed separately, and a reviewer
+      # asked for the agency evidence should not have to find fifteen PNGs
+      # among seventy-five.
+      #
+      # It also measures each screen's horizontal overflow at four widths and
+      # exits non-zero on a screen that pushes the page sideways - which is
+      # how the Phase 4D settlement registers were caught doing exactly that
+      # at 390px, through an absolutely positioned screen-reader hint.
+      - name: Capture the Phase 4D agency screens
+        if: success()
+        run: |
+          source <(bash tests/e2e/harness/stack.sh env)
+          node scripts/capture-agency-screens.mjs
+
+      - name: Upload the Phase 4D agency screens
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytos-phase-4d-agency-screens
+          # The PNGs and `timings.json` only — never `.e2e/state/`, which
+          # holds the harness's session cookies.
+          path: .e2e/shots/agency/
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Tear down the stack
         if: always()
         run: bash tests/e2e/harness/stack.sh down || true
@@ -311,12 +385,34 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The key is dearmoured into a binary keyring rather than written as
+      # the ASCII-armoured `.asc` it is served as.
+      #
+      # Both forms are legal in a `signed-by=`, and the armoured one worked
+      # until 2026-11-08, when four of five runs failed here with
+      #
+      #   GPG error: ... noble-pgdg InRelease:
+      #     GPG: add_keyblock_resource ... GPG: keydb_search ...
+      #   E: The repository ... is not signed.
+      #
+      # — apt's verifier failing to load the armoured keyring at all, on a
+      # runner image that had read it an hour earlier. The binary form has no
+      # such ambiguity: it is what `apt-key` always produced, what the
+      # PostgreSQL project's own instructions use, and what every apt version
+      # reads the same way. `--yes` so a re-run overwrites rather than
+      # prompting.
+      #
+      # Infrastructure, not this phase. Changed here because this is one of
+      # the four jobs that must pass before anything is certified, and a gate
+      # that fails four times in five is not a gate.
       - name: Install PostgreSQL 17
         run: |
           sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/keyrings/postgresql.asc >/dev/null
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor --yes -o /etc/apt/keyrings/postgresql.gpg
+          sudo chmod 0644 /etc/apt/keyrings/postgresql.gpg
           . /etc/os-release
-          printf 'deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          printf 'deb [signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-17 postgresql-client-17
           echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"

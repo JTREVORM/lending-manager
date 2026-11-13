@@ -36,6 +36,33 @@
         "public_default_acl": false
       }
     },
+    "agency_agent_line_obligations(p_float_account_id uuid)": {
+      "classification": "A",
+      "reason": "Phase 4E agency read, decision OD-4. Returns the reasons an agent line cannot be closed yet: float still held, commission owed either way, transactions in flight, float trades pending. Reachable by `authenticated` on purpose — the screen reads it before offering the close button, so the rule has one implementation rather than a second one in the client. It discloses figures about one line of the caller's own branches and takes no lock. No capability check: this is advisory, and the act it advises on, close_agency_agent_line(), refuses without agency:providers.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "approve_agency_cash_reconciliation(p_reconciliation_id uuid, p_adjust boolean, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Certifies one cash count, optionally writing its variance off to 5950. Requires agency:reconcile to approve and agency:variance_adjustment as well to adjust, so a manager who miscounts cannot certify the miscount into the books; both refuse with 42501. Refuses the officer who recorded the count, one already closed, and one whose underlying balance has moved since the count was taken - a stale variance describes nothing. A variance is always recorded and only written off when asked for, with a reason.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "approve_agency_float_reconciliation(p_reconciliation_id uuid, p_adjust boolean, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Certifies one float reconciliation, optionally writing its variance off to 5960. Requires agency:reconcile, and agency:variance_adjustment as well to adjust; both refuse with 42501. Refuses the officer who recorded the statement, one already closed, one whose float balance has moved since, and a write-off with no named provider statement. Its sign convention is the opposite of the cash one, so its two adjustment directions are written out separately.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "approve_benefit_claim(p_claim_id uuid, p_approved_amount bigint, p_note text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -126,6 +153,15 @@
         "public_default_acl": false
       }
     },
+    "authorise_agency_commission_exception(p_transaction_id uuid, p_reason text, p_evidence text, p_proposed_amount bigint)": {
+      "classification": "A",
+      "reason": "Phase 4B-S agency RPC, extended in Phase 4D. Authorises a commission figure that differs from what the provider's configured terms produce, recording the reason, the external evidence, the authorising officer and both pinned figures. Called with four arguments it also records the Owner's proposed amount, which the interface must do because the counter supplies none - without it the workflow was unreachable. Refuses any caller without agency:commission_exception with SQLSTATE 42501 before it reads the transaction; that capability is granted to owner_admin only. Refuses another branch's transaction via agency_locked_transaction(), a posted transaction, a negative figure, one above the principal, and one that does not actually differ. The audit row carries the figure before and after, so a change made after submission is never quiet.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "begin_benefit_verification(p_claim_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -198,6 +234,15 @@
         "public_default_acl": false
       }
     },
+    "cancel_agency_transaction(p_transaction_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Cancels an unposted transaction. Refuses a caller without agency:write with 42501, and requires agency:verify to cancel a transaction somebody else submitted. Refuses a posted transaction, which is reversed instead.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "cancel_benefit_claim(p_claim_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -252,9 +297,27 @@
         "public_default_acl": false
       }
     },
+    "certify_agency_commission_reconciliation(p_reconciliation_id uuid, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decisions OD-9 and OD-2. Certifies a commission reconciliation: a second officer has seen the difference. Writes no journal line of any kind, so certification never changes a balance. Refuses a caller without agency:reconcile with 42501 via agency_actor(), a reconciliation from another branch, one already certified, and the person who submitted it.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "client_has_live_loan(p_client_id uuid)": {
       "classification": "PENDING-REVIEW",
       "reason": "Behavioural probe (borrower session, null arguments) produced no authorization refusal, and this function takes a third-party identifier. NOT yet retested with a real identifier, so it is neither confirmed safe nor confirmed leaking. Carried as an open Phase 3 item in docs/POLYTOS-SECURITY-RISK-INVENTORY.md.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "close_agency_agent_line(p_float_account_id uuid, p_reason text, p_closed_on date)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-4. Closes an agent line. Refuses a caller without agency:providers with 42501, a line the caller's branch cannot see, one already closed, a blank reason, and any line that still holds float, is owed commission, owes commission back, has transactions in flight or float trades pending — naming each in the refusal.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -282,6 +345,15 @@
     "consume_rate_limit(p_bucket_key text, p_action text, p_limit integer, p_window_seconds integer)": {
       "classification": "D",
       "reason": "Returns business configuration or policy metadata, not a member's money or personal data. Also depended on in the caller's own context by an RLS policy, a CHECK constraint or a security_invoker view, where raising would turn a correct silent denial into an error.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "create_agency_transaction(p_transaction_type_id uuid, p_principal_amount bigint, p_float_account_id uuid, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_transaction_date date, p_idempotency_key text, p_customer_fee_mode text, p_transacted_at timestamp with time zone, p_branch_id uuid)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Records a draft agency transaction. Refuses a caller without agency:write with SQLSTATE 42501, before it reads a single argument, via agency_actor(). The operating branch is validated, never assumed: an officer assigned to a branch records at it and may name no other, an officer with none must name one, and the branch is checked with user_can_see_branch() and must be open. Phase 4B took it from the profile alone and fell back to the alphabetically first active branch for an officer who had none, which routed every Head Office transaction by a string comparison as soon as a second branch existed; 20261115001500 removed that fallback and made the branch an argument. Phase 4E also re-signed it for the fee mode and the provider timestamp, and each re-signing drops the previous signature so there is exactly one overload of the call that records money.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -372,6 +444,15 @@
     "enrol_member(p_client_id uuid, p_payment_method text, p_fee_reference text, p_consent_method text, p_signature_name text, p_fee_idempotency_key uuid, p_signature_path text, p_witness_profile_id uuid, p_challenge_id uuid, p_initial_deposit bigint, p_deposit_reference text, p_deposit_idempotency_key uuid, p_notes text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "ensure_agency_float_account(p_provider_id uuid, p_branch_id uuid, p_till_name text)": {
+      "classification": "A",
+      "reason": "Phase 4A agency administration RPC. Provisions one agency float till: creates its 1320-series ledger account with cash_kind = agency_float and registers it. Refuses any caller without the agency:providers capability with SQLSTATE 42501, before it reads a single argument, and only owner_admin holds that capability. Asserted in tests/db/agency-foundation.test.ts, which calls it as a secretary_treasurer and a manager and requires 42501 from both.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -522,9 +603,27 @@
         "public_default_acl": false
       }
     },
+    "post_agency_payable_settlement(p_provider_id uuid, p_branch_id uuid, p_settlement_amount bigint, p_cash_account_id uuid, p_receipt_ref text, p_settlement_date date)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Remits collections held on a provider's behalf: Dr the provider's payable, Cr the branch's cash or bank. Refuses a caller without agency:settlements with 42501 before reading any argument, and a branch the caller cannot see. Refuses a provider_float provider, a non-positive amount, a duplicate receipt reference, more cash than the till holds, and more than the provider's own outstanding payable at that branch - so one bank's collections cannot fund another's settlement and no settlement can drive the liability into net debit.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "post_benefit_payment(p_claim_id uuid, p_payment_method text, p_external_reference text, p_idempotency_key uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "post_float_replenishment(p_float_account_id uuid, p_amount bigint, p_funding_account_id uuid, p_reference text, p_replenishment_date date)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Tops up one provider float till: Dr the till's 1320-series account, Cr an approved funding account. Requires agency:settlements with 42501 before reading any argument. The till identifies the provider and branch, so neither is a caller assertion. Refuses a till the caller's branch cannot see, an inactive till, a non-positive amount, insufficient funding, a duplicate provider reference, and any funding account that is not the branch's own cash-at-hand or bank - which excludes agency float and the mobile money wallets loan repayments arrive in.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -570,6 +669,42 @@
     "preview_membership_policy_transition(p_to_version_id uuid, p_effective_on date)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "record_agency_commission_payout(p_float_account_id uuid, p_amount bigint, p_provider_reference text, p_payout_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Records commission the provider paid into one agent line's float: Dr the line's 1320 account, Cr 1310, touching no income account because the income was recognised per transaction. Refuses a caller without agency:settlements with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a closed line, more than that line's own outstanding receivable, and a missing or repeated provider reference. Takes the provider balance lock before the sorted account locks.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "record_agency_commission_recovery(p_float_account_id uuid, p_amount bigint, p_method text, p_provider_reference text, p_recovery_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-10. Clears a commission recovery payable in 2230, either by deduction from the line's float or by offset against commission owed. Refuses a caller without agency:settlements with 42501 via agency_actor(), a line the caller's branch cannot see, an invented method, more than the line owes back, a float deduction the line cannot cover, and a missing or repeated reference.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "record_agency_float_trade(p_kind text, p_float_account_id uuid, p_float_amount bigint, p_reference text, p_counter_float_account_id uuid, p_settlement_account_id uuid, p_cash_amount bigint, p_fee_amount bigint, p_source_kind text, p_counterparty_name text, p_trade_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-7. Records a float purchase, sale or line-to-line transfer as pending and posts no journal, so it moves no balance. Refuses a caller without agency:float_trade with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a transfer into a branch the caller does not administer with 42501, a closed line, a purchase into a line that is not active, a cross-provider or self transfer, a provider that holds no float, and a missing or repeated reference.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "record_commission_settlement(p_provider_id uuid, p_branch_id uuid, p_settlement_amount bigint, p_settlement_account_id uuid, p_statement_ref text, p_settlement_date date)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Records one remittance of accrued commission: Dr the branch receiving account, Cr 1310. Refuses a caller without agency:settlements with SQLSTATE 42501 via agency_actor(), before it reads any argument. Refuses a branch the caller cannot see with the same refusal as an unknown provider, so it discloses neither. Refuses an immediate-commission provider, a non-positive amount, a receiving account that is not the settling branch's own cash-at-hand or bank account, a duplicate provider statement reference, and more than the provider's outstanding receivable at that branch - read after a provider-and-branch advisory lock, so two concurrent settlements cannot both fit inside one balance. Never posts to 4510: the income was recognised at accrual.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -675,9 +810,27 @@
         "public_default_acl": false
       }
     },
+    "register_agency_agent_line(p_provider_id uuid, p_branch_id uuid, p_till_name text, p_label text, p_line_msisdn text, p_agent_code text, p_opened_on date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Registers an agent line and mints its 1320 ledger account through ensure_agency_float_account(). Refuses a caller without agency:providers with SQLSTATE 42501 before it reads the provider, and refuses a till name the provider already uses at that branch rather than returning the existing line. Audited by the configuration trigger.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "register_member_beneficiary(p_membership_id uuid, p_full_name text, p_relationship text, p_phone text, p_alternative_phone text, p_village_area text, p_district text, p_identity_document_kind text, p_identity_reference text, p_is_primary boolean, p_supersedes_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reject_agency_float_trade(p_trade_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Refuses a pending float trade with a stated reason and posts nothing, so a maker-checker control can say no as well as yes. Refuses a caller without agency:settlements with 42501 via agency_actor(), a trade from another branch, a trade that is not pending, and a blank reason.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -765,9 +918,54 @@
         "public_default_acl": false
       }
     },
+    "return_agency_transaction(p_transaction_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Returns a submitted transaction to draft with a reason. Refuses a caller without agency:verify with 42501, because judging a transaction wrong is the same authority as judging it right. Moves no money.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_agency_float_trade(p_trade_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Mirrors a posted float trade's journal leg for leg, asserting sufficiency on every asset the contra draws down, and keeps the original. Refuses a caller without agency:reverse with 42501 via agency_actor(), a trade from another branch, a trade that is not posted, and a blank reason.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_agency_payable_settlement(p_settlement_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Reverses one payable settlement by a contra entry, restoring the liability the remittance cleared. Requires agency:reverse rather than agency:settlements, because recording a remittance and undoing one are different authorities. Refuses a settlement at another branch with 42501 via agency_locked_payable_settlement(), refuses one already reversed, and requires a reason. The original row is annotated, never deleted.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_agency_transaction(p_transaction_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Reverses a posted transaction by mirroring its journal. Refuses a caller without agency:reverse with 42501, and a prior-day reversal without agency:reverse_cross_day with 42501. Refuses a reversal whose deferred commission has already been settled.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "reverse_benefit_payment(p_payment_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_commission_settlement(p_settlement_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Corrects one commission settlement recorded in error by a balanced contra - Dr 1310, Cr the receiving account - restoring the receivable and releasing any historical transaction the settlement was blocking from reversal. Requires agency:reverse with 42501, refuses a settlement at another branch via agency_locked_commission_settlement(), refuses one already corrected, requires a reason, and refuses if the receiving account no longer holds the money. Never deletes a settlement.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -900,9 +1098,72 @@
         "public_default_acl": false
       }
     },
+    "set_agency_agent_line_suspended(p_float_account_id uuid, p_suspended boolean, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-4. Suspends an agent line or lifts a suspension, each with a required reason. Refuses a caller without agency:providers with 42501, a line the caller's branch cannot see, a closed line, and a no-op in either direction. Deliberately has no balance conditions: a suspension refused because the line holds float would be useless exactly when it is needed.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "set_agency_provider_commission_source(p_provider_id uuid, p_source text, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Sets whether a provider's commission is computed from its configuration or reported per transaction. Refuses a caller without agency:providers with SQLSTATE 42501, refuses a provider that is already confirmed because its posted snapshots cite the basis in force, and refuses the reported source while a rate or fixed amount is configured. Audited.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "set_agency_service_limit(p_transaction_type_id uuid, p_max_single_transaction bigint, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-11. Sets one service's maximum single transaction. Refuses a caller without agency:providers with SQLSTATE 42501 before it reads the type, so only the Owner configures a ceiling. Refuses NULL and zero, because the live-readiness guard treats an unstated ceiling as a reason not to post and this function exists to state one. Writes the before and after values and the Owner's reason to the audit log.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "settings_reference_sequences()": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "submit_agency_cash_reconciliation(p_cash_account_id uuid, p_physical_count bigint, p_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Records one physical count of a branch till, covering agency and lending cash together because they share the drawer. Requires agency:reconcile with 42501. Refuses a branch the caller cannot see, refuses an agency float account by name and anything that is not cash at hand, refuses a negative count, a future date, and a second count of the same account on the same day. Snapshots the system balance under the account lock.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "submit_agency_commission_reconciliation(p_float_account_id uuid, p_period_start date, p_period_end date, p_provider_reported_commission bigint, p_statement_ref text, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-9. Records one provider statement period for one agent line with what the books recognised over the provider's own dates and what the statement reports. Posts no journal. Refuses a caller without agency:reconcile with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a period that overlaps one already reconciled for that line, a period ending in the future or ending before it starts, a negative reported figure, and a missing or repeated statement reference. Takes the provider balance lock before the overlap check, which is what makes that check sound rather than racy.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "submit_agency_float_reconciliation(p_float_account_id uuid, p_statement_balance bigint, p_statement_ref text, p_date date, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4C agency RPC. Records one provider float till against the provider's statement balance, per till. Requires agency:reconcile with 42501 and refuses a till the caller's branch cannot see. Provider and branch come from the till's registration, never from the caller. Snapshots the system balance under the account lock.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "submit_agency_transaction(p_transaction_id uuid)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Moves a draft to awaiting_verification. Refuses a caller without agency:write with 42501. Posts nothing; the readiness gate refuses a provisional or inactive provider here.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -930,6 +1191,33 @@
     "transition_membership_to_policy(p_transition_id uuid, p_membership_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "update_agency_agent_line(p_float_account_id uuid, p_label text, p_line_msisdn text, p_agent_code text, p_notes text)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC. Edits an agent line's label, line number, agent code and notes. Refuses a caller without agency:providers with 42501, a line the caller's branch cannot see, and a closed line. The till name, ledger account, provider and branch are refused by the immutability trigger because the ledger account code encodes them.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "update_agency_transaction(p_transaction_id uuid, p_principal_amount bigint, p_customer_identifier text, p_customer_name text, p_provider_reference text, p_customer_fee bigint, p_commission_supplied bigint, p_description text, p_customer_fee_mode text, p_transacted_at timestamp with time zone)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Edits a draft only. Refuses a caller without agency:write with 42501, and refuses any status but draft, so a submitted transaction cannot be altered under the verifier. Phase 4E re-signed it for the fee mode and the provider timestamp, and dropped the old eight-argument signature so there is one overload.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "update_agency_transaction_reference(p_transaction_id uuid, p_new_reference text, p_reason text)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC. Corrects the provider reference on a posted transaction and writes no journal. Refuses a caller without agency:correct with 42501, and refuses a reference another transaction already claims.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -984,6 +1272,24 @@
     "validate_loan_for_approval(p_loan_id uuid)": {
       "classification": "A",
       "reason": "Guarded in 20261106000100. Thin authorized wrapper; the logic lives behind an internal name with no authenticated grant. Both directions asserted in tests/db/security-definer-surface.test.ts.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "verify_agency_float_trade(p_trade_id uuid, p_expected_revision integer)": {
+      "classification": "A",
+      "reason": "Phase 4E agency RPC, decision OD-7. The call that posts a pending float trade. Refuses a caller without agency:settlements with SQLSTATE 42501 via agency_actor(), a trade from another branch with 42501, the person who recorded it, a stale revision, and insufficient cash or float. Idempotent on an already-posted trade. Takes the provider balance lock — both branches in branch-id order on a cross-branch transfer — before the sorted account locks.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "verify_agency_transaction(p_transaction_id uuid, p_expected_revision integer)": {
+      "classification": "A",
+      "reason": "Phase 4B agency RPC, extended in Phase 4D. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 — which the verifier_not_submitter CHECK also refuses independently. The Phase 4D second argument is the revision the verifier reviewed: verification is refused when it is not the current one, and a call quoting no revision is refused once the figures changed after submission, so a manager cannot post a commission exception authorised behind a screen they had already loaded. Asserted in tests/db/agency-transaction-engine.test.ts and tests/db/agency-settlement.test.ts.",
       "surface": {
         "anon": false,
         "authenticated": true,

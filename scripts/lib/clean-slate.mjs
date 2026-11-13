@@ -10,7 +10,7 @@
  *
  * ## Why it is written this way
  *
- * There are 80 tables in `public` and 57 of them reference `profiles`, so a
+ * There are 93 tables in `public` and 68 of them reference `profiles`, so a
  * hand-written delete order would be wrong the first time somebody added a
  * table. Instead every table is classified into exactly one bucket, and the
  * procedure REFUSES TO RUN if a table in the database is not classified at
@@ -63,6 +63,14 @@ export const PRESERVE_WHOLE = [
   // Where the business operates, and its books' structure.
   'branches',
   'ledger_accounts',
+  // Agency Banking and Mobile Money configuration. The provider catalogue and
+  // the transaction types are written by migrations, and every agent line
+  // owns a float account in `ledger_accounts`, which is kept: emptying the
+  // lines would leave those accounts orphaned. With the journals gone each
+  // line's float reads zero, which is the true opening position.
+  'agency_service_providers',
+  'agency_transaction_types',
+  'agency_provider_float_accounts',
   // The three settings singletons.
   'company_settings',
   'business_settings',
@@ -208,10 +216,51 @@ export const TRUNCATE_TABLES = [
   'meeting_action_items',
   'meeting_fines',
   'meeting_fine_payments',
+  // --- agency banking and mobile money ----------------------------------
+  // Each is append-only against row DELETE, which TRUNCATE does not fire, so
+  // the demonstration rows can go with the books they posted to. Without
+  // `agency_transactions` here, `journal_entries` could not be truncated at
+  // all: PostgreSQL refuses a TRUNCATE while an unlisted table references it,
+  // whether or not that table holds a row.
+  'agency_transactions',
+  'agency_float_trades',
+  'agency_float_replenishments',
+  'agency_cash_reconciliations',
+  'agency_float_reconciliations',
+  'agency_commission_reconciliations',
+  'agency_commission_settlements',
+  'agency_commission_recoveries',
+  'agency_payable_settlements',
   // --- operational traces ------------------------------------------------
   'notifications',
   'notification_reads',
   'rate_limit_counters',
+];
+
+/**
+ * Immutable trails that are emptied only when they are already empty.
+ *
+ * `agency_transaction_audit_log` is append-only the way `audit_log` is: a
+ * statement-level trigger rejects TRUNCATE. Unlike `audit_log` it cannot
+ * simply be kept, because it references `agency_transactions`, which
+ * references `journal_entries` — so leaving it out of the TRUNCATE leaves the
+ * books impossible to empty, even on a database with no agency activity.
+ *
+ * So the rule is the one that keeps the guarantee: the trail is never erased.
+ * Inside the cleanup's transaction the table is locked ACCESS EXCLUSIVE, so
+ * nothing can be written to it, and counted. If it holds a single row the
+ * procedure refuses and nothing changes — that history needs a fresh project,
+ * exactly as the audit log does. Only when it is provably empty is its
+ * TRUNCATE guard set aside for the one statement and restored before commit.
+ * ALTER TABLE is transactional, so a failure anywhere rolls the guard back
+ * with everything else, and there is no moment at which it is off outside
+ * this transaction.
+ */
+export const EMPTY_APPEND_ONLY = [
+  {
+    table: 'agency_transaction_audit_log',
+    trigger: 'agency_transaction_audit_log_reject_truncate',
+  },
 ];
 
 /**
@@ -358,6 +407,7 @@ export function classify(actualTables) {
     ...PRESERVE_WHOLE,
     ...PRESERVE_PARTIAL.map((entry) => entry.table),
     ...TRUNCATE_TABLES,
+    ...EMPTY_APPEND_ONLY.map((entry) => entry.table),
     // Neutralised, not emptied and not preserved whole.
     'profiles',
   ]);
@@ -472,10 +522,15 @@ export async function runCleanSlate(db, { ownerProfileId, dryRun = true }) {
     throw new Error(lines.join('\n'));
   }
 
+  // Checked here so a dry run says so too; checked again under lock below,
+  // because a row could be written between this read and the execute.
+  await refuseNonEmptyAppendOnly(db, '');
+
   const before = await countBusinessRows(db);
+  const truncateTables = [...TRUNCATE_TABLES, ...EMPTY_APPEND_ONLY.map((e) => e.table)];
 
   if (dryRun) {
-    return { dryRun: true, owner, before, plan: { truncate: TRUNCATE_TABLES.length } };
+    return { dryRun: true, owner, before, plan: { truncate: truncateTables.length } };
   }
 
   // One transaction. A failure anywhere leaves the database as it was.
@@ -483,9 +538,21 @@ export async function runCleanSlate(db, { ownerProfileId, dryRun = true }) {
   try {
     // 1. The business rows, together, so the foreign keys between them are
     //    satisfied without CASCADE reaching anything unlisted.
+    //    The immutable trails first: locked, proven empty, and only then is
+    //    their TRUNCATE guard set aside for this one statement.
+    for (const { table } of EMPTY_APPEND_ONLY) {
+      await db.query(`lock table public.${table} in access exclusive mode`);
+    }
+    await refuseNonEmptyAppendOnly(db, ' Nothing was changed.');
+    for (const { table, trigger } of EMPTY_APPEND_ONLY) {
+      await db.query(`alter table public.${table} disable trigger ${trigger}`);
+    }
     await db.query(
-      `truncate table ${TRUNCATE_TABLES.map((t) => `public.${t}`).join(', ')}`,
+      `truncate table ${truncateTables.map((t) => `public.${t}`).join(', ')}`,
     );
+    for (const { table, trigger } of EMPTY_APPEND_ONLY) {
+      await db.query(`alter table public.${table} enable trigger ${trigger}`);
+    }
 
     // 2. The demonstration actors' own references on preserved rows.
     for (const { table, column } of NULL_PRESERVED_ACTOR_REFERENCES) {
@@ -545,6 +612,28 @@ export async function runCleanSlate(db, { ownerProfileId, dryRun = true }) {
 
   const after = await countBusinessRows(db);
   return { dryRun: false, owner, before, after, residue: await describeResidue(db) };
+}
+
+/**
+ * Refuse while any immutable trail in EMPTY_APPEND_ONLY holds a row.
+ *
+ * @param {{ query: (sql: string, params?: readonly unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }} db
+ * @param {string} suffix appended to the message
+ */
+async function refuseNonEmptyAppendOnly(db, suffix) {
+  for (const { table } of EMPTY_APPEND_ONLY) {
+    const { rows } = await db.query(`select count(*) as n from public.${table}`);
+    const n = Number(rows[0]?.n ?? 0);
+    if (n > 0) {
+      throw new Error(
+        `public.${table} holds ${n} entr${n === 1 ? 'y' : 'ies'}: it is an ` +
+          'append-only audit trail and the clean slate never erases one. A ' +
+          'database with recorded agency activity can only be started afresh ' +
+          'as a new project.' +
+          suffix,
+      );
+    }
+  }
 }
 
 /**

@@ -253,9 +253,11 @@ test.describe('a new loan', () => {
 
     await page.getByRole('button', { name: /the money has been handed over/i }).click();
 
-    await expect(page.getByText(/active|disbursed/i).first()).toBeVisible({
-      timeout: 20_000,
-    });
+    // Again the status description rather than a regex: "active" and
+    // "disbursed" both appear in explanatory copy elsewhere on this page.
+    await expect(
+      page.getByText('Disbursed. The borrower owes the contractual total.'),
+    ).toBeVisible({ timeout: 20_000 });
     await expectNoErrorBoundary(page);
 
     // --- the schedule the database generated ----------------------------

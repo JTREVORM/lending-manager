@@ -214,6 +214,49 @@ export const ROUTES = {
   reconciliation: '/finance/reconciliation',
   newReconciliation: '/finance/reconciliation/new',
   ledger: '/finance/ledger',
+
+  /**
+   * Phase 4D. Agency banking and digital payments.
+   *
+   * Its own section rather than a corner of `/finance`, because it is a
+   * different business: the money belongs to a provider or a customer until
+   * it is settled, and the people who run a counter all day should not have
+   * to walk through the company's own cash book to reach it. The accounting
+   * still lands in the same ledger, which is why every screen here reads the
+   * Phase 4C views rather than totalling anything itself.
+   */
+  agency: '/agency',
+  agencyRecord: '/agency/record',
+  agencyPending: '/agency/pending',
+  agencyHistory: '/agency/history',
+  agencyFloat: '/agency/float',
+  agencyReplenish: '/agency/float/replenish',
+  agencyCommission: '/agency/commission',
+  agencyPayables: '/agency/payables',
+  agencyCashCount: '/agency/reconciliation/cash',
+  agencyFloatCount: '/agency/reconciliation/float',
+  agencyReports: '/agency/reports',
+  agencyExceptions: '/agency/exceptions',
+  agencyProviders: '/agency/providers',
+  /**
+   * Phase 4E. The Mobile Money screens.
+   *
+   * `/agency/money` is the provider-and-line view of the same postings the
+   * rest of the module already shows: it reads the Phase 4E views and adds
+   * the float trades, the per-line commission and the statement
+   * reconciliations. It is deliberately not a second transaction counter —
+   * a deposit or a withdrawal is still recorded at `/agency/record`, by the
+   * engine that was already there.
+   *
+   * `/agency/lines` is the Owner's administration of the lines themselves:
+   * opening one, correcting its identifiers, suspending it, closing it, and
+   * the two commercial controls (the transaction ceiling and where the
+   * commission figure comes from). It needs `agency:providers`, the same
+   * capability as the provider register, because that is what it is — the
+   * configuration behind the counter rather than the counter.
+   */
+  agencyMoney: '/agency/money',
+  agencyLines: '/agency/lines',
   /**
    * Phase 18. The trial balance.
    *

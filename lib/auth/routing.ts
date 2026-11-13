@@ -164,6 +164,27 @@ const ROUTE_PERMISSIONS: readonly {
   { prefix: ROUTES.reconciliation, permission: 'reconciliation:view' },
   { prefix: ROUTES.ledger, permission: 'ledger:view' },
   { prefix: ROUTES.finance, permission: 'ledger:view' },
+  // Phase 4D. Agency banking. Listed longest-prefix first, as everywhere in
+  // this table, so `/agency/record` is not swallowed by `/agency`. The four
+  // that need more than `agency:reports` are the ones that *do* something:
+  // recording, reconciling and configuring. Verification and reversal have no
+  // route of their own - they are actions on a transaction's own page, where
+  // the control is rendered or explained according to the capability.
+  { prefix: ROUTES.agencyRecord, permission: 'agency:write' },
+  { prefix: ROUTES.agencyCashCount, permission: 'agency:reconcile' },
+  { prefix: ROUTES.agencyFloatCount, permission: 'agency:reconcile' },
+  { prefix: ROUTES.agencyReplenish, permission: 'agency:settlements' },
+  { prefix: ROUTES.agencyProviders, permission: 'agency:providers' },
+  { prefix: ROUTES.agencyLines, permission: 'agency:providers' },
+  { prefix: ROUTES.agencyMoney, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyPending, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyHistory, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyFloat, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyCommission, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyPayables, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyReports, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyExceptions, permission: 'agency:reports' },
+  { prefix: ROUTES.agency, permission: 'agency:reports' },
   { prefix: ROUTES.portal, permission: 'portal:view' },
   { prefix: ROUTES.account, permission: 'account:view' },
   // The dashboard is last: '/' prefixes everything, so it must only match

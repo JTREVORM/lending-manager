@@ -88,7 +88,18 @@ export type RateLimitedAction =
   | 'beneficiary.manage'
   | 'beneficiary.verify'
   | 'meeting.manage'
-  | 'meeting.attendance';
+  | 'meeting.attendance'
+  // Polytos Phase 4D. Agency banking: the counter, settlement and counting.
+  | 'agency.record'
+  | 'agency.lifecycle'
+  | 'agency.verify'
+  | 'agency.reverse'
+  | 'agency.settlement'
+  | 'agency.replenish'
+  | 'agency.reconcile'
+  | 'agency.reconcile_decision'
+  | 'agency.float_trade'
+  | 'agency.configure';
 
 export interface RateLimitRule {
   /** Requests permitted inside one window. */
@@ -355,6 +366,82 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 60,
     onStoreFailure: 'open',
     message: 'Attendance is being marked faster than expected. Try again in a moment.',
+  },
+  // --- Polytos Phase 4D: agency banking ------------------------------------
+  //
+  // The counter is the busiest surface in the business: a mobile money agent
+  // records a transaction every minute or two at a market branch, so the
+  // recording limit is generous and fails *open* - refusing a genuine
+  // customer at the counter because a rate-limit store is unreachable would
+  // be worse than the abuse it prevents, and the database still refuses a
+  // duplicate idempotency key whatever this allows.
+  //
+  // The decisions are different. Verification posts to the ledger and a
+  // reversal unposts; both fail *closed*, because an unmetered loop over
+  // either is a financial event rather than a busy counter.
+  'agency.record': {
+    limit: 60,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message:
+      'Transactions are being recorded faster than expected. Try again in a moment.',
+  },
+  'agency.lifecycle': {
+    limit: 60,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Too many changes at once. Try again in a moment.',
+  },
+  'agency.verify': {
+    limit: 40,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many verifications at once. Wait a moment and try again.',
+  },
+  'agency.reverse': {
+    limit: 10,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many reversals at once. Wait a moment and try again.',
+  },
+  'agency.settlement': {
+    limit: 20,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many settlements at once. Wait a moment and try again.',
+  },
+  'agency.replenish': {
+    limit: 20,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many float top-ups at once. Wait a moment and try again.',
+  },
+  'agency.reconcile': {
+    limit: 20,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Too many counts at once. Try again in a moment.',
+  },
+  'agency.reconcile_decision': {
+    limit: 20,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many approvals at once. Wait a moment and try again.',
+  },
+  'agency.float_trade': {
+    // Its own bucket rather than sharing agency.replenish: a cashier
+    // recording trades and a manager topping float up are different people
+    // doing different work, and one should not exhaust the other's budget.
+    limit: 20,
+    windowSeconds: 60,
+    onStoreFailure: 'closed',
+    message: 'Too many float trades at once. Wait a moment and try again.',
+  },
+  'agency.configure': {
+    limit: 20,
+    windowSeconds: 300,
+    onStoreFailure: 'closed',
+    message: 'Too many configuration changes. Wait a few minutes and try again.',
   },
   'savings.reverse': {
     limit: 20,

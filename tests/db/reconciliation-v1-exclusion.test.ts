@@ -1,7 +1,7 @@
 /**
  * A cash difference is not closed by the person who counted the drawer.
  *
- * Before 20261112000100 `approve_reconciliation` checked the
+ * Before 20261112000200 `approve_reconciliation` checked the
  * `reconciliation:approve` capability and nothing else, so the officer who
  * performed a count could approve it — and that approval posts the variance
  * to 5950 Cash Over and Short. There were two routes: approve your own
@@ -168,7 +168,7 @@ describeDb('cash reconciliation under the V1 restriction', () => {
   it('still writes nothing off when the review setting is turned OFF', async () => {
     // The setting lives on `finance_settings`, which the same Owner may edit,
     // so a control that depended on it could be removed by the person it
-    // constrains. Since 20261112000100 `submit_reconciliation` approves
+    // constrains. Since 20261112000200 `submit_reconciliation` approves
     // nothing at all, and this asserts the setting can no longer buy anybody
     // a self-closed variance.
     await setReview(false);

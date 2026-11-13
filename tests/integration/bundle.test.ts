@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 635 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 676 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -210,14 +210,92 @@ describeBundle('the browser bundle', () => {
     // headroom than the earlier raises, deliberately, because a phase that
     // adds 84 KB should not also be handed room for the next one.
     //
-    // It is not what a page costs. No page loads all seventy: a measured
+    // ## 635 → 670, for Polytos Phase 4D agency banking
+    //
+    // Fourteen screens for 34 KB, which is the smallest per-screen cost of
+    // any phase that has raised this ceiling - and the reason is worth
+    // stating, because it is the thing to hold on to rather than the number.
+    //
+    //   - **No new dependency.** `package.json` is untouched, and the two
+    //     assertions that actually catch a library creeping in both pass
+    //     unchanged: the chart, date and utility list above, and the 120 KB
+    //     largest-chunk ceiling. The largest chunk *fell*, 72 KB to 71 KB.
+    //   - **Seven chunks for fourteen screens.** 97 chunks became 104,
+    //     because seven of the fourteen routes render no client component of
+    //     their own: the dashboard, the pending queue, the transaction
+    //     history, the float balances, the reports, the exceptions list and
+    //     the provider configuration are Server Components that read a view
+    //     and render a table. The other seven take input - the recording
+    //     form, the lifecycle controls and commission exception on one
+    //     transaction, the float top-up, the two settlement screens and the
+    //     two reconciliation screens - and only those cross into the
+    //     browser.
+    //
+    //     (An earlier draft of this comment said nine. It was counted from
+    //     memory rather than from the import graph, and the import graph
+    //     says seven. Every page still carries the shell's own JavaScript,
+    //     which is what makes "ships no JavaScript" the wrong phrase for
+    //     any of them.)
+    //   - **Just under five kilobytes a chunk.** Every one is built from the
+    //     same `DataTable`, `Money`, `Field` and `Alert` primitives as the
+    //     rest of the application. A register that carries a whole form
+    //     inside a table cell costs about what a form costs, because it is
+    //     the same form.
+    //   - **What a page costs did not move, and is asserted on this section
+    //     too.** Measured cold on a 390px phone against this build:
+    //     `/agency` 167 KB of JavaScript, `/agency/record` 172 KB,
+    //     `/agency/reconciliation/cash` 178 KB - the same band as
+    //     `/payments` at 178 KB, which is the screen this application has
+    //     always been measured by. `/agency`, `/agency/record`,
+    //     `/agency/pending`, `/agency/reconciliation/cash` and
+    //     `/agency/reports` joined the budgeted pages in
+    //     `tests/e2e/specs/performance.spec.ts`, against the same unchanged
+    //     ceilings every other page is held to. Raising a total without
+    //     putting the new routes under the per-page budget would be raising
+    //     it on trust.
+    //
+    // 670 leaves five kilobytes over the measured 665 - tighter again than
+    // the last raise, deliberately. A phase that needs room should have to
+    // make its own case here, as this one did.
+    //
+    // ## 670 → 676, for Polytos Phase 4E Mobile Money
+    //
+    // Five screens for 6 KB, measured both ways on the same machine: the
+    // build with the five routes removed and nothing else changed is 104
+    // chunks and 665 KB, and the build with them is 107 chunks and 671 KB.
+    //
+    //   - **No new dependency,** again. `package.json` is untouched, and the
+    //     largest chunk did not move: 72 KB before and 72 KB after, well
+    //     inside the 120 KB ceiling above.
+    //   - **Three chunks for five routes.** `/agency/money` renders no
+    //     client component of its own — it is a Server Component reading two
+    //     views into tables — and the other four share the three new chunks
+    //     between them, because the float trade form, the commission forms
+    //     and the agent-line forms are built from the same `Field`, `Alert`,
+    //     `Card`, `DataTable` and `Money` primitives as the Phase 4D screens
+    //     and import nothing else.
+    //   - **Two kilobytes a chunk.** Lower than Phase 4D's five, for the
+    //     same reason: a register carrying three forms inside a table cell
+    //     costs what one form costs, because it is the same form.
+    //   - **The new routes are under the per-page budget.**
+    //     `/agency/money/DEMO_AIRTEL` and `/agency/lines` joined the
+    //     budgeted pages in `tests/e2e/specs/performance.spec.ts`, against
+    //     the same unchanged ceilings every other page is held to. Raising a
+    //     total without putting the new routes under a per-page budget would
+    //     be raising it on trust — the rule the last three raises set, and
+    //     the one that makes this number mean anything.
+    //
+    // 676 leaves five kilobytes over the measured 671, the same headroom the
+    // last raise left. A phase that needs room makes its own case here.
+    //
+    // It is not what a page costs. No page loads all of them: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
     // `tests/e2e/specs/performance.spec.ts`, because only a browser knows
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(635);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(676);
   });
 
   it('emits no source map for the browser', () => {

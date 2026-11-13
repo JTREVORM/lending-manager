@@ -1,0 +1,2527 @@
+/**
+ * Phase 4B: the agency transaction engine, proved by moving money.
+ *
+ * ## What this file asserts, and why it asserts it this way
+ *
+ * Phase 4A proved the *shape* of an agency transaction — what a row may and
+ * may not say. This proves the *posting*: that verifying a transaction writes
+ * the journal the architecture specifies, leg for leg, for every one of the
+ * nine services, and that nothing else can write one.
+ *
+ * Every posted case is asserted on its exact lines rather than on a total. A
+ * total can be right while the directions are wrong — a deposit booked as a
+ * withdrawal balances perfectly and is still a lie about where the money went
+ * — and the directions are precisely what the architecture had wrong for one
+ * case (see "bank agency withdrawal" below).
+ *
+ * ## Synthetic rates, deliberately
+ *
+ * None of the nine seeded providers is used for posting. They ship provisional
+ * and inactive, and that is the point of them. The providers here are created
+ * by this file with **invented, round, obviously-synthetic rates** — 150bp,
+ * 500 fixed, an explicit zero — so that no figure in this suite could ever be
+ * mistaken for a negotiated commercial term. Real terms are open decisions C
+ * and F.
+ */
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import {
+  asUser,
+  asUserCommitted,
+  createTestUser,
+  type TestUser,
+} from '../helpers/auth-fixtures';
+import {
+  closePool,
+  expectError,
+  getClient,
+  hasDatabase,
+  query,
+  queryOne,
+  skipReason,
+} from '../helpers/db';
+
+const describeDb = hasDatabase ? describe : describe.skip;
+if (!hasDatabase) {
+  describe('agency transaction engine', () => {
+    it.skip(`skipped - ${skipReason}`, () => undefined);
+  });
+}
+
+/** One journal line, as the assertions compare them. */
+interface Line {
+  readonly code: string;
+  readonly debit: number;
+  readonly credit: number;
+}
+
+/** A service under test: its provider, its operation, and its till. */
+interface Service {
+  readonly providerId: string;
+  readonly typeId: string;
+  readonly tillId: string | null;
+  readonly floatCode: string | null;
+}
+
+describeDb('Phase 4B — agency transaction engine', () => {
+  let owner: TestUser;
+  let manager: TestUser;
+  let secretary: TestUser;
+  let secretary2: TestUser;
+  let borrower: TestUser;
+  let suspended: TestUser;
+  let forcedPassword: TestUser;
+
+  let branchA: string;
+  let branchB: string;
+  let cashCode: string;
+
+  let mtnDeposit: Service;
+  let mtnWithdrawal: Service;
+  let airtelDeposit: Service;
+  let airtelWithdrawal: Service;
+  let bankDeposit: Service;
+  let bankWithdrawal: Service;
+  let uedcl: Service;
+  let nwsc: Service;
+  let dstv: Service;
+  let gotv: Service;
+  let lyca: Service;
+  let school: Service;
+
+  /** Read the lines of a journal entry, in posting order. */
+  async function linesOf(entryId: string): Promise<Line[]> {
+    const rows = await query<{ code: string; debit: string; credit: string }>(
+      `select a.code, l.debit::text, l.credit::text
+         from public.journal_lines l
+         join public.ledger_accounts a on a.id = l.account_id
+        where l.entry_id = $1 order by l.line_number`,
+      [entryId],
+    );
+    return rows.map((r) => ({
+      code: r.code,
+      debit: Number(r.debit),
+      credit: Number(r.credit),
+    }));
+  }
+
+  /** A ledger account's balance, signed by its normal side. */
+  async function balanceOf(code: string): Promise<number> {
+    const r = await queryOne<{ balance: string }>(
+      `select coalesce(b.balance, 0)::text as balance
+         from public.ledger_accounts a
+         left join public.ledger_account_balances b on b.account_id = a.id
+        where a.code = $1`,
+      [code],
+    );
+    return Number(r.balance);
+  }
+
+  /**
+   * Record, submit and verify one transaction, as two different people.
+   *
+   * The separation of duties is real throughout this file: the secretary
+   * records and the manager verifies, because nothing else is permitted.
+   */
+  async function postOne(
+    service: Service,
+    principal: number,
+    opts: {
+      reference?: string;
+      fee?: number;
+      supplied?: number | null;
+      identifier?: string;
+      name?: string;
+      recorder?: TestUser;
+      verifier?: TestUser;
+    } = {},
+  ): Promise<{ txId: string; entryId: string }> {
+    const recorder = opts.recorder ?? secretary;
+    const verifier = opts.verifier ?? manager;
+
+    // `asUserCommitted` rather than `asUser`: the lifecycle spans two people,
+    // so each step must persist for the next to see it, and `asUser` rolls
+    // back after every call. It runs as the table owner, so RLS is not
+    // exercised here — the policies are asserted separately, with `asUser`.
+    // The capability checks *are* exercised, because the JWT claim is set and
+    // `agency_actor()` reads it.
+    const created = await asUserCommitted(recorder, [
+      {
+        sql: `select public.create_agency_transaction($1, $2, $3, $4, $5, $6, $7, $8) as id`,
+        params: [
+          service.typeId,
+          principal,
+          service.tillId,
+          opts.identifier ?? '+256770000001',
+          opts.name ?? 'Test Customer',
+          opts.reference ?? `REF-${Math.random().toString(36).slice(2, 12)}`,
+          opts.fee ?? 0,
+          opts.supplied ?? null,
+        ],
+      },
+    ]);
+    expect(created.ok, created.message).toBe(true);
+    const txId = (created.rows[0] as { id: string }).id;
+
+    const submitted = await asUserCommitted(recorder, [
+      { sql: `select public.submit_agency_transaction($1)`, params: [txId] },
+    ]);
+    expect(submitted.ok, submitted.message).toBe(true);
+
+    const verified = await asUserCommitted(verifier, [
+      { sql: `select public.verify_agency_transaction($1) as entry`, params: [txId] },
+    ]);
+    expect(verified.ok, verified.message).toBe(true);
+    const entryId = (verified.rows[0] as { entry: string }).entry;
+
+    return { txId, entryId };
+  }
+
+  /** Create a confirmed, active provider with a synthetic commission basis. */
+  async function makeService(opts: {
+    code: string;
+    name: string;
+    category: string;
+    floatModel: 'provider_float' | 'cash_payable';
+    incomeCode: string;
+    payableCode?: string;
+    model: 'deferred' | 'immediate';
+    rateBps?: number;
+    fixed?: number;
+    direction: 'deposit' | 'withdrawal' | 'payment';
+    typeCode: string;
+    maxSingle?: number;
+    branch?: string;
+  }): Promise<Service> {
+    const provider = await queryOne<{ id: string }>(
+      `insert into public.agency_service_providers
+         (code, name, category, float_model, payable_account_id, income_account_id,
+          commission_model, commission_rate_bps, commission_fixed,
+          is_provisional, is_active)
+       values ($1, $2, $3, $4,
+               (select id from public.ledger_accounts where code = $5),
+               (select id from public.ledger_accounts where code = $6),
+               $7, $8, $9, false, true)
+       on conflict (code) do update set name = excluded.name
+       returning id`,
+      [
+        opts.code,
+        opts.name,
+        opts.category,
+        opts.floatModel,
+        opts.payableCode ?? null,
+        opts.incomeCode,
+        opts.model,
+        opts.rateBps ?? null,
+        opts.fixed ?? null,
+      ],
+    );
+
+    const type = await queryOne<{ id: string }>(
+      `insert into public.agency_transaction_types
+         (provider_id, code, name, direction, max_single_transaction)
+       values ($1, $2, $3, $4, $5)
+       on conflict (provider_id, code) do update set name = excluded.name
+       returning id`,
+      [
+        provider.id,
+        opts.typeCode,
+        `${opts.name} ${opts.typeCode}`,
+        opts.direction,
+        opts.maxSingle ?? 50_000_000,
+      ],
+    );
+
+    let tillId: string | null = null;
+    let floatCode: string | null = null;
+    if (opts.floatModel === 'provider_float') {
+      const till = await queryOne<{ id: string }>(
+        `select public.ensure_agency_float_account($1, $2) as id`,
+        [provider.id, opts.branch ?? branchA],
+      );
+      tillId = till.id;
+      const acct = await queryOne<{ code: string }>(
+        `select a.code from public.agency_provider_float_accounts f
+           join public.ledger_accounts a on a.id = f.ledger_account_id
+          where f.id = $1`,
+        [tillId],
+      );
+      floatCode = acct.code;
+    }
+
+    return { providerId: provider.id, typeId: type.id, tillId, floatCode };
+  }
+
+  /** A second operation on a provider that already exists. */
+  async function addType(
+    base: Service,
+    typeCode: string,
+    name: string,
+    direction: 'deposit' | 'withdrawal' | 'payment',
+  ): Promise<Service> {
+    const row = await queryOne<{ id: string }>(
+      `insert into public.agency_transaction_types
+         (provider_id, code, name, direction, max_single_transaction)
+       values ($1, $2, $3, $4, 50000000)
+       on conflict (provider_id, code) do update set name = excluded.name
+       returning id`,
+      [base.providerId, typeCode, name, direction],
+    );
+    return { ...base, typeId: row.id };
+  }
+
+  /** Put money into an account, the way the ledger records capital. */
+  async function fund(code: string, amount: number): Promise<void> {
+    await query(
+      `select public.post_journal(
+          (select id from public.branches order by branch_code limit 1),
+          current_date, $3, 'opening_balance', null, null, null,
+          jsonb_build_array(
+            jsonb_build_object('account_id',
+              (select id from public.ledger_accounts where code = $1),
+              'debit', $2::bigint, 'credit', 0),
+            jsonb_build_object('account_id', public.ledger_account_by_code('3000'),
+              'debit', 0, 'credit', $2::bigint)),
+          now(),
+          (select p.id from public.profiles p
+             join public.user_roles r on r.profile_id = p.id
+            where r.role_key = 'owner_admin' order by p.created_at limit 1),
+          'test fixture')`,
+      [code, amount, `Fixture: fund ${code}`],
+    );
+  }
+
+  /** A committed draft, recorded by `recorder`. */
+  async function makeDraft(
+    service: Service,
+    principal = 50_000,
+    opts: {
+      reference?: string;
+      recorder?: TestUser;
+      fee?: number;
+      supplied?: number | null;
+    } = {},
+  ): Promise<string> {
+    const recorder = opts.recorder ?? secretary;
+    const r = await asUserCommitted(recorder, [
+      {
+        sql: `select public.create_agency_transaction($1, $2, $3, $4, $5, $6, $7, $8) as id`,
+        params: [
+          service.typeId,
+          principal,
+          service.tillId,
+          '+256770000002',
+          'Test Customer',
+          opts.reference ?? `D-${Math.random().toString(36).slice(2, 12)}`,
+          opts.fee ?? 0,
+          opts.supplied ?? null,
+        ],
+      },
+    ]);
+    expect(r.ok, r.message).toBe(true);
+    return (r.rows[0] as { id: string }).id;
+  }
+
+  /** A committed draft that has been submitted for verification. */
+  async function makeSubmitted(
+    service: Service,
+    principal = 50_000,
+    opts: { reference?: string; recorder?: TestUser; supplied?: number | null } = {},
+  ): Promise<string> {
+    const id = await makeDraft(service, principal, opts);
+    const r = await asUserCommitted(opts.recorder ?? secretary, [
+      { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+    ]);
+    expect(r.ok, r.message).toBe(true);
+    return id;
+  }
+
+  /** The audit trail for one transaction, oldest first. */
+  async function auditOf(txId: string): Promise<string[]> {
+    const rows = await query<{ action: string }>(
+      `select action from public.agency_transaction_audit_log
+        where transaction_id = $1 order by created_at, action`,
+      [txId],
+    );
+    return rows.map((r) => r.action);
+  }
+
+  beforeAll(async () => {
+    owner = await createTestUser('owner_admin');
+    manager = await createTestUser('manager');
+    secretary = await createTestUser('secretary_treasurer');
+    secretary2 = await createTestUser('secretary_treasurer');
+    borrower = await createTestUser('client');
+    suspended = await createTestUser('secretary_treasurer', 'suspended');
+    forcedPassword = await createTestUser('secretary_treasurer');
+    await query(`update public.profiles set must_change_password = true where id = $1`, [
+      forcedPassword.profileId,
+    ]);
+
+    branchA = (
+      await queryOne<{ id: string }>(
+        `select id from public.branches order by branch_code limit 1`,
+      )
+    ).id;
+    branchB = (
+      await queryOne<{ id: string }>(
+        `insert into public.branches (branch_code, name, location, status, opened_on)
+         values ('BR9902', 'Engine Test Branch', 'Testing', 'active', current_date)
+         on conflict (branch_code) do update set name = excluded.name
+         returning id`,
+      )
+    ).id;
+
+    // Everyone who records or verifies belongs to branch A.
+    await query(`update public.profiles set branch_id = $1 where id = any($2::uuid[])`, [
+      branchA,
+      [
+        owner.profileId,
+        manager.profileId,
+        secretary.profileId,
+        secretary2.profileId,
+        suspended.profileId,
+        forcedPassword.profileId,
+      ],
+    ]);
+
+    cashCode = (
+      await queryOne<{ code: string }>(
+        `select a.code from public.ledger_accounts a
+          where a.branch_id = $1 and a.cash_kind = 'cash_at_hand'`,
+        [branchA],
+      )
+    ).code;
+
+    // --- the nine services, with synthetic rates -------------------------
+    mtnDeposit = await makeService({
+      code: 'TMTN',
+      name: 'Test MoMo',
+      category: 'mobile_money',
+      floatModel: 'provider_float',
+      incomeCode: '4510',
+      model: 'deferred',
+      rateBps: 150,
+      direction: 'deposit',
+      typeCode: 'DEPOSIT',
+    });
+    mtnWithdrawal = await addType(
+      mtnDeposit,
+      'WITHDRAWAL',
+      'Test MoMo WITHDRAWAL',
+      'withdrawal',
+    );
+
+    airtelDeposit = await makeService({
+      code: 'TAIRTEL',
+      name: 'Test Airtel',
+      category: 'mobile_money',
+      floatModel: 'provider_float',
+      incomeCode: '4510',
+      model: 'deferred',
+      fixed: 500,
+      direction: 'deposit',
+      typeCode: 'DEPOSIT',
+    });
+    airtelWithdrawal = await addType(
+      airtelDeposit,
+      'WITHDRAWAL',
+      'Test Airtel WITHDRAWAL',
+      'withdrawal',
+    );
+
+    bankDeposit = await makeService({
+      code: 'TSTANBIC',
+      name: 'Test Bank Agency',
+      category: 'agency_banking',
+      floatModel: 'cash_payable',
+      payableCode: '2220',
+      incomeCode: '4520',
+      model: 'deferred',
+      rateBps: 200,
+      direction: 'deposit',
+      typeCode: 'DEPOSIT',
+    });
+    bankWithdrawal = await addType(
+      bankDeposit,
+      'WITHDRAWAL',
+      'Test Bank WITHDRAWAL',
+      'withdrawal',
+    );
+
+    uedcl = await makeService({
+      code: 'TUEDCL',
+      name: 'Test Yaka',
+      category: 'utility',
+      floatModel: 'provider_float',
+      incomeCode: '4530',
+      model: 'deferred',
+      fixed: 500,
+      direction: 'payment',
+      typeCode: 'YAKA',
+    });
+    nwsc = await makeService({
+      code: 'TNWSC',
+      name: 'Test Water',
+      category: 'utility',
+      floatModel: 'provider_float',
+      incomeCode: '4530',
+      model: 'deferred',
+      rateBps: 100,
+      direction: 'payment',
+      typeCode: 'WATER',
+    });
+    dstv = await makeService({
+      code: 'TDSTV',
+      name: 'Test DStv',
+      category: 'tv_subscription',
+      floatModel: 'provider_float',
+      incomeCode: '4550',
+      model: 'deferred',
+      rateBps: 300,
+      direction: 'payment',
+      typeCode: 'SUBSCRIPTION',
+    });
+    gotv = await makeService({
+      code: 'TGOTV',
+      name: 'Test GOtv',
+      category: 'tv_subscription',
+      floatModel: 'provider_float',
+      incomeCode: '4550',
+      model: 'deferred',
+      fixed: 1000,
+      direction: 'payment',
+      typeCode: 'SUBSCRIPTION',
+    });
+    lyca = await makeService({
+      code: 'TLYCA',
+      name: 'Test Airtime',
+      category: 'airtime_data',
+      floatModel: 'provider_float',
+      incomeCode: '4560',
+      model: 'immediate',
+      rateBps: 300,
+      direction: 'payment',
+      typeCode: 'AIRTIME',
+    });
+    school = await makeService({
+      code: 'TSCHOOL',
+      name: 'Test School',
+      category: 'school_fees',
+      floatModel: 'cash_payable',
+      payableCode: '2210',
+      incomeCode: '4540',
+      model: 'deferred',
+      fixed: 0,
+      direction: 'payment',
+      typeCode: 'FEES',
+    });
+
+    // Fund the till and every float account generously, so a refusal in this
+    // suite is never an accident of an empty balance.
+    await fund(cashCode, 500_000_000);
+    const everyService = [
+      mtnDeposit,
+      airtelDeposit,
+      bankDeposit,
+      uedcl,
+      nwsc,
+      dstv,
+      gotv,
+      lyca,
+      school,
+    ];
+    for (const s of everyService) {
+      if (s.floatCode !== null) await fund(s.floatCode, 200_000_000);
+    }
+  });
+
+  afterAll(async () => {
+    // Deliberately no `deleteTestUsers()`. It deletes the journal entries its
+    // fixtures wrote, and `agency_transactions.journal_entry_id` is ON DELETE
+    // RESTRICT, so the database refuses — correctly: a posted transaction may
+    // not lose the journal that proves it. The transactions cannot be removed
+    // first either, because the table is append-only by trigger.
+    //
+    // Nothing leaks as a result. This project has its own `globalSetup`, which
+    // rebuilds the database from the migrations before the suite runs, so the
+    // fixtures exist only for this run. The same reasoning is why the suite
+    // has a project of its own at all.
+    await closePool();
+  });
+
+  // =========================================================================
+  describe('journal by service type', () => {
+    it('MTN MoMo deposit: cash in, float out, commission accrued', async () => {
+      const { entryId } = await postOne(mtnDeposit, 100_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 100_000, credit: 0 },
+        { code: mtnDeposit.floatCode, debit: 0, credit: 100_000 },
+        { code: '1310', debit: 1_500, credit: 0 },
+        { code: '4510', debit: 0, credit: 1_500 },
+      ]);
+    });
+
+    it('MTN MoMo withdrawal: float in, cash out', async () => {
+      const { entryId } = await postOne(mtnWithdrawal, 100_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: mtnWithdrawal.floatCode, debit: 100_000, credit: 0 },
+        { code: cashCode, debit: 0, credit: 100_000 },
+        { code: '1310', debit: 1_500, credit: 0 },
+        { code: '4510', debit: 0, credit: 1_500 },
+      ]);
+    });
+
+    it('Airtel Money deposit and withdrawal, on a fixed commission', async () => {
+      const dep = await postOne(airtelDeposit, 70_000);
+      expect(await linesOf(dep.entryId)).toEqual([
+        { code: cashCode, debit: 70_000, credit: 0 },
+        { code: airtelDeposit.floatCode, debit: 0, credit: 70_000 },
+        { code: '1310', debit: 500, credit: 0 },
+        { code: '4510', debit: 0, credit: 500 },
+      ]);
+
+      const wit = await postOne(airtelWithdrawal, 70_000);
+      expect(await linesOf(wit.entryId)).toEqual([
+        { code: airtelWithdrawal.floatCode, debit: 70_000, credit: 0 },
+        { code: cashCode, debit: 0, credit: 70_000 },
+        { code: '1310', debit: 500, credit: 0 },
+        { code: '4510', debit: 0, credit: 500 },
+      ]);
+    });
+
+    it('bank agency deposit: cash in, payable up', async () => {
+      const { entryId } = await postOne(bankDeposit, 500_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 500_000, credit: 0 },
+        { code: '2220', debit: 0, credit: 500_000 },
+        { code: '1310', debit: 10_000, credit: 0 },
+        { code: '4520', debit: 0, credit: 10_000 },
+      ]);
+    });
+
+    it('bank agency withdrawal: payable DOWN, cash out — the direction the spec had wrong', async () => {
+      // §8.2's cash_payable branch posts "Dr Cash, Cr Payable" regardless of
+      // direction. For a withdrawal that is backwards: the customer receives
+      // cash and the liability must fall. Posted the specification's way, a
+      // deposit-and-withdrawal pair would credit 2220 twice and show the
+      // business owing a bank money it had just handed back.
+      const before = await balanceOf('2220');
+      const { entryId } = await postOne(bankWithdrawal, 300_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: '2220', debit: 300_000, credit: 0 },
+        { code: cashCode, debit: 0, credit: 300_000 },
+        { code: '1310', debit: 6_000, credit: 0 },
+        { code: '4520', debit: 0, credit: 6_000 },
+      ]);
+      // The liability really fell, by exactly the principal.
+      expect(await balanceOf('2220')).toBe(before - 300_000);
+    });
+
+    it('UEDCL Yaka payment: cash in, float out, fixed commission', async () => {
+      const { entryId } = await postOne(uedcl, 50_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 50_000, credit: 0 },
+        { code: uedcl.floatCode, debit: 0, credit: 50_000 },
+        { code: '1310', debit: 500, credit: 0 },
+        { code: '4530', debit: 0, credit: 500 },
+      ]);
+    });
+
+    it('NWSC water payment: 100bp of 80,000 is 800', async () => {
+      const { entryId } = await postOne(nwsc, 80_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 80_000, credit: 0 },
+        { code: nwsc.floatCode, debit: 0, credit: 80_000 },
+        { code: '1310', debit: 800, credit: 0 },
+        { code: '4530', debit: 0, credit: 800 },
+      ]);
+    });
+
+    it('DStv subscription: 300bp of 45,000 is 1,350', async () => {
+      const { entryId } = await postOne(dstv, 45_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 45_000, credit: 0 },
+        { code: dstv.floatCode, debit: 0, credit: 45_000 },
+        { code: '1310', debit: 1_350, credit: 0 },
+        { code: '4550', debit: 0, credit: 1_350 },
+      ]);
+    });
+
+    it('GOtv subscription: a fixed 1,000 whatever the principal', async () => {
+      const { entryId } = await postOne(gotv, 32_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 32_000, credit: 0 },
+        { code: gotv.floatCode, debit: 0, credit: 32_000 },
+        { code: '1310', debit: 1_000, credit: 0 },
+        { code: '4550', debit: 0, credit: 1_000 },
+      ]);
+    });
+
+    it('Lycamobile airtime: immediate income, float short by the spread', async () => {
+      // The immediate model realises commission inside the float leg: we
+      // collect 10,000 and send 9,700, and the 300 is income at once. No
+      // receivable is created, which is what distinguishes it.
+      const { entryId } = await postOne(lyca, 10_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 10_000, credit: 0 },
+        { code: lyca.floatCode, debit: 0, credit: 9_700 },
+        { code: '4560', debit: 0, credit: 300 },
+      ]);
+    });
+
+    it('school fees: cash in, payable up, explicit zero commission', async () => {
+      const { entryId } = await postOne(school, 200_000);
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 200_000, credit: 0 },
+        { code: '2210', debit: 0, credit: 200_000 },
+      ]);
+    });
+
+    it('every posted entry balances, and none is empty', async () => {
+      const bad = await query<{ id: string; d: string; c: string }>(
+        `select e.id::text, sum(l.debit)::text as d, sum(l.credit)::text as c
+           from public.journal_entries e
+           join public.journal_lines l on l.entry_id = e.id
+          where e.source_type like 'agency%'
+          group by e.id having sum(l.debit) <> sum(l.credit)`,
+      );
+      expect(bad).toEqual([]);
+
+      const empty = await query<{ id: string }>(
+        `select e.id::text from public.journal_entries e
+          where e.source_type like 'agency%'
+            and not exists (select 1 from public.journal_lines l where l.entry_id = e.id)`,
+      );
+      expect(empty).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+  describe('commission calculation', () => {
+    it('rounds basis points half-up, in integer arithmetic', async () => {
+      // 150bp of 10,034 is 150.51 and must land on 151; of 10,000 it is
+      // exactly 150. No float is involved: the rule is
+      // (principal * bps + 5000) / 10000 in bigint.
+      const cases: readonly [number, number][] = [
+        [10_000, 150],
+        [10_001, 150],
+        [10_034, 151],
+        [1, 0],
+        [34, 1],
+        [33, 0],
+      ];
+      for (const [principal, expected] of cases) {
+        const r = await queryOne<{ amount: string; basis: string }>(
+          `select amount::text, basis from public.agency_commission_for($1, $2)`,
+          [mtnDeposit.providerId, principal],
+        );
+        expect(Number(r.amount), `150bp of ${String(principal)}`).toBe(expected);
+        expect(r.basis).toBe('rate');
+      }
+    });
+
+    it('returns a fixed commission whatever the principal', async () => {
+      for (const principal of [1_000, 100_000, 10_000_000]) {
+        const r = await queryOne<{ amount: string; basis: string }>(
+          `select amount::text, basis from public.agency_commission_for($1, $2)`,
+          [airtelDeposit.providerId, principal],
+        );
+        expect(Number(r.amount)).toBe(500);
+        expect(r.basis).toBe('fixed');
+      }
+    });
+
+    it('reports an explicit zero as its own basis, not as an absent decision', async () => {
+      const r = await queryOne<{ amount: string; basis: string }>(
+        `select amount::text, basis from public.agency_commission_for($1, 200000)`,
+        [school.providerId],
+      );
+      expect(Number(r.amount)).toBe(0);
+      expect(r.basis).toBe('zero');
+    });
+
+    it('refuses a provider configuring both a rate and a fixed amount', async () => {
+      const err = await expectError(
+        `do $$
+         declare p uuid;
+         begin
+           insert into public.agency_service_providers
+             (code, name, category, float_model, income_account_id,
+              commission_model, commission_rate_bps, commission_fixed,
+              is_provisional, is_active)
+           values ('TCONFLICT','Conflicted','other','provider_float',
+                   (select id from public.ledger_accounts where code='4590'),
+                   'deferred', 150, 500, false, true) returning id into p;
+           perform public.agency_commission_for(p, 100000);
+         end $$;`,
+      );
+      expect(err?.message).toMatch(/both a .* rate and a fixed commission/i);
+    });
+
+    it('refuses a provider configuring neither', async () => {
+      const err = await expectError(`select public.agency_commission_for($1, 100000)`, [
+        (
+          await queryOne<{ id: string }>(
+            `select id from public.agency_service_providers where code = 'MTN_MOMO'`,
+          )
+        ).id,
+      ]);
+      expect(err?.message).toMatch(/no commission basis/i);
+    });
+
+    it('refuses a supplied commission that differs, without an authorisation', async () => {
+      // Phase 4B-S closed this. Phase 4B posted a differing figure and flagged
+      // it; the person typing it is the person whose branch earns the income,
+      // and `agency:write` is held by every Secretary/Treasurer, so that was a
+      // self-service income adjustment.
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/differs from the 1500/i);
+      expect(r.message).toMatch(/authorised with a reason and external evidence/i);
+
+      // Both figures survive the refusal, so the discrepancy is investigable.
+      const t = await queryOne<{ supplied: string; status: string }>(
+        `select commission_supplied::text as supplied, status
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(Number(t.supplied)).toBe(1_800);
+      expect(t.status).toBe('awaiting_verification');
+    });
+
+    it('refuses the authorisation itself to anyone but an owner', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+      for (const user of [secretary, manager]) {
+        const r = await asUser(
+          user,
+          `select public.authorise_agency_commission_exception($1, 'provider promotion', 'MTN-STMT-9')`,
+          [id],
+        );
+        expect(r.ok).toBe(false);
+        expect(r.code).toBe('42501');
+      }
+    });
+
+    it('posts a differing commission once an owner authorises it, and records who', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+
+      const authorised = await asUserCommitted(owner, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1, $2, $3)`,
+          params: [id, 'Provider ran a promotional rate', 'MTN statement 2026-11-07/441'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      // Phase 4D: the Owner moved the figure after submission, so a manager
+      // pressing Verify on the screen they already had is refused. Asserted
+      // here rather than worked around, because this is the workflow the
+      // safeguard was built for.
+      const stale = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(stale.ok).toBe(false);
+      expect(stale.message).toMatch(/changed after it was submitted/i);
+
+      // A manager still verifies it, now having reloaded and reviewed the
+      // authorised figure: the Owner authorised the difference, not the
+      // transaction, so neither acts alone.
+      const reloaded = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const verified = await asUserCommitted(manager, [
+        {
+          sql: `select public.verify_agency_transaction($1,$2) as e`,
+          params: [id, Number(reloaded.revision)],
+        },
+      ]);
+      expect(verified.ok, verified.message).toBe(true);
+      const entryId = (verified.rows[0] as { e: string }).e;
+
+      const t = await queryOne<{
+        amount: string;
+        computed: string;
+        by: string;
+        reason: string;
+        evidence: string;
+      }>(
+        `select commission_amount::text as amount, commission_computed::text as computed,
+                commission_exception_by::text as by, commission_exception_reason as reason,
+                commission_exception_evidence as evidence
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(Number(t.amount)).toBe(1_800);
+      expect(Number(t.computed)).toBe(1_500);
+      expect(t.by).toBe(owner.profileId);
+      expect(t.reason).toBe('Provider ran a promotional rate');
+      expect(t.evidence).toBe('MTN statement 2026-11-07/441');
+
+      // The authorised figure is what reached the ledger.
+      const lines = await linesOf(entryId);
+      expect(lines).toContainEqual({ code: '1310', debit: 1_800, credit: 0 });
+      expect(lines).toContainEqual({ code: '4510', debit: 0, credit: 1_800 });
+
+      expect(await auditOf(id)).toContain('commission_exception');
+    });
+
+    it('refuses an authorisation for a figure that does not actually differ', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_500 });
+      const r = await asUser(
+        owner,
+        `select public.authorise_agency_commission_exception($1, 'no reason', 'none')`,
+        [id],
+      );
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/nothing to authorise/i);
+    });
+
+    it('will not let an edit after the authorisation ride on it', async () => {
+      // The authorisation is for the figures it was given for. Authorising a
+      // draft and then editing the figure would otherwise post a number
+      // nobody approved: `update_agency_transaction` edits a draft, and the
+      // exception columns are not its business to clear.
+      const id = await makeDraft(mtnDeposit, 100_000, { supplied: 1_800 });
+
+      const authorised = await asUserCommitted(owner, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1, $2, $3)`,
+          params: [id, 'Promotional rate', 'MTN statement 441'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      // The counter now types a much larger figure and sends it on.
+      const edited = await asUserCommitted(secretary, [
+        {
+          sql: `select public.update_agency_transaction($1, null, null, null, null, null, $2)`,
+          params: [id, 50_000],
+        },
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(edited.ok, edited.message).toBe(true);
+
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/must be authorised again/i);
+      expect(r.message).toContain('1800');
+      expect(r.message).toContain('50000');
+
+      // Nothing posted.
+      const t = await queryOne<{ j: string | null; status: string }>(
+        `select journal_entry_id::text as j, status
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(t.j).toBeNull();
+      expect(t.status).toBe('awaiting_verification');
+    });
+
+    it('will not let a provider re-rating ride on an earlier authorisation', async () => {
+      // Nobody touches the transaction here: the configured terms move under
+      // it, which widens the difference the Owner approved.
+      const id = await makeSubmitted(mtnDeposit, 100_000, { supplied: 1_800 });
+
+      const authorised = await asUserCommitted(owner, [
+        {
+          sql: `select public.authorise_agency_commission_exception($1, $2, $3)`,
+          params: [id, 'Promotional rate', 'MTN statement 442'],
+        },
+      ]);
+      expect(authorised.ok, authorised.message).toBe(true);
+
+      await query(
+        `update public.agency_service_providers
+            set commission_rate_bps = 50 where id = $1`,
+        [mtnDeposit.providerId],
+      );
+
+      // The manager reloads and quotes the revision they reviewed, so the
+      // Phase 4D revision guard is satisfied and this test still proves what
+      // it was written to prove: the pinned authorisation is what refuses a
+      // re-rated transaction, not merely a stale screen.
+      const reloaded = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const r = await asUserCommitted(manager, [
+        {
+          sql: `select public.verify_agency_transaction($1,$2)`,
+          params: [id, Number(reloaded.revision)],
+        },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/must be authorised again/i);
+    });
+
+    it('refuses a supplied commission larger than its own principal', async () => {
+      const id = await makeSubmitted(mtnDeposit, 10_000, { supplied: 20_000 });
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/cannot exceed the principal/i);
+    });
+
+    it('credits the income account the provider names, and only that one', async () => {
+      const byProvider: readonly [Service, string][] = [
+        [mtnDeposit, '4510'],
+        [bankDeposit, '4520'],
+        [uedcl, '4530'],
+        [dstv, '4550'],
+        [lyca, '4560'],
+      ];
+      for (const [service, code] of byProvider) {
+        const { entryId } = await postOne(service, 60_000);
+        const income = (await linesOf(entryId)).filter(
+          (l) => l.code.startsWith('4') && l.credit > 0,
+        );
+        expect(
+          income.map((l) => l.code),
+          code,
+        ).toEqual([code]);
+      }
+    });
+
+    it('keeps the snapshot when the provider rate changes afterwards', async () => {
+      // The whole reason the snapshot columns exist. Re-rating a provider must
+      // not rewrite the explanation of income already recognised.
+      const { txId } = await postOne(gotv, 40_000);
+      const before = await queryOne<{ fixed: string; amount: string }>(
+        `select commission_fixed_applied::text as fixed, commission_amount::text as amount
+           from public.agency_transactions where id = $1`,
+        [txId],
+      );
+      expect(Number(before.fixed)).toBe(1_000);
+
+      await query(
+        `update public.agency_service_providers set commission_fixed = 9999 where id = $1`,
+        [gotv.providerId],
+      );
+      try {
+        const after = await queryOne<{ fixed: string; amount: string }>(
+          `select commission_fixed_applied::text as fixed, commission_amount::text as amount
+             from public.agency_transactions where id = $1`,
+          [txId],
+        );
+        expect(Number(after.fixed)).toBe(1_000);
+        expect(after.amount).toBe(before.amount);
+      } finally {
+        await query(
+          `update public.agency_service_providers set commission_fixed = 1000 where id = $1`,
+          [gotv.providerId],
+        );
+      }
+    });
+
+    it('recognises commission once, not twice, when verification is retried', async () => {
+      const id = await makeSubmitted(mtnDeposit, 100_000);
+      const first = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+      ]);
+      const second = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+      ]);
+      expect(first.ok && second.ok).toBe(true);
+      expect((second.rows[0] as { e: string }).e).toBe(
+        (first.rows[0] as { e: string }).e,
+      );
+
+      const entries = await query<{ n: string }>(
+        `select count(*)::text as n from public.journal_entries
+          where source_type = 'agency_transaction' and source_id = $1`,
+        [id],
+      );
+      expect(Number(entries[0]?.n)).toBe(1);
+    });
+
+    it('charges a customer fee to 4570, on top of the principal', async () => {
+      const { entryId } = await postOne(uedcl, 50_000, { fee: 2_000 });
+      expect(await linesOf(entryId)).toEqual([
+        { code: cashCode, debit: 52_000, credit: 0 },
+        { code: uedcl.floatCode, debit: 0, credit: 50_000 },
+        { code: '4570', debit: 0, credit: 2_000 },
+        { code: '1310', debit: 500, credit: 0 },
+        { code: '4530', debit: 0, credit: 500 },
+      ]);
+    });
+  });
+
+  // =========================================================================
+  describe('roles and separation of duties', () => {
+    it('lets a secretary record and submit, and refuses them verification', async () => {
+      const id = await makeSubmitted(mtnDeposit);
+      const attempt = await asUser(
+        secretary2,
+        `select public.verify_agency_transaction($1)`,
+        [id],
+      );
+      expect(attempt.ok).toBe(false);
+      expect(attempt.code).toBe('42501');
+      expect(attempt.message).toMatch(/agency:verify/i);
+    });
+
+    it('refuses the submitter verifying their own, even holding agency:verify', async () => {
+      // A manager records one, then tries to verify it. The capability is
+      // present; the separation of duties is what refuses.
+      const id = await makeSubmitted(mtnDeposit, 50_000, { recorder: manager });
+      const attempt = await asUser(
+        manager,
+        `select public.verify_agency_transaction($1)`,
+        [id],
+      );
+      expect(attempt.ok).toBe(false);
+      expect(attempt.code).toBe('42501');
+      expect(attempt.message).toMatch(
+        /cannot be verified by the person who recorded it/i,
+      );
+    });
+
+    it('lets a manager and an owner verify somebody else’s', async () => {
+      for (const verifier of [manager, owner]) {
+        const id = await makeSubmitted(mtnDeposit);
+        const r = await asUserCommitted(verifier, [
+          { sql: `select public.verify_agency_transaction($1) as e`, params: [id] },
+        ]);
+        expect(r.ok, r.message).toBe(true);
+      }
+    });
+
+    it('refuses a borrower every agency operation', async () => {
+      const id = await makeSubmitted(mtnDeposit);
+      const calls: readonly [string, unknown[]][] = [
+        [
+          `select public.create_agency_transaction($1, 1000, $2)`,
+          [mtnDeposit.typeId, mtnDeposit.tillId],
+        ],
+        [`select public.submit_agency_transaction($1)`, [id]],
+        [`select public.verify_agency_transaction($1)`, [id]],
+        [`select public.cancel_agency_transaction($1)`, [id]],
+        [`select public.reverse_agency_transaction($1, 'no')`, [id]],
+        [`select public.update_agency_transaction_reference($1, 'X', 'no')`, [id]],
+      ];
+      for (const [sql, params] of calls) {
+        const attempt = await asUser(borrower, sql, params);
+        expect(attempt.ok, sql).toBe(false);
+        expect(attempt.code, sql).toBe('42501');
+      }
+    });
+
+    it('refuses a suspended account and a forced-password account', async () => {
+      // Neither resolves through current_profile_id(), so agency_actor()
+      // refuses them before any capability is consulted. This is the Phase 2
+      // boundary, inherited rather than restated.
+      for (const user of [suspended, forcedPassword]) {
+        const attempt = await asUser(
+          user,
+          `select public.create_agency_transaction($1, 1000, $2)`,
+          [mtnDeposit.typeId, mtnDeposit.tillId],
+        );
+        expect(attempt.ok).toBe(false);
+        expect(attempt.code).toBe('42501');
+        expect(attempt.message).toMatch(/unidentified session/i);
+      }
+    });
+
+    it('needs agency:correct for a reference correction, which a manager has and a secretary does not', async () => {
+      const { txId } = await postOne(mtnDeposit, 20_000);
+      const refused = await asUser(
+        secretary,
+        `select public.update_agency_transaction_reference($1, $2, 'typo')`,
+        [txId, `FIX-${Math.random().toString(36).slice(2, 10)}`],
+      );
+      expect(refused.ok).toBe(false);
+      expect(refused.code).toBe('42501');
+
+      const allowed = await asUser(
+        manager,
+        `select public.update_agency_transaction_reference($1, $2, 'typo')`,
+        [txId, `FIX-${Math.random().toString(36).slice(2, 10)}`],
+      );
+      expect(allowed.ok, allowed.message).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  describe('branch isolation', () => {
+    it('refuses a till that belongs to another branch', async () => {
+      // A provider with a till at branch B only. The secretary belongs to
+      // branch A, and the transaction's branch is the officer's own, so the
+      // till and the branch disagree and the guard refuses.
+      const other = await makeService({
+        code: 'TOTHERBR',
+        name: 'Other Branch MoMo',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+        branch: branchB,
+      });
+      const attempt = await asUser(
+        secretary,
+        `select public.create_agency_transaction($1, 10000, $2, '+256770000003', 'C', 'XB-1')`,
+        [other.typeId, other.tillId],
+      );
+      expect(attempt.ok).toBe(false);
+      expect(attempt.message).toMatch(/different branch/i);
+    });
+
+    it('hides another branch’s transactions from a branch-scoped reader', async () => {
+      const { txId } = await postOne(mtnDeposit, 30_000);
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branchB,
+        manager.profileId,
+      ]);
+      try {
+        const seen = await asUser(
+          manager,
+          `select count(*)::int as n from public.agency_transactions where id = $1`,
+          [txId],
+        );
+        expect(seen.ok).toBe(true);
+        expect((seen.rows[0] as { n: number }).n).toBe(0);
+      } finally {
+        await query(`update public.profiles set branch_id = $1 where id = $2`, [
+          branchA,
+          manager.profileId,
+        ]);
+      }
+    });
+  });
+
+  // =========================================================================
+  describe('provider readiness, preserved from Phase 4A', () => {
+    /** A provider that is confirmed and active, then broken in one way. */
+    async function brokenService(label: string, patch: string): Promise<Service> {
+      const service = await makeService({
+        code: `TBRK${label}`,
+        name: `Broken ${label}`,
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      await query(patch.replace('$ID', `'${service.providerId}'`));
+      return service;
+    }
+
+    it('refuses submission once the provider is made provisional', async () => {
+      const s = await brokenService(
+        'PROV',
+        `update public.agency_service_providers set is_provisional = true where id = $ID`,
+      );
+      const id = await makeDraft(s);
+      const r = await asUserCommitted(secretary, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/still provisional/i);
+    });
+
+    it('refuses submission once the provider is deactivated', async () => {
+      const s = await brokenService(
+        'INACT',
+        `update public.agency_service_providers set is_active = false where id = $ID`,
+      );
+      const id = await makeDraft(s);
+      const r = await asUserCommitted(secretary, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/not active/i);
+    });
+
+    it('refuses submission when the type states no maximum', async () => {
+      const s = await makeService({
+        code: 'TNOMAX',
+        name: 'No Ceiling',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      await query(
+        `update public.agency_transaction_types set max_single_transaction = null where id = $1`,
+        [s.typeId],
+      );
+      const id = await makeDraft(s);
+      const r = await asUserCommitted(secretary, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/no maximum single transaction/i);
+    });
+
+    it('refuses a principal above the type’s maximum', async () => {
+      const s = await makeService({
+        code: 'TSMALLMAX',
+        name: 'Small Ceiling',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+        maxSingle: 10_000,
+      });
+      const attempt = await asUser(
+        secretary,
+        `select public.create_agency_transaction($1, 20000, $2, '+256770000004', 'C', 'MAX-1')`,
+        [s.typeId, s.tillId],
+      );
+      expect(attempt.ok).toBe(false);
+      expect(attempt.message).toMatch(/may not exceed/i);
+    });
+
+    it('allows a draft against a provisional provider, and refuses its submission', async () => {
+      const seeded = await queryOne<{ id: string; type_id: string }>(
+        `select p.id, t.id as type_id
+           from public.agency_service_providers p
+           join public.agency_transaction_types t on t.provider_id = p.id
+          where p.code = 'MTN_MOMO' and t.code = 'DEPOSIT'`,
+      );
+      const till = await queryOne<{ id: string }>(
+        `select public.ensure_agency_float_account($1, $2) as id`,
+        [seeded.id, branchA],
+      );
+      const draft = await asUserCommitted(secretary, [
+        {
+          sql: `select public.create_agency_transaction($1, 1000, $2, '+256770000005', 'C', 'SEED-1') as id`,
+          params: [seeded.type_id, till.id],
+        },
+      ]);
+      expect(draft.ok, draft.message).toBe(true);
+
+      const submitted = await asUserCommitted(secretary, [
+        {
+          sql: `select public.submit_agency_transaction($1)`,
+          params: [(draft.rows[0] as { id: string }).id],
+        },
+      ]);
+      expect(submitted.ok).toBe(false);
+      expect(submitted.message).toMatch(/still provisional/i);
+    });
+  });
+  // =========================================================================
+  describe('cash and float protections', () => {
+    it('refuses a deposit the float cannot fund', async () => {
+      // A provider whose till is deliberately left unfunded.
+      const s = await makeService({
+        code: 'TDRY',
+        name: 'Dry Till',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      const id = await makeSubmitted(s, 100_000);
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/float, which is less than/i);
+    });
+
+    it('refuses a withdrawal the till cannot pay', async () => {
+      // More than the drawer holds. The ceiling has to be raised above the
+      // amount first, or the type's max_single_transaction would refuse it
+      // before the cash check was ever reached — which is a different control
+      // and is asserted separately.
+      const big = await makeService({
+        code: 'TBIGWD',
+        name: 'Big Withdrawal',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'withdrawal',
+        typeCode: 'WITHDRAWAL',
+        maxSingle: 1_000_000_000_000,
+      });
+      const cash = await balanceOf(cashCode);
+      const id = await makeSubmitted(big, cash + 1_000_000);
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/less than the .* being taken out of it/i);
+    });
+
+    it('keeps the float rule separate from the cash rule', async () => {
+      // allow_negative_cash on must not permit negative float. Correction C4,
+      // asserted through the posting path rather than the helper alone.
+      const s = await makeService({
+        code: 'TDRY2',
+        name: 'Dry Till Two',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      const id = await makeSubmitted(s, 100_000);
+      await query(
+        `update public.finance_settings set allow_negative_cash = true where id = 1`,
+      );
+      try {
+        const r = await asUserCommitted(manager, [
+          { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+        ]);
+        expect(r.ok).toBe(false);
+        expect(r.message).toMatch(/float, which is less than/i);
+      } finally {
+        await query(
+          `update public.finance_settings set allow_negative_cash = false where id = 1`,
+        );
+      }
+    });
+
+    it('never lets agency float move through record_transfer', async () => {
+      const floatAccount = await queryOne<{ id: string }>(
+        `select id from public.ledger_accounts where code = $1`,
+        [mtnDeposit.floatCode],
+      );
+      const cash = await queryOne<{ id: string }>(
+        `select id from public.ledger_accounts where code = $1`,
+        [cashCode],
+      );
+      const attempt = await asUser(
+        owner,
+        `select public.record_transfer($1, $2, 1000, current_date, 'refused')`,
+        [cash.id, floatAccount.id],
+      );
+      expect(attempt.ok).toBe(false);
+      expect(attempt.message).toMatch(/agency float account/i);
+    });
+
+    it('reconciles two tills of one provider independently', async () => {
+      // A second till for MTN at the same branch. Posting against one must
+      // move only that one.
+      const second = await queryOne<{ id: string }>(
+        `select public.ensure_agency_float_account($1, $2, 'counter2') as id`,
+        [mtnDeposit.providerId, branchA],
+      );
+      const secondCode = (
+        await queryOne<{ code: string }>(
+          `select a.code from public.agency_provider_float_accounts f
+             join public.ledger_accounts a on a.id = f.ledger_account_id
+            where f.id = $1`,
+          [second.id],
+        )
+      ).code;
+      await fund(secondCode, 10_000_000);
+
+      const firstBefore = await balanceOf(mtnDeposit.floatCode!);
+      const secondBefore = await balanceOf(secondCode);
+
+      await postOne({ ...mtnDeposit, tillId: second.id, floatCode: secondCode }, 25_000);
+
+      expect(await balanceOf(mtnDeposit.floatCode!)).toBe(firstBefore);
+      expect(await balanceOf(secondCode)).toBe(secondBefore - 25_000);
+    });
+  });
+
+  // =========================================================================
+  describe('duplicates and concurrency', () => {
+    it('refuses a provider reference another submitted transaction claims', async () => {
+      const reference = `DUP-${Math.random().toString(36).slice(2, 10)}`;
+      await makeSubmitted(mtnDeposit, 10_000, { reference });
+      const second = await makeDraft(mtnDeposit, 10_000, { reference });
+      const r = await asUserCommitted(secretary, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [second] },
+      ]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/duplicate key|provider_reference_unique/i);
+    });
+
+    it('returns the same transaction for a repeated idempotency key', async () => {
+      const key = `IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const call = {
+        sql: `select public.create_agency_transaction($1, 15000, $2, '+256770000006', 'C', $3, 0, null, null, null, $4) as id`,
+        params: [mtnDeposit.typeId, mtnDeposit.tillId, `K-${key}`, key],
+      };
+      const first = await asUserCommitted(secretary, [call]);
+      const second = await asUserCommitted(secretary, [call]);
+      expect(first.ok && second.ok).toBe(true);
+      expect((second.rows[0] as { id: string }).id).toBe(
+        (first.rows[0] as { id: string }).id,
+      );
+
+      const n = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.agency_transactions where idempotency_key = $1`,
+        [key],
+      );
+      expect(Number(n.n)).toBe(1);
+    });
+
+    it('refuses a reused key that describes a different transaction', async () => {
+      // Phase 4D-F. The retry contract has two halves and only one of them
+      // was built. "The same submission, asked again" must come back with the
+      // first transaction. "A different submission wearing the same key" must
+      // not: returning the first one tells the counter that the second
+      // customer's money was recorded when nothing of the sort happened.
+      //
+      // This is not hypothetical. The recording form minted one key per
+      // mounted page, so a secretary who recorded one customer and then typed
+      // the next without reloading sent the second transaction under the
+      // first one's key - and was shown a success.
+      const key = `IDEMX-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await asUserCommitted(secretary, [
+        {
+          sql: `select public.create_agency_transaction($1, 15000, $2, '+256770000011', 'First customer', $3, 0, null, null, null, $4) as id`,
+          params: [mtnDeposit.typeId, mtnDeposit.tillId, `R1-${key}`, key],
+        },
+      ]);
+      expect(first.ok, first.message).toBe(true);
+      const firstId = (first.rows[0] as { id: string }).id;
+
+      // A different customer, a different amount, the same key.
+      const second = await asUserCommitted(secretary, [
+        {
+          sql: `select public.create_agency_transaction($1, 90000, $2, '+256770000012', 'Second customer', $3, 0, null, null, null, $4) as id`,
+          params: [mtnDeposit.typeId, mtnDeposit.tillId, `R2-${key}`, key],
+        },
+      ]);
+      expect(second.ok).toBe(false);
+      expect(second.message).toMatch(/different transaction|already recorded/i);
+
+      // And nothing was written for the second attempt.
+      const n = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.agency_transactions
+          where idempotency_key = $1`,
+        [key],
+      );
+      expect(Number(n.n)).toBe(1);
+      const kept = await queryOne<{ amount: string }>(
+        `select principal_amount::text as amount
+           from public.agency_transactions where id = $1`,
+        [firstId],
+      );
+      expect(Number(kept.amount)).toBe(15_000);
+    });
+
+    it('still returns the first transaction for a genuine retry', async () => {
+      // The other half, asserted beside it so a future tightening cannot
+      // quietly turn every retry into a refusal. Same arguments, same key:
+      // the officer who never saw the first response gets the first
+      // transaction, not a second one and not an error.
+      const key = `IDEMR-${Math.random().toString(36).slice(2, 10)}`;
+      const call = {
+        sql: `select public.create_agency_transaction($1, 22000, $2, '+256770000013', 'Retrying customer', $3, 500, null, 'note', null, $4) as id`,
+        params: [mtnDeposit.typeId, mtnDeposit.tillId, `RR-${key}`, key],
+      };
+      const first = await asUserCommitted(secretary, [call]);
+      const again = await asUserCommitted(secretary, [call]);
+      expect(first.ok, first.message).toBe(true);
+      expect(again.ok, again.message).toBe(true);
+      expect((again.rows[0] as { id: string }).id).toBe(
+        (first.rows[0] as { id: string }).id,
+      );
+    });
+
+    it('lets only one of two concurrent verifications post', async () => {
+      // Two connections verify the same transaction at the same time. The row
+      // lock in post_agency_transaction decides: one posts, the other finds it
+      // already posted and returns the same journal. Never two entries.
+      const id = await makeSubmitted(mtnDeposit, 40_000);
+      const a = await getClient();
+      const b = await getClient();
+      try {
+        await a.query('begin');
+        await b.query('begin');
+        await a.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+          manager.authUserId,
+        ]);
+        await b.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+          owner.authUserId,
+        ]);
+
+        // A takes the row lock and posts. B's statement is then issued while
+        // that lock is still held, so it blocks inside
+        // post_agency_transaction's `for update` — which is the race being
+        // tested. A commits, B wakes, re-reads the row the lock protected and
+        // finds it already posted.
+        //
+        // A must commit before B is awaited. Awaiting both first would wait
+        // forever: B cannot proceed until A releases, and A does not release
+        // until it commits.
+        const first = await a.query(`select public.verify_agency_transaction($1) as e`, [
+          id,
+        ]);
+        const second = b.query(`select public.verify_agency_transaction($1) as e`, [id]);
+        await new Promise((r) => setTimeout(r, 50));
+        await a.query('commit');
+        const secondResult = await second.then(
+          (v) => ({ status: 'fulfilled' as const, value: v }),
+          (e: Error) => ({ status: 'rejected' as const, reason: e.message }),
+        );
+        await b.query('commit').catch(() => undefined);
+
+        const results = [{ status: 'fulfilled' as const }, secondResult];
+
+        // Whichever way the second call reported, it must not have posted a
+        // second entry: either it returned A's journal, or it refused.
+        if (secondResult.status === 'fulfilled') {
+          expect((secondResult.value.rows[0] as { e: string }).e).toBe(
+            (first.rows[0] as { e: string }).e,
+          );
+        }
+
+        // Whatever each call reported, the book must hold exactly one entry.
+        const entries = await queryOne<{ n: string }>(
+          `select count(*)::text as n from public.journal_entries
+            where source_type = 'agency_transaction' and source_id = $1`,
+          [id],
+        );
+        expect(Number(entries.n), JSON.stringify(results.map((r) => r.status))).toBe(1);
+
+        const t = await queryOne<{ status: string; verified_by: string }>(
+          `select status, verified_by::text from public.agency_transactions where id = $1`,
+          [id],
+        );
+        expect(t.status).toBe('posted');
+        expect([manager.profileId, owner.profileId]).toContain(t.verified_by);
+      } finally {
+        a.release();
+        b.release();
+      }
+    });
+
+    it('leaves nothing behind when posting fails midway', async () => {
+      // An unfundable deposit: the status change, the journal and the snapshot
+      // are one transaction, so a refusal leaves the row awaiting
+      // verification with no journal and no snapshot.
+      const s = await makeService({
+        code: 'TROLLBACK',
+        name: 'Rollback Till',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      const id = await makeSubmitted(s, 500_000);
+      const r = await asUserCommitted(manager, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [id] },
+      ]);
+      expect(r.ok).toBe(false);
+
+      const t = await queryOne<{
+        status: string;
+        journal_entry_id: string | null;
+        verified_by: string | null;
+        commission_computed: string | null;
+      }>(
+        `select status, journal_entry_id::text, verified_by::text,
+                commission_computed::text
+           from public.agency_transactions where id = $1`,
+        [id],
+      );
+      expect(t.status).toBe('awaiting_verification');
+      expect(t.journal_entry_id).toBeNull();
+      expect(t.verified_by).toBeNull();
+      expect(t.commission_computed).toBeNull();
+
+      const entries = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.journal_entries where source_id = $1`,
+        [id],
+      );
+      expect(Number(entries.n)).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  describe('reversals', () => {
+    it('mirrors the original journal leg for leg and deletes nothing', async () => {
+      const { txId, entryId } = await postOne(mtnDeposit, 90_000, { fee: 1_000 });
+      const original = await linesOf(entryId);
+
+      const r = await asUserCommitted(manager, [
+        {
+          sql: `select public.reverse_agency_transaction($1, $2) as e`,
+          params: [txId, 'Customer changed their mind'],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      const contraId = (r.rows[0] as { e: string }).e;
+      const contra = await linesOf(contraId);
+
+      // Same accounts, same amounts, opposite sides.
+      expect(contra).toEqual(
+        original.map((l) => ({ code: l.code, debit: l.credit, credit: l.debit })),
+      );
+
+      // The original entry and its lines are still there.
+      const still = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.journal_lines where entry_id = $1`,
+        [entryId],
+      );
+      expect(Number(still.n)).toBe(original.length);
+    });
+
+    it('preserves the whole trail: reference, officers, reason and audit', async () => {
+      const reference = `REV-${Math.random().toString(36).slice(2, 10)}`;
+      const { txId } = await postOne(mtnDeposit, 20_000, { reference });
+      await asUserCommitted(manager, [
+        {
+          sql: `select public.reverse_agency_transaction($1, $2)`,
+          params: [txId, 'Wrong wallet'],
+        },
+      ]);
+
+      const t = await queryOne<{
+        status: string;
+        provider_reference: string;
+        submitted_by: string;
+        verified_by: string;
+        reversed_by: string;
+        reversal_reason: string;
+        journal_entry_id: string;
+        reversal_entry_id: string;
+      }>(
+        `select status, provider_reference, submitted_by::text, verified_by::text,
+                reversed_by::text, reversal_reason, journal_entry_id::text,
+                reversal_entry_id::text
+           from public.agency_transactions where id = $1`,
+        [txId],
+      );
+      expect(t.status).toBe('reversed');
+      expect(t.provider_reference).toBe(reference); // the claim is kept
+      expect(t.submitted_by).toBe(secretary.profileId);
+      expect(t.verified_by).toBe(manager.profileId);
+      expect(t.reversed_by).toBe(manager.profileId);
+      expect(t.reversal_reason).toBe('Wrong wallet');
+      expect(t.journal_entry_id).not.toBeNull();
+      expect(t.reversal_entry_id).not.toBeNull();
+
+      expect(await auditOf(txId)).toEqual(
+        expect.arrayContaining(['submit', 'verify', 'post', 'reverse']),
+      );
+
+      // And the original entry names what undid it.
+      const stamp = await queryOne<{ reversed_by_entry_id: string }>(
+        `select reversed_by_entry_id::text from public.journal_entries where id = $1`,
+        [t.journal_entry_id],
+      );
+      expect(stamp.reversed_by_entry_id).toBe(t.reversal_entry_id);
+    });
+
+    it('refuses a reversal without a reason, and is idempotent once done', async () => {
+      const { txId } = await postOne(mtnDeposit, 10_000);
+      const noReason = await asUser(
+        manager,
+        `select public.reverse_agency_transaction($1, '  ')`,
+        [txId],
+      );
+      expect(noReason.ok).toBe(false);
+      expect(noReason.message).toMatch(/needs a reason/i);
+
+      const first = await asUserCommitted(manager, [
+        { sql: `select public.reverse_agency_transaction($1, 'x') as e`, params: [txId] },
+      ]);
+      const again = await asUserCommitted(manager, [
+        { sql: `select public.reverse_agency_transaction($1, 'x') as e`, params: [txId] },
+      ]);
+      expect((again.rows[0] as { e: string }).e).toBe((first.rows[0] as { e: string }).e);
+
+      const contras = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.journal_entries
+          where source_type = 'agency_transaction_reversal' and source_id = $1`,
+        [txId],
+      );
+      expect(Number(contras.n)).toBe(1);
+    });
+
+    it('needs agency:reverse_cross_day for a prior day, which a manager lacks', async () => {
+      const { txId } = await postOne(mtnDeposit, 15_000);
+      await query(
+        `update public.agency_transactions set transaction_date = current_date - 1 where id = $1`,
+        [txId],
+      );
+      const refused = await asUser(
+        manager,
+        `select public.reverse_agency_transaction($1, 'yesterday')`,
+        [txId],
+      );
+      expect(refused.ok).toBe(false);
+      expect(refused.code).toBe('42501');
+      expect(refused.message).toMatch(/reverse_cross_day/i);
+
+      const allowed = await asUserCommitted(owner, [
+        {
+          sql: `select public.reverse_agency_transaction($1, 'yesterday') as e`,
+          params: [txId],
+        },
+      ]);
+      expect(allowed.ok, allowed.message).toBe(true);
+    });
+
+    it('reverses after the provider has been deactivated, without reactivating it', async () => {
+      // Task 5's historical-correction path. The readiness gate exempts a
+      // reversal precisely so a mistake can be corrected behind a provider
+      // that has since been switched off.
+      const s = await makeService({
+        code: 'TRETIRED',
+        name: 'Retired Provider',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 100,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      await fund(s.floatCode!, 1_000_000);
+      const { txId } = await postOne(s, 30_000);
+
+      await query(
+        `update public.agency_service_providers
+            set is_active = false, is_provisional = true where id = $1`,
+        [s.providerId],
+      );
+
+      const r = await asUserCommitted(manager, [
+        {
+          sql: `select public.reverse_agency_transaction($1, 'posted in error') as e`,
+          params: [txId],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      // The provider is still off: the correction did not reopen it.
+      const after = await queryOne<{ is_active: boolean; is_provisional: boolean }>(
+        `select is_active, is_provisional from public.agency_service_providers where id = $1`,
+        [s.providerId],
+      );
+      expect(after.is_active).toBe(false);
+      expect(after.is_provisional).toBe(true);
+
+      // And nothing new can be posted against it.
+      const blocked = await asUserCommitted(secretary, [
+        {
+          sql: `select public.submit_agency_transaction($1)`,
+          params: [await makeDraft(s, 1_000)],
+        },
+      ]);
+      expect(blocked.ok).toBe(false);
+    });
+
+    it('refuses a reversal whose commission has already been settled', async () => {
+      // Settlement is Phase 4C, so the settled state is created here by
+      // crediting 1310 directly — a test fixture, clearly labelled, standing
+      // in for the settlement entry 4C will write.
+      const s = await makeService({
+        code: 'TSETTLED',
+        name: 'Settled Commission',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        fixed: 5_000,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      await fund(s.floatCode!, 1_000_000);
+      const { txId } = await postOne(s, 100_000);
+
+      const settlement = await queryOne<{ id: string }>(
+        `insert into public.agency_commission_settlements
+           (provider_id, branch_id, settlement_date, settlement_amount,
+            settlement_account_id, created_by)
+         values ($1, $2, current_date, 5000,
+                 (select id from public.ledger_accounts where code = $3), $4)
+         returning id`,
+        [s.providerId, branchA, s.floatCode, owner.profileId],
+      );
+      await query(
+        `select public.post_journal($1, current_date, 'Fixture: settle commission',
+            'agency_commission_settlement', $2, null, null,
+            jsonb_build_array(
+              jsonb_build_object('account_id',
+                (select id from public.ledger_accounts where code = $3),
+                'debit', 5000, 'credit', 0),
+              jsonb_build_object('account_id', public.ledger_account_by_code('1310'),
+                'debit', 0, 'credit', 5000)),
+            now(), $4, 'test fixture')`,
+        [branchA, settlement.id, s.floatCode, owner.profileId],
+      );
+
+      expect(
+        Number(
+          (
+            await queryOne<{ o: string }>(
+              `select public.agency_commission_outstanding($1, $2)::text as o`,
+              [s.providerId, branchA],
+            )
+          ).o,
+        ),
+      ).toBe(0);
+
+      // Decision OD-10 replaced Phase 4B's refusal here. The reversal is
+      // permitted, and the 5,000 the provider had already paid is
+      // reclassified as a recovery payable rather than pushing the
+      // receivable below zero, which would assert that the provider owes us
+      // less than nothing.
+      const r = await asUserCommitted(manager, [
+        {
+          sql: `select public.reverse_agency_transaction($1, 'too late')`,
+          params: [txId],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      expect(
+        Number(
+          (
+            await queryOne<{ o: string }>(
+              `select public.agency_commission_outstanding($1, $2)::text as o`,
+              [s.providerId, branchA],
+            )
+          ).o,
+        ),
+      ).toBe(0);
+
+      const owed = await queryOne<{ v: string }>(
+        `select coalesce(b.balance, 0)::text as v
+           from public.ledger_accounts a
+           left join public.ledger_account_balances b on b.account_id = a.id
+          where a.code = '2230'`,
+      );
+      expect(Number(owed.v)).toBe(5_000);
+    });
+  });
+
+  // =========================================================================
+  describe('lifecycle', () => {
+    it('edits a draft, and refuses to edit anything else', async () => {
+      const id = await makeDraft(mtnDeposit, 10_000);
+      const edited = await asUserCommitted(secretary, [
+        { sql: `select public.update_agency_transaction($1, 25000)`, params: [id] },
+      ]);
+      expect(edited.ok, edited.message).toBe(true);
+      expect(
+        Number(
+          (
+            await queryOne<{ p: string }>(
+              `select principal_amount::text as p from public.agency_transactions where id = $1`,
+              [id],
+            )
+          ).p,
+        ),
+      ).toBe(25_000);
+
+      await asUserCommitted(secretary, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      const refused = await asUser(
+        secretary,
+        `select public.update_agency_transaction($1, 30000)`,
+        [id],
+      );
+      expect(refused.ok).toBe(false);
+      expect(refused.message).toMatch(/Only a draft can be edited/i);
+    });
+
+    it('returns a submitted transaction for correction, and needs a reason', async () => {
+      const id = await makeSubmitted(mtnDeposit, 10_000);
+      const noReason = await asUser(
+        manager,
+        `select public.return_agency_transaction($1, '')`,
+        [id],
+      );
+      expect(noReason.ok).toBe(false);
+
+      const returned = await asUserCommitted(manager, [
+        {
+          sql: `select public.return_agency_transaction($1, 'Wrong meter number')`,
+          params: [id],
+        },
+      ]);
+      expect(returned.ok, returned.message).toBe(true);
+      expect(
+        (
+          await queryOne<{ status: string }>(
+            `select status from public.agency_transactions where id = $1`,
+            [id],
+          )
+        ).status,
+      ).toBe('draft');
+
+      // And it is editable again, which is the point of the state.
+      const edited = await asUserCommitted(secretary, [
+        { sql: `select public.update_agency_transaction($1, 11000)`, params: [id] },
+      ]);
+      expect(edited.ok).toBe(true);
+    });
+
+    it('cancels an unposted transaction and refuses to cancel a posted one', async () => {
+      const draft = await makeDraft(mtnDeposit, 5_000);
+      const cancelled = await asUserCommitted(secretary, [
+        {
+          sql: `select public.cancel_agency_transaction($1, 'keyed twice')`,
+          params: [draft],
+        },
+      ]);
+      expect(cancelled.ok, cancelled.message).toBe(true);
+
+      const { txId } = await postOne(mtnDeposit, 5_000);
+      const refused = await asUser(
+        secretary,
+        `select public.cancel_agency_transaction($1, 'too late')`,
+        [txId],
+      );
+      expect(refused.ok).toBe(false);
+      expect(refused.message).toMatch(/Only an unposted transaction can be cancelled/i);
+    });
+
+    it('releases the provider reference when a transaction is cancelled', async () => {
+      const reference = `CAN-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await makeSubmitted(mtnDeposit, 5_000, { reference });
+      await asUserCommitted(secretary, [
+        {
+          sql: `select public.cancel_agency_transaction($1, 'keyed twice')`,
+          params: [first],
+        },
+      ]);
+      // The same reference is now free, because a cancelled row claims none.
+      const second = await makeSubmitted(mtnDeposit, 5_000, { reference });
+      expect(second).not.toBe(first);
+    });
+
+    it('corrects a reference on a posted transaction without touching the ledger', async () => {
+      const { txId, entryId } = await postOne(mtnDeposit, 12_000);
+      const before = await linesOf(entryId);
+      const corrected = `COR-${Math.random().toString(36).slice(2, 10)}`;
+
+      const r = await asUserCommitted(manager, [
+        {
+          sql: `select public.update_agency_transaction_reference($1, $2, 'provider re-issued it')`,
+          params: [txId, corrected],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+
+      expect(
+        (
+          await queryOne<{ provider_reference: string }>(
+            `select provider_reference from public.agency_transactions where id = $1`,
+            [txId],
+          )
+        ).provider_reference,
+      ).toBe(corrected);
+
+      // No new entry, and the original is untouched.
+      expect(await linesOf(entryId)).toEqual(before);
+      const entries = await queryOne<{ n: string }>(
+        `select count(*)::text as n from public.journal_entries where source_id = $1`,
+        [txId],
+      );
+      expect(Number(entries.n)).toBe(1);
+      expect(await auditOf(txId)).toContain('reference_corrected');
+    });
+
+    it('refuses a float submission with no provider reference', async () => {
+      const r = await asUserCommitted(secretary, [
+        {
+          sql: `select public.create_agency_transaction($1, 9000, $2, '+256770000007', 'C', null) as id`,
+          params: [mtnDeposit.typeId, mtnDeposit.tillId],
+        },
+      ]);
+      expect(r.ok, r.message).toBe(true);
+      const submitted = await asUserCommitted(secretary, [
+        {
+          sql: `select public.submit_agency_transaction($1)`,
+          params: [(r.rows[0] as { id: string }).id],
+        },
+      ]);
+      expect(submitted.ok).toBe(false);
+      expect(submitted.message).toMatch(/must be recorded before this is submitted/i);
+    });
+  });
+  // =========================================================================
+  describe('the operating branch', () => {
+    /**
+     * The correction, and what it replaced.
+     *
+     * Phase 4B stamped a transaction with the recording officer's own branch
+     * — never an argument, which is what stops one branch posting against
+     * another's till. For an officer whose profile carries no branch, which
+     * is every Head Office account, it fell through to the **alphabetically
+     * first active branch**:
+     *
+     *     select b.id into v_branch from public.branches b
+     *      where b.status = 'active' order by b.branch_code limit 1;
+     *
+     * One branch made that right by accident. Two made it wrong silently: a
+     * head-office cashier naming a head-office till was refused with "That
+     * till belongs to a different branch", because the transaction had been
+     * routed by a string comparison.
+     *
+     * The approved rule is that the branch is said, validated, and never
+     * substituted. These tests are that rule, case by case, and the last of
+     * them is the one that would have caught the original defect: the branch
+     * a transaction lands at must not change when a branch with an earlier
+     * code appears.
+     */
+    let headOffice: TestUser;
+    let headChecker: TestUser;
+    let branchCashier: TestUser;
+    let tillA: string;
+    let tillB: string;
+    let typeId: string;
+    let payableType: string;
+
+    beforeAll(async () => {
+      // An officer with no branch of their own, which is what Head Office is.
+      headOffice = await createTestUser('secretary_treasurer');
+      // A checker who can see both branches, which a branch manager cannot:
+      // the seeded `manager` belongs to branch A, so a branch-B transaction
+      // is correctly invisible to them. And a different person from the
+      // recorder, because maker ≠ checker holds here as everywhere.
+      headChecker = await createTestUser('manager');
+      branchCashier = await createTestUser('secretary_treasurer');
+      await query(`update public.profiles set branch_id = $1 where id = $2`, [
+        branchA,
+        branchCashier.profileId,
+      ]);
+
+      const svc = await makeService({
+        code: 'TOPBRANCH',
+        name: 'Operating Branch MoMo',
+        category: 'mobile_money',
+        floatModel: 'provider_float',
+        incomeCode: '4510',
+        model: 'deferred',
+        rateBps: 150,
+        direction: 'deposit',
+        typeCode: 'DEPOSIT',
+      });
+      typeId = svc.typeId;
+      tillA = svc.tillId!;
+      await fund(svc.floatCode!, 50_000_000);
+
+      // The same provider's line at the second branch, and its float.
+      tillB = (
+        await queryOne<{ id: string }>(
+          `select public.ensure_agency_float_account($1, $2) as id`,
+          [svc.providerId, branchB],
+        )
+      ).id;
+      const codeB = (
+        await queryOne<{ code: string }>(
+          `select a.code from public.agency_provider_float_accounts f
+             join public.ledger_accounts a on a.id = f.ledger_account_id
+            where f.id = $1`,
+          [tillB],
+        )
+      ).code;
+      await fund(codeB, 50_000_000);
+
+      // Branch B needs its own drawer: a deposit there puts cash in it.
+      await query(
+        `insert into public.ledger_accounts
+           (code, name, account_type, normal_side, cash_kind, branch_id, parent_id, status)
+         select a.code || '.B', a.name || ' (B)', a.account_type, a.normal_side,
+                a.cash_kind, $1::uuid, a.parent_id, 'active'
+           from public.ledger_accounts a
+          where a.branch_id = $2 and a.cash_kind in ('cash_at_hand', 'bank')
+         on conflict (code) do nothing`,
+        [branchB, branchA],
+      );
+
+      // A payable provider, for the rule that holds where there is no till.
+      const payable = await makeService({
+        code: 'TOPBRANCHBILL',
+        name: 'Operating Branch Bills',
+        category: 'agency_banking',
+        floatModel: 'cash_payable',
+        incomeCode: '4520',
+        payableCode: '2290',
+        model: 'immediate',
+        fixed: 500,
+        direction: 'payment',
+        typeCode: 'PAYMENT',
+      });
+      payableType = payable.typeId;
+    });
+
+    /** Records one deposit, returning the attempt so a refusal can be read. */
+    async function record(
+      who: TestUser,
+      till: string | null,
+      branch: string | null,
+      reference: string,
+      type = typeId,
+    ) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.create_agency_transaction(
+                  $1, 20000, $2, '+256770012000', 'C', $3, 0,
+                  null, null, null, $3, null, null, $4) as id`,
+          params: [type, till, reference, branch],
+        },
+      ]);
+    }
+
+    async function branchOf(reference: string): Promise<string> {
+      const row = await queryOne<{ branch: string }>(
+        `select branch_id::text as branch from public.agency_transactions
+          where provider_reference = $1`,
+        [reference],
+      );
+      return row.branch;
+    }
+
+    it('records at branch A when a Head Office officer names branch A', async () => {
+      const r = await record(headOffice, tillA, branchA, 'OB-A1');
+      expect(r.ok, r.message).toBe(true);
+      expect(await branchOf('OB-A1')).toBe(branchA);
+    });
+
+    it('records at branch B when the same officer names branch B', async () => {
+      // The same account, the same provider, a different branch — and the
+      // transaction lands where it was told to. Under the fallback this was
+      // impossible: every one of this officer's transactions went to whichever
+      // branch sorted first.
+      const r = await record(headOffice, tillB, branchB, 'OB-B1');
+      expect(r.ok, r.message).toBe(true);
+      expect(await branchOf('OB-B1')).toBe(branchB);
+    });
+
+    it('refuses a Head Office officer who names no branch, and says why', async () => {
+      const r = await record(headOffice, tillA, null, 'OB-NONE');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/choose the branch/i);
+      expect(r.message).toMatch(/not assigned to one/i);
+
+      const rows = await query(
+        `select 1 from public.agency_transactions where provider_reference = 'OB-NONE'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('refuses a till that belongs to a different branch than the one named', async () => {
+      const r = await record(headOffice, tillB, branchA, 'OB-MISMATCH');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/different branch/i);
+
+      const rows = await query(
+        `select 1 from public.agency_transactions where provider_reference = 'OB-MISMATCH'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('lets a branch cashier record at their own branch, named or not', async () => {
+      const named = await record(branchCashier, tillA, branchA, 'OB-OWN1');
+      expect(named.ok, named.message).toBe(true);
+      expect(await branchOf('OB-OWN1')).toBe(branchA);
+
+      // Omitting it is the same answer: their branch is not a choice.
+      const silent = await record(branchCashier, tillA, null, 'OB-OWN2');
+      expect(silent.ok, silent.message).toBe(true);
+      expect(await branchOf('OB-OWN2')).toBe(branchA);
+    });
+
+    it('refuses a branch cashier who names another branch', async () => {
+      const r = await record(branchCashier, tillB, branchB, 'OB-OTHER');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/only record transactions at your own branch/i);
+
+      const rows = await query(
+        `select 1 from public.agency_transactions where provider_reference = 'OB-OTHER'`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('requires the branch for a payable provider, which has no till at all', async () => {
+      // Rule 5. A water bill is collected into 2290 and never touches a
+      // float account, so nothing downstream would have noticed the branch
+      // being wrong — which is exactly why the check sits before the
+      // float-or-payable split rather than inside it.
+      const refused = await record(headOffice, null, null, 'OB-BILL0', payableType);
+      expect(refused.ok).toBe(false);
+      expect(refused.message).toMatch(/choose the branch/i);
+
+      const named = await record(headOffice, null, branchB, 'OB-BILL1', payableType);
+      expect(named.ok, named.message).toBe(true);
+      expect(await branchOf('OB-BILL1')).toBe(branchB);
+    });
+
+    it('refuses a branch that is not open', async () => {
+      const closed = (
+        await queryOne<{ id: string }>(
+          `insert into public.branches
+             (branch_code, name, location, status, opened_on, closed_on)
+           values ('BR9903', 'Closed Branch', 'Testing', 'closed',
+                   current_date - 10, current_date - 1)
+           on conflict (branch_code) do update set status = 'closed'
+           returning id`,
+        )
+      ).id;
+
+      const r = await record(headOffice, tillA, closed, 'OB-CLOSED');
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/not open for business/i);
+    });
+
+    it('is not influenced by a branch whose code sorts first', async () => {
+      // The original defect, as a test. A new branch with an earlier code
+      // used to capture every head-office transaction; now it changes
+      // nothing, because nothing is inferred from a branch code.
+      await queryOne<{ id: string }>(
+        `insert into public.branches (branch_code, name, location, status, opened_on)
+         values ('AAA001', 'Alphabetically First', 'Testing', 'active', current_date)
+         on conflict (branch_code) do update set status = 'active'
+         returning id`,
+      );
+
+      const head = await record(headOffice, tillA, branchA, 'OB-SORT1');
+      expect(head.ok, head.message).toBe(true);
+      expect(await branchOf('OB-SORT1')).toBe(branchA);
+
+      const cashier = await record(branchCashier, tillA, null, 'OB-SORT2');
+      expect(cashier.ok, cashier.message).toBe(true);
+      expect(await branchOf('OB-SORT2')).toBe(branchA);
+
+      await query(`delete from public.branches where branch_code = 'AAA001'`);
+    });
+
+    /**
+     * Records with the key and the reference given separately, so a retry can
+     * change one thing at a time.
+     */
+    async function recordKeyed(
+      who: TestUser,
+      branch: string | null,
+      key: string,
+      reference: string,
+      till: string | null = tillA,
+    ) {
+      return asUserCommitted(who, [
+        {
+          sql: `select public.create_agency_transaction(
+                  $1, 20000, $2, '+256770012100', 'C', $3, 0,
+                  null, null, null, $4, null, null, $5) as id`,
+          params: [typeId, till, reference, key, branch],
+        },
+      ]);
+    }
+
+    async function rowsForKey(key: string) {
+      return query<{ id: string; branch: string }>(
+        `select t.id::text as id, b.branch_code as branch
+           from public.agency_transactions t
+           join public.branches b on b.id = t.branch_id
+          where t.idempotency_key = $1`,
+        [key],
+      );
+    }
+
+    /**
+     * The idempotency key is answered **after** the branch is resolved.
+     *
+     * Found in independent review of the correction above, and it is the kind
+     * of ordering bug that reads as harmless until it is written down. The
+     * key lookup used to run first: it found the earlier transaction, checked
+     * only that the caller could *see* that transaction's branch, compared the
+     * amount, the customer, the reference and the fee mode — and returned the
+     * id. The branch the caller had just asked for was never part of the
+     * comparison and had not yet been validated.
+     *
+     * So a Head Office officer who retried key K while naming a different
+     * branch was handed branch A's transaction and told it was theirs; one
+     * who retried naming no branch at all was answered rather than asked to
+     * choose, which is the mandatory rule from the correction above going
+     * quietly missing; and a branch cashier naming somebody else's branch got
+     * an id instead of a refusal.
+     *
+     * Nothing double-posted — that is what the key is for, and it held. What
+     * failed was the *answer*: "yes, recorded" for a transaction that was
+     * never recorded where the caller said.
+     *
+     * The fix is ordering plus one comparison: resolve and validate the
+     * branch first, then let the key decide, and treat a different branch as
+     * what it is — a different transaction.
+     */
+    it('answers a retry only for the branch the retry names', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+
+      const first = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-1');
+      expect(first.ok, first.message).toBe(true);
+      const id = (first.rows[0] as { id: string }).id;
+
+      // A genuine retry: the same submission, asked again. One transaction,
+      // the same id, still at branch A.
+      const again = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-1');
+      expect(again.ok, again.message).toBe(true);
+      expect((again.rows[0] as { id: string }).id).toBe(id);
+      expect(await rowsForKey(key)).toHaveLength(1);
+
+      // The same key and *the same till*, naming a different branch — every
+      // field the old comparison looked at is identical, so this is the case
+      // it answered with branch A's transaction. It is not that submission,
+      // and it must not be answered as if it were.
+      const elsewhere = await recordKeyed(headOffice, branchB, key, 'OB-IDEM-1', tillA);
+      expect(elsewhere.ok).toBe(false);
+      expect(elsewhere.message).toMatch(/already recorded for a different transaction/i);
+
+      // And with the other branch's till too, which differs in one more
+      // field but must be refused on the same ground.
+      const bothChanged = await recordKeyed(headOffice, branchB, key, 'OB-IDEM-1', tillB);
+      expect(bothChanged.ok).toBe(false);
+
+      // Still one transaction, still at branch A, and the branch-B till is
+      // untouched.
+      const rows = await rowsForKey(key);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.id).toBe(id);
+      expect(rows[0]?.branch).not.toBe('BR9902');
+    });
+
+    it('still demands the branch from a Head Office officer retrying a key', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-2');
+      expect(first.ok, first.message).toBe(true);
+
+      // The mandatory rule does not stop applying because a key is in hand.
+      // Before the fix this returned the transaction and said nothing.
+      const silent = await recordKeyed(headOffice, null, key, 'OB-IDEM-2');
+      expect(silent.ok).toBe(false);
+      expect(silent.message).toMatch(/choose the branch/i);
+
+      expect(await rowsForKey(key)).toHaveLength(1);
+    });
+
+    it('refuses a branch cashier who retries a key against another branch', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await recordKeyed(branchCashier, branchA, key, 'OB-IDEM-3');
+      expect(first.ok, first.message).toBe(true);
+      const id = (first.rows[0] as { id: string }).id;
+
+      // Their own branch: a real retry, same answer.
+      const own = await recordKeyed(branchCashier, branchA, key, 'OB-IDEM-3');
+      expect(own.ok, own.message).toBe(true);
+      expect((own.rows[0] as { id: string }).id).toBe(id);
+
+      // Somebody else's: refused on the branch rule, before the key is
+      // consulted at all.
+      const other = await recordKeyed(branchCashier, branchB, key, 'OB-IDEM-3', tillB);
+      expect(other.ok).toBe(false);
+      expect(other.message).toMatch(/only record transactions at your own branch/i);
+
+      expect(await rowsForKey(key)).toHaveLength(1);
+    });
+
+    it('writes one journal for a key, however many times it is retried', async () => {
+      const key = `OB-IDEM-${Math.random().toString(36).slice(2, 10)}`;
+      const first = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-4');
+      expect(first.ok, first.message).toBe(true);
+      const id = (first.rows[0] as { id: string }).id;
+
+      await asUserCommitted(headOffice, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      const rev = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const posted = await asUserCommitted(headChecker, [
+        {
+          sql: `select public.verify_agency_transaction($1, $2)`,
+          params: [id, Number(rev.revision)],
+        },
+      ]);
+      expect(posted.ok, posted.message).toBe(true);
+
+      // Retried after posting, from both sides of the branch rule.
+      const retry = await recordKeyed(headOffice, branchA, key, 'OB-IDEM-4');
+      expect(retry.ok, retry.message).toBe(true);
+      expect((retry.rows[0] as { id: string }).id).toBe(id);
+      const wrong = await recordKeyed(headOffice, branchB, key, 'OB-IDEM-4', tillB);
+      expect(wrong.ok).toBe(false);
+
+      // One transaction, one journal entry, and the entry is the one the
+      // transaction points at.
+      expect(await rowsForKey(key)).toHaveLength(1);
+      const entries = await query<{ id: string }>(
+        `select e.id::text as id
+           from public.journal_entries e
+           join public.agency_transactions t on t.journal_entry_id = e.id
+          where t.idempotency_key = $1`,
+        [key],
+      );
+      expect(entries).toHaveLength(1);
+    });
+
+    it('posts the journal to the branch the transaction names, and nowhere else', async () => {
+      const r = await record(headOffice, tillB, branchB, 'OB-POST');
+      expect(r.ok, r.message).toBe(true);
+      const id = (r.rows[0] as { id: string }).id;
+
+      await asUserCommitted(headOffice, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [id] },
+      ]);
+      const rev = await queryOne<{ revision: string }>(
+        `select revision::text as revision from public.agency_transactions where id = $1`,
+        [id],
+      );
+      const posted = await asUserCommitted(headChecker, [
+        {
+          sql: `select public.verify_agency_transaction($1, $2)`,
+          params: [id, Number(rev.revision)],
+        },
+      ]);
+      expect(posted.ok, posted.message).toBe(true);
+
+      // Every line of the journal belongs to branch B or to an account with
+      // no branch of its own. A single line at branch A would mean the money
+      // moved through the wrong drawer.
+      const lines = await query<{ branch: string | null; code: string }>(
+        `select a.branch_id::text as branch, a.code
+           from public.agency_transactions t
+           join public.journal_lines l on l.entry_id = t.journal_entry_id
+           join public.ledger_accounts a on a.id = l.account_id
+          where t.id = $1`,
+        [id],
+      );
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) {
+        expect(line.branch === null || line.branch === branchB, line.code).toBe(true);
+      }
+
+      const entry = await queryOne<{ branch: string }>(
+        `select e.branch_id::text as branch
+           from public.agency_transactions t
+           join public.journal_entries e on e.id = t.journal_entry_id
+          where t.id = $1`,
+        [id],
+      );
+      expect(entry.branch).toBe(branchB);
+    });
+  });
+});

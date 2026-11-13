@@ -63,6 +63,10 @@ export declare const PRESERVE_WHOLE: readonly string[];
 export declare const PRESERVE_PARTIAL: readonly PreservePartialEntry[];
 export declare const NEUTRALISE_PROFILES: NeutraliseProfiles;
 export declare const TRUNCATE_TABLES: readonly string[];
+export declare const EMPTY_APPEND_ONLY: readonly {
+  readonly table: string;
+  readonly trigger: string;
+}[];
 export declare const RESET_SEQUENCES: readonly string[];
 export declare const PRESERVE_SEQUENCES: readonly string[];
 export declare const NULL_PRESERVED_ACTOR_REFERENCES: readonly ActorReference[];

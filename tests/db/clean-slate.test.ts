@@ -8,7 +8,7 @@
  *
  * ## Why it has a vitest project of its own
  *
- * It truncates 62 tables and deletes every profile but one. That is global
+ * It truncates 72 tables and deletes every profile but one. That is global
  * state no other suite could survive sharing, for the same reason the four
  * seeder suites have projects of their own: see the header of
  * `vitest.config.mts`. The `db` project excludes this file.
@@ -32,6 +32,7 @@ import {
   classifySequences,
   countBusinessRows,
   describeResidue,
+  EMPTY_APPEND_ONLY,
   PRESERVE_PARTIAL,
   PRESERVE_SEQUENCES,
   PRESERVE_WHOLE,
@@ -384,6 +385,64 @@ describeDb('the clean slate', () => {
   });
 
   // --------------------------------------------------------------------
+  // The agency audit trail is never erased
+  // --------------------------------------------------------------------
+
+  /**
+   * The real connection, except that the agency audit trail reports entries.
+   * Fabricating a genuine agency transaction would need a provider, an agent
+   * line and a funded till; the property under test is only what the
+   * procedure does once it sees a non-empty trail.
+   */
+  function withAgencyAuditEntries(entriesOnCall: (call: number) => number) {
+    let calls = 0;
+    return {
+      query: (sql: string, params?: readonly unknown[]) => {
+        if (sql.includes('count(*) as n from public.agency_transaction_audit_log')) {
+          calls += 1;
+          return Promise.resolve({ rows: [{ n: entriesOnCall(calls) }] });
+        }
+        return db.query(sql, params);
+      },
+    };
+  }
+
+  it('treats the agency audit trail as an immutable table, not a business one', () => {
+    expect(EMPTY_APPEND_ONLY.map((entry) => entry.table)).toEqual([
+      'agency_transaction_audit_log',
+    ]);
+    expect(TRUNCATE_TABLES).not.toContain('agency_transaction_audit_log');
+    expect(PRESERVE_WHOLE).not.toContain('agency_transaction_audit_log');
+  });
+
+  it('refuses a dry run while the agency audit trail holds an entry', async () => {
+    await expect(
+      runCleanSlate(
+        withAgencyAuditEntries(() => 1),
+        { ownerProfileId, dryRun: true },
+      ),
+    ).rejects.toThrow(/append-only audit trail and the clean slate never erases one/);
+    expect(await countBusinessRows(db)).toEqual(before);
+  });
+
+  it('re-checks under lock, and changes nothing when an entry appears', async () => {
+    // Empty at the first look, one entry by the time the table is locked.
+    await expect(
+      runCleanSlate(
+        withAgencyAuditEntries((call) => (call === 1 ? 0 : 1)),
+        { ownerProfileId, dryRun: false },
+      ),
+    ).rejects.toThrow(/Nothing was changed/);
+    expect(await countBusinessRows(db)).toEqual(before);
+
+    const guard = await queryOne<{ enabled: string }>(
+      `select tgenabled as enabled from pg_catalog.pg_trigger
+        where tgname = 'agency_transaction_audit_log_reject_truncate'`,
+    );
+    expect(guard.enabled, 'the TRUNCATE guard must be in force').toBe('O');
+  }, 60_000);
+
+  // --------------------------------------------------------------------
   // The real thing
   // --------------------------------------------------------------------
 
@@ -444,6 +503,31 @@ describeDb('the clean slate', () => {
       refused = true;
     }
     expect(refused, 'the audit log must still refuse deletion').toBe(true);
+  });
+
+  it('leaves the agency audit trail guarded after emptying the books', async () => {
+    // The execute above set the TRUNCATE guard aside for one statement on a
+    // table it had proved empty under lock. It must be back in force.
+    const guard = await queryOne<{ enabled: string }>(
+      `select tgenabled as enabled from pg_catalog.pg_trigger
+        where tgname = 'agency_transaction_audit_log_reject_truncate'`,
+    );
+    expect(guard.enabled).toBe('O');
+
+    let refused = false;
+    try {
+      await query('truncate public.agency_transaction_audit_log');
+    } catch {
+      refused = true;
+    }
+    expect(refused, 'the agency audit trail must still refuse TRUNCATE').toBe(true);
+
+    const agency = await queryOne<{ transactions: string; providers: string }>(
+      `select (select count(*) from public.agency_transactions)::text as transactions,
+              (select count(*) from public.agency_service_providers)::text as providers`,
+    );
+    expect(Number(agency.transactions)).toBe(0);
+    expect(Number(agency.providers), 'the provider catalogue is kept').toBeGreaterThan(0);
   });
 
   it('leaves every demonstration profile unable to sign in or act', async () => {
