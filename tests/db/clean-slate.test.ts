@@ -679,9 +679,10 @@ describeDb('the clean slate', () => {
     //
     // active -> draft is not in the guard's one-way sequence.
     await expect(
-      query(`update public.membership_policy_versions set status = 'draft' where id = $1`, [
-        demo.id,
-      ]),
+      query(
+        `update public.membership_policy_versions set status = 'draft' where id = $1`,
+        [demo.id],
+      ),
     ).rejects.toThrow(/cannot move from active to draft/);
 
     // And the readiness flags are GENERATED ALWAYS: they are derived from the
