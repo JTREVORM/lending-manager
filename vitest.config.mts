@@ -85,6 +85,7 @@ export default defineConfig({
             'tests/db/demo-borrower-reuse.test.ts',
             'tests/db/member-loan-demo-seed.test.ts',
             'tests/db/benefit-demo-seed.test.ts',
+            'tests/db/clean-slate.test.ts',
           ],
         },
       },
@@ -164,6 +165,23 @@ export default defineConfig({
           // for the refusals — each a child process, so it gets a budget as
           // wide as the member-loan suite's.
           testTimeout: 400_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'clean-slate',
+          environment: 'node',
+          include: ['tests/db/clean-slate.test.ts'],
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          // It truncates 62 tables and deletes every profile but one. That is
+          // global state no other suite could survive sharing, which is the
+          // same reason the four seeder suites above have projects of their
+          // own. It builds a small loan book first — two loans driven to
+          // disbursement and paid — then empties it and asserts the result, so
+          // the budget is the database suite's rather than a seeder's.
+          testTimeout: 180_000,
         },
       },
     ],

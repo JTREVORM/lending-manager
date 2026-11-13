@@ -46,6 +46,29 @@ describeDb('forced-password business authorization', () => {
     await closePool();
   });
 
+  it('denies arbitrary GL account balances to borrowers but permits finance staff', async () => {
+    const account = await queryOne<{ id: string }>(
+      'select id from public.ledger_accounts where is_postable = true order by code limit 1',
+    );
+    const client = users.client!;
+    const manager = users.manager!;
+
+    const denied = await asUser(
+      client,
+      'select public.ledger_account_balance($1) as balance',
+      [account.id],
+    );
+    expect(denied.ok).toBe(false);
+    expect(denied.code).toBe('42501');
+
+    const authorized = await asUser(
+      manager,
+      'select public.ledger_account_balance($1) as balance',
+      [account.id],
+    );
+    expect(authorized.ok).toBe(true);
+  });
+
   for (const role of ['owner_admin', 'manager', 'secretary_treasurer', 'client']) {
     it(`withholds business identity, capabilities and loan rows from forced ${role}`, async () => {
       const user = users[role]!;

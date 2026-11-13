@@ -192,7 +192,7 @@ describeDb('an expense that needed no decision says nothing', () => {
 });
 
 // ---------------------------------------------------------------------------
-describeDb('a count written off on submission is not announced as waiting', () => {
+describeDb('a count that is waiting is announced, and one that is not is not', () => {
   async function varianceNotifications(): Promise<number> {
     const row = await queryOne<{ n: string }>(
       `select count(*)::text as n from public.notifications
@@ -218,7 +218,17 @@ describeDb('a count written off on submission is not announced as waiting', () =
     expect(row.severity).toBe('urgent');
   });
 
-  it('says nothing where the difference was approved on submission', async () => {
+  it('announces a difference even where review was switched off', async () => {
+    // This case used to assert the opposite, and was right to at the time:
+    // `submit_reconciliation` wrote the difference off in the same
+    // transaction when `reconciliation_requires_review` was false, so there
+    // was never a review to wait for and announcing one would have been the
+    // bug this suite exists to catch.
+    //
+    // 20261112000100 removed that path. A difference is now always left
+    // `submitted` whatever the setting says, because approving your own count
+    // is the thing the approval step exists to prevent — so it genuinely is
+    // awaiting somebody, and saying so is correct rather than noise.
     await query(
       `update public.finance_settings set reconciliation_requires_review = false where id = 1`,
     );
@@ -234,10 +244,8 @@ describeDb('a count written off on submission is not announced as waiting', () =
       `select status from public.account_reconciliations`,
     );
 
-    // `submit_reconciliation` wrote it off in the same transaction, so there
-    // was never a review to wait for.
-    expect(row.status).toBe('approved');
-    expect(await varianceNotifications()).toBe(0);
+    expect(row.status).toBe('submitted');
+    expect(await varianceNotifications()).toBe(1);
   });
 
   it('says nothing at all for a count that balanced', async () => {

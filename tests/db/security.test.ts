@@ -1415,6 +1415,10 @@ describeDb('privileged functions', () => {
       'request_benefit_information',
       'request_savings_withdrawal',
       'require_business_identity',
+      // 20261106000500. The single answer to who may read a savings account's
+      // amounts, shared by the two wrappers below. Internal: no grant to
+      // `authenticated`.
+      'require_savings_account_access',
       'reschedule_membership_meeting',
       'reverse_benefit_payment',
       'reverse_expense',
@@ -1434,13 +1438,24 @@ describeDb('privileged functions', () => {
       'savings_accounts_assign_number',
       'savings_accounts_guard',
       'savings_accounts_stamp_provenance',
-      // Polytos Phase 3. Each answers one figure about an account the caller
-      // has already named, and both are what the policy's live-loan rule is
-      // written against — so they must give the same answer to every caller.
+      // Polytos Phase 3, re-guarded in 20261106000500. Each answers one figure
+      // about an account the caller has already named, and both are what the
+      // policy's live-loan rule is written against — so for any caller allowed
+      // to see the account at all, they must give the same answer.
+      //
+      // They no longer answer *every* caller. Until 20261106000500 they held
+      // only `require_business_identity`, which refuses a forced-password or
+      // inactive session and says nothing about capability, so an unrelated
+      // borrower who knew an account's UUID read that member's true
+      // withdrawable balance. Each is now a thin wrapper over an internal
+      // function that keeps the arithmetic, in front of
+      // `require_savings_account_access`.
       'savings_pledged_amount',
+      'savings_pledged_amount_internal',
       'savings_summary',
       'savings_transactions_assign_number',
       'savings_withdrawable_amount',
+      'savings_withdrawable_amount_internal',
       'savings_withdrawal_requests_assign_number',
       'savings_withdrawal_requests_guard',
       'schedule_membership_meeting',
@@ -1457,6 +1472,10 @@ describeDb('privileged functions', () => {
       'user_roles_guard_assignment',
       'user_roles_set_granted_by',
       'validate_loan_for_approval',
+      // 20261106000100. The approval rules themselves, moved behind an
+      // internal name with no `authenticated` grant, so the Data API cannot
+      // reach them. The public name above is now a thin authorized wrapper.
+      'validate_loan_for_approval_internal',
       'verify_benefit_document',
       'verify_member_beneficiary',
     ]);
@@ -1537,6 +1556,17 @@ describeDb('privileged functions', () => {
     // password, which the database cannot observe — so the function is
     // reachable only through the server, by `service_role`. See migration
     // 20261002000800 and tests/db/password-change.test.ts.
+    //
+    // Seven names left this list in 20261106000400 — `benefit_blocked_reason`,
+    // `benefits_blocked_reason`, `member_lending_blocked_reason`,
+    // `benefit_expense_account`, `membership_fee_is_posted`,
+    // `membership_terms_are_accepted` and `savings_account_governing_policy`.
+    // Each was a SECURITY DEFINER function with no authorization check of its
+    // own that nothing in the application ever called over the Data API, so
+    // the grant was withdrawn rather than a guard invented for it. Their
+    // internal callers are definer functions, which execute as the owner. The
+    // list is meant to shrink; `scripts/check-database-security.mjs` holds the
+    // reviewed baseline for what remains.
     expect(rows.map((row) => row.proname)).toEqual([
       // Polytos Phase 1. The re-acceptance route. See the note above.
       'accept_membership_policy_version',
@@ -1580,15 +1610,12 @@ describeDb('privileged functions', () => {
       'begin_benefit_verification',
       'begin_membership_policy_transition',
       'benefit_amount_for_claim',
-      'benefit_blocked_reason',
       'benefit_claim_eligibility',
       'benefit_claim_transition_allowed',
-      'benefit_expense_account',
       'benefit_expense_by_type',
       'benefit_payment_blocked_reason',
       'benefit_policy_year_bounds',
       'benefit_summary',
-      'benefits_blocked_reason',
       'business_date',
       'business_now',
       'business_timezone',
@@ -1694,7 +1721,6 @@ describeDb('privileged functions', () => {
       'meeting_fine_candidates',
       'meeting_fine_summary',
       'member_benefit_position',
-      'member_lending_blocked_reason',
       'member_loan_cadence_for_term',
       'member_loan_interest',
       // Polytos Phase 3. Granted because the dashboard reads it, and safe to
@@ -1704,11 +1730,9 @@ describeDb('privileged functions', () => {
       'member_primary_beneficiary',
       'member_savings_position',
       'member_savings_qualification',
-      'membership_fee_is_posted',
       'membership_governing_policy',
       'membership_policy_allows',
       'membership_savings_qualified',
-      'membership_terms_are_accepted',
       // Polytos Phase 3. The calendar-monthly collection date rule, granted
       // for the same reason: pure, immutable, and the one place the rule is
       // stated, so the preview and the generator cannot disagree about it.
@@ -1774,6 +1798,13 @@ describeDb('privileged functions', () => {
       // written against — so they must give the same answer to every caller.
       'review_meeting_absence_notice',
       'revoke_member_beneficiary',
+      // Restored in 20261106000600 after 20261106000400 took it away. It is
+      // granted for a reason that is easy to miss and that broke 31 browser
+      // tests: `savings_qualification_under_policy` and
+      // `member_savings_qualification` below are SECURITY INVOKER and call it,
+      // so the session needs EXECUTE in its own right even though nothing in
+      // the application names it. The invoker-chain check in
+      // scripts/check-database-security.mjs now derives that dependency.
       'savings_account_governing_policy',
       'savings_pledged_amount',
       'savings_qualification_under_policy',

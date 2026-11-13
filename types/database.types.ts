@@ -7314,6 +7314,24 @@ export type Database = {
         Args: { p_savings_account_id: string; p_as_of?: string | null };
         Returns: number;
       };
+      /**
+       * 20261106000500. Holds the pledge sum the wrapper above delegates to,
+       * behind `require_savings_account_access`. Internal: no `authenticated`
+       * grant, so the Data API cannot reach it.
+       */
+      savings_pledged_amount_internal: {
+        Args: { p_savings_account_id: string; p_as_of?: string | null };
+        Returns: number;
+      };
+      /**
+       * 20261106000500. Holds the withdrawal arithmetic — balance, pledges and
+       * the governing policy's live-loan rule — that the wrapper delegates to.
+       * Internal: no `authenticated` grant.
+       */
+      savings_withdrawable_amount_internal: {
+        Args: { p_savings_account_id: string; p_as_of?: string | null };
+        Returns: number | null;
+      };
 
       /**
        * Polytos Phase 3. How much of a savings account a member may withdraw
@@ -7904,6 +7922,24 @@ export type Database = {
       validate_loan_for_approval: {
         Args: { p_loan_id: string };
         Returns: { failure_code: string; detail: string | null }[];
+      };
+      /**
+       * 20261106000100. Holds the approval rules the wrapper above delegates
+       * to. Declared because the generated types describe every function in
+       * the schema, not because the application may call it: it carries no
+       * `authenticated` grant, so the Data API cannot reach it.
+       */
+      validate_loan_for_approval_internal: {
+        Args: { p_loan_id: string };
+        Returns: { failure_code: string; detail: string | null }[];
+      };
+      /**
+       * 20261106000500. The shared answer to who may read a savings account's
+       * amounts. Internal: no `authenticated` grant.
+       */
+      require_savings_account_access: {
+        Args: { p_savings_account_id: string };
+        Returns: undefined;
       };
       user_has_at_least_role: {
         Args: { p_role_key: string };
