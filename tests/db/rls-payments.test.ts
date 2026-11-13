@@ -577,6 +577,35 @@ describeDb('payment row level security', () => {
         // over `benefit_claims` would hand every member's medical claim to
         // anybody who could select from it, and a definer view over the
         // beneficiary register would hand over the payment instructions.
+        // Phase 4D. Four operational registers: the records an officer has to
+        // act on - a count waiting for a second signature, a settlement
+        // recorded by mistake - which the Phase 4C reporting views do not
+        // list. Each is `security_invoker` over a table whose policies
+        // already decide what a branch may see.
+        // Phase 4E. Six more: commission per agent line and per calendar
+        // month, the statement-period and float-trade registers, and the two
+        // Mobile Money reports. Each is `security_invoker` over tables whose
+        // policies already decide what a branch may see — and the per-line
+        // commission figures come from the same functions the posting
+        // refusals use, so a screen cannot promise what a refusal denies.
+        'agency_cash_reconciliation_register',
+        'agency_commission_by_line',
+        'agency_commission_line_balances',
+        'agency_commission_monthly',
+        'agency_commission_reconciliation_register',
+        'agency_commission_settlement_register',
+        'agency_commission_summary',
+        'agency_daily_cash_movement',
+        'agency_end_of_day_exceptions',
+        'agency_float_balances',
+        'agency_float_reconciliation_register',
+        'agency_float_trade_register',
+        'agency_mobile_money_consolidated',
+        'agency_mobile_money_dashboard',
+        'agency_payable_settlement_register',
+        'agency_payable_summary',
+        'agency_transaction_history',
+        'agency_variance_report',
         'benefit_claim_portal_view',
         'benefit_claim_register',
         'benefit_payment_register',

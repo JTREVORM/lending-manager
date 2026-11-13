@@ -305,7 +305,7 @@ describeDb('a sole Owner can run the business', () => {
   // The reconciliation control gap used to be asserted here, as a reminder
   // that `approve_reconciliation` had no distinct-actor rule. It is not
   // asserted here any more, and the reason matters for whoever reads this
-  // next: 20261112000100 closes that gap, and an assertion that the gap
+  // next: 20261112000200 closes that gap, and an assertion that the gap
   // EXISTS would then contradict the migration. Two independent pull
   // requests cannot hold opposite assertions about the same function — the
   // second to merge breaks — so the behaviour is asserted where it belongs,

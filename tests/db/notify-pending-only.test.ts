@@ -225,7 +225,7 @@ describeDb('a count that is waiting is announced, and one that is not is not', (
     // was never a review to wait for and announcing one would have been the
     // bug this suite exists to catch.
     //
-    // 20261112000100 removed that path. A difference is now always left
+    // 20261112000200 removed that path. A difference is now always left
     // `submitted` whatever the setting says, because approving your own count
     // is the thing the approval step exists to prevent — so it genuinely is
     // awaiting somebody, and saying so is correct rather than noise.

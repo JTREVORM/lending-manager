@@ -80,13 +80,131 @@ export default defineConfig({
           fileParallelism: false,
           testTimeout: 30_000,
           // Each seeder suite has a project of its own; see their headers.
+          // So does the agency foundation suite, for the same kind of reason:
+          // it commits a second branch, and a second branch is global state.
+          // `money-movement.test.ts` and `ledger-posting.test.ts` read
+          // `branch_cash_position` with `queryOne`, which requires exactly one
+          // row — so leaving it in this project made those two pass or fail on
+          // file ordering alone. It did pass locally and failed in CI, which is
+          // the definition of the problem rather than bad luck.
           exclude: [
             'tests/db/demo-seed.test.ts',
             'tests/db/demo-borrower-reuse.test.ts',
             'tests/db/member-loan-demo-seed.test.ts',
             'tests/db/benefit-demo-seed.test.ts',
             'tests/db/clean-slate.test.ts',
+            'tests/db/agency-foundation.test.ts',
+            'tests/db/agency-transaction-engine.test.ts',
+            'tests/db/agency-security-closure.test.ts',
+            'tests/db/agency-settlement.test.ts',
+            'tests/db/shared-till-concurrency.test.ts',
+            'tests/db/agency-money-foundation.test.ts',
+            'tests/db/agency-money-commission.test.ts',
+            'tests/db/agency-money-float.test.ts',
           ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency',
+          environment: 'node',
+          include: ['tests/db/agency-foundation.test.ts'],
+          // Its own database, rebuilt from the migrations, because this suite
+          // commits fixtures the rest of the database suite can see: a second
+          // branch, a confirmed provider, and the float tills provisioned
+          // against both. None of it can be cleaned up afterwards either —
+          // `agency_provider_float_accounts` is append-only by trigger and
+          // every reference to a branch is ON DELETE RESTRICT, which is the
+          // schema behaving correctly.
+          //
+          // Keeping it here rather than in `db` is what makes the suite
+          // honest: it needs two branches to prove that one branch cannot
+          // reach the other's till, and it must not make another file's
+          // single-branch assumption false to get them.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 30_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-engine',
+          environment: 'node',
+          include: ['tests/db/agency-transaction-engine.test.ts'],
+          // Its own database again, and for a stronger reason than the
+          // foundation suite's: this one posts real journals. It funds float
+          // and a till and then moves money through them, so any suite that
+          // asserts a cash position, a trial balance or a ledger total would
+          // be reading a book this one had written to. Sharing a database
+          // would make those suites depend on file ordering, which is the
+          // failure the foundation suite already hit once.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-security',
+          environment: 'node',
+          include: ['tests/db/agency-security-closure.test.ts'],
+          // Its own database, for the reason the other two agency projects
+          // have one, and one more besides: this suite stages real races on
+          // two open connections and commits them in a chosen order. A suite
+          // sharing the database would see balances mid-race.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 90_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-settlement',
+          environment: 'node',
+          include: ['tests/db/agency-settlement.test.ts'],
+          // Its own database, like the other agency projects: this suite posts
+          // real settlements and stages races on two connections, so a suite
+          // sharing the database would read a book this one wrote to.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-money',
+          environment: 'node',
+          include: [
+            'tests/db/agency-money-foundation.test.ts',
+            'tests/db/agency-money-commission.test.ts',
+            'tests/db/agency-money-float.test.ts',
+          ],
+          // Its own database, like every other agency project. This suite
+          // commits providers, agent lines and posted transactions, suspends
+          // lines and changes service ceilings — all of it visible to anything
+          // sharing the database, and none of it rollback-able.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'shared-till',
+          environment: 'node',
+          include: ['tests/db/shared-till-concurrency.test.ts'],
+          // Its own database: this suite disburses loans and posts payments,
+          // and it stages lock contention on two connections. A suite sharing
+          // the database would read a book this one wrote to.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
         },
       },
       {

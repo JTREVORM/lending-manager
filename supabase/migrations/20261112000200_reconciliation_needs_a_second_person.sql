@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 20261112000100_reconciliation_needs_a_second_person
+-- 20261112000200_reconciliation_needs_a_second_person
 --
 -- A cash difference may no longer be written off by the person who counted
 -- the drawer.
@@ -143,7 +143,7 @@ begin
   -- person who counted a drawer close their own variance, and the setting
   -- that governed it is editable by the same person. The count is recorded
   -- and the difference stays visible; closing it is a separate, authorised
-  -- act by somebody else. See 20261112000100.
+  -- act by somebody else. See 20261112000200.
   --
   -- `v_review` is still read above: the column remains, and a later version
   -- may want it for something that is not a self-approval.
@@ -256,10 +256,10 @@ end;
 $$;
 
 comment on function public.submit_reconciliation(uuid, date, bigint, text) is
-  'Phase 11. Records a count of a cash account. A count that agrees is balanced and writes no journal; a count that disagrees is submitted and waits for a second authorised person. As of 20261112000100 it never approves a difference itself, whatever reconciliation_requires_review says.';
+  'Phase 11. Records a count of a cash account. A count that agrees is balanced and writes no journal; a count that disagrees is submitted and waits for a second authorised person. As of 20261112000200 it never approves a difference itself, whatever reconciliation_requires_review says.';
 
 comment on function public.approve_reconciliation(uuid, text) is
-  'Phase 11. Posts an approved cash difference to 5950 Cash Over and Short. As of 20261112000100 it refuses the person recorded as having performed the count, with 42501: approving your own variance is the one thing the approval step exists to prevent.';
+  'Phase 11. Posts an approved cash difference to 5950 Cash Over and Short. As of 20261112000200 it refuses the person recorded as having performed the count, with 42501: approving your own variance is the one thing the approval step exists to prevent.';
 
 
 -- ---------------------------------------------------------------------------

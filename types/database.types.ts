@@ -5039,6 +5039,600 @@ export type Database = {
         };
         Relationships: [];
       };
+      // --- Phase 4A: agency banking and digital payments ---------------------
+      //
+      // Every one of these is SELECT-only for `authenticated`: the Insert and
+      // Update shapes are what the Phase 4B/4C definer functions write, not
+      // what a client may send. A session holding INSERT could register a
+      // provider pointed at the wrong income account, or a float till with no
+      // ledger account behind it.
+      agency_service_providers: {
+        Row: {
+          id: string;
+          code: string;
+          name: string;
+          category: string;
+          float_model: string;
+          payable_account_id: string | null;
+          income_account_id: string;
+          commission_model: string;
+          commission_rate_bps: number | null;
+          commission_fixed: number | null;
+          is_provisional: boolean;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          name: string;
+          category: string;
+          float_model: string;
+          payable_account_id?: string | null;
+          income_account_id: string;
+          commission_model: string;
+          commission_rate_bps?: number | null;
+          commission_fixed?: number | null;
+          is_provisional?: boolean;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          name?: string;
+          category?: string;
+          float_model?: string;
+          payable_account_id?: string | null;
+          income_account_id?: string;
+          commission_model?: string;
+          commission_rate_bps?: number | null;
+          commission_fixed?: number | null;
+          is_provisional?: boolean;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_transaction_types: {
+        Row: {
+          id: string;
+          provider_id: string;
+          code: string;
+          name: string;
+          direction: string;
+          requires_meter_number: boolean;
+          requires_account_number: boolean;
+          requires_customer_name: boolean;
+          max_single_transaction: number | null;
+          requires_approval_above: number | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider_id: string;
+          code: string;
+          name: string;
+          direction: string;
+          requires_meter_number?: boolean;
+          requires_account_number?: boolean;
+          requires_customer_name?: boolean;
+          max_single_transaction?: number | null;
+          requires_approval_above?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider_id?: string;
+          code?: string;
+          name?: string;
+          direction?: string;
+          requires_meter_number?: boolean;
+          requires_account_number?: boolean;
+          requires_customer_name?: boolean;
+          max_single_transaction?: number | null;
+          requires_approval_above?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_provider_float_accounts: {
+        Row: {
+          id: string;
+          provider_id: string;
+          branch_id: string;
+          ledger_account_id: string;
+          till_name: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider_id: string;
+          branch_id: string;
+          ledger_account_id: string;
+          till_name?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider_id?: string;
+          branch_id?: string;
+          ledger_account_id?: string;
+          till_name?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_transactions: {
+        Row: {
+          id: string;
+          branch_id: string;
+          provider_id: string;
+          transaction_type_id: string;
+          float_account_id: string | null;
+          payable_account_id: string | null;
+          status: string;
+          principal_amount: number;
+          commission_amount: number;
+          customer_fee: number;
+          provider_reference: string | null;
+          customer_identifier: string | null;
+          customer_name: string | null;
+          description: string | null;
+          transaction_date: string;
+          posted_at: string | null;
+          reversed_at: string | null;
+          original_id: string | null;
+          reversal_id: string | null;
+          submitted_by: string;
+          verified_by: string | null;
+          reversed_by: string | null;
+          reversal_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          idempotency_key: string | null;
+          created_at: string;
+          updated_at: string;
+          commission_supplied: number | null;
+          commission_model_applied: string | null;
+          commission_basis_applied: string | null;
+          commission_rate_bps_applied: number | null;
+          commission_fixed_applied: number | null;
+          commission_computed: number | null;
+          commission_exception_reason: string | null;
+          commission_exception_evidence: string | null;
+          commission_exception_by: string | null;
+          commission_exception_amount: number | null;
+          commission_exception_computed: number | null;
+          income_account_id: string | null;
+          revision: number;
+          submitted_revision: number | null;
+        };
+        Insert: {
+          id?: string;
+          branch_id: string;
+          provider_id: string;
+          transaction_type_id: string;
+          float_account_id?: string | null;
+          payable_account_id?: string | null;
+          status?: string;
+          principal_amount: number;
+          commission_amount?: number;
+          customer_fee?: number;
+          provider_reference?: string | null;
+          customer_identifier?: string | null;
+          customer_name?: string | null;
+          description?: string | null;
+          transaction_date?: string;
+          posted_at?: string | null;
+          reversed_at?: string | null;
+          original_id?: string | null;
+          reversal_id?: string | null;
+          submitted_by: string;
+          verified_by?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          idempotency_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          commission_supplied?: number | null;
+          commission_model_applied?: string | null;
+          commission_basis_applied?: string | null;
+          commission_rate_bps_applied?: number | null;
+          commission_fixed_applied?: number | null;
+          commission_computed?: number | null;
+          commission_exception_reason?: string | null;
+          commission_exception_evidence?: string | null;
+          commission_exception_by?: string | null;
+          commission_exception_amount?: number | null;
+          commission_exception_computed?: number | null;
+          income_account_id?: string | null;
+          revision?: number;
+          submitted_revision?: number | null;
+        };
+        Update: {
+          id?: string;
+          branch_id?: string;
+          provider_id?: string;
+          transaction_type_id?: string;
+          float_account_id?: string | null;
+          payable_account_id?: string | null;
+          status?: string;
+          principal_amount?: number;
+          commission_amount?: number;
+          customer_fee?: number;
+          provider_reference?: string | null;
+          customer_identifier?: string | null;
+          customer_name?: string | null;
+          description?: string | null;
+          transaction_date?: string;
+          posted_at?: string | null;
+          reversed_at?: string | null;
+          original_id?: string | null;
+          reversal_id?: string | null;
+          submitted_by?: string;
+          verified_by?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          idempotency_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          commission_supplied?: number | null;
+          commission_model_applied?: string | null;
+          commission_basis_applied?: string | null;
+          commission_rate_bps_applied?: number | null;
+          commission_fixed_applied?: number | null;
+          commission_computed?: number | null;
+          commission_exception_reason?: string | null;
+          commission_exception_evidence?: string | null;
+          commission_exception_by?: string | null;
+          commission_exception_amount?: number | null;
+          commission_exception_computed?: number | null;
+          income_account_id?: string | null;
+          revision?: number;
+          submitted_revision?: number | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_settlements: {
+        Row: {
+          id: string;
+          provider_id: string;
+          branch_id: string;
+          settlement_date: string;
+          settlement_amount: number;
+          settlement_account_id: string;
+          provider_statement_ref: string | null;
+          journal_entry_id: string | null;
+          status: string;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversal_reason: string | null;
+          reversal_entry_id: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider_id: string;
+          branch_id: string;
+          settlement_date: string;
+          settlement_amount: number;
+          settlement_account_id: string;
+          provider_statement_ref?: string | null;
+          status?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          reversal_entry_id?: string | null;
+          journal_entry_id?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider_id?: string;
+          branch_id?: string;
+          settlement_date?: string;
+          settlement_amount?: number;
+          settlement_account_id?: string;
+          provider_statement_ref?: string | null;
+          status?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          reversal_entry_id?: string | null;
+          journal_entry_id?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_payable_settlements: {
+        Row: {
+          id: string;
+          provider_id: string;
+          branch_id: string;
+          payable_account_id: string;
+          cash_account_id: string;
+          settlement_date: string;
+          settlement_amount: number;
+          provider_receipt_ref: string | null;
+          journal_entry_id: string | null;
+          status: string;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversal_reason: string | null;
+          reversal_entry_id: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider_id: string;
+          branch_id: string;
+          payable_account_id: string;
+          cash_account_id: string;
+          settlement_date: string;
+          settlement_amount: number;
+          provider_receipt_ref?: string | null;
+          journal_entry_id?: string | null;
+          status?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          reversal_entry_id?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider_id?: string;
+          branch_id?: string;
+          payable_account_id?: string;
+          cash_account_id?: string;
+          settlement_date?: string;
+          settlement_amount?: number;
+          provider_receipt_ref?: string | null;
+          journal_entry_id?: string | null;
+          status?: string;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          reversal_entry_id?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      // --- Polytos Phase 4C ------------------------------------------------
+      //
+      // Provider and branch are denormalised from the till so a report can
+      // scope by either without a three-table join; a guard trigger asserts
+      // they agree with the till's own registration rather than trusting them.
+      agency_float_replenishments: {
+        Row: {
+          id: string;
+          provider_id: string;
+          branch_id: string;
+          float_account_id: string;
+          funding_account_id: string;
+          replenishment_date: string;
+          amount: number;
+          provider_reference: string | null;
+          journal_entry_id: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider_id: string;
+          branch_id: string;
+          float_account_id: string;
+          funding_account_id: string;
+          replenishment_date: string;
+          amount: number;
+          provider_reference?: string | null;
+          journal_entry_id?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider_id?: string;
+          branch_id?: string;
+          float_account_id?: string;
+          funding_account_id?: string;
+          replenishment_date?: string;
+          amount?: number;
+          provider_reference?: string | null;
+          journal_entry_id?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_float_reconciliations: {
+        Row: {
+          id: string;
+          float_account_id: string;
+          provider_id: string | null;
+          branch_id: string | null;
+          provider_statement_ref: string | null;
+          reconciliation_date: string;
+          system_closing_balance: number;
+          provider_statement_balance: number;
+          variance: number;
+          variance_written_off: number;
+          variance_journal_entry_id: string | null;
+          notes: string | null;
+          status: string;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          float_account_id: string;
+          provider_id?: string | null;
+          branch_id?: string | null;
+          provider_statement_ref?: string | null;
+          reconciliation_date: string;
+          system_closing_balance: number;
+          provider_statement_balance: number;
+          variance?: number;
+          variance_written_off?: number;
+          variance_journal_entry_id?: string | null;
+          notes?: string | null;
+          status?: string;
+          reconciled_by?: string | null;
+          reconciled_at?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          float_account_id?: string;
+          provider_id?: string | null;
+          branch_id?: string | null;
+          provider_statement_ref?: string | null;
+          reconciliation_date?: string;
+          system_closing_balance?: number;
+          provider_statement_balance?: number;
+          variance?: number;
+          variance_written_off?: number;
+          variance_journal_entry_id?: string | null;
+          notes?: string | null;
+          status?: string;
+          reconciled_by?: string | null;
+          reconciled_at?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_cash_reconciliations: {
+        Row: {
+          id: string;
+          branch_id: string;
+          cash_account_id: string;
+          reconciliation_date: string;
+          system_closing_balance: number;
+          physical_count: number;
+          variance: number;
+          variance_written_off: number;
+          variance_journal_entry_id: string | null;
+          notes: string | null;
+          status: string;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          branch_id: string;
+          cash_account_id: string;
+          reconciliation_date: string;
+          system_closing_balance: number;
+          physical_count: number;
+          variance?: number;
+          variance_written_off?: number;
+          variance_journal_entry_id?: string | null;
+          notes?: string | null;
+          status?: string;
+          reconciled_by?: string | null;
+          reconciled_at?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          branch_id?: string;
+          cash_account_id?: string;
+          reconciliation_date?: string;
+          system_closing_balance?: number;
+          physical_count?: number;
+          variance?: number;
+          variance_written_off?: number;
+          variance_journal_entry_id?: string | null;
+          notes?: string | null;
+          status?: string;
+          reconciled_by?: string | null;
+          reconciled_at?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agency_transaction_audit_log: {
+        Row: {
+          id: string;
+          transaction_id: string;
+          action: string;
+          actor_id: string;
+          old_value: Json | null;
+          new_value: Json | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          transaction_id: string;
+          action: string;
+          actor_id: string;
+          old_value?: Json | null;
+          new_value?: Json | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          transaction_id?: string;
+          action?: string;
+          actor_id?: string;
+          old_value?: Json | null;
+          new_value?: Json | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
 
     /**
@@ -5049,6 +5643,301 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      // --- Polytos Phase 4C: the agency reporting layer ----------------------
+      //
+      // All seven are `security_invoker`, so the row-level policies on the
+      // agency tables, journal_entries and journal_lines decide what a caller
+      // sees. The two summaries recompute the outstanding figures inline
+      // rather than calling agency_commission_outstanding() or
+      // agency_payable_outstanding(), which are revoked from `authenticated`
+      // on purpose.
+      agency_commission_by_line: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          till_name: string | null;
+          label: string | null;
+          line_status: string | null;
+          ledger_account_code: string | null;
+          float_balance: number | null;
+          commission_outstanding: number | null;
+          recovery_owed: number | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_monthly: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          month_start: string | null;
+          transactions: number | null;
+          principal: number | null;
+          customer_fees: number | null;
+          commission_earned: number | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_reconciliation_register: {
+        Row: {
+          id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          period_start: string | null;
+          period_end: string | null;
+          system_commission_earned: number | null;
+          provider_reported_commission: number | null;
+          variance: number | null;
+          variance_means: string | null;
+          statement_ref: string | null;
+          status: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string | null;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          current_system_earned: number | null;
+        };
+        Relationships: [];
+      };
+      agency_float_trade_register: {
+        Row: {
+          id: string | null;
+          kind: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          counter_float_account_id: string | null;
+          counter_till_name: string | null;
+          counter_label: string | null;
+          counter_branch_id: string | null;
+          counter_branch_code: string | null;
+          settlement_account_id: string | null;
+          settlement_account_code: string | null;
+          settlement_account_name: string | null;
+          trade_date: string | null;
+          float_amount: number | null;
+          cash_amount: number | null;
+          fee_amount: number | null;
+          total_amount: number | null;
+          purchase_basis: string | null;
+          purchase_difference: number | null;
+          source_kind: string | null;
+          counterparty_name: string | null;
+          reference: string | null;
+          notes: string | null;
+          status: string | null;
+          revision: number | null;
+          created_by: string | null;
+          created_at: string | null;
+          verified_by: string | null;
+          verified_at: string | null;
+          rejected_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_by: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+        };
+        Relationships: [];
+      };
+      agency_mobile_money_consolidated: {
+        Row: {
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          agent_lines: number | null;
+          active_lines: number | null;
+          suspended_lines: number | null;
+          float_held: number | null;
+          commission_outstanding: number | null;
+          recovery_owed: number | null;
+          float_purchased: number | null;
+          purchase_premium: number | null;
+          purchase_discount: number | null;
+          float_sold: number | null;
+          sale_fee_income: number | null;
+          float_transferred_out: number | null;
+          float_transferred_in: number | null;
+        };
+        Relationships: [];
+      };
+      agency_mobile_money_dashboard: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          till_name: string | null;
+          label: string | null;
+          line_status: string | null;
+          ledger_account_code: string | null;
+          float_balance: number | null;
+          commission_outstanding: number | null;
+          recovery_owed: number | null;
+          deposits_today: number | null;
+          deposit_value_today: number | null;
+          withdrawals_today: number | null;
+          withdrawal_value_today: number | null;
+          commission_today: number | null;
+          customer_fees_today: number | null;
+          pending_trades: number | null;
+          transactions_in_flight: number | null;
+          open_commission_reconciliations: number | null;
+        };
+        Relationships: [];
+      };
+      agency_float_balances: {
+        Row: {
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          till_name: string | null;
+          till_is_active: boolean | null;
+          ledger_account_id: string | null;
+          ledger_account_code: string | null;
+          balance: number | null;
+          provider_is_active: boolean | null;
+          provider_is_provisional: boolean | null;
+        };
+        Relationships: [];
+      };
+      agency_transaction_history: {
+        Row: {
+          id: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          type_code: string | null;
+          type_name: string | null;
+          direction: string | null;
+          transaction_date: string | null;
+          status: string | null;
+          principal_amount: number | null;
+          customer_fee: number | null;
+          commission_amount: number | null;
+          commission_computed: number | null;
+          commission_supplied: number | null;
+          commission_exception_reason: string | null;
+          customer_identifier: string | null;
+          provider_reference: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          submitted_by: string | null;
+          verified_by: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_summary: {
+        Row: {
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          commission_earned: number | null;
+          commission_received: number | null;
+          commission_returned: number | null;
+          commission_outstanding: number | null;
+        };
+        Relationships: [];
+      };
+      agency_payable_summary: {
+        Row: {
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          collected_on_behalf: number | null;
+          remitted: number | null;
+          remittance_reversed: number | null;
+          payable_outstanding: number | null;
+        };
+        Relationships: [];
+      };
+      agency_variance_report: {
+        Row: {
+          reconciliation_kind: string | null;
+          id: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          provider_id: string | null;
+          provider_name: string | null;
+          float_account_id: string | null;
+          account_id: string | null;
+          reconciliation_date: string | null;
+          system_closing_balance: number | null;
+          counted_or_statement_balance: number | null;
+          variance: number | null;
+          variance_means: string | null;
+          variance_written_off: number | null;
+          variance_journal_entry_id: string | null;
+          status: string | null;
+          created_by: string | null;
+          reconciled_by: string | null;
+          provider_statement_ref: string | null;
+          notes: string | null;
+        };
+        Relationships: [];
+      };
+      agency_daily_cash_movement: {
+        Row: {
+          branch_id: string | null;
+          branch_code: string | null;
+          entry_date: string | null;
+          cash_account_id: string | null;
+          cash_account_code: string | null;
+          source_type: string | null;
+          entry_lines: number | null;
+          cash_in: number | null;
+          cash_out: number | null;
+          net_movement: number | null;
+        };
+        Relationships: [];
+      };
+      agency_end_of_day_exceptions: {
+        Row: {
+          exception_kind: string | null;
+          branch_id: string | null;
+          as_of_date: string | null;
+          subject_id: string | null;
+          provider_name: string | null;
+          amount: number | null;
+          detail: string | null;
+        };
+        Relationships: [];
+      };
       // --- Polytos Phase 4 -------------------------------------------------
       //
       // `benefit_claim_portal_view` is the one whose **column list is the
@@ -5056,6 +5945,115 @@ export type Database = {
       // cannot render an assessor's reasoning about a member's documents by
       // accident, and a future `select *` cannot reintroduce it.
 
+      agency_cash_reconciliation_register: {
+        Row: {
+          id: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          cash_account_id: string | null;
+          account_code: string | null;
+          account_name: string | null;
+          reconciliation_date: string | null;
+          status: string | null;
+          system_closing_balance: number | null;
+          physical_count: number | null;
+          variance: number | null;
+          variance_means: string | null;
+          variance_written_off: number | null;
+          variance_journal_entry_id: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string | null;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          current_system_balance: number | null;
+          balance_moved: boolean | null;
+        };
+        Relationships: [];
+      };
+      agency_float_reconciliation_register: {
+        Row: {
+          id: string | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          ledger_account_id: string | null;
+          account_code: string | null;
+          account_name: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          reconciliation_date: string | null;
+          status: string | null;
+          system_closing_balance: number | null;
+          provider_statement_balance: number | null;
+          provider_statement_ref: string | null;
+          variance: number | null;
+          variance_means: string | null;
+          variance_written_off: number | null;
+          variance_journal_entry_id: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string | null;
+          reconciled_by: string | null;
+          reconciled_at: string | null;
+          current_system_balance: number | null;
+          balance_moved: boolean | null;
+        };
+        Relationships: [];
+      };
+      agency_commission_settlement_register: {
+        Row: {
+          id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          settlement_date: string | null;
+          settlement_amount: number | null;
+          settlement_account_id: string | null;
+          settlement_account_code: string | null;
+          settlement_account_name: string | null;
+          provider_statement_ref: string | null;
+          status: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_by: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
+      agency_payable_settlement_register: {
+        Row: {
+          id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          settlement_date: string | null;
+          settlement_amount: number | null;
+          cash_account_id: string | null;
+          cash_account_code: string | null;
+          cash_account_name: string | null;
+          payable_account_id: string | null;
+          provider_receipt_ref: string | null;
+          status: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          created_by: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
       benefit_claim_register: {
         Row: {
           id: string | null;
@@ -5546,6 +6544,10 @@ export type Database = {
           airtel_money: number;
           cash_at_bank: number;
           total_liquidity: number;
+          // Phase 4A. Appended after the total, because `create or replace
+          // view` can only add a column at the end. total_liquidity is every
+          // account with a cash_kind, so this is one of its five components.
+          agency_float: number;
         };
         Relationships: [];
       };
@@ -6635,6 +7637,388 @@ export type Database = {
     };
 
     Functions: {
+      // --- Phase 4B: the agency transaction engine ---------------------------
+      //
+      // Eight lifecycle RPCs reachable by a signed-in user, each refusing a
+      // caller without its agency capability with SQLSTATE 42501. The
+      // commission helpers and the posting routine are NOT reachable: they are
+      // called by the lifecycle functions, which are SECURITY DEFINER, and
+      // their EXECUTE grant is withheld.
+      create_agency_transaction: {
+        Args: {
+          p_transaction_type_id: string;
+          p_principal_amount: number;
+          p_float_account_id?: string | null;
+          p_customer_identifier?: string | null;
+          p_customer_name?: string | null;
+          p_provider_reference?: string | null;
+          p_customer_fee?: number;
+          p_commission_supplied?: number | null;
+          p_description?: string | null;
+          p_transaction_date?: string | null;
+          p_idempotency_key?: string | null;
+          p_customer_fee_mode?: string | null;
+          p_transacted_at?: string | null;
+          p_branch_id?: string | null;
+        };
+        Returns: string;
+      };
+      update_agency_transaction: {
+        Args: {
+          p_transaction_id: string;
+          p_principal_amount?: number | null;
+          p_customer_identifier?: string | null;
+          p_customer_name?: string | null;
+          p_provider_reference?: string | null;
+          p_customer_fee?: number | null;
+          p_commission_supplied?: number | null;
+          p_description?: string | null;
+        };
+        Returns: undefined;
+      };
+      submit_agency_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      return_agency_transaction: {
+        Args: { p_transaction_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      verify_agency_transaction: {
+        Args: { p_transaction_id: string; p_expected_revision?: number | null };
+        Returns: string;
+      };
+      cancel_agency_transaction: {
+        Args: { p_transaction_id: string; p_reason?: string | null };
+        Returns: undefined;
+      };
+      reverse_agency_transaction: {
+        Args: { p_transaction_id: string; p_reason: string };
+        Returns: string;
+      };
+      update_agency_transaction_reference: {
+        Args: { p_transaction_id: string; p_new_reference: string; p_reason: string };
+        Returns: undefined;
+      };
+      // Not reachable by `authenticated`; declared because the schema holds
+      // them and this file is asserted to be complete.
+      post_agency_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: string;
+      };
+      agency_actor: {
+        Args: { p_capability: string };
+        Returns: string;
+      };
+      agency_line: {
+        Args: {
+          p_account_id: string;
+          p_debit: number;
+          p_credit: number;
+          p_memo: string;
+        };
+        Returns: Json;
+      };
+      agency_commission_for: {
+        Args: { p_provider_id: string; p_principal: number };
+        Returns: {
+          amount: number;
+          basis: string;
+          rate_bps: number | null;
+          fixed: number | null;
+        }[];
+      };
+      agency_commission_reconcile: {
+        Args: { p_provider_id: string; p_principal: number; p_supplied?: number | null };
+        Returns: {
+          amount: number;
+          computed: number;
+          basis: string;
+          rate_bps: number | null;
+          fixed: number | null;
+          differs: boolean;
+        }[];
+      };
+      agency_commission_outstanding: {
+        Args: { p_provider_id: string; p_branch_id: string };
+        Returns: number;
+      };
+      // --- Phase 4B-S: security closure --------------------------------------
+      //
+      // None of these four is reachable by a signed-in user except
+      // `authorise_agency_commission_exception`, which refuses anybody without
+      // `agency:commission_exception` (owner_admin only) with SQLSTATE 42501.
+      // `agency_locked_transaction` is the single authorization gate the
+      // lifecycle functions share: it locks the row and refuses one in another
+      // branch without disclosing that it exists. `lock_ledger_balances`
+      // serialises concurrent readers of a cash or float balance, and
+      // `agency_payable_outstanding` backs the bank agency payable floor.
+      agency_locked_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: Database['public']['Tables']['agency_transactions']['Row'];
+      };
+      // --- Polytos Phase 4C: settlement, replenishment and reconciliation ---
+      agency_locked_commission_settlement: {
+        Args: { p_settlement_id: string };
+        Returns: Database['public']['Tables']['agency_commission_settlements']['Row'];
+      };
+      agency_locked_payable_settlement: {
+        Args: { p_settlement_id: string };
+        Returns: Database['public']['Tables']['agency_payable_settlements']['Row'];
+      };
+      approve_agency_cash_reconciliation: {
+        Args: {
+          p_reconciliation_id: string;
+          p_adjust?: boolean;
+          p_reason?: string | null;
+        };
+        Returns: string | null;
+      };
+      approve_agency_float_reconciliation: {
+        Args: {
+          p_reconciliation_id: string;
+          p_adjust?: boolean;
+          p_reason?: string | null;
+        };
+        Returns: string | null;
+      };
+      assert_agency_settlement_account: {
+        Args: { p_account_id: string; p_branch_id: string; p_role: string };
+        Returns: undefined;
+      };
+      lock_agency_provider_balance: {
+        Args: { p_provider_id: string; p_branch_id: string };
+        Returns: undefined;
+      };
+      post_agency_payable_settlement: {
+        Args: {
+          p_provider_id: string;
+          p_branch_id: string;
+          p_settlement_amount: number;
+          p_cash_account_id: string;
+          p_receipt_ref?: string | null;
+          p_settlement_date?: string | null;
+        };
+        Returns: string;
+      };
+      post_float_replenishment: {
+        Args: {
+          p_float_account_id: string;
+          p_amount: number;
+          p_funding_account_id: string;
+          p_reference?: string | null;
+          p_replenishment_date?: string | null;
+        };
+        Returns: string;
+      };
+      agency_agent_line_obligations: {
+        Args: { p_float_account_id: string };
+        Returns: string[];
+      };
+      agency_commission_earned_by_line: {
+        Args: { p_float_account_id: string; p_from: string; p_to: string };
+        Returns: number;
+      };
+      agency_commission_outstanding_by_line: {
+        Args: { p_float_account_id: string };
+        Returns: number;
+      };
+      agency_commission_recovery_outstanding_by_line: {
+        Args: { p_float_account_id: string };
+        Returns: number;
+      };
+      certify_agency_commission_reconciliation: {
+        Args: { p_reconciliation_id: string; p_notes?: string | null };
+        Returns: undefined;
+      };
+      close_agency_agent_line: {
+        Args: {
+          p_float_account_id: string;
+          p_reason: string;
+          p_closed_on?: string | null;
+        };
+        Returns: undefined;
+      };
+      record_agency_commission_payout: {
+        Args: {
+          p_float_account_id: string;
+          p_amount: number;
+          p_provider_reference: string;
+          p_payout_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      record_agency_commission_recovery: {
+        Args: {
+          p_float_account_id: string;
+          p_amount: number;
+          p_method: string;
+          p_provider_reference: string;
+          p_recovery_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      record_agency_float_trade: {
+        Args: {
+          p_kind: string;
+          p_float_account_id: string;
+          p_float_amount: number;
+          p_reference: string;
+          p_counter_float_account_id?: string | null;
+          p_settlement_account_id?: string | null;
+          p_cash_amount?: number | null;
+          p_fee_amount?: number | null;
+          p_source_kind?: string | null;
+          p_counterparty_name?: string | null;
+          p_trade_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      register_agency_agent_line: {
+        Args: {
+          p_provider_id: string;
+          p_branch_id: string;
+          p_till_name: string;
+          p_label?: string | null;
+          p_line_msisdn?: string | null;
+          p_agent_code?: string | null;
+          p_opened_on?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      reject_agency_float_trade: {
+        Args: { p_trade_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      reverse_agency_float_trade: {
+        Args: { p_trade_id: string; p_reason: string };
+        Returns: string;
+      };
+      set_agency_agent_line_suspended: {
+        Args: {
+          p_float_account_id: string;
+          p_suspended: boolean;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
+      set_agency_provider_commission_source: {
+        Args: { p_provider_id: string; p_source: string; p_reason?: string | null };
+        Returns: string;
+      };
+      set_agency_service_limit: {
+        Args: {
+          p_transaction_type_id: string;
+          p_max_single_transaction: number;
+          p_reason?: string | null;
+        };
+        Returns: string;
+      };
+      submit_agency_commission_reconciliation: {
+        Args: {
+          p_float_account_id: string;
+          p_period_start: string;
+          p_period_end: string;
+          p_provider_reported_commission: number;
+          p_statement_ref: string;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      update_agency_agent_line: {
+        Args: {
+          p_float_account_id: string;
+          p_label?: string | null;
+          p_line_msisdn?: string | null;
+          p_agent_code?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: undefined;
+      };
+      verify_agency_float_trade: {
+        Args: { p_trade_id: string; p_expected_revision?: number | null };
+        Returns: string;
+      };
+      record_commission_settlement: {
+        Args: {
+          p_provider_id: string;
+          p_branch_id: string;
+          p_settlement_amount: number;
+          p_settlement_account_id: string;
+          p_statement_ref?: string | null;
+          p_settlement_date?: string | null;
+        };
+        Returns: string;
+      };
+      reverse_agency_payable_settlement: {
+        Args: { p_settlement_id: string; p_reason: string };
+        Returns: string;
+      };
+      reverse_commission_settlement: {
+        Args: { p_settlement_id: string; p_reason: string };
+        Returns: string;
+      };
+      submit_agency_cash_reconciliation: {
+        Args: {
+          p_cash_account_id: string;
+          p_physical_count: number;
+          p_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      submit_agency_float_reconciliation: {
+        Args: {
+          p_float_account_id: string;
+          p_statement_balance: number;
+          p_statement_ref?: string | null;
+          p_date?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      agency_payable_outstanding: {
+        Args: { p_provider_id: string; p_branch_id: string };
+        Returns: number;
+      };
+      authorise_agency_commission_exception: {
+        Args: {
+          p_transaction_id: string;
+          p_reason: string;
+          p_evidence: string;
+          p_proposed_amount?: number | null;
+        };
+        Returns: undefined;
+      };
+      lock_ledger_balances: {
+        Args: { p_account_ids: string[] };
+        Returns: undefined;
+      };
+      // --- Phase 4A: agency banking -----------------------------------------
+      //
+      // `ensure_agency_float_account` is the only one reachable by a signed-in
+      // user; it refuses anybody without `agency:providers` with SQLSTATE
+      // 42501. The assertion helper is called by the Phase 4B/4C posting
+      // functions and its EXECUTE grant is withheld.
+      ensure_agency_float_account: {
+        Args: {
+          p_provider_id: string;
+          p_branch_id: string;
+          p_till_name?: string;
+        };
+        Returns: string;
+      };
+      assert_agency_float_available: {
+        Args: {
+          p_account_id: string;
+          p_amount: number;
+        };
+        Returns: undefined;
+      };
       polytos_readiness: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;

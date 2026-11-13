@@ -213,6 +213,53 @@ export interface Fixtures {
     readonly waitingDays: number;
     readonly yearBasis: string;
   };
+  /**
+   * Polytos Phase 4D. The agency counter the harness has been trading at.
+   *
+   * Three obviously synthetic providers, prefixed `DEMO_`, created only in
+   * this throwaway database. The nine providers Phase 4A registered are left
+   * exactly as the migration made them - provisional and inactive, because
+   * nobody has approved their commercial terms - so the fourteen agency
+   * screens have real postings to show without any registered provider being
+   * activated anywhere.
+   *
+   *   transactions.awaitingVerification  recorded and submitted, so the
+   *                                      pending queue is not empty
+   *   transactions.draft                 still being typed at the counter
+   *   transactions.reversed              posted and then reversed, so the
+   *                                      history has a contra entry
+   *   transactions.commissionException   a promotional rate the Owner
+   *                                      authorised and a manager then
+   *                                      verified at the new revision
+   *   reconciliations.openFloatStatement a provider statement 4,000 short of
+   *                                      our books, awaiting a second officer
+   *   reconciliations.certifiedCashCount a drawer 2,000 short, certified with
+   *                                      the difference left outstanding
+   */
+  readonly agency: {
+    readonly providers: {
+      readonly mtn: string;
+      readonly airtel: string;
+      readonly nwsc: string;
+    };
+    readonly types: {
+      readonly mtnDeposit: string;
+      readonly mtnWithdrawal: string;
+      readonly waterBill: string;
+    };
+    readonly tills: { readonly mtn: string; readonly airtel: string };
+    readonly transactions: {
+      readonly awaitingVerification: string;
+      readonly draft: string;
+      readonly reversed: string;
+      readonly commissionException: string;
+    };
+    readonly settlements: { readonly commission: string; readonly payable: string };
+    readonly reconciliations: {
+      readonly certifiedCashCount: string;
+      readonly openFloatStatement: string;
+    };
+  };
   readonly memberLending: {
     readonly multiplierBps: number;
     readonly interestBasis: string;
@@ -273,6 +320,65 @@ export async function resetRateLimits(): Promise<void> {
   } finally {
     await client.end();
   }
+}
+
+/**
+ * Read a row or two straight from the harness database.
+ *
+ * A browser can show that a screen said "Recorded". Only the database can
+ * show that one journal was written, that its lines balance, and that the
+ * audit log names who did it - which is the difference between testing an
+ * interface and testing a financial system through one.
+ *
+ * Guarded by the same check the destructive helpers use, so it can never be
+ * pointed at anything but the throwaway stack. Callers read; nothing here
+ * writes, because a test that set up its own data behind the interface would
+ * stop proving the interface can.
+ */
+export async function queryHarness<Row extends Record<string, unknown>>(
+  sql: string,
+  params: readonly unknown[] = [],
+): Promise<Row[]> {
+  const url = process.env.E2E_DATABASE_URL;
+  if (url === undefined || url === '') {
+    throw new Error(
+      'E2E_DATABASE_URL is not set; source tests/e2e/harness/stack.sh env.',
+    );
+  }
+
+  assertTestDatabaseUrl(url, 'browser');
+
+  const require = createRequire(join(process.cwd(), 'package.json'));
+  const { Client } = require('pg') as {
+    Client: new (c: { connectionString: string }) => {
+      connect(): Promise<void>;
+      query(sql: string, params?: readonly unknown[]): Promise<{ rows: Row[] }>;
+      end(): Promise<void>;
+    };
+  };
+
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  try {
+    const { rows } = await client.query(sql, params);
+    return rows;
+  } finally {
+    await client.end();
+  }
+}
+
+/** The one row a query returned, or a failure that says which query. */
+export async function queryHarnessOne<Row extends Record<string, unknown>>(
+  sql: string,
+  params: readonly unknown[] = [],
+): Promise<Row> {
+  const rows = await queryHarness<Row>(sql, params);
+  if (rows.length !== 1) {
+    throw new Error(
+      `Expected exactly one row, got ${String(rows.length)}: ${sql.slice(0, 120)}`,
+    );
+  }
+  return rows[0]!;
 }
 
 export async function signIn(page: Page, who: Who): Promise<void> {

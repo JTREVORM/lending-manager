@@ -121,10 +121,64 @@ const PHASE_PREFIXES = [
   '20261028',
   '20261103',
   '20261106',
+  // Phase 4A-4D, agency banking and digital payments. In the list for the
+  // plain reason the list exists: none of it is deployed, so all of it is
+  // part of the upgrade rather than part of the existing schema.
+  //
+  // It was outside the list until Phase 4D, and that was wrong in a way
+  // nothing caught until the harness seed grew an agency section: the seed
+  // ran against a database that already had the agency engine but not the
+  // Polytos savings deposits, so the float top-up was refused for want of
+  // cash in a drawer that had not been filled yet. The seed was not the
+  // defect. Classifying unreleased migrations as "existing" was.
+  //
+  // Applying them here is also the stronger check, for the same reason the
+  // comment above gives for Phase 4: they land on a seeded book between the
+  // two financial baselines, so the claim that agency banking moves not one
+  // shilling of anybody's loan is measured rather than asserted.
+  '20261107',
+  '20261108',
+  '20261109',
+  '20261110',
+  '20261111',
+  '20261112',
+  '20261113',
+  '20261114',
+  // Phase 4E, Mobile Money. Unreleased like every agency phase before it.
+  '20261115',
 ];
 
 const isPhaseMigration = (name) =>
   PHASE_PREFIXES.some((prefix) => name.startsWith(prefix));
+
+/**
+ * Refuse to run if a migration newer than the newest unreleased one is being
+ * treated as released.
+ *
+ * The list above is a manual record of what is not deployed yet, and twice
+ * now a new migration has been added without it - once in Phase 4D and once
+ * in 4D-F. Both times the symptom was a seeding failure three steps later,
+ * with nothing in the message about this list.
+ *
+ * The rule is narrow on purpose: a file dated after the newest prefix here
+ * cannot already be in production, because the ones here are not. Anything
+ * older is a judgement the list has already made, and is left alone.
+ */
+function assertPhaseListIsCurrent(names) {
+  const newest = PHASE_PREFIXES.reduce((a, b) => (a > b ? a : b));
+  const missed = names
+    .filter((name) => name.slice(0, 8) > newest && !isPhaseMigration(name))
+    .sort();
+
+  if (missed.length > 0) {
+    throw new Error(
+      `These migrations are newer than every unreleased one and are being ` +
+        `treated as the released schema, which cannot be right:\n` +
+        missed.map((name) => `  ${name}`).join('\n') +
+        `\n\nAdd their date prefixes to PHASE_PREFIXES in ${'scripts/verify-membership-upgrade.mjs'}.`,
+    );
+  }
+}
 
 const PORT = process.env.UPGRADE_PG_PORT ?? '5433';
 const USER = process.env.UPGRADE_PG_USER ?? 'lending';
@@ -283,6 +337,8 @@ async function capture(client) {
 const all = readdirSync(MIGRATIONS)
   .filter((name) => name.endsWith('.sql'))
   .sort();
+
+assertPhaseListIsCurrent(all);
 
 const before = all.filter((name) => !isPhaseMigration(name));
 const phase = all.filter(isPhaseMigration);

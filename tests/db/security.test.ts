@@ -76,6 +76,46 @@ describeDb('row level security', () => {
       // no posting behind it.
       'account_reconciliations:SELECT',
       'account_transfers:SELECT',
+      // Phase 4A. The agency banking tables: SELECT only, every one of them,
+      // for exactly the reason the money-movement documents above are. Each is
+      // written by a definer function that posts its journal in the same
+      // transaction, so a session holding INSERT could register a provider
+      // whose income account was the wrong type, or a float till with no
+      // ledger account behind it.
+      'agency_cash_reconciliation_register:SELECT',
+      'agency_cash_reconciliations:SELECT',
+      'agency_commission_by_line:SELECT',
+      'agency_commission_line_balances:SELECT',
+      'agency_commission_monthly:SELECT',
+      'agency_commission_reconciliation_register:SELECT',
+      // Phase 4E. SELECT only on the three new registers and the six new
+      // views. Every write goes through a function; no screen in this
+      // phase reaches a table directly.
+      'agency_commission_reconciliations:SELECT',
+      'agency_commission_recoveries:SELECT',
+      'agency_commission_settlement_register:SELECT',
+      'agency_commission_settlements:SELECT',
+      'agency_commission_summary:SELECT',
+      'agency_daily_cash_movement:SELECT',
+      'agency_end_of_day_exceptions:SELECT',
+      'agency_float_balances:SELECT',
+      'agency_float_reconciliation_register:SELECT',
+      'agency_float_reconciliations:SELECT',
+      'agency_float_replenishments:SELECT',
+      'agency_float_trade_register:SELECT',
+      'agency_float_trades:SELECT',
+      'agency_mobile_money_consolidated:SELECT',
+      'agency_mobile_money_dashboard:SELECT',
+      'agency_payable_settlement_register:SELECT',
+      'agency_payable_settlements:SELECT',
+      'agency_payable_summary:SELECT',
+      'agency_provider_float_accounts:SELECT',
+      'agency_service_providers:SELECT',
+      'agency_transaction_audit_log:SELECT',
+      'agency_transaction_history:SELECT',
+      'agency_transaction_types:SELECT',
+      'agency_transactions:SELECT',
+      'agency_variance_report:SELECT',
       'audit_log:SELECT',
       // Phase 10. The branch network and the ledger: SELECT only. Nothing writes to a journal through a session; every posting is made by a definer function.
       // Polytos Phase 4. SELECT only almost everywhere: a beneficiary is
@@ -392,6 +432,25 @@ describeDb('row level security', () => {
       // definer function that posts its journal in the same transaction.
       'account_reconciliations:SELECT',
       'account_transfers:SELECT',
+      // Phase 4A. Read policies only, for the same reason. Each is gated on
+      // `agency:reports` and branch-isolated; the borrower role holds no
+      // `agency:*` capability at all, so the predicate is false for them and
+      // every one of these tables returns nothing.
+      'agency_cash_reconciliations:SELECT',
+      // Phase 4E. SELECT only, gated on agency:reports and the branch,
+      // with the branch rule restated inline so PostgreSQL can hoist it.
+      'agency_commission_reconciliations:SELECT',
+      'agency_commission_recoveries:SELECT',
+      'agency_commission_settlements:SELECT',
+      'agency_float_reconciliations:SELECT',
+      'agency_float_replenishments:SELECT',
+      'agency_float_trades:SELECT',
+      'agency_payable_settlements:SELECT',
+      'agency_provider_float_accounts:SELECT',
+      'agency_service_providers:SELECT',
+      'agency_transaction_audit_log:SELECT',
+      'agency_transaction_types:SELECT',
+      'agency_transactions:SELECT',
       'audit_log:SELECT',
       // Phase 10. Read policies only: no session role writes a journal,
       // a ledger account or a branch — every one of those is a definer
@@ -878,6 +937,32 @@ describeDb('views', () => {
         // and `benefit_claim_portal_view` carries the member's disclosure policy
         // as its column list, so a portal screen cannot render an assessor's note
         // by accident and a future `select *` cannot reintroduce one.
+        // Phase 4D. Four operational registers: the records an officer has to
+        // act on - a count waiting for a second signature, a settlement
+        // recorded by mistake - which the Phase 4C reporting views do not
+        // list. Each is `security_invoker` over a table whose policies
+        // already decide what a branch may see.
+        'agency_cash_reconciliation_register',
+        // Phase 4E. Commission per agent line and per calendar month, the
+        // statement-period and float-trade registers, and the two Mobile
+        // Money reports.
+        'agency_commission_by_line',
+        'agency_commission_line_balances',
+        'agency_commission_monthly',
+        'agency_commission_reconciliation_register',
+        'agency_commission_settlement_register',
+        'agency_commission_summary',
+        'agency_daily_cash_movement',
+        'agency_end_of_day_exceptions',
+        'agency_float_balances',
+        'agency_float_reconciliation_register',
+        'agency_float_trade_register',
+        'agency_mobile_money_consolidated',
+        'agency_mobile_money_dashboard',
+        'agency_payable_settlement_register',
+        'agency_payable_summary',
+        'agency_transaction_history',
+        'agency_variance_report',
         'benefit_claim_portal_view',
         'benefit_claim_register',
         'benefit_payment_register',
@@ -1016,7 +1101,17 @@ describeDb('views', () => {
     // and the member-loan register. And six from Polytos Phase 4: the claim
     // register and the portal's read of it, the beneficiary register, the
     // payment register, the meeting register and the attendance register.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(48);
+    // Eleven from agency banking: the seven Phase 4C reporting views — float
+    // balances, transaction history, the commission and payable summaries,
+    // the variance report, the daily cash movement and the end-of-day
+    // exceptions — and the four Phase 4D operational registers, which list
+    // the records an officer has to act on rather than reporting a total.
+    // Seven more from Phase 4E: commission per agent line and per calendar
+    // month, the statement-period and float-trade registers, the two Mobile
+    // Money reports, and the per-line commission balances the first and last
+    // of those are built from — a view rather than a DEFINER function call,
+    // so the reader's own ledger permission and branch rule apply.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(66);
   });
 });
 
@@ -1062,12 +1157,64 @@ describeDb('privileged functions', () => {
       // rule, and the registers that report per-member rows are
       // `security_invoker` views instead.
       'add_meeting_action_item',
+      // Phase 4B: the transaction engine. DEFINER because each writes the ledger
+      'agency_actor',
+      // Phase 4E. The Mobile Money engine: the float-trade lifecycle, the
+      // commission payout, its recovery, the statement reconciliation, the
+      // agent-line administration and the guards and readers they use.
+      // Every one pins search_path and checks a capability before it reads
+      // an argument, except the readers, which are revoked from every role.
+      'agency_agent_line_obligations',
+      'agency_commission_earned_by_line',
+      'agency_commission_for',
+      'agency_commission_outstanding',
+      'agency_commission_outstanding_by_line',
+      'agency_commission_reconcile',
+      'agency_commission_recovery_outstanding_by_line',
+      'agency_commission_settlement_destination_guard',
+      // Phase 4A. Three trigger guards and two assertion helpers. The guards
+      // are DEFINER because each reads a second table to check an invariant a
+      // CHECK constraint cannot reach; none of them is reachable by a signed-in
+      // user, because a trigger fires as the table owner and needs no EXECUTE
+      // grant, so the default one is revoked.
+      'agency_float_account_guard',
+      'agency_float_account_immutable_identity',
+      'agency_float_reconciliation_guard',
+      'agency_float_replenishment_guard',
+      'agency_float_trade_revision_guard',
+      'agency_locked_commission_settlement',
+      'agency_locked_payable_settlement',
+      // Phase 4B-S: branch authorization and per-account balance serialization
+      'agency_locked_transaction',
+      // Phase 4B-S. What is still held on one provider's behalf, used by the
+      // payable floor. DEFINER so it can read the ledger a counter officer
+      // cannot join across; revoked from authenticated, called only from
+      // post_agency_transaction().
+      'agency_payable_outstanding',
+      'agency_provider_accounts_guard',
+      'agency_transaction_guard',
+      // Phase 4A readiness gate: refuses any transaction past draft whose
+      // provider is still provisional or inactive, or whose type states no
+      // maximum. Also a trigger, also unreachable by a signed-in user.
+      'agency_transaction_live_readiness_guard',
+      // Phase 4D. A trigger that counts changes to the figures, so a verifier
+      // can be made to quote the version they reviewed. Revoked from every
+      // exposed role: nothing but the trigger calls it.
+      'agency_transaction_revision_guard',
+      // Phase 4D. Records the version the second officer was handed, so a
+      // verification that quotes nothing is refused once the money moves
+      // after submission. Also a trigger, also unreachable by a user.
+      'agency_transaction_submitted_revision',
       'apply_eligible_penalties',
+      'approve_agency_cash_reconciliation',
+      'approve_agency_float_reconciliation',
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
       'approve_reconciliation',
       'approve_transfer',
+      'assert_agency_float_available',
+      'assert_agency_settlement_account',
       'assert_cash_account',
       'assert_cash_available',
       'assert_owner_admin_remains',
@@ -1084,6 +1231,7 @@ describeDb('privileged functions', () => {
       'assess_member_loan_eligibility',
       'attach_benefit_document',
       'audit_actor_label',
+      'audit_agency_configuration_change',
       'audit_attendance_corrected',
       'audit_beneficiary_decided',
       'audit_beneficiary_registered',
@@ -1139,6 +1287,10 @@ describeDb('privileged functions', () => {
       'audit_savings_withdrawal_change',
       'audit_settings_change',
       'audit_user_role_change',
+      // Phase 4B-S. Authorises a commission figure that differs from the
+      // provider's configured terms. owner_admin only; its refusals are
+      // asserted in tests/db/agency-transaction-engine.test.ts.
+      'authorise_agency_commission_exception',
       'backfill_ledger_history',
       'begin_benefit_verification',
       'begin_membership_policy_transition',
@@ -1162,6 +1314,7 @@ describeDb('privileged functions', () => {
       // business_settings that would strand an active product is refused.
       'business_settings_keep_products_valid',
       'business_timezone',
+      'cancel_agency_transaction',
       'cancel_benefit_claim',
       'cancel_loan',
       // Phase 12. Freezing the product terms writes an append-only table no
@@ -1173,6 +1326,7 @@ describeDb('privileged functions', () => {
       'cancel_savings_withdrawal',
       'capture_loan_product_snapshot',
       'carry_forward_unpaid_installments',
+      'certify_agency_commission_reconciliation',
       'client_guarantors_guard_detach',
       'client_has_live_loan',
       'client_remarks_stamp_author',
@@ -1180,10 +1334,12 @@ describeDb('privileged functions', () => {
       'clients_guard_privileged_columns',
       'clients_stamp_branch',
       'clients_stamp_provenance',
+      'close_agency_agent_line',
       'complete_membership_policy_transition',
       'condolence_next_of_kin_status',
       'confirm_password_change',
       'consume_rate_limit',
+      'create_agency_transaction',
       'current_profile_id',
       'current_session_context',
       'current_user_branch_id',
@@ -1194,6 +1350,7 @@ describeDb('privileged functions', () => {
       'decide_savings_withdrawal',
       'disburse_loan',
       'enrol_member',
+      'ensure_agency_float_account',
       'ensure_penalty_applied',
       'finalise_meeting_minutes',
       'generate_loan_schedule',
@@ -1242,6 +1399,8 @@ describeDb('privileged functions', () => {
       'loans_guard_transition',
       'loans_stamp_branch',
       'loans_stamp_product',
+      'lock_agency_provider_balance',
+      'lock_ledger_balances',
       // Phase 15. The one writer of the stream, and the ten triggers that
       // call it. Every one is a trigger function or definer-only: none is
       // granted to `authenticated`, which the next assertion checks.
@@ -1370,9 +1529,12 @@ describeDb('privileged functions', () => {
       'notify_transfer_pending',
       'open_benefit_claim',
       'open_savings_account',
+      'post_agency_payable_settlement',
+      'post_agency_transaction',
       'post_benefit_payment',
       'post_disbursement_journal',
       'post_expense_journal',
+      'post_float_replenishment',
       'post_journal',
       'post_meeting_fine_payment',
       'post_payment',
@@ -1390,7 +1552,11 @@ describeDb('privileged functions', () => {
       // and granted to nobody: a session that could raise a notification
       // could address one to any capability it liked.
       'raise_notification',
+      'record_agency_commission_payout',
+      'record_agency_commission_recovery',
+      'record_agency_float_trade',
       'record_audit_event',
+      'record_commission_settlement',
       'record_death_confirmation',
       'record_draft_policy_timing',
       'record_expense',
@@ -1402,7 +1568,9 @@ describeDb('privileged functions', () => {
       'record_sign_in',
       'record_transfer',
       'redeem_membership_consent_code',
+      'register_agency_agent_line',
       'register_member_beneficiary',
+      'reject_agency_float_trade',
       'reject_benefit_claim',
       'reject_expense',
       'reject_loan',
@@ -1420,7 +1588,12 @@ describeDb('privileged functions', () => {
       // `authenticated`.
       'require_savings_account_access',
       'reschedule_membership_meeting',
+      'return_agency_transaction',
+      'reverse_agency_float_trade',
+      'reverse_agency_payable_settlement',
+      'reverse_agency_transaction',
       'reverse_benefit_payment',
+      'reverse_commission_settlement',
       'reverse_expense',
       'reverse_meeting_fine_payment',
       'reverse_membership_fee',
@@ -1459,10 +1632,20 @@ describeDb('privileged functions', () => {
       'savings_withdrawal_requests_assign_number',
       'savings_withdrawal_requests_guard',
       'schedule_membership_meeting',
+      'set_agency_agent_line_suspended',
+      'set_agency_provider_commission_source',
+      'set_agency_service_limit',
       'settings_reference_sequences',
+      'submit_agency_cash_reconciliation',
+      'submit_agency_commission_reconciliation',
+      'submit_agency_float_reconciliation',
+      'submit_agency_transaction',
       'submit_benefit_claim',
       'submit_reconciliation',
       'transition_membership_to_policy',
+      'update_agency_agent_line',
+      'update_agency_transaction',
+      'update_agency_transaction_reference',
       'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
@@ -1476,6 +1659,8 @@ describeDb('privileged functions', () => {
       // internal name with no `authenticated` grant, so the Data API cannot
       // reach them. The public name above is now a thin authorized wrapper.
       'validate_loan_for_approval_internal',
+      'verify_agency_float_trade',
+      'verify_agency_transaction',
       'verify_benefit_document',
       'verify_member_beneficiary',
     ]);
@@ -1587,6 +1772,14 @@ describeDb('privileged functions', () => {
       // number minters are **absent**, as they are in every earlier phase:
       // nothing calls them but PostgreSQL.
       'add_meeting_action_item',
+      // Phase 4E. The RPCs a screen calls, each refusing without its
+      // capability before it reads an argument, plus
+      // agency_agent_line_obligations, which is advisory and tells the
+      // Owner what stands in the way of closing a line.
+      'agency_agent_line_obligations',
+      'approve_agency_cash_reconciliation',
+      'approve_agency_float_reconciliation',
+      // Phase 4B: the lifecycle RPCs, each gated on an agency capability
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
@@ -1607,6 +1800,16 @@ describeDb('privileged functions', () => {
       // date from a caller: `business_now` honours an override only on a
       // direct owner connection, which no application path has.
       'attach_benefit_document',
+      // Phase 4B-S. Like `accept_membership_policy_version`, this one names a
+      // record rather than acting on the caller alone, and it is granted for
+      // the same reason: it checks `agency:commission_exception` on the
+      // session before it reads anything, and that capability belongs to
+      // owner_admin alone. A counter officer calling it is refused with
+      // SQLSTATE 42501, and a transaction in another branch is refused by
+      // `agency_locked_transaction` without disclosing that it exists. Both
+      // refusals are asserted in tests/db/agency-transaction-engine.test.ts
+      // and tests/db/agency-security-closure.test.ts.
+      'authorise_agency_commission_exception',
       'begin_benefit_verification',
       'begin_membership_policy_transition',
       'benefit_amount_for_claim',
@@ -1623,6 +1826,7 @@ describeDb('privileged functions', () => {
       // The preview screen calls it so staff see the authoritative figures
       // rather than the browser's.
       'calculate_loan_breakdown',
+      'cancel_agency_transaction',
       'cancel_benefit_claim',
       'cancel_loan',
       // Phase 9. The rate limiter. Granted to `authenticated` so a signed-in
@@ -1639,12 +1843,15 @@ describeDb('privileged functions', () => {
       'cancel_membership_meeting',
       'cancel_savings_withdrawal',
       'carry_forward_unpaid_installments',
+      'certify_agency_commission_reconciliation',
       'client_has_live_loan',
       'client_has_outstanding_loan',
       'client_outstanding_loans',
+      'close_agency_agent_line',
       'complete_membership_policy_transition',
       'condolence_next_of_kin_status',
       'consume_rate_limit',
+      'create_agency_transaction',
       'current_profile_id',
       // Phase 18. The whole session in one round trip: the caller's active
       // profile, their role keys, and why not when there is none. Granted
@@ -1674,6 +1881,7 @@ describeDb('privileged functions', () => {
       // trigger and the approval validator are the enforcement.
       'enforce_password_change',
       'enrol_member',
+      'ensure_agency_float_account',
       'finalise_meeting_minutes',
       'guarantor_candidates',
       // Phase 6. SECURITY INVOKER, so a session reading a balance sees only
@@ -1747,7 +1955,9 @@ describeDb('privileged functions', () => {
       // decides nothing.
       // Constant no-data readiness, also callable by anon; no session data.
       'polytos_readiness',
+      'post_agency_payable_settlement',
       'post_benefit_payment',
+      'post_float_replenishment',
       'post_meeting_fine_payment',
       'post_payment',
       // Phase 11. The four money-movement writers and their decisions.
@@ -1760,6 +1970,10 @@ describeDb('privileged functions', () => {
       'post_savings_deposit',
       'post_savings_withdrawal',
       'preview_membership_policy_transition',
+      'record_agency_commission_payout',
+      'record_agency_commission_recovery',
+      'record_agency_float_trade',
+      'record_commission_settlement',
       'record_death_confirmation',
       'record_draft_policy_timing',
       'record_expense',
@@ -1771,7 +1985,9 @@ describeDb('privileged functions', () => {
       'record_sign_in',
       'record_transfer',
       'redeem_membership_consent_code',
+      'register_agency_agent_line',
       'register_member_beneficiary',
+      'reject_agency_float_trade',
       'reject_benefit_claim',
       'reject_expense',
       'reject_loan',
@@ -1781,7 +1997,12 @@ describeDb('privileged functions', () => {
       'request_benefit_information',
       'request_savings_withdrawal',
       'reschedule_membership_meeting',
+      'return_agency_transaction',
+      'reverse_agency_float_trade',
+      'reverse_agency_payable_settlement',
+      'reverse_agency_transaction',
       'reverse_benefit_payment',
+      'reverse_commission_settlement',
       'reverse_expense',
       'reverse_meeting_fine_payment',
       'reverse_membership_fee',
@@ -1812,6 +2033,9 @@ describeDb('privileged functions', () => {
       'savings_summary',
       'savings_withdrawable_amount',
       'schedule_membership_meeting',
+      'set_agency_agent_line_suspended',
+      'set_agency_provider_commission_source',
+      'set_agency_service_limit',
       'settings_reference_sequences',
       'storage_path_claim_id',
       'storage_path_client_id',
@@ -1822,15 +2046,24 @@ describeDb('privileged functions', () => {
       // storage policies that gate the bucket.
       'storage_path_loan_id',
       'storage_path_membership_id',
+      'submit_agency_cash_reconciliation',
+      'submit_agency_commission_reconciliation',
+      'submit_agency_float_reconciliation',
+      'submit_agency_transaction',
       'submit_benefit_claim',
       'submit_reconciliation',
       'transition_membership_to_policy',
+      'update_agency_agent_line',
+      'update_agency_transaction',
+      'update_agency_transaction_reference',
       'update_meeting_action_item',
       'user_can_see_branch',
       'user_has_at_least_role',
       'user_has_permission',
       'user_has_role',
       'validate_loan_for_approval',
+      'verify_agency_float_trade',
+      'verify_agency_transaction',
       'verify_benefit_document',
       'verify_member_beneficiary',
     ]);

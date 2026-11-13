@@ -389,6 +389,12 @@ describe('column type discipline', () => {
      * a table that simply forgot it.
      */
     const NO_UPDATED_AT = new Set([
+      // Phase 4A. The agency transaction's own trail, for the reason every
+      // append-only table here carries: UPDATE, DELETE and TRUNCATE are all
+      // refused by statement-level trigger and the privilege is not granted,
+      // so an `updated_at` would be a timestamp that can never advance —
+      // worse than absent, because it would imply the row can be edited.
+      'agency_transaction_audit_log',
       // Polytos policy update. Three more append-only tables, for the reason
       // every one above is: UPDATE is refused by trigger and the privilege is
       // not granted, so an `updated_at` would be a timestamp that can never
@@ -748,6 +754,42 @@ describe('types stay in step with the schema', () => {
 
     // Trigger functions are not callable over the API and are not generated.
     const TRIGGER_FUNCTIONS = new Set([
+      // Phase 4A. Three agency guards, each enforcing an invariant that spans
+      // two tables and so cannot be a CHECK: a float till's ledger account
+      // really is agency float and really belongs to the branch claiming it; a
+      // provider's income account really is a postable 4500-series account;
+      // and a transaction's type, till and payable really are the ones its
+      // provider registered. None is reachable by a signed-in user — a trigger
+      // fires as the table owner, so the default EXECUTE grant is revoked.
+      'agency_float_account_guard',
+      'agency_provider_accounts_guard',
+      'agency_transaction_guard',
+      'agency_transaction_live_readiness_guard',
+      // Phase 4C. Two more of the same kind: each asserts that a
+      // denormalised provider and branch agree with the till's own
+      // registration, which spans two tables and so cannot be a CHECK.
+      // Neither is reachable by a signed-in user — a trigger fires as the
+      // table owner and needs no EXECUTE grant.
+      'agency_float_replenishment_guard',
+      'agency_float_reconciliation_guard',
+      'notify_low_float',
+      // Phase 4D. Two triggers that keep the verification revision: one
+      // counts changes to the figures, the other records the version the
+      // second officer was handed. Both fire as the table owner and are
+      // revoked from every exposed role, so neither is callable over the API.
+      'agency_transaction_revision_guard',
+      'agency_transaction_submitted_revision',
+      // Phase 4E. Four more of the same kind. Two guard what cannot be a
+      // CHECK because it spans two tables — an agent line's till name and
+      // ledger account are immutable because the account code encodes them,
+      // and a commission payout's destination really is the line's own float
+      // account. One keeps the float-trade verification revision. One writes
+      // every agency configuration change to the general audit log. All four
+      // fire as the table owner and are revoked from every exposed role.
+      'agency_float_account_immutable_identity',
+      'agency_commission_settlement_destination_guard',
+      'agency_float_trade_revision_guard',
+      'audit_agency_configuration_change',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

@@ -545,6 +545,66 @@ export const PERMISSIONS = [
   'reports:view_financial',
   /** Open the executive summary: interest and penalty collected, principal lent. */
   'reports:view_sensitive',
+
+  // --- Phase 4A: agency banking and digital payments ----------------------
+  //
+  // The same maker-checker split the money-movement module uses, for the same
+  // reason: verification is what posts an agency transaction to the ledger, so
+  // whoever recorded it must not be the one who posts it. `agency:verify` is
+  // therefore withheld from the Secretary/Treasurer exactly as
+  // `transfers:approve` is, and the database enforces the stronger rule that
+  // nobody verifies their own entry whatever role they hold.
+  /** Record, edit and cancel draft agency transactions. Posts nothing. */
+  'agency:write',
+  /** Verify somebody else's agency transaction, which posts it to the ledger. */
+  'agency:verify',
+  /** Reverse a posted agency transaction dated today, by contra entries. */
+  'agency:reverse',
+  /** Reverse a posted agency transaction dated before today. */
+  'agency:reverse_cross_day',
+  /** Correct the provider reference on a posted transaction. No journal. */
+  'agency:correct',
+  /** Post commission settlements, payable remittances and float top-ups. */
+  'agency:settlements',
+  /**
+   * Record a float purchase, sale or line-to-line transfer as pending.
+   *
+   * Moves no money: posting one requires `agency:settlements`, held by a
+   * different person, and the maker-checker separation is a CHECK on
+   * `agency_float_trades` rather than a hidden button. Decision OD-7 extends
+   * the recording half to cashiers for exactly this reason — a float sale is
+   * a cash payment to an external party with a fee the seller types, so one
+   * person should not be able to complete it alone.
+   */
+  'agency:float_trade',
+  /** Submit and approve cash-till and provider-float reconciliations. */
+  'agency:reconcile',
+  /** Create and edit providers, their transaction types and their float tills. */
+  'agency:providers',
+  /**
+   * Write a reconciliation variance off to the over-and-short accounts.
+   *
+   * The Owner's alone. `agency:reconcile` records a count and certifies it;
+   * moving the difference into the ledger is a separate act, because
+   * otherwise a manager who miscounts can certify the miscount into the
+   * books. A variance is always *recorded* without this capability — it is
+   * only *written off* with it.
+   */
+  'agency:variance_adjustment',
+  /**
+   * Authorise a commission figure that differs from what the provider's
+   * configured terms produce, against a reason and external evidence.
+   *
+   * The Owner's alone, and deliberately not the Manager's. Recognised
+   * commission is income, so letting the officer who records a transaction
+   * also decide what it earned would make the figure self-certifying. A
+   * Manager still verifies the transaction; what they cannot do is move the
+   * number. The database refuses anybody without this capability with
+   * SQLSTATE 42501.
+   */
+  'agency:commission_exception',
+  /** View agency transactions, balances, commission and settlement history. */
+  'agency:reports',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -704,6 +764,18 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // not needed to take money over a counter, and §42 asks for that to be a
     // decision rather than an inheritance.
     'reports:view_operational',
+
+    // Phase 4A. This role is the counter: it records the agency transaction
+    // and reads its own day's work. It does not verify — not even somebody
+    // else's — which is the same line already drawn at `transfers:approve`
+    // and `expenses:approve`.
+    'agency:write',
+    // Decision OD-7: the counter may record a float purchase, sale or
+    // line-to-line transfer. It posts nothing — a different holder of
+    // agency:settlements verifies it, and the data layer refuses the same
+    // person doing both.
+    'agency:float_trade',
+    'agency:reports',
   ],
 
   manager: [
@@ -854,6 +926,20 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     // loan.
     'reports:view_operational',
     'reports:view_financial',
+
+    // Phase 4A. The Manager is the checker for agency work: they verify what
+    // the counter recorded, reverse the current day's mistakes, settle with
+    // providers and approve a reconciliation. Two are withheld. Reopening a
+    // closed day (`agency:reverse_cross_day`) and defining the providers
+    // themselves (`agency:providers`) are the Owner's.
+    'agency:write',
+    'agency:verify',
+    'agency:reverse',
+    'agency:correct',
+    'agency:settlements',
+    'agency:reconcile',
+    'agency:float_trade',
+    'agency:reports',
   ],
 
   owner_admin: [
@@ -983,6 +1069,22 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'reports:view_operational',
     'reports:view_financial',
     'reports:view_sensitive',
+
+    // Phase 4A. Everything the Manager holds, plus the two that are the
+    // Owner's alone: reopening a day that has closed, and deciding which
+    // providers the business acts for and on what commission terms.
+    'agency:write',
+    'agency:verify',
+    'agency:reverse',
+    'agency:reverse_cross_day',
+    'agency:correct',
+    'agency:settlements',
+    'agency:float_trade',
+    'agency:reconcile',
+    'agency:providers',
+    'agency:commission_exception',
+    'agency:variance_adjustment',
+    'agency:reports',
   ],
 } as const;
 
