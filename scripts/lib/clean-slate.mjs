@@ -75,9 +75,14 @@ export const PRESERVE_WHOLE = [
   // Published policy versions, which cannot be deleted either:
   // `20261019000200` rejects DELETE at statement level, because a savings
   // account is frozen to the version it was opened under and removing one
-  // would silently re-price history. UPDATE is permitted, so the
-  // demonstration version is retired rather than removed — see
-  // RETIRE_POLICY_VERSIONS.
+  // would silently re-price history. UPDATE is permitted, and the guard in
+  // that migration allows the one-way step `active` -> `superseded` without
+  // touching a contractual column, so a demonstration version CAN be retired
+  // rather than removed. This procedure deliberately does not do it: an
+  // approved policy is a business instrument, and retiring one is an
+  // explicitly authorised act, not a side effect of emptying the books. It is
+  // reported instead — see DEMONSTRATION_POLICY_MATCH and describeResidue —
+  // and carried out as launch item A-1.
   'membership_policy_versions',
   // The audit log, which CANNOT be emptied and is not asked to be.
   //
@@ -231,8 +236,101 @@ export const NEUTRALISE_PROFILES = {
   why: 'Every profile but the Owner is deactivated and unlinked from Auth; the audit log forbids deleting them.',
 };
 
-/** Reference counters, so the first real record is numbered 1. */
-export const RESET_SEQUENCES = ['client', 'loan', 'payment'];
+/**
+ * Reference counters, so the first real record is numbered 1.
+ *
+ * Every scope here numbers a table in TRUNCATE_TABLES: once the rows are
+ * gone, a counter left at its demonstration value numbers the client's first
+ * real document after a history that no longer exists — the first journal
+ * voucher would be JV2600598, not JV2600001.
+ *
+ * `reference_formats` is the list of scopes that exist; `reference_sequences`
+ * holds one row per scope PER YEAR, created on demand by `next_reference`. So
+ * a scope legitimately has no row yet on a database where that document type
+ * has never been issued, and the reset is written to cover every row a scope
+ * does have.
+ */
+export const RESET_SEQUENCES = [
+  // lending and the books
+  'client',
+  'loan',
+  'payment',
+  'journal',
+  'expense',
+  'other_income',
+  'transfer',
+  'reconciliation',
+  // membership, savings, benefits, meetings
+  'membership',
+  'membership_fee',
+  'membership_card',
+  'membership_meeting',
+  'membership_policy_transition',
+  'savings_account',
+  'savings_transaction',
+  'savings_withdrawal',
+  'beneficiary',
+  'benefit_claim',
+  'benefit_payment',
+  'meeting_fine',
+  'meeting_fine_payment',
+];
+
+/**
+ * Counters that must NOT be reset, each with the reason.
+ *
+ * `branch` numbers `branches`, which is reference data in PRESERVE_WHOLE.
+ * Resetting it would hand the next branch a code an existing branch holds.
+ */
+export const PRESERVE_SEQUENCES = ['branch'];
+
+/**
+ * The same refusal the table lists get, for the numbering counters.
+ *
+ * Checked against `reference_formats`, which is migration-managed and is the
+ * list of scopes that exist — not against `reference_sequences`, whose rows
+ * appear only once a document of that kind has been issued.
+ *
+ * A scope in neither list means nobody has decided whether the client's first
+ * real document of that kind should be numbered 1, so it stops the procedure
+ * with a name to look at rather than being silently left at a demonstration
+ * value.
+ *
+ * @param {readonly string[]} formatScopes every scope in reference_formats
+ * @returns {{ unclassified: string[], missing: string[] }}
+ */
+export function classifySequences(formatScopes) {
+  const classified = new Set([...RESET_SEQUENCES, ...PRESERVE_SEQUENCES]);
+  const actual = new Set(formatScopes);
+  return {
+    unclassified: formatScopes.filter((scope) => !classified.has(scope)).sort(),
+    missing: [...classified].filter((scope) => !actual.has(scope)).sort(),
+  };
+}
+
+/**
+ * Which Supabase project a connection string actually points at.
+ *
+ * The enable phrase authorises emptying "a database". It does not say which
+ * one, and a DATABASE_URL is one paste away from naming a different project,
+ * so the runner confirms the target by name and this is what it compares.
+ *
+ * Supabase puts the project reference in one of two places: the direct host
+ * `db.<ref>.supabase.co`, or the pooler username `postgres.<ref>`. Returns
+ * null when neither is present — the answer for a local cluster, and the
+ * reason a hosted run with no confirmed reference is refused rather than
+ * assumed.
+ *
+ * @param {string} value a PostgreSQL connection string
+ * @returns {string | null} the 20-character project reference, lowercased
+ */
+export function projectRefFromConnectionString(value) {
+  const host = /(?:^|@)db\.([a-z0-9]{20})\.supabase\.(?:co|com)/i.exec(value);
+  if (host !== null) return host[1].toLowerCase();
+  const pooler = /(?:^|\/\/)postgres\.([a-z0-9]{20})(?::|@)/i.exec(value);
+  if (pooler !== null) return pooler[1].toLowerCase();
+  return null;
+}
 
 /**
  * Columns on preserved tables that point at a profile being deleted.
@@ -332,6 +430,46 @@ export async function runCleanSlate(db, { ownerProfileId, dryRun = true }) {
     throw new Error(
       `Profile ${ownerProfileId} does not hold owner_admin (holds: ${String(owner.roles ?? 'nothing')}).`,
     );
+  }
+  // The Owner must have an Auth identity, for two reasons that both end with
+  // nobody able to sign in. A profile with no `auth_user_id` has no
+  // credential, so it could not sign in afterwards however active it is. And
+  // step 5 keeps exactly the Auth user this column names: with the column
+  // NULL there is no user to keep, so the delete would take every one of
+  // them. Refusing here is the difference between a clean slate and a locked
+  // building.
+  if (owner.auth_user_id === null || owner.auth_user_id === undefined) {
+    throw new Error(
+      `Profile ${ownerProfileId} has no auth_user_id: it holds no credential, ` +
+        'so it could not sign in after the cleanup and there would be no Auth ' +
+        'user to preserve. Link the Owner to an Auth user first.',
+    );
+  }
+
+  // The counters get the same treatment as the tables: a scope nobody has
+  // classified stops the procedure rather than being silently left at its
+  // demonstration value.
+  const { rows: scopeRows } = await db.query(
+    `select scope from public.reference_formats order by scope`,
+  );
+  const actualScopes = scopeRows.map((row) => String(row.scope));
+  const scopeVerdict = classifySequences(actualScopes);
+
+  if (scopeVerdict.unclassified.length > 0 || scopeVerdict.missing.length > 0) {
+    const lines = ['The clean slate refuses to run: its counter lists are out of date.'];
+    if (scopeVerdict.unclassified.length > 0) {
+      lines.push(
+        `  in reference_formats, classified nowhere: ${scopeVerdict.unclassified.join(', ')}`,
+        '  Decide whether each should restart at 1 for the first real record, and',
+        '  add it to RESET_SEQUENCES or PRESERVE_SEQUENCES.',
+      );
+    }
+    if (scopeVerdict.missing.length > 0) {
+      lines.push(
+        `  classified but not in reference_formats: ${scopeVerdict.missing.join(', ')}`,
+      );
+    }
+    throw new Error(lines.join('\n'));
   }
 
   const before = await countBusinessRows(db);

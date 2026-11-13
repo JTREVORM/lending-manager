@@ -31,7 +31,12 @@
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 
-import { countBusinessRows, runCleanSlate } from './lib/clean-slate.mjs';
+import {
+  countBusinessRows,
+  projectRefFromConnectionString,
+  RESET_SEQUENCES,
+  runCleanSlate,
+} from './lib/clean-slate.mjs';
 
 const require = createRequire(import.meta.url);
 const pg = require('pg');
@@ -66,7 +71,42 @@ const looksHosted =
   /supabase\.(co|com)|pooler\.supabase/.test(connectionString) &&
   !/localhost|127\.0\.0\.1/.test(connectionString);
 
+const expectedProject = arg('expect-project');
+const actualProject = projectRefFromConnectionString(connectionString);
+
 if (execute) {
+  // The phrase says "empty a database". It does not say WHICH database, and
+  // a DATABASE_URL is one paste away from naming somebody else's project. So
+  // the target is confirmed by name before anything is emptied: the caller
+  // states the project it means, and the connection string has to agree.
+  if (expectedProject !== undefined) {
+    if (actualProject === null) {
+      console.error(
+        `Refusing to empty: --expect-project ${expectedProject} was given, but no\n` +
+          'Supabase project reference could be read from DATABASE_URL. The target\n' +
+          'identity cannot be confirmed, so it is not assumed.',
+      );
+      process.exit(1);
+    }
+    if (actualProject !== expectedProject.toLowerCase()) {
+      console.error(
+        'Refusing to empty: DATABASE_URL does not point at the expected project.\n\n' +
+          `  --expect-project  ${expectedProject.toLowerCase()}\n` +
+          `  DATABASE_URL      ${actualProject}\n\n` +
+          'This is the wrong database. Nothing was changed.',
+      );
+      process.exit(1);
+    }
+  } else if (looksHosted) {
+    console.error(
+      'Refusing to empty a hosted database without confirming which one.\n\n' +
+        `  --expect-project ${actualProject ?? '<project-ref>'}\n\n` +
+        'Pass the project reference this cleanup is authorised for. The phrase\n' +
+        'authorises emptying a database; this names the database.',
+    );
+    process.exit(1);
+  }
+
   if (process.env.POLYTOS_CLEAN_SLATE !== ENABLE_PHRASE) {
     console.error(
       `Refusing to empty a database without the phrase.\n\n  POLYTOS_CLEAN_SLATE=${ENABLE_PHRASE} \\\n    node scripts/clean-slate.mjs --owner ${ownerProfileId} --execute\n`,
@@ -150,8 +190,11 @@ try {
   if (a.active_profiles !== 1) {
     problems.push(`active profiles is ${String(a.active_profiles)}, expected 1`);
   }
-  if (a.auth_users > 1)
-    problems.push(`auth_users is ${String(a.auth_users)}, expected at most 1`);
+  // Exactly one, not "at most one". Zero would mean the Owner cannot sign in
+  // either, which is a failed cleanup wearing the look of a thorough one.
+  if (a.auth_users !== 1) {
+    problems.push(`auth_users is ${String(a.auth_users)}, expected exactly 1`);
+  }
 
   const mustSurvive = [
     'roles',
@@ -166,7 +209,7 @@ try {
 
   // The Owner must still hold owner_admin and be active.
   const { rows: ownerAfter } = await db.query(
-    `select p.status,
+    `select p.status, p.auth_user_id,
             (select pg_catalog.string_agg(ur.role_key, ',')
                from public.user_roles ur where ur.profile_id = p.id) as roles
        from public.profiles p where p.id = $1`,
@@ -175,6 +218,19 @@ try {
   if (ownerAfter[0]?.status !== 'active') problems.push('the Owner is no longer active');
   if (!String(ownerAfter[0]?.roles ?? '').includes('owner_admin')) {
     problems.push('the Owner no longer holds owner_admin');
+  }
+  // Active and privileged still gets nobody in without a credential, and the
+  // one Auth user left has to be this profile's rather than merely somebody's.
+  if (ownerAfter[0]?.auth_user_id === null || ownerAfter[0]?.auth_user_id === undefined) {
+    problems.push('the Owner is no longer linked to an Auth user');
+  } else {
+    const { rows: survivors } = await db.query(
+      'select id from auth.users where id = $1',
+      [ownerAfter[0].auth_user_id],
+    );
+    if (survivors.length !== 1) {
+      problems.push("the Owner's Auth user was deleted");
+    }
   }
 
   // No preserved row may still point at a profile that is gone.
@@ -193,7 +249,8 @@ try {
   // The counters start again.
   const { rows: counters } = await db.query(
     `select scope, last_value from public.reference_sequences
-      where scope in ('client','loan','payment') order by scope`,
+      where scope = any ($1::text[]) order by scope`,
+    [RESET_SEQUENCES],
   );
   for (const row of counters) {
     if (Number(row.last_value) !== 0) {
