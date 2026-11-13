@@ -15,8 +15,8 @@ completed first.
 
 **Current state, read from production.** Membership policy **999.0**, titled
 *"DEMONSTRATION ONLY — not the approved Polytos membership policy"*, is the
-only `active` policy. It is marked approved, and carries
-`is_enrolment_enabled = true` and `is_savings_enabled = true`. Six memberships
+only `active` policy. It is marked approved, and its
+derived flags `is_enrolment_enabled` and `is_savings_enabled` are both true. Six memberships
 sit on it, with five savings accounts, 26 savings transactions and six
 membership fee receipts.
 
@@ -29,10 +29,37 @@ are genuinely blocked on undecided policy decisions. Policies 1.0 and 2.0 are
 999.0 is active with enrolment on, an Owner can enrol a real member onto
 demonstration terms with demonstration fee and savings figures.
 
-**The change.** Turn the module off without deleting anything:
+**The change.** Turn the module off without deleting anything. There is
+exactly one statement, and it is the only one the schema permits:
 
-- [ ] **A-1.** Set policy 999.0 `status` to `draft`, and
-      `is_enrolment_enabled` and `is_savings_enabled` to `false`.
+```sql
+-- Retire the demonstration policy. Requires membership:manage_policies.
+update public.membership_policy_versions
+   set status = 'superseded'
+ where version = '999.0' and status = 'active';
+```
+
+Two earlier drafts of this step could not have run, and the reasons are worth
+keeping because they are what makes the statement above the right one:
+
+- **`status` cannot go to `draft`.** `membership_policy_versions_guard`
+  enforces a one-way sequence — `draft` -> `active` -> `superseded`. An
+  `active` version moving to `draft` raises *"A membership policy version
+  cannot move from active to draft."*
+- **`is_enrolment_enabled` and `is_savings_enabled` cannot be written at
+  all.** They are `GENERATED ALWAYS` columns derived from the policy's own
+  figures, precisely so no write can forge readiness. Postgres rejects the
+  update itself.
+
+`superseded` is not a workaround. It is the state the schema provides for a
+version that no longer governs, it keeps the row and its promises readable,
+and it needs no trigger disabled, no constraint dropped and no row deleted.
+Once it is set, `active_membership_policy_id()` returns NULL, so
+`membership_policy_allows(...)` answers `false` for every activity and
+enrolment fails shut. `tests/db/clean-slate.test.ts` proves all of this —
+including that both impossible steps above are in fact refused.
+
+- [ ] **A-1.** Run the statement above against the hosted project.
 - [ ] **A-2.** Confirm afterwards that no policy is `active`, and that the
       membership and savings screens refuse new enrolment.
 - [ ] **A-3.** Confirm the six existing memberships and their savings records
