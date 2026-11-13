@@ -421,6 +421,98 @@ every such lookup here is `{ exact: true }`.
 
 ---
 
+## 8B. The accessibility findings the Phase 4E report raised against this phase
+
+The Phase 4E delivery report recorded three outstanding contrast findings
+against Phase 4D components, to be cleaned up here. They were investigated
+first, and the honest answer is that **they do not exist.**
+
+### What the finding said, and what is actually in the code
+
+Phase 4E found a real WCAG AA contrast failure in its own new screens:
+`text-muted` resolves to `--color-muted`, which `app/globals.css` defines as
+`var(--color-surface-sunken)` — the pale grey a sunken panel is *filled*
+with. As a text colour it fails AA, and axe failed `/agency/record` over it.
+That was fixed in the Phase 4E files.
+
+The same report then named three Phase 4D components as carrying it:
+
+| Component | What it actually uses |
+| --- | --- |
+| `components/agency/reconciliation-forms.tsx` | `text-text-muted`, nine times |
+| `components/agency/commission-exception-form.tsx` | `text-text-muted`, three times |
+| `components/agency/lifecycle-controls.tsx` | `text-text-muted`, once |
+
+Every one is the approved token. A search of the whole branch for the bare
+class — `grep -rP "(?<![\w-])text-muted(?![\w-])"` over every file — returns
+nothing outside git metadata.
+
+**The finding was an artefact of the search that produced it.** It was counted
+with `grep -c "text-muted\b"`, and `\b` matches inside `text-text-muted`,
+so the counts 9, 3 and 1 were counts of the *correct* token. Having found a
+genuine fault in its own files, Phase 4E inferred the neighbours shared it.
+They do not, and nothing has been changed in them.
+
+### Confirming AA in both themes, which was already asserted
+
+- **Light**, as rendered: the axe sweep, now including the transaction detail
+  screen, 108 tests, zero violations.
+- **Dark**, as defined: `tests/unit/colour-contrast.test.ts` reads
+  `--color-text-muted` against `--color-surface` from the light *and* the dark
+  palette and holds both to the AA floor — "muted text clears AA on the page
+  in both modes" — plus a block that checks muted text on every ground it
+  lands on: the application shell, the record panel and the sunken surface.
+  17 tests, passing.
+
+There is also no dark theme to sweep in a browser. `app/layout.tsx` declares
+`colorScheme: 'light'`, nothing in the application sets `data-theme`, and
+`globals.css` says so in as many words: the palette is kept, and kept proven,
+for the day a deliberate switch ships. A dark-mode browser sweep would be
+testing a state no user can reach.
+
+### What was missing, and is now covered
+
+One real gap sat behind the false finding. `SCREENS` is a list of paths, and
+the transaction detail screen's path carries a transaction id — so the
+densest screen in the module, four panels of small print and tinted
+surfaces, was the one screen the sweep had never looked at. Two of the three
+named components render **only** there.
+
+`accessibility.spec.ts` now sweeps it in both states that matter:
+
+| State | What renders |
+| --- | --- |
+| `awaiting_verification` | every panel at once — the commission-exception authorisation, the reference correction and the lifecycle controls. The fullest the screen gets |
+| `posted` | the lifecycle controls in their reversal state: a reason field and a destructive button, markup that appears nowhere else |
+
+The ids come from the seeded book rather than being written into the test.
+Four new tests — two states on each of the desktop and mobile profiles — and
+zero violations, which is the first time these components have been measured
+rather than reasoned about.
+
+### Certified, and the effect on the stacked PR #27
+
+All four mandatory jobs pass at **`6cbda77`** — CI run
+[43013873769](https://github.com/JTREVORM/lending-manager/actions/runs/43013873769):
+1,923 `db` tests plus the agency and seeder projects, 2,675 unit and
+integration, the PostgreSQL 17 release rehearsal, and 1,009 browser tests on
+a production build against a fresh seed.
+
+PR #27 was not touched. The effect on it was assessed with `git merge-tree`:
+the first attempt at this change also carried a regenerated
+`tests/e2e/harness/fixtures.json` — 56 fresh UUIDs the seeder writes on every
+run — which put a conflict in a generated artefact between the branches. It
+was reverted in a follow-up commit rather than by rewriting a branch another
+PR is based on, and `git merge-tree` now reports #27 merging cleanly against
+this head, `accessibility.spec.ts` included: the two branches changed
+different regions of it.
+
+One thing is left for the Phase 4E branch and is not done here: its delivery
+report still carries the withdrawn finding, in §6 and §10. Correcting it
+means committing to that branch, which this authorisation does not cover.
+
+---
+
 ## 9. Evidence
 
 ### Database, on a clean PostgreSQL 16 cluster
@@ -454,11 +546,12 @@ the database's; the commission field is absent; the approval threshold is
 marked unenforced; and four role-based access tests point a Secretary, a
 Manager and a borrower straight at URLs they may not open.
 
-Accessibility: `tests/e2e/specs/accessibility.spec.ts` sweeps five agency
+Accessibility: `tests/e2e/specs/accessibility.spec.ts` sweeps **six** agency
 screens for WCAG 2.1 AA with axe — the two reconciliation screens (a checkbox,
 a revealed reason field and a submit button inside a table cell), the
 nine-column history register, the struck-through money column on the providers
-screen, and the recording form. 104 passed, zero violations.
+screen, the recording form, and the transaction detail screen in two states
+(§8B). 108 passed, zero violations.
 
 Per-page cost: `/agency`, `/agency/record`, `/agency/pending`,
 `/agency/reconciliation/cash` and `/agency/reports` joined the budgeted pages
