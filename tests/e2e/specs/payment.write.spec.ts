@@ -296,7 +296,16 @@ test.describe('reversing a payment', () => {
     // The submit button names the payment it is about to withdraw.
     await page.getByRole('button', { name: /^reverse [A-Z0-9]/i }).click();
 
-    await expect(page.getByText(/reversed/i).first()).toBeVisible({ timeout: 20_000 });
+    // The sentence only a reversed payment carries (`alreadyReversed` in
+    // payment-reversal-panel.tsx), not a loose /reversed/i. The form's own
+    // help text says the record is "marked reversed" while it is still being
+    // filled in, so the loose match resolved before the action had run, and
+    // the reload below could abandon the reversal mid-flight — the struck
+    // figure was then absent and the failure pointed here at the strike
+    // rather than at the wait. Same defect as the loan approval step.
+    await expect(page.getByText('This payment has already been reversed.')).toBeVisible({
+      timeout: 20_000,
+    });
     await expectNoErrorBoundary(page);
 
     // §9. A reversed figure is struck through, not deleted — the register is
@@ -309,9 +318,7 @@ test.describe('reversing a payment', () => {
     await page.reload();
 
     const struck = page.locator('[data-money].line-through, [data-money] .line-through');
-    expect(await struck.count(), 'the reversed amount is struck through').toBeGreaterThan(
-      0,
-    );
+    await expect(struck, 'the reversed amount is struck through').not.toHaveCount(0);
 
     // The reason is on the record.
     await expect(page.getByText(/wrong loan/i).first()).toBeVisible();
