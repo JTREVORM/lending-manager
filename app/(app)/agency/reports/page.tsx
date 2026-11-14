@@ -36,7 +36,7 @@ export async function generateMetadata({
   readonly searchParams: Promise<ParamRecord>;
 }): Promise<{ readonly title: string }> {
   const filter = readAgencyReportFilter(await searchParams, BUSINESS_TIMEZONE);
-  return { title: `Agency — ${AGENCY_REPORT_SECTION_META[filter.section].label}` };
+  return { title: `Agency — ${AGENCY_REPORT_SECTION_META[filter.section].heading}` };
 }
 
 /**
@@ -156,7 +156,7 @@ export default async function AgencyReportsPage({
       <PageHeader
         eyebrow="Consolidated Agency Reports"
         icon={FileBarChart}
-        title={meta.label}
+        title={meta.heading}
         description={meta.description}
         back={{ href: ROUTES.agency, label: 'Agency Services' }}
       />

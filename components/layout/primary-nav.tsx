@@ -506,7 +506,19 @@ function SidebarGroup({
           {Icon === undefined ? null : (
             <Icon aria-hidden="true" className="size-3.5 shrink-0 lg:size-3" />
           )}
-          <span className="truncate">{group.label}</span>
+          {/*
+            Wraps rather than truncates, which is the rule the rest of this
+            rail already follows: "the heading wraps rather than truncating —
+            an ellipsis hides information, and two lines on a small phone is
+            the better trade."
+
+            This span carried `truncate` in the first version and the browser
+            suite caught it: "Consolidated Agency Reports" is 27 characters in
+            a 256px drawer behind two levels of indentation, so it clipped —
+            and a clipped branch label is worse here than anywhere else in the
+            rail, because a branch is the thing a reader is scanning for.
+          */}
+          <span className="leading-snug">{group.label}</span>
         </span>
         {expanded ? (
           <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 lg:size-3" />

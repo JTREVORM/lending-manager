@@ -68,47 +68,70 @@ export function isAgencyReportSection(value: unknown): value is AgencyReportSect
   );
 }
 
-/** What each section is called, and what it answers. */
+/**
+ * What each section is called, and what it answers.
+ *
+ * `label` is the rail's word and `heading` is the page's, and they differ in
+ * exactly one place. Under a branch called "Consolidated Agency Reports", the
+ * row reads "Overview" and could read nothing else; as an `<h1>` on its own
+ * page, "Overview" says nothing about what is being overviewed.
+ *
+ * The two were one field in the first version, which left the hub's default
+ * screen headed "Overview" — and the browser suite caught it, because
+ * `agency.spec.ts` asserts that `/agency/reports` renders the words "Agency
+ * reports". That assertion was right and the page was wrong.
+ */
 export const AGENCY_REPORT_SECTION_META: Readonly<
-  Record<AgencyReportSection, { readonly label: string; readonly description: string }>
+  Record<
+    AgencyReportSection,
+    { readonly label: string; readonly heading: string; readonly description: string }
+  >
 > = {
   overview: {
     label: 'Overview',
+    heading: 'Agency reports',
     description:
       'The position across every configured bank and Mobile Money network: float held, cash banked, commission earned against commission received, and the work still outstanding.',
   },
   transactions: {
     label: 'Transaction reports',
+    heading: 'Transaction reports',
     description:
       'Customer deposits and withdrawals, their counts and values, the charges taken, and who recorded and verified each one.',
   },
   'cash-float': {
     label: 'Cash & float reports',
+    heading: 'Cash & float reports',
     description:
       'Opening float, verified increases and decreases, closing float; and physical cash received, paid out, banked, counted and the variance.',
   },
   commission: {
     label: 'Commission reports',
+    heading: 'Commission reports',
     description:
       'Commission earned by day, provider and account, set against what the provider has actually settled — and what is therefore still receivable.',
   },
   settlements: {
     label: 'Settlement reports',
+    heading: 'Settlement reports',
     description:
       'Provider remittances and commission settlements, with the maker, the checker and the reference behind each.',
   },
   reconciliation: {
     label: 'Reconciliation reports',
+    heading: 'Reconciliation reports',
     description:
       'What the books say against what the statement says, the variance between them, and whether the difference has been resolved.',
   },
   performance: {
     label: 'Agent performance',
+    heading: 'Agent performance',
     description:
       'What each staff member handled: the accounts they are on, the deposits and withdrawals they recorded, and the transactions that were reversed or corrected.',
   },
   export: {
     label: 'Export centre',
+    heading: 'Export centre',
     description:
       'Every report above as a PDF or a spreadsheet-compatible CSV, carrying the filters, the period and the time it was generated.',
   },

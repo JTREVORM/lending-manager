@@ -138,6 +138,25 @@ describe('the Agency rail — its shape', () => {
     ]);
   });
 
+  it('offers no destination twice anywhere in the module', () => {
+    /*
+      Two rows on one href would both claim to be the open page, which is the
+      one thing the active-route resolver cannot recover from.
+
+      The desktop rail's own E2E test asserts this across the modules, but it
+      collects the links each module renders when open — and the Agency
+      module's destinations live inside branches that are closed at that
+      moment, so it now sees none of them. This is where that property is
+      held for this module, over the whole grafted tree, branches included.
+    */
+    const hrefs = moduleItems(ownerAgency()).map((item) => item.href);
+
+    expect(hrefs.length).toBeGreaterThan(30);
+    expect(new Set(hrefs).size, 'the Agency rail offers one href twice').toBe(
+      hrefs.length,
+    );
+  });
+
   it('separates Agent Banking from Mobile Money, with no destination in both', () => {
     const groups = agencyModule().groups ?? [];
     const banking = groupById(groups, 'agency-banking');

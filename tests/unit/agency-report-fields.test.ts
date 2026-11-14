@@ -15,6 +15,7 @@ import { assertNoIdentityField, csvColumns } from '@/lib/reports/columns';
 import { toCsv } from '@/lib/domain/reporting';
 import {
   AGENCY_REPORT_SECTIONS,
+  AGENCY_REPORT_SECTION_META,
   categoriesForScope,
   readAgencyReportFilter,
   tallyAgentPerformance,
@@ -296,6 +297,32 @@ describe('the Agency report filter', () => {
     // empty every morning.
     expect(filter.period).toBe('month');
     expect(filter.error).toBeNull();
+  });
+
+  it('heads the hub\'s default screen "Agency reports", which a browser test asserts', () => {
+    /*
+      `tests/e2e/specs/agency.spec.ts` opens `/agency/reports` and requires the
+      words "Agency reports" to be visible in `main`. The hub's heading comes
+      from this table, so the wording is pinned here as well — a rename now
+      breaks a test that runs in a second rather than one that runs twenty
+      minutes into a browser suite.
+
+      `label` and `heading` differ only for the overview, and deliberately:
+      under a branch called "Consolidated Agency Reports" the row can only
+      read "Overview", while "Overview" alone as an `<h1>` says nothing about
+      what is being overviewed. The first version had one field for both and
+      left the page headed "Overview", which is what the browser suite caught.
+    */
+    expect(AGENCY_REPORT_SECTION_META.overview.heading).toBe('Agency reports');
+    expect(AGENCY_REPORT_SECTION_META.overview.label).toBe('Overview');
+
+    // Every other section's heading is its label: there is nothing to
+    // disambiguate once the section names itself.
+    for (const section of AGENCY_REPORT_SECTIONS) {
+      if (section === 'overview') continue;
+      const meta = AGENCY_REPORT_SECTION_META[section];
+      expect(meta.heading, section).toBe(meta.label);
+    }
   });
 
   it('reads every section the hub declares', () => {

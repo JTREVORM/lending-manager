@@ -139,7 +139,7 @@ export async function GET(request: Request): Promise<Response> {
     return pdfResponse(
       renderReportPdf({
         branding,
-        title: `Agency — ${AGENCY_REPORT_SECTION_META[filter.section].label}`,
+        title: `Agency — ${AGENCY_REPORT_SECTION_META[filter.section].heading}`,
         coverage: `${agencyPeriodLabel(filter)} · ${filter.range.from} to ${filter.range.to}`,
         // Said in the document rather than left to be inferred. A reader
         // holding a printout should not have to wonder which filters produced
