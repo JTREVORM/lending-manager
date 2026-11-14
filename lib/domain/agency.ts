@@ -584,3 +584,187 @@ export interface OperatingBranchOption {
   readonly branchCode: string;
   readonly name: string;
 }
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+// ---------------------------------------------------------------------------
+
+/**
+ * The states a cash banking can be in.
+ *
+ * Four rather than two, for the reason the float trade has four: a control
+ * that can only say yes is not a control, so a rejected slip is kept with its
+ * reason, and a posted banking that turns out to have gone to the wrong
+ * account is reversed rather than edited.
+ */
+export const AGENCY_CASH_BANKING_STATUSES = [
+  'pending',
+  'posted',
+  'rejected',
+  'reversed',
+] as const;
+export type AgencyCashBankingStatus = (typeof AGENCY_CASH_BANKING_STATUSES)[number];
+
+export function isAgencyCashBankingStatus(
+  value: unknown,
+): value is AgencyCashBankingStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_CASH_BANKING_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * One row of `agency_cash_banking_register`.
+ *
+ * `netBanked` is the database's own `amount - charge`, not a subtraction done
+ * here: it is what the bank actually credited, and a screen that recomputed it
+ * would be a second opinion on a figure the journal already settled.
+ */
+export interface AgencyCashBankingRow {
+  readonly id: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly bankingDate: string;
+  readonly amount: UgxAmount;
+  readonly charge: UgxAmount;
+  readonly netBanked: UgxAmount;
+  readonly depositReference: string;
+  readonly evidenceNote: string | null;
+  readonly notes: string | null;
+  readonly status: AgencyCashBankingStatus;
+  readonly revision: number;
+  readonly cashAccountId: string;
+  readonly cashAccountCode: string;
+  readonly bankAccountId: string;
+  readonly bankAccountCode: string;
+  readonly bankAccountName: string;
+  readonly bankInstitution: string | null;
+  readonly bankedBy: string;
+  readonly bankedByName: string;
+  readonly createdBy: string;
+  readonly createdByName: string;
+  readonly createdAt: string;
+  readonly verifiedBy: string | null;
+  readonly verifiedByName: string | null;
+  readonly verifiedAt: string | null;
+  readonly rejectedReason: string | null;
+  readonly journalEntryId: string | null;
+  readonly reversalEntryId: string | null;
+  readonly reversedBy: string | null;
+  readonly reversedByName: string | null;
+  readonly reversedAt: string | null;
+  readonly reversalReason: string | null;
+}
+
+/** A bank account a cash banking may be paid into. */
+export interface BankAccountOption {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly institution: string | null;
+  readonly branchId: string;
+  readonly branchCode: string;
+}
+
+/** A staff member who may be named as having carried the cash. */
+export interface BankingStaffOption {
+  readonly profileId: string;
+  readonly fullName: string;
+  readonly branchId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Provider categories — what separates the two operational modules
+// ---------------------------------------------------------------------------
+
+/**
+ * The categories `agency_service_providers.category` admits.
+ *
+ * Declared here as the single list the navigation, the banking screens and the
+ * Mobile Money screens all read, so "which providers are banks" is one answer
+ * in one place rather than a predicate written three times. The values are the
+ * database's own CHECK from Phase 4A and are not invented here.
+ */
+export const AGENCY_PROVIDER_CATEGORIES = [
+  'mobile_money',
+  'agency_banking',
+  'utility',
+  'school_fees',
+  'tv_subscription',
+  'airtime_data',
+  'other',
+] as const;
+export type AgencyProviderCategory = (typeof AGENCY_PROVIDER_CATEGORIES)[number];
+
+export function isAgencyProviderCategory(
+  value: unknown,
+): value is AgencyProviderCategory {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_PROVIDER_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
+/** How a category is written on a screen. */
+export const AGENCY_CATEGORY_LABELS: Readonly<Record<AgencyProviderCategory, string>> = {
+  mobile_money: 'Mobile Money',
+  agency_banking: 'Agent Banking',
+  utility: 'Utilities',
+  school_fees: 'School fees',
+  tv_subscription: 'TV subscriptions',
+  airtime_data: 'Airtime & data',
+  other: 'Other services',
+};
+
+/**
+ * One agent account or agent line, with its identity and today's position.
+ *
+ * The same row shape for a bank agent account and a Mobile Money line,
+ * because in the database they are the same thing: a row of
+ * `agency_provider_float_accounts` with its own ledger account. The two
+ * modules differ in which `providerCategory` they read, not in what an
+ * account is — which is what keeps one tested aggregation behind both.
+ */
+export interface AgencyAgentAccountRow extends AgencyMoneyLineRow {
+  readonly providerCategory: AgencyProviderCategory;
+  readonly lineMsisdnMasked: string | null;
+  readonly agentCode: string | null;
+  readonly openedOn: string | null;
+  readonly closedOn: string | null;
+  readonly branchName: string;
+  readonly transactionsToday: number;
+}
+
+/**
+ * What a reader calls an account in this module.
+ *
+ * A bank calls it an agent account and prints an agent number on its
+ * statement; MTN and Airtel call it a line and it has a phone number. One
+ * screen serving both would otherwise have to pick one word and be wrong half
+ * the time.
+ */
+export function agentAccountNoun(category: AgencyProviderCategory): {
+  readonly singular: string;
+  readonly plural: string;
+} {
+  return category === 'mobile_money'
+    ? { singular: 'agent line', plural: 'agent lines' }
+    : { singular: 'agent account', plural: 'agent accounts' };
+}
+
+/**
+ * The name to show for an account: its label, else its provider identifier,
+ * else the till it is.
+ *
+ * Never the raw MSISDN, which is masked in the view it comes from.
+ */
+export function agentAccountName(row: {
+  readonly label: string | null;
+  readonly agentCode: string | null;
+  readonly lineMsisdnMasked: string | null;
+  readonly tillName: string;
+}): string {
+  return row.label ?? row.agentCode ?? row.lineMsisdnMasked ?? `Till ${row.tillName}`;
+}

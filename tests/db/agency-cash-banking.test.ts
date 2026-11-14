@@ -29,7 +29,14 @@ import {
   createTestUser,
   type TestUser,
 } from '../helpers/auth-fixtures';
-import { closePool, getClient, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  getClient,
+  hasDatabase,
+  query,
+  queryOne,
+  skipReason,
+} from '../helpers/db';
 
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
@@ -55,7 +62,8 @@ describeDb('Agency redesign — cash banking', () => {
   let bankId: string;
 
   let seq = 0;
-  const ref = (): string => `DEP-${String(++seq).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const ref = (): string =>
+    `DEP-${String(++seq).padStart(4, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
   async function fund(code: string, amount: number): Promise<void> {
     await query(
@@ -96,7 +104,11 @@ describeDb('Agency redesign — cash banking', () => {
         where l.entry_id = $1 order by l.line_number`,
       [entryId],
     );
-    return rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
+    return rows.map((r) => ({
+      code: r.code,
+      debit: Number(r.debit),
+      credit: Number(r.credit),
+    }));
   }
 
   async function entryCount(): Promise<number> {
@@ -198,7 +210,11 @@ describeDb('Agency redesign — cash banking', () => {
   // -------------------------------------------------------------------------
 
   it('records a pending banking and moves no money at all', async () => {
-    const before = { cash: await balance(cashCode), bank: await balance(bankCode), n: await entryCount() };
+    const before = {
+      cash: await balance(cashCode),
+      bank: await balance(bankCode),
+      n: await entryCount(),
+    };
 
     const id = await record({ amount: 2_000_000 });
     const r = await row(id);
@@ -288,7 +304,11 @@ describeDb('Agency redesign — cash banking', () => {
 
   it('is not a customer transaction: no agency_transaction row exists for it', async () => {
     const before = Number(
-      (await queryOne<{ n: string }>(`select count(*)::text as n from public.agency_transactions`)).n,
+      (
+        await queryOne<{ n: string }>(
+          `select count(*)::text as n from public.agency_transactions`,
+        )
+      ).n,
     );
 
     const id = await record({ amount: 400_000 });
@@ -297,7 +317,11 @@ describeDb('Agency redesign — cash banking', () => {
     ]);
 
     const after = Number(
-      (await queryOne<{ n: string }>(`select count(*)::text as n from public.agency_transactions`)).n,
+      (
+        await queryOne<{ n: string }>(
+          `select count(*)::text as n from public.agency_transactions`,
+        )
+      ).n,
     );
     expect(after).toBe(before);
   });
@@ -428,7 +452,9 @@ describeDb('Agency redesign — cash banking', () => {
     const id = await record({ amount: 410_000 });
     const before = (await row(id)).revision;
 
-    await query(`update public.agency_cash_bankings set amount = 420000 where id = $1`, [id]);
+    await query(`update public.agency_cash_bankings set amount = 420000 where id = $1`, [
+      id,
+    ]);
 
     const bumped = (await row(id)).revision;
     expect(bumped).toBe(before + 1);
@@ -583,11 +609,17 @@ describeDb('Agency redesign — cash banking', () => {
     ]);
 
     const first = await asUserCommitted(mgr2, [
-      { sql: `select public.reverse_agency_cash_banking($1, 'duplicate slip') as entry`, params: [id] },
+      {
+        sql: `select public.reverse_agency_cash_banking($1, 'duplicate slip') as entry`,
+        params: [id],
+      },
     ]);
     const n = await entryCount();
     const second = await asUserCommitted(mgr2, [
-      { sql: `select public.reverse_agency_cash_banking($1, 'duplicate slip') as entry`, params: [id] },
+      {
+        sql: `select public.reverse_agency_cash_banking($1, 'duplicate slip') as entry`,
+        params: [id],
+      },
     ]);
 
     expect(second.rows[0]?.entry).toBe(first.rows[0]?.entry);
@@ -628,7 +660,10 @@ describeDb('Agency redesign — cash banking', () => {
 
     // The Owner holds it.
     const allowed = await asUserCommitted(owner, [
-      { sql: `select public.reverse_agency_cash_banking($1, 'wrong day') as entry`, params: [id] },
+      {
+        sql: `select public.reverse_agency_cash_banking($1, 'wrong day') as entry`,
+        params: [id],
+      },
     ]);
     expect(allowed.ok).toBe(true);
     expect((await row(id)).status).toBe('reversed');

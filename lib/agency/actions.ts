@@ -61,6 +61,9 @@ import {
   payableSettlementSchema,
   reconciliationApprovalSchema,
   recordAgencyTransactionSchema,
+  cashBankingReasonSchema,
+  cashBankingSchema,
+  cashBankingVerificationSchema,
   serviceLimitSchema,
   settlementReversalSchema,
 } from '@/lib/validation/agency';
@@ -88,6 +91,13 @@ function revalidateAgency(): void {
     ROUTES.agencyFloatCount,
     ROUTES.agencyReports,
     ROUTES.agencyExceptions,
+    // The Agency redesign's screens. A cash banking moves the branch cash
+    // position, which the banking overview and the consolidated report both
+    // lead with, so both are stale the moment one posts.
+    ROUTES.agencyBanking,
+    ROUTES.agencyBankingAccounts,
+    ROUTES.agencyCashBanking,
+    ROUTES.agencyTransfers,
     ROUTES.dashboard,
   ]) {
     revalidatePath(route);
@@ -1188,5 +1198,170 @@ export async function setCommissionSourceAction(
       ? 'Commission will be taken from each transaction’s confirmation message.'
       : "Commission will be computed from the provider's configured terms.",
     data,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+//
+// Four actions and a strict division between them: recording writes a pending
+// document and posts nothing, and exactly one of the other three posts. That
+// is the maker-checker control, and it is enforced by the database — which
+// refuses the person who recorded a banking from posting it, whatever these
+// functions do. Neither the amount banked nor the charge is turned into a
+// debit or a credit here; `verify_agency_cash_banking()` builds the legs from
+// the row it locks.
+// ---------------------------------------------------------------------------
+
+/**
+ * Record an agent's deposit of collected cash into a company bank account.
+ *
+ * Takes `agency:write`, the counter capability, because the person who fills
+ * this in is the one who banked the money. Nothing moves until a second
+ * officer posts it.
+ */
+export async function recordCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:write', 'agency.record');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingSchema, {
+    bankAccountId: formData.get('bankAccountId'),
+    amount: formData.get('amount'),
+    depositReference: formData.get('depositReference'),
+    bankedBy: formData.get('bankedBy') ?? null,
+    charge: formData.get('charge') ?? null,
+    bankingDate: formData.get('bankingDate') ?? null,
+    evidenceNote: formData.get('evidenceNote') ?? null,
+    notes: formData.get('notes') ?? null,
+    branchId: formData.get('branchId') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('record_agency_cash_banking', {
+    p_bank_account_id: input.bankAccountId,
+    p_amount: input.amount,
+    p_reference: input.depositReference,
+    p_banked_by: input.bankedBy ?? null,
+    p_charge: input.charge ?? 0,
+    p_banking_date: input.bankingDate ?? null,
+    p_evidence_note: input.evidenceNote ?? null,
+    p_notes: input.notes ?? null,
+    p_branch_id: input.branchId ?? null,
+  });
+
+  return settle(
+    error,
+    'Recording a cash banking',
+    'Recorded, and waiting for a second officer. No cash has moved yet.',
+    data,
+  );
+}
+
+/**
+ * Post a recorded cash banking.
+ *
+ * Takes `agency:settlements`. The database refuses the person who recorded it
+ * and compares the revision the screen was showing against the row it locks,
+ * so a figure cannot change between the screen and the click.
+ */
+export async function verifyCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingVerificationSchema, {
+    bankingId: formData.get('bankingId'),
+    reviewedRevision: formData.get('reviewedRevision'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('verify_agency_cash_banking', {
+    p_banking_id: parsed.data.bankingId,
+    p_expected_revision: parsed.data.reviewedRevision,
+  });
+
+  return settle(
+    error,
+    'Posting a cash banking',
+    'Posted. The cash has moved from the till to the bank account.',
+    parsed.data.bankingId,
+  );
+}
+
+/** Reject a recorded cash banking, with a reason. Posts nothing. */
+export async function rejectCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingReasonSchema, {
+    bankingId: formData.get('bankingId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('reject_agency_cash_banking', {
+    p_banking_id: parsed.data.bankingId,
+    p_reason: parsed.data.reason,
+  });
+
+  return settle(
+    error,
+    'Rejecting a cash banking',
+    'Rejected, with your reason on the record. Nothing was posted.',
+    parsed.data.bankingId,
+  );
+}
+
+/**
+ * Reverse a posted cash banking by contra entries.
+ *
+ * Takes `agency:reverse`, and the database additionally requires
+ * `agency:reverse_cross_day` for a banking dated before today. The original
+ * journal is never touched.
+ */
+export async function reverseCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:reverse', 'agency.reverse');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingReasonSchema, {
+    bankingId: formData.get('bankingId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('reverse_agency_cash_banking', {
+    p_banking_id: parsed.data.bankingId,
+    p_reason: parsed.data.reason,
+  });
+
+  return settle(
+    error,
+    'Reversing a cash banking',
+    'Reversed by contra entries. The original posting is unchanged.',
+    parsed.data.bankingId,
   );
 }

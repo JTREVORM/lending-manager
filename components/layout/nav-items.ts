@@ -13,6 +13,7 @@ import {
   Settings,
   HeartHandshake,
   ShieldAlert,
+  Smartphone,
   UserCircle,
   Users,
 } from 'lucide-react';
@@ -101,11 +102,79 @@ export interface NavItem {
  * These are the business's own divisions instead, each closed until somebody
  * asks for it.
  */
+/**
+ * A collapsible branch *inside* a module: the rail's third level, and with a
+ * nested `groups`, its fourth.
+ *
+ * ## Why the rail grew a level
+ *
+ * The Agency module had fourteen entries in one flat list: a counter screen, a
+ * verification queue, two reconciliations, a commission screen, a remittance
+ * screen, a Mobile Money screen, a provider register and a line register, all
+ * siblings. Nothing in it said that recording a customer's deposit and
+ * configuring a bank are different kinds of act, or that MTN and Airtel are
+ * two businesses rather than one link called "Mobile Money". A reader looking
+ * for "Stanbic's agent accounts" had no row to aim at and no reason to think
+ * the application held the answer.
+ *
+ * The client's confirmed requirements are explicit that Agent Banking and
+ * Mobile Money are separate operational modules, each with its own providers,
+ * accounts, transactions, float, commissions and reports. That is a tree, and
+ * a tree does not fit in two levels.
+ *
+ * ## Data-driven, and only where the data is the structure
+ *
+ * `items` is static: the operations a module offers do not depend on what is
+ * registered. `groups` may be either — the Agency branch's static groups are
+ * declared below, and the per-bank, per-provider and per-line groups are built
+ * from the database by `agencyNavGroups()`, because which banks exist and which
+ * lines are registered is business data and hard-coding it is how STANBIC
+ * becomes the only bank the application can ever have.
+ *
+ * A dynamic group carries **no icon**. A Lucide icon is a React component and
+ * a component cannot be passed from a Server Component to a Client Component,
+ * so anything resolved server-side must be plain serialisable data. The
+ * static groups above them carry the icons that name the branch.
+ */
+export interface NavGroup {
+  /**
+   * Stable within the whole rail, because it is what "which groups are open"
+   * is keyed on. Dynamic groups derive theirs from the provider code or the
+   * account id rather than from a position in a list, so re-ordering the data
+   * does not move somebody's open branch.
+   */
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: LucideIcon;
+  /**
+   * A short line under the label — a float balance, a status, a count.
+   *
+   * Only dynamic groups use it, and only for a fact the reader needs before
+   * they click: that a line is suspended, or that a bank has no accounts yet.
+   */
+  readonly note?: string;
+  /** The destinations directly inside this group. */
+  readonly items: readonly NavItem[];
+  /** Branches inside this branch. */
+  readonly groups?: readonly NavGroup[];
+  /**
+   * Shown in place of the group's contents when it has none.
+   *
+   * A registered provider with no agent accounts yet is a real and common
+   * state, and a branch that opened onto nothing would read as a fault. The
+   * empty state says what is missing; the `items` that remain are how a
+   * permitted reader fixes it.
+   */
+  readonly emptyLabel?: string;
+}
+
 export interface NavModule {
   readonly id: NavModuleId;
   readonly label: string;
   readonly icon: LucideIcon;
   readonly items: readonly NavItem[];
+  /** Collapsible branches below `items`. See `NavGroup`. */
+  readonly groups?: readonly NavGroup[];
 }
 
 export const NAV_MODULE_IDS = [
@@ -892,93 +961,234 @@ export const NAV_MODULES: readonly NavModule[] = [
     ],
   },
   {
+    /*
+      AGENCY — three branches, because the business has three.
+
+      The flat fourteen-entry list this replaces made a counter screen, a
+      provider register and a Mobile Money dashboard siblings, which told a
+      reader that recording a customer's deposit, configuring a bank and
+      reading a network's position are the same kind of act. They are not,
+      and the client's confirmed requirements say so: Agent Banking and
+      Mobile Money are separate operational modules, and the consolidated
+      reports are a third thing that reads across both.
+
+      Every destination below already existed or is added by this redesign,
+      and each one leads to a page that renders something. Several are
+      filtered views of a screen that already reads the filter — the
+      reporting hub's seven sections, the account register narrowed to one
+      bank — because, as the note on `NavItem` says, a label does not earn a
+      route.
+
+      The per-bank, per-provider and per-line branches are **not** here. They
+      are built from the database by `agencyNavGroups()`, because which banks
+      are configured and which lines are registered is business data. Nothing
+      in this file names STANBIC, MTN or Airtel.
+    */
     id: 'agency',
     label: 'Agency',
     icon: Network,
-    items: [
+    // No direct entries: every Agency destination belongs to one of the three
+    // branches, and a loose row above them would belong to none of them.
+    items: [],
+    groups: [
       {
-        href: ROUTES.agency,
-        label: 'Agency Services',
-        permission: 'agency:reports',
-        phase: 4,
+        id: 'agency-banking',
+        label: 'Agent Banking',
+        icon: Landmark,
+        items: [
+          {
+            href: ROUTES.agencyBanking,
+            label: 'Overview',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            // The counter. Shared with Mobile Money deliberately: a deposit
+            // is recorded by one engine whatever the provider is, and a
+            // second counter screen would be a second posting path.
+            href: ROUTES.agencyRecord,
+            label: 'Record transaction',
+            permission: 'agency:write',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyPending,
+            label: 'Pending verification',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyHistory,
+            label: 'Transaction history',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyReplenish,
+            label: 'Float top-ups',
+            permission: 'agency:settlements',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyTransfers,
+            label: 'Account transfers',
+            permission: 'agency:float_trade',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyCashBanking,
+            label: 'Cash banking',
+            permission: 'agency:write',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyCommission,
+            label: 'Commissions',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyPayables,
+            label: 'Settlements',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyCashCount,
+            label: 'Cash reconciliation',
+            permission: 'agency:reconcile',
+            phase: 4,
+          },
+          {
+            href: ROUTES.agencyFloatCount,
+            label: 'Float reconciliation',
+            permission: 'agency:reconcile',
+            phase: 4,
+          },
+          {
+            // The reporting hub, narrowed to the banking providers. The hub
+            // reads `scope`, so this is a view of a screen rather than a
+            // second report.
+            href: `${ROUTES.agencyReports}?scope=banking`,
+            label: 'Banking reports',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+        ],
+        groups: [
+          {
+            id: 'agency-banking-banks',
+            label: 'Banks & Agent Accounts',
+            items: [
+              {
+                href: ROUTES.agencyBankingAccounts,
+                label: 'All banks & accounts',
+                permission: 'agency:reports',
+                phase: 4,
+              },
+              {
+                // Registering a bank is configuration, not counter work, and
+                // it is the Owner's: `agency:providers`. It sits here because
+                // this is where a reader discovers there is no bank yet.
+                href: ROUTES.agencyProviders,
+                label: 'Register a bank',
+                permission: 'agency:providers',
+                phase: 4,
+              },
+              {
+                href: ROUTES.agencyLines,
+                label: 'Register an agent account',
+                permission: 'agency:providers',
+                phase: 4,
+              },
+            ],
+            emptyLabel: 'No bank is configured yet',
+          },
+        ],
       },
       {
-        href: ROUTES.agencyRecord,
-        label: 'Record transaction',
-        permission: 'agency:write',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyPending,
-        label: 'Pending verification',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyHistory,
-        label: 'Transaction history',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyFloat,
-        label: 'Float and tills',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyCommission,
-        label: 'Commission',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyPayables,
-        label: 'Provider remittances',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyCashCount,
-        label: 'Cash reconciliation',
-        permission: 'agency:reconcile',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyFloatCount,
-        label: 'Float reconciliation',
-        permission: 'agency:reconcile',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyReports,
-        label: 'Agency reports',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyExceptions,
-        label: 'End-of-day exceptions',
-        permission: 'agency:reports',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyMoney,
+        id: 'agency-money',
         label: 'Mobile Money',
-        permission: 'agency:reports',
-        phase: 4,
+        icon: Smartphone,
+        items: [
+          {
+            href: ROUTES.agencyMoney,
+            label: 'Overview',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+        ],
+        // MTN and Airtel are built from the provider register, below.
+        emptyLabel: 'No Mobile Money provider is configured yet',
       },
       {
-        href: ROUTES.agencyProviders,
-        label: 'Providers & services',
-        permission: 'agency:providers',
-        phase: 4,
-      },
-      {
-        href: ROUTES.agencyLines,
-        label: 'Agent lines',
-        permission: 'agency:providers',
-        phase: 4,
+        id: 'agency-consolidated',
+        label: 'Consolidated Agency Reports',
+        icon: ChartColumn,
+        items: [
+          {
+            href: ROUTES.agencyReports,
+            label: 'Overview',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=transactions`,
+            label: 'Transaction reports',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=cash-float`,
+            label: 'Cash & float reports',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=commission`,
+            label: 'Commission reports',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=settlements`,
+            label: 'Settlement reports',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=reconciliation`,
+            label: 'Reconciliation reports',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=performance`,
+            label: 'Agent performance',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+          {
+            href: ROUTES.agencyExceptions,
+            label: 'Audit & exception reports',
+            permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            href: `${ROUTES.agencyReports}?section=export`,
+            label: 'Export centre',
+            permission: 'agency:reports',
+            phase: 4,
+            prefetch: false,
+          },
+        ],
       },
     ],
   },
@@ -1140,10 +1350,41 @@ export const NAV_MODULES: readonly NavModule[] = [
   },
 ];
 
-/** Every staff destination, flat: the two pinned rows plus every module. */
+// ---------------------------------------------------------------------------
+// Walking the tree
+// ---------------------------------------------------------------------------
+
+/**
+ * Every destination inside a group, including its nested groups'.
+ *
+ * Depth-first and order-preserving, so "the entries of this branch" reads the
+ * same way the rail renders it.
+ */
+export function groupItems(group: NavGroup): readonly NavItem[] {
+  return [...group.items, ...(group.groups ?? []).flatMap((child) => groupItems(child))];
+}
+
+/** Every destination in a module: its own entries, then its branches'. */
+export function moduleItems(module: NavModule): readonly NavItem[] {
+  return [
+    ...module.items,
+    ...(module.groups ?? []).flatMap((group) => groupItems(group)),
+  ];
+}
+
+/**
+ * Every staff destination, flat: the two pinned rows plus every module.
+ *
+ * Reads through the groups as well as the items, which is the whole reason
+ * `moduleItems` exists. Before the rail grew a third level this was
+ * `module.items` alone; leaving it that way would have dropped every Agency
+ * destination out of the navigation parity test — the test that asserts a
+ * visible link and a guarded route cannot disagree — and it would have done
+ * so silently, by passing.
+ */
 export const NAV_ITEMS: readonly NavItem[] = [
   DASHBOARD_ITEM,
-  ...NAV_MODULES.flatMap((module) => module.items),
+  ...NAV_MODULES.flatMap((module) => moduleItems(module)),
   NOTIFICATIONS_ITEM,
 ];
 
@@ -1229,10 +1470,39 @@ export function visibleNavItems(
 }
 
 /**
- * The modules this person may see, each with the entries they may reach.
+ * One group, with only the entries and branches this person may reach.
+ *
+ * Returns `null` for a group that filtered down to nothing *and* has no empty
+ * state to show — a reader should never meet a header that opens onto
+ * nothing. A group with an `emptyLabel` survives, because "this bank has no
+ * agent accounts yet" is information rather than an empty list: it is the
+ * difference between a branch that is waiting for data and one that is not
+ * this reader's to see.
+ */
+export function visibleNavGroup(
+  group: NavGroup,
+  permissions: readonly Permission[],
+): NavGroup | null {
+  const items = visibleNavItems(group.items, permissions);
+  const groups = (group.groups ?? [])
+    .map((child) => visibleNavGroup(child, permissions))
+    .filter((child): child is NavGroup => child !== null);
+
+  if (items.length === 0 && groups.length === 0 && group.emptyLabel === undefined) {
+    return null;
+  }
+  return { ...group, items, groups };
+}
+
+/**
+ * The modules this person may see, each with the entries and branches they
+ * may reach.
  *
  * A module that filtered down to nothing is dropped, so a Secretary never
- * meets an "Administration" header that opens onto an empty list.
+ * meets an "Administration" header that opens onto an empty list. A module
+ * whose own `items` are empty but which still has a branch survives — the
+ * Agency module is exactly that, and dropping it would hide the whole module
+ * from everybody.
  */
 export function visibleNavModules(
   permissions: readonly Permission[],
@@ -1240,7 +1510,10 @@ export function visibleNavModules(
   return NAV_MODULES.map((module) => ({
     ...module,
     items: visibleNavItems(module.items, permissions),
-  })).filter((module) => module.items.length > 0);
+    groups: (module.groups ?? [])
+      .map((group) => visibleNavGroup(group, permissions))
+      .filter((group): group is NavGroup => group !== null),
+  })).filter((module) => module.items.length > 0 || (module.groups?.length ?? 0) > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1313,15 +1586,16 @@ export function currentNavModuleId(
   params?: URLSearchParams | null,
 ): NavModuleId | null {
   const current = currentNavItem(
-    modules.flatMap((module) => module.items),
+    modules.flatMap((module) => moduleItems(module)),
     pathname,
     params,
   );
   if (current === null) return null;
 
   return (
-    modules.find((module) => module.items.some((item) => item.href === current.href))
-      ?.id ?? null
+    modules.find((module) =>
+      moduleItems(module).some((item) => item.href === current.href),
+    )?.id ?? null
   );
 }
 
@@ -1361,4 +1635,240 @@ export function splitForBottomBar(
   const overflow = [...ranked.slice(BOTTOM_BAR_SLOTS), ...rest];
 
   return { bar, overflow };
+}
+
+// ---------------------------------------------------------------------------
+// Which branches are open
+// ---------------------------------------------------------------------------
+
+/**
+ * The ids of every group on the path from a module down to the entry being
+ * viewed.
+ *
+ * What the rail opens by itself on arrival. Opening a line's page should
+ * reveal the line under its provider under Mobile Money — three headers — and
+ * a reader who had to open three branches to find where they already are is
+ * being asked to navigate to their own location.
+ *
+ * Returns the ancestors rather than just the innermost group, because a
+ * branch whose parent is closed is not visible however open it claims to be.
+ */
+export function activeNavGroupIds(
+  module: NavModule,
+  current: NavItem | null,
+): readonly string[] {
+  if (current === null) return [];
+
+  const walk = (groups: readonly NavGroup[]): readonly string[] => {
+    for (const group of groups) {
+      if (group.items.some((item) => item.href === current.href)) return [group.id];
+      const deeper = walk(group.groups ?? []);
+      if (deeper.length > 0) return [group.id, ...deeper];
+    }
+    return [];
+  };
+
+  return walk(module.groups ?? []);
+}
+
+// ---------------------------------------------------------------------------
+// The Agency branch's data-driven groups
+// ---------------------------------------------------------------------------
+
+/**
+ * One agent account or agent line, as the rail needs it.
+ *
+ * Plain serialisable data, resolved on the server and passed through the
+ * shell: no React component, no Lucide icon, nothing that cannot cross the
+ * Server/Client boundary. The masked number is the only form of the MSISDN
+ * that reaches a screen.
+ */
+export interface AgencyNavAccount {
+  readonly id: string;
+  readonly label: string;
+  readonly status: 'active' | 'suspended' | 'closed';
+}
+
+/** One configured provider, with the accounts registered against it. */
+export interface AgencyNavProvider {
+  readonly code: string;
+  readonly name: string;
+  readonly accounts: readonly AgencyNavAccount[];
+}
+
+/**
+ * The banks and the Mobile Money networks the rail should show.
+ *
+ * Two lists rather than one with a category on each entry, because the two
+ * modules render them differently: a bank's accounts hang off the shared
+ * "Banks & Agent Accounts" branch, while each Mobile Money network is a
+ * branch of its own with its own operations beneath it.
+ */
+export interface AgencyNavData {
+  readonly banks: readonly AgencyNavProvider[];
+  readonly mobileMoney: readonly AgencyNavProvider[];
+}
+
+/** Nothing configured, or nothing readable. The rail still renders. */
+export const EMPTY_AGENCY_NAV: AgencyNavData = { banks: [], mobileMoney: [] };
+
+/**
+ * One account's entry: its own detail page.
+ *
+ * A suspended or closed account says so in the label. The alternative is a
+ * rail where a line that takes no new business looks exactly like one that
+ * does, and the first time anybody finds out is when the counter refuses a
+ * transaction on it. `NavItem` carries no status field and should not grow
+ * one for this: the fact belongs to the label because it is part of what the
+ * destination *is*.
+ *
+ * `agency:reports` because that is what the detail route guards, and
+ * `prefetch: false` because the page reads a per-account aggregate — opening a
+ * provider with eight lines should not fire eight of them.
+ */
+function accountItem(account: AgencyNavAccount): NavItem {
+  const suffix =
+    account.status === 'suspended'
+      ? ' — suspended'
+      : account.status === 'closed'
+        ? ' — closed'
+        : '';
+
+  return {
+    href: `${ROUTES.agencyAccounts}/${account.id}`,
+    label: `${account.label}${suffix}`,
+    permission: 'agency:reports',
+    phase: 4,
+    prefetch: false,
+  };
+}
+
+/**
+ * A provider's own branch under Mobile Money: its operations, then its lines.
+ *
+ * Every operation is a view of a screen that already exists and already reads
+ * the filter, which is why there is one provider screen rather than an MTN one
+ * and an Airtel one. The provider code is in the href, so this function knows
+ * nothing about which networks the business uses.
+ */
+function mobileMoneyProviderGroup(provider: AgencyNavProvider): NavGroup {
+  const base = `${ROUTES.agencyMoney}/${provider.code}`;
+
+  return {
+    id: `agency-money-${provider.code}`,
+    label: provider.name,
+    items: [
+      { href: base, label: 'Dashboard', permission: 'agency:reports', phase: 4 },
+      {
+        href: `${ROUTES.agencyHistory}?provider=${provider.code}`,
+        label: 'Transactions',
+        permission: 'agency:reports',
+        phase: 4,
+        prefetch: false,
+      },
+      {
+        href: `${base}#float-trades`,
+        label: 'Float management',
+        permission: 'agency:reports',
+        phase: 4,
+        prefetch: false,
+      },
+      {
+        href: `${base}/commission`,
+        label: 'Commissions',
+        permission: 'agency:reports',
+        phase: 4,
+        prefetch: false,
+      },
+      {
+        href: `${base}/statements`,
+        label: 'Reconciliation',
+        permission: 'agency:reports',
+        phase: 4,
+        prefetch: false,
+      },
+      {
+        href: `${ROUTES.agencyReports}?provider=${provider.code}`,
+        label: `${provider.name} reports`,
+        permission: 'agency:reports',
+        phase: 4,
+        prefetch: false,
+      },
+    ],
+    groups: [
+      {
+        id: `agency-money-${provider.code}-lines`,
+        label: 'Agent lines',
+        items: provider.accounts.map(accountItem),
+        // Not "no lines": a reader who sees this needs to know the provider is
+        // configured and the lines are not, which is a different problem from
+        // a provider nobody has set up.
+        emptyLabel: 'No agent line registered yet',
+      },
+    ],
+  };
+}
+
+/** A bank's branch: its registered agent accounts, and each account's page. */
+function bankGroup(bank: AgencyNavProvider): NavGroup {
+  return {
+    id: `agency-bank-${bank.code}`,
+    label: bank.name,
+    items: [
+      {
+        // The register, narrowed to this bank. A filtered view of a screen
+        // that reads the filter, not a route per bank.
+        href: `${ROUTES.agencyBankingAccounts}?provider=${bank.code}`,
+        label: 'Registered agent accounts',
+        permission: 'agency:reports',
+        phase: 4,
+        prefetch: false,
+      },
+      ...bank.accounts.map(accountItem),
+    ],
+    emptyLabel: 'No agent account registered yet',
+  };
+}
+
+/**
+ * The Agency module, with its data-driven branches grafted on.
+ *
+ * Pure: it takes the static tree and the data and returns a new tree, so the
+ * static declaration stays the single statement of what the module offers and
+ * this stays the single statement of how the data hangs off it. The rail
+ * calls it after the capability filter, so an account a reader may not see
+ * never reaches a group.
+ *
+ * A provider with no accounts still gets its branch — with an empty state
+ * inside. That is the requirement's "show a meaningful empty state and a
+ * permitted registration action" rather than silently omitting a bank the
+ * Owner has configured and is waiting to use.
+ */
+export function withAgencyNavData(
+  modules: readonly NavModule[],
+  data: AgencyNavData,
+): readonly NavModule[] {
+  return modules.map((module) => {
+    if (module.id !== 'agency') return module;
+
+    return {
+      ...module,
+      groups: (module.groups ?? []).map((group) => {
+        if (group.id === 'agency-banking') {
+          return {
+            ...group,
+            groups: (group.groups ?? []).map((child) =>
+              child.id === 'agency-banking-banks'
+                ? { ...child, groups: data.banks.map(bankGroup) }
+                : child,
+            ),
+          };
+        }
+        if (group.id === 'agency-money') {
+          return { ...group, groups: data.mobileMoney.map(mobileMoneyProviderGroup) };
+        }
+        return group;
+      }),
+    };
+  });
 }

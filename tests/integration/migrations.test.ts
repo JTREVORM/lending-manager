@@ -790,6 +790,16 @@ describe('types stay in step with the schema', () => {
       'agency_commission_settlement_destination_guard',
       'agency_float_trade_revision_guard',
       'audit_agency_configuration_change',
+      // The Agency redesign. Two guards on `agency_cash_bankings`, both of
+      // the same kind as the four above. One asserts what a CHECK cannot,
+      // because it spans `ledger_accounts`: that a cash banking moves
+      // cash_at_hand to bank, both postable, both active and both at the
+      // recording branch. The other keeps the verification revision and
+      // refuses an edit to a banking that is no longer pending. Both fire as
+      // the table owner and are revoked from every exposed role, so neither
+      // is callable over the API.
+      'agency_cash_banking_guard',
+      'agency_cash_banking_revision_guard',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

@@ -171,6 +171,25 @@ const ROUTE_PERMISSIONS: readonly {
   // route of their own - they are actions on a transaction's own page, where
   // the control is rendered or explained according to the capability.
   { prefix: ROUTES.agencyRecord, permission: 'agency:write' },
+  // The Agency redesign. Longest-prefix first again, so
+  // `/agency/banking/accounts` is not swallowed by `/agency/banking` and
+  // neither is swallowed by `/agency`.
+  //
+  // Cash banking takes `agency:write`, not `agency:settlements`: recording an
+  // agent's deposit slip is a counter action, and the Secretary/Treasurer who
+  // runs the counter holds `agency:write`. Posting it needs
+  // `agency:settlements` and the database refuses anyone else — which is where
+  // that control belongs, because it is a control on the posting rather than
+  // on the screen. Giving the screen the stronger capability would hide the
+  // form from the only person who fills it in.
+  //
+  // Transfers take `agency:float_trade`, the capability the Phase 4E engine
+  // already requires to record one.
+  { prefix: ROUTES.agencyCashBanking, permission: 'agency:write' },
+  { prefix: ROUTES.agencyTransfers, permission: 'agency:float_trade' },
+  { prefix: ROUTES.agencyBankingAccounts, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyAccounts, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyBanking, permission: 'agency:reports' },
   { prefix: ROUTES.agencyCashCount, permission: 'agency:reconcile' },
   { prefix: ROUTES.agencyFloatCount, permission: 'agency:reconcile' },
   { prefix: ROUTES.agencyReplenish, permission: 'agency:settlements' },

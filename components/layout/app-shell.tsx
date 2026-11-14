@@ -8,6 +8,8 @@ import { contextCan, type AuthContext } from '@/lib/auth/context';
 import { APP_SHORT_NAME, ROUTES } from '@/config/app';
 import { getCompanyBranding } from '@/lib/data/company';
 import { getNotificationSummary } from '@/lib/data/notifications';
+import { getAgencyNavData } from '@/lib/data/agency-nav';
+import { EMPTY_AGENCY_NAV } from './nav-items';
 import { ROLES, effectiveRole } from '@/lib/permissions';
 import { SignOutButton } from './sign-out-button';
 import { PrimaryNav } from './primary-nav';
@@ -64,7 +66,17 @@ export async function AppShell({
   // is in the shell. Not read at all for somebody who cannot open it — the
   // borrower portal has its own frame and this is the staff one, but a staff
   // account without the capability should cost no query.
-  const [{ branding }, notifications] = await Promise.all([
+  // The Agency redesign. The rail's Agency branch shows the configured banks,
+  // the Mobile Money networks and the agent accounts registered against each,
+  // and all three are business data — so the shell reads them, in parallel
+  // with the branding and the bell.
+  //
+  // Not read at all for somebody who holds no agency capability, for the same
+  // reason the notification summary is not: Row Level Security would return
+  // nothing, and a query that is certain to return nothing should not be sent.
+  const canSeeAgency = contextCan(context, 'agency:reports');
+
+  const [{ branding }, notifications, agencyNav] = await Promise.all([
     getCompanyBranding(),
     canSeeNotifications
       ? getNotificationSummary()
@@ -75,6 +87,7 @@ export async function AppShell({
           unreadAttention: 0,
           newestUnreadAt: null,
         }),
+    canSeeAgency ? getAgencyNavData() : Promise.resolve(EMPTY_AGENCY_NAV),
   ]);
 
   const role = effectiveRole(context.roles);
@@ -153,7 +166,12 @@ export async function AppShell({
           </div>
 
           {/* --- The menu ------------------------------------------- */}
-          <PrimaryNav variant="sidebar" menu="staff" permissions={context.permissions} />
+          <PrimaryNav
+            variant="sidebar"
+            menu="staff"
+            permissions={context.permissions}
+            agency={agencyNav}
+          />
 
           {/* --- The signed-in person (#06295E) --------------------- */}
           <div className="bg-sidebar-deep shrink-0 border-t border-blue-800/80 p-2">

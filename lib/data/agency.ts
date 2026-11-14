@@ -52,6 +52,14 @@ import {
   type AgencyTradeStatus,
   type AgencyTransactionRow,
   type AgencyVarianceRow,
+  isAgencyCashBankingStatus,
+  isAgencyProviderCategory,
+  type AgencyAgentAccountRow,
+  type AgencyCashBankingRow,
+  type AgencyCashBankingStatus,
+  type AgencyProviderCategory,
+  type BankAccountOption,
+  type BankingStaffOption,
   OperatingBranchOption,
 } from '@/lib/domain/agency';
 
@@ -174,6 +182,22 @@ export async function getAgencyFloatBalances(): Promise<AgencyRows<AgencyFloatRo
 export async function getAgencyTransactions(options?: {
   readonly statuses?: readonly AgencyStatus[];
   readonly providerId?: string;
+  /**
+   * The provider's own code, which is what a URL carries.
+   *
+   * Beside `providerId` rather than replacing it: the id is what a page that
+   * already holds a provider row filters by, and the code is what
+   * `?provider=MTN_MOMO` gives a page that holds nothing yet. Resolving the
+   * code to an id here would be a second read for an equality the view can
+   * already do, because `provider_code` is one of its columns.
+   */
+  readonly providerCode?: string;
+  /** Agent Banking or Mobile Money, as a filter rather than a second query. */
+  readonly categories?: readonly AgencyProviderCategory[];
+  readonly floatAccountId?: string;
+  readonly branchId?: string;
+  readonly from?: string;
+  readonly to?: string;
   readonly limit?: number;
 }): Promise<AgencyRows<AgencyTransactionRow>> {
   const supabase = await createSupabaseServerClient();
@@ -188,6 +212,24 @@ export async function getAgencyTransactions(options?: {
   }
   if (options?.providerId !== undefined) {
     query = query.eq('provider_id', options.providerId);
+  }
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+  if (options?.categories !== undefined && options.categories.length > 0) {
+    query = query.in('provider_category', [...options.categories]);
+  }
+  if (options?.floatAccountId !== undefined) {
+    query = query.eq('float_account_id', options.floatAccountId);
+  }
+  if (options?.branchId !== undefined) {
+    query = query.eq('branch_id', options.branchId);
+  }
+  if (options?.from !== undefined) {
+    query = query.gte('transaction_date', options.from);
+  }
+  if (options?.to !== undefined) {
+    query = query.lte('transaction_date', options.to);
   }
 
   const { data, error } = await query;
@@ -1060,4 +1102,290 @@ export async function getOperatingBranches(profileId: string): Promise<
   // database would refuse that anyway; an empty list is the honest answer and
   // the form says what it means.
   return { ok: true, row: { own, choices: own === null ? options : [own] } };
+}
+
+// ---------------------------------------------------------------------------
+// Agent accounts and agent lines — one reader, two modules
+// ---------------------------------------------------------------------------
+
+/** A provider category the view must have produced, or the honest fallback. */
+function category(value: unknown): AgencyProviderCategory {
+  return isAgencyProviderCategory(value) ? value : 'other';
+}
+
+function mapAgentAccount(r: Record<string, unknown>): AgencyAgentAccountRow {
+  return {
+    ...mapLineCommission(r),
+    depositsToday: num(r.deposits_today),
+    depositValueToday: ugx(r.deposit_value_today),
+    withdrawalsToday: num(r.withdrawals_today),
+    withdrawalValueToday: ugx(r.withdrawal_value_today),
+    commissionToday: ugx(r.commission_today),
+    customerFeesToday: ugx(r.customer_fees_today),
+    pendingTrades: num(r.pending_trades),
+    transactionsInFlight: num(r.transactions_in_flight),
+    openCommissionReconciliations: num(r.open_commission_reconciliations),
+    providerCategory: category(r.provider_category),
+    lineMsisdnMasked: strOrNull(r.line_msisdn_masked),
+    agentCode: strOrNull(r.agent_code),
+    openedOn: strOrNull(r.opened_on),
+    closedOn: strOrNull(r.closed_on),
+    branchName: str(r.branch_name),
+    transactionsToday: num(r.transactions_today),
+  };
+}
+
+/**
+ * Every agent account or agent line the reader may see, filtered the way the
+ * module asking needs.
+ *
+ * One function for Agent Banking and Mobile Money both, because in the
+ * database they are one structure: `agency_mobile_money_dashboard` joins over
+ * every float account whatever its provider's category, which is why a bank
+ * agent account and an MTN line can share a tested aggregation instead of two
+ * that would drift. The module is expressed as a filter, not as a second
+ * query.
+ *
+ * `categories` is how Agent Banking asks for banks and Mobile Money asks for
+ * MTN and Airtel. `providerCode` narrows to one provider for its own screen.
+ * `floatAccountId` narrows to one account for its own page.
+ */
+export async function getAgencyAgentAccounts(options?: {
+  readonly categories?: readonly AgencyProviderCategory[];
+  readonly providerCode?: string;
+  readonly floatAccountId?: string;
+  readonly branchId?: string;
+}): Promise<AgencyRows<AgencyAgentAccountRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_mobile_money_dashboard')
+    .select('*')
+    .order('provider_name')
+    .order('branch_code')
+    .order('till_name');
+
+  if (options?.categories !== undefined && options.categories.length > 0) {
+    query = query.in('provider_category', [...options.categories]);
+  }
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+  if (options?.floatAccountId !== undefined) {
+    query = query.eq('float_account_id', options.floatAccountId);
+  }
+  if (options?.branchId !== undefined) {
+    query = query.eq('branch_id', options.branchId);
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return failed('the agent accounts', error);
+
+  return { ok: true, rows: data.map(mapAgentAccount) };
+}
+
+/**
+ * One agent account, or `null` where the reader may not see it.
+ *
+ * `null` rather than a failure: a reader who may not see an account and an
+ * account that does not exist are the same answer to a screen, and
+ * distinguishing them on the page would tell an unauthorised reader that the
+ * account is real.
+ */
+export async function getAgencyAgentAccount(
+  floatAccountId: string,
+): Promise<AgencyMaybeRow<AgencyAgentAccountRow>> {
+  const result = await getAgencyAgentAccounts({ floatAccountId });
+  if (!result.ok) return result;
+  return { ok: true, row: result.rows[0] ?? null };
+}
+
+/**
+ * The providers in one or more categories, so a module can list its banks or
+ * its Mobile Money networks without naming a single code.
+ */
+export async function getAgencyProvidersByCategory(
+  categories: readonly AgencyProviderCategory[],
+): Promise<AgencyRows<AgencyProviderRow>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('agency_service_providers')
+    .select(
+      'id, code, name, category, float_model, commission_model, commission_rate_bps, commission_fixed, is_active, is_provisional',
+    )
+    .in('category', [...categories])
+    .order('name', { ascending: true });
+
+  if (error !== null || data === null) return failed('the providers', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      code: str(r.code),
+      name: str(r.name),
+      category: str(r.category),
+      floatModel: r.float_model === 'cash_payable' ? 'cash_payable' : 'provider_float',
+      commissionModel: r.commission_model === 'immediate' ? 'immediate' : 'deferred',
+      commissionRateBps: intOrNull(r.commission_rate_bps),
+      commissionFixed: ugxOrNull(r.commission_fixed),
+      isActive: r.is_active === true,
+      isProvisional: r.is_provisional === true,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+// ---------------------------------------------------------------------------
+
+function cashBankingStatus(value: unknown): AgencyCashBankingStatus {
+  return isAgencyCashBankingStatus(value) ? value : 'pending';
+}
+
+function mapCashBanking(r: Record<string, unknown>): AgencyCashBankingRow {
+  return {
+    id: str(r.id),
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    branchName: str(r.branch_name),
+    bankingDate: str(r.banking_date),
+    amount: ugx(r.amount),
+    charge: ugx(r.charge),
+    netBanked: ugx(r.net_banked),
+    depositReference: str(r.deposit_reference),
+    evidenceNote: strOrNull(r.evidence_note),
+    notes: strOrNull(r.notes),
+    status: cashBankingStatus(r.status),
+    revision: num(r.revision),
+    cashAccountId: str(r.cash_account_id),
+    cashAccountCode: str(r.cash_account_code),
+    bankAccountId: str(r.bank_account_id),
+    bankAccountCode: str(r.bank_account_code),
+    bankAccountName: str(r.bank_account_name),
+    bankInstitution: strOrNull(r.bank_institution),
+    bankedBy: str(r.banked_by),
+    bankedByName: str(r.banked_by_name),
+    createdBy: str(r.created_by),
+    createdByName: str(r.created_by_name),
+    createdAt: str(r.created_at),
+    verifiedBy: strOrNull(r.verified_by),
+    verifiedByName: strOrNull(r.verified_by_name),
+    verifiedAt: strOrNull(r.verified_at),
+    rejectedReason: strOrNull(r.rejected_reason),
+    journalEntryId: strOrNull(r.journal_entry_id),
+    reversalEntryId: strOrNull(r.reversal_entry_id),
+    reversedBy: strOrNull(r.reversed_by),
+    reversedByName: strOrNull(r.reversed_by_name),
+    reversedAt: strOrNull(r.reversed_at),
+    reversalReason: strOrNull(r.reversal_reason),
+  };
+}
+
+/** Cash bankings, newest first, optionally narrowed by state or branch. */
+export async function getAgencyCashBankings(options?: {
+  readonly statuses?: readonly AgencyCashBankingStatus[];
+  readonly branchId?: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly limit?: number;
+}): Promise<AgencyRows<AgencyCashBankingRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_cash_banking_register')
+    .select('*')
+    .order('banking_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(options?.limit ?? 100);
+
+  if (options?.statuses !== undefined && options.statuses.length > 0) {
+    query = query.in('status', [...options.statuses]);
+  }
+  if (options?.branchId !== undefined) query = query.eq('branch_id', options.branchId);
+  if (options?.from !== undefined) query = query.gte('banking_date', options.from);
+  if (options?.to !== undefined) query = query.lte('banking_date', options.to);
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return failed('the cash bankings', error);
+
+  return { ok: true, rows: data.map(mapCashBanking) };
+}
+
+/**
+ * The bank accounts a cash banking may be paid into.
+ *
+ * Read off `cash_kind = 'bank'` rather than a `1040` code pattern, so a second
+ * bank account opened later is offered with no change here. The branch filter
+ * is the form's, not the authorization: the database refuses an account of
+ * another branch whatever this returns.
+ */
+export async function getBankAccountOptions(options?: {
+  readonly branchId?: string;
+}): Promise<AgencyRows<BankAccountOption>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('ledger_accounts')
+    .select('id, code, name, institution, branch_id, branches(branch_code)')
+    .eq('cash_kind', 'bank')
+    .eq('is_postable', true)
+    .eq('status', 'active')
+    .order('code', { ascending: true });
+
+  if (options?.branchId !== undefined) query = query.eq('branch_id', options.branchId);
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return failed('the bank accounts', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => {
+      const branch = r.branches as { branch_code?: unknown } | null;
+      return {
+        id: str(r.id),
+        code: str(r.code),
+        name: str(r.name),
+        institution: strOrNull(r.institution),
+        branchId: str(r.branch_id),
+        branchCode: branch === null ? '' : str(branch.branch_code),
+      };
+    }),
+  };
+}
+
+/**
+ * The staff who may be named as having carried the cash.
+ *
+ * Active profiles holding a staff role, which is who can be at a counter.
+ * Offering the list is a convenience; the database checks the named profile
+ * is active and would refuse one that is not.
+ */
+export async function getBankingStaffOptions(options?: {
+  readonly branchId?: string;
+}): Promise<AgencyRows<BankingStaffOption>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('profiles')
+    .select('id, full_name, branch_id, user_roles!inner(role_key)')
+    .eq('status', 'active')
+    .neq('user_roles.role_key', 'client')
+    .order('full_name', { ascending: true });
+
+  if (options?.branchId !== undefined) query = query.eq('branch_id', options.branchId);
+
+  const { data, error } = await query;
+  if (error !== null || data === null) return failed('the staff list', error);
+
+  // One profile may hold several roles, so the inner join can repeat it.
+  const seen = new Set<string>();
+  const rows: BankingStaffOption[] = [];
+  for (const r of data) {
+    const id = str(r.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    rows.push({
+      profileId: id,
+      fullName: str(r.full_name),
+      branchId: strOrNull(r.branch_id),
+    });
+  }
+  return { ok: true, rows };
 }

@@ -41,6 +41,95 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      // --- The Agency redesign: cash banking (client Rule 5) ----------------
+      //
+      // An agent's deposit of collected physical cash into one of the
+      // company's own bank accounts. SELECT-only for `authenticated`, like
+      // every other agency table: the four RPCs below are the only writers.
+      // It references no provider, no float till and no transaction type,
+      // which is what makes "a cash banking is not a customer deposit, not
+      // revenue and not a float top-up" structural rather than a convention.
+      agency_cash_bankings: {
+        Row: {
+          id: string;
+          branch_id: string;
+          cash_account_id: string;
+          bank_account_id: string;
+          banked_by: string;
+          banking_date: string;
+          amount: number;
+          charge: number;
+          deposit_reference: string;
+          evidence_note: string | null;
+          notes: string | null;
+          status: string;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          created_by: string;
+          created_at: string;
+          verified_by: string | null;
+          verified_at: string | null;
+          rejected_reason: string | null;
+          reversed_by: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+          revision: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          branch_id: string;
+          cash_account_id: string;
+          bank_account_id: string;
+          banked_by: string;
+          banking_date: string;
+          amount: number;
+          charge?: number;
+          deposit_reference: string;
+          evidence_note?: string | null;
+          notes?: string | null;
+          status?: string;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          created_by: string;
+          created_at?: string;
+          verified_by?: string | null;
+          verified_at?: string | null;
+          rejected_reason?: string | null;
+          reversed_by?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          branch_id?: string;
+          cash_account_id?: string;
+          bank_account_id?: string;
+          banked_by?: string;
+          banking_date?: string;
+          amount?: number;
+          charge?: number;
+          deposit_reference?: string;
+          evidence_note?: string | null;
+          notes?: string | null;
+          status?: string;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          created_by?: string;
+          created_at?: string;
+          verified_by?: string | null;
+          verified_at?: string | null;
+          rejected_reason?: string | null;
+          reversed_by?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       // --- Polytos Phase 4: benefits, beneficiaries and meetings ------------
       //
       // `member_beneficiary_identities` is a table of its own because Row
@@ -5155,6 +5244,17 @@ export type Database = {
           is_active: boolean;
           created_at: string;
           updated_at: string;
+          label: string;
+          line_msisdn: string | null;
+          agent_code: string | null;
+          opened_on: string | null;
+          closed_on: string | null;
+          notes: string | null;
+          updated_by: string | null;
+          status: string;
+          status_reason: string | null;
+          status_changed_by: string | null;
+          status_changed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -5165,6 +5265,17 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          label?: string;
+          line_msisdn?: string | null;
+          agent_code?: string | null;
+          opened_on?: string | null;
+          closed_on?: string | null;
+          notes?: string | null;
+          updated_by?: string | null;
+          status?: string;
+          status_reason?: string | null;
+          status_changed_by?: string | null;
+          status_changed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -5175,6 +5286,17 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          label?: string;
+          line_msisdn?: string | null;
+          agent_code?: string | null;
+          opened_on?: string | null;
+          closed_on?: string | null;
+          notes?: string | null;
+          updated_by?: string | null;
+          status?: string;
+          status_reason?: string | null;
+          status_changed_by?: string | null;
+          status_changed_at?: string | null;
         };
         Relationships: [];
       };
@@ -5643,6 +5765,50 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      // --- The Agency redesign: the cash banking register -------------------
+      //
+      // `security_invoker`, so the table's own branch-scoped policy decides
+      // the rows. Carries `net_banked` (amount - charge) as the database's
+      // own column, so no screen subtracts it again.
+      agency_cash_banking_register: {
+        Row: {
+          id: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          banking_date: string | null;
+          amount: number | null;
+          charge: number | null;
+          net_banked: number | null;
+          deposit_reference: string | null;
+          evidence_note: string | null;
+          notes: string | null;
+          status: string | null;
+          revision: number | null;
+          cash_account_id: string | null;
+          cash_account_code: string | null;
+          bank_account_id: string | null;
+          bank_account_code: string | null;
+          bank_account_name: string | null;
+          bank_institution: string | null;
+          banked_by: string | null;
+          banked_by_name: string | null;
+          created_by: string | null;
+          created_by_name: string | null;
+          created_at: string | null;
+          verified_by: string | null;
+          verified_by_name: string | null;
+          verified_at: string | null;
+          rejected_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          reversed_by: string | null;
+          reversed_by_name: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+        };
+        Relationships: [];
+      };
       // --- Polytos Phase 4C: the agency reporting layer ----------------------
       //
       // All seven are `security_invoker`, so the row-level policies on the
@@ -5666,6 +5832,12 @@ export type Database = {
           float_balance: number | null;
           commission_outstanding: number | null;
           recovery_owed: number | null;
+          provider_category: string | null;
+          line_msisdn_masked: string | null;
+          agent_code: string | null;
+          opened_on: string | null;
+          closed_on: string | null;
+          branch_name: string | null;
         };
         Relationships: [];
       };
@@ -5780,6 +5952,7 @@ export type Database = {
           sale_fee_income: number | null;
           float_transferred_out: number | null;
           float_transferred_in: number | null;
+          provider_category: string | null;
         };
         Relationships: [];
       };
@@ -5807,6 +5980,13 @@ export type Database = {
           pending_trades: number | null;
           transactions_in_flight: number | null;
           open_commission_reconciliations: number | null;
+          provider_category: string | null;
+          line_msisdn_masked: string | null;
+          agent_code: string | null;
+          opened_on: string | null;
+          closed_on: string | null;
+          branch_name: string | null;
+          transactions_today: number | null;
         };
         Relationships: [];
       };
@@ -5855,6 +6035,17 @@ export type Database = {
           submitted_by: string | null;
           verified_by: string | null;
           created_at: string | null;
+          revision: number | null;
+          float_account_id: string | null;
+          till_name: string | null;
+          label: string | null;
+          customer_fee_mode: string | null;
+          transacted_at: string | null;
+          provider_category: string | null;
+          branch_name: string | null;
+          submitted_by_name: string | null;
+          verified_by_name: string | null;
+          agent_code: string | null;
         };
         Relationships: [];
       };
@@ -7637,6 +7828,50 @@ export type Database = {
     };
 
     Functions: {
+      // --- The Agency redesign: cash banking (client Rule 5) ----------------
+      //
+      // Recording posts nothing; verifying is the one call that writes a
+      // journal, and the database refuses it to the person who recorded the
+      // banking. Rejecting and reversing are the other halves of the control.
+      record_agency_cash_banking: {
+        Args: {
+          p_bank_account_id: string;
+          p_amount: number;
+          p_reference: string;
+          p_banked_by?: string | null;
+          p_charge?: number;
+          p_banking_date?: string | null;
+          p_evidence_note?: string | null;
+          p_notes?: string | null;
+          p_branch_id?: string | null;
+        };
+        Returns: string;
+      };
+      verify_agency_cash_banking: {
+        Args: {
+          p_banking_id: string;
+          p_expected_revision?: number | null;
+        };
+        Returns: string;
+      };
+      reject_agency_cash_banking: {
+        Args: {
+          p_banking_id: string;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
+      reverse_agency_cash_banking: {
+        Args: {
+          p_banking_id: string;
+          p_reason: string;
+        };
+        Returns: string;
+      };
+      mask_msisdn: {
+        Args: { p_msisdn: string | null };
+        Returns: string | null;
+      };
       // --- Phase 4B: the agency transaction engine ---------------------------
       //
       // Eight lifecycle RPCs reachable by a signed-in user, each refusing a

@@ -383,3 +383,65 @@ export const commissionSourceSchema = z.object({
   source: z.enum(['configured', 'reported']),
   reason: optionalString(500),
 });
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+// ---------------------------------------------------------------------------
+
+/**
+ * Recording an agent's deposit of collected cash into a company bank account.
+ *
+ * `bankAccountId` is required and `cashAccountId` is deliberately absent: the
+ * branch has exactly one cash-at-hand wallet and the database looks it up, so
+ * a form that could name it could name another branch's.
+ *
+ * The charge is optional and defaults to zero, which is the ordinary case. It
+ * is validated here only for shape — that it is a whole non-negative number;
+ * whether it is below the amount is checked by the database, against the
+ * amount it has, because a cross-field rule checked here would be checked
+ * again there anyway and the second answer is the one that decides.
+ */
+export const cashBankingSchema = z.object({
+  bankAccountId: uuidSchema,
+  amount: amountSchema,
+  depositReference: nonEmptyString('Bank deposit reference', 64),
+  /**
+   * Who physically carried the cash. Optional: the database defaults it to
+   * the person recording, which is the common case, and naming somebody else
+   * is what makes a supervisor-recorded banking accountable to the cashier
+   * who did it.
+   */
+  bankedBy: optionalField(uuidSchema),
+  charge: feeSchema.optional(),
+  bankingDate: optionalField(businessDateSchema),
+  evidenceNote: optionalString(500),
+  notes: optionalString(500),
+  /** Head Office names the branch; a branch officer's own is used. */
+  branchId: optionalField(uuidSchema),
+});
+export type CashBankingInput = z.infer<typeof cashBankingSchema>;
+
+/**
+ * Verification carries the revision the screen was showing, for the reason
+ * `verifyAgencyTransactionSchema` gives: the database compares it against the
+ * row it locks, and what this refuses is a form that lost the value and would
+ * otherwise fall back to the weaker no-token path.
+ */
+export const cashBankingVerificationSchema = z.object({
+  bankingId: uuidSchema,
+  reviewedRevision: z
+    .string()
+    .trim()
+    .min(1, 'Reload the cash banking before posting it.')
+    .regex(/^[0-9]+$/, 'Reload the cash banking before posting it.')
+    .transform((v) => Number(v))
+    .refine((v) => Number.isSafeInteger(v) && v >= 1, {
+      message: 'Reload the cash banking before posting it.',
+    }),
+});
+
+/** Rejecting or reversing one: both need a reason, and say so. */
+export const cashBankingReasonSchema = z.object({
+  bankingId: uuidSchema,
+  reason: reasonSchema,
+});

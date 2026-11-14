@@ -675,6 +675,15 @@
         "public_default_acl": false
       }
     },
+    "record_agency_cash_banking(p_bank_account_id uuid, p_amount bigint, p_reference text, p_banked_by uuid, p_charge bigint, p_banking_date date, p_evidence_note text, p_notes text, p_branch_id uuid)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC, client Rule 5. Records an agent banking collected physical cash into a company bank account, and posts nothing. Refuses a borrower session with SQLSTATE 42501 and the message “This action requires the agency:write capability.” before touching its arguments — measured by the behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body. Also refuses a branch the caller cannot see with 42501, a closed branch, a future date, a non-positive amount, a charge at or above the amount, a missing deposit reference, a duplicate reference on the same bank account, and an inactive banker. The source cash account is looked up from the branch rather than taken as an argument, so a caller cannot name another branch's till.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "record_agency_commission_payout(p_float_account_id uuid, p_amount bigint, p_provider_reference text, p_payout_date date, p_notes text)": {
       "classification": "A",
       "reason": "Phase 4E agency RPC. Records commission the provider paid into one agent line's float: Dr the line's 1320 account, Cr 1310, touching no income account because the income was recognised per transaction. Refuses a caller without agency:settlements with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a closed line, more than that line's own outstanding receivable, and a missing or repeated provider reference. Takes the provider balance lock before the sorted account locks.",
@@ -828,6 +837,15 @@
         "public_default_acl": false
       }
     },
+    "reject_agency_cash_banking(p_banking_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC. Rejects a pending cash banking with a stated reason and posts nothing. Refuses a borrower session with SQLSTATE 42501 and the message “This action requires the agency:settlements capability.” before touching its arguments — measured by the behavioural probe. Also refuses a banking from another branch with 42501, a row that is not pending, the person who recorded it, and an empty reason.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "reject_agency_float_trade(p_trade_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Phase 4E agency RPC. Refuses a pending float trade with a stated reason and posts nothing, so a maker-checker control can say no as well as yes. Refuses a caller without agency:settlements with 42501 via agency_actor(), a trade from another branch, a trade that is not pending, and a blank reason.",
@@ -921,6 +939,15 @@
     "return_agency_transaction(p_transaction_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Phase 4B agency RPC. Returns a submitted transaction to draft with a reason. Refuses a caller without agency:verify with 42501, because judging a transaction wrong is the same authority as judging it right. Moves no money.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_agency_cash_banking(p_banking_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC. Reverses a posted cash banking by contra entries; the original journal is never touched. Refuses a borrower session with SQLSTATE 42501 and the message “This action requires the agency:reverse capability.” before touching its arguments — measured by the behavioural probe. Also refuses a banking from another branch with 42501, a row that is not posted, an empty reason, a banking dated before today without agency:reverse_cross_day (42501), and a bank account that no longer holds what was banked. Idempotent on an already-reversed row.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1272,6 +1299,15 @@
     "validate_loan_for_approval(p_loan_id uuid)": {
       "classification": "A",
       "reason": "Guarded in 20261106000100. Thin authorized wrapper; the logic lives behind an internal name with no authenticated grant. Both directions asserted in tests/db/security-definer-surface.test.ts.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "verify_agency_cash_banking(p_banking_id uuid, p_expected_revision integer)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC, client Rule 5. The one call that posts a cash banking: Dr the bank account for amount - charge, Dr 5080 for the charge, Cr the branch cash at hand for the full amount. Refuses a borrower session with SQLSTATE 42501 and the message “This action requires the agency:settlements capability.” before touching its arguments — measured by the behavioural probe. Also refuses a banking from another branch with 42501, the person who recorded it, a stale revision and insufficient cash. Idempotent on an already-posted row. Locks both ledger balances through lock_ledger_balances(), which sorts the account ids, before any balance is read.",
       "surface": {
         "anon": false,
         "authenticated": true,
