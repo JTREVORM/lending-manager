@@ -81,12 +81,22 @@ supervisory route is exercised rather than assumed — see item 6.3.
 ### 1.4 What the demonstration book contains
 
 A full lending book (clients, loans, repayments, arrears), and for the Agency
-module: MTN and Airtel as Mobile Money providers with one agent line each and
-float topped up from the company's own cash, a utility biller on the
-cash-payable model, posted deposits and withdrawals, a reversal, a commission
-exception, a payable settlement, and both reconciliations.
+module:
 
-Every figure is synthetic and every provider is provisional.
+- **MTN** and **Airtel** as Mobile Money providers, one agent line each, float
+  topped up from the company's own cash, with the counter staff authorised on
+  both lines.
+- A **utility biller** on the cash-payable model, to show a provider whose
+  customers' money we hold and owe onward.
+- A **provisional partner bank** on the cash-payable model and holding no
+  float — which is exactly the state the real provisional catalogue is in, and
+  what item 9 of the checklist asks you to correct. Without it there would be
+  nothing to correct and that step could not be performed.
+- Posted deposits and withdrawals, a reversal, a commission exception, a
+  payable settlement, and both reconciliations.
+
+Every figure is synthetic. The provisional bank cannot be posted against, and
+nothing in the preview activates any provider.
 
 ---
 
@@ -188,8 +198,8 @@ see refused**, because in this module the refusals are most of the control.
 | # | Do this | Expect |
 |---|---|---|
 | 9.1 | Agency → Providers. Read the panel at the foot. | The control, and a clear statement that it corrects configuration and activates nothing. |
-| 9.2 | Note which providers it offers. | **Provisional only.** Confirmed providers are listed as unavailable, with the reason. |
-| 9.3 | Correct a provisional bank to electronic float, with a reason. | Accepted. Its payable is cleared; a float account can now be opened against it. |
+| 9.2 | Note which providers it offers. | **Provisional only** — in the preview, the Demonstration Partner Bank. Confirmed providers are listed as unavailable, with the reason. |
+| 9.3 | Correct it to electronic float, with a reason. | Accepted. Its payable is cleared; a float account can now be opened against it. |
 | 9.4 | Register an agent account against it, then look at the consolidated float report. | It appears, labelled Agent Banking. |
 | 9.5 | Try to correct a provider that holds float. | **Refused**, telling you to settle the position it holds under the present model first. |
 | 9.6 | Try as a Manager. | **Refused.** |

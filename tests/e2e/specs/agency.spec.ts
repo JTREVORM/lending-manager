@@ -232,12 +232,21 @@ test.describe('what the interface refuses to pretend', () => {
     ).toBeVisible();
   });
 
-  test('provider configuration says it cannot be edited here', async ({ page }) => {
+  test('provider configuration says what cannot be changed here', async ({ page }) => {
     await page.goto('/agency/providers');
 
+    // This screen used to say "Read-only", and that assertion was right until
+    // the Owner's decision 1 added one writer: the correction that moves a
+    // *provisional* provider between the two float models. The page is no
+    // longer read-only, so the word had to go — and the assertion has to
+    // follow the page rather than the page follow the assertion.
+    //
+    // What must still hold is the part that matters: commercial terms cannot
+    // be changed and no provider can be activated from here, because the
+    // approval workflow for terms has not been decided.
     await expect(
       page
-        .getByText(/Read-only/i)
+        .getByText(/approving its commercial terms or making it live is not a screen/i)
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
@@ -246,6 +255,29 @@ test.describe('what the interface refuses to pretend', () => {
     await expect(
       page.getByRole('button', { name: /register|activate|save/i }),
     ).toHaveCount(0);
+  });
+
+  test('the one thing it can change is scoped to a provisional provider', async ({
+    page,
+  }) => {
+    // The other half of the same claim. The correction exists, it is named,
+    // and it says in words that it activates nothing — so a reader cannot
+    // mistake it for the provider-approval workflow that does not exist.
+    await page.goto('/agency/providers');
+
+    await expect(
+      page
+        .getByText(/Correct a provisional provider's money model/i)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
+
+    await expect(
+      page
+        .getByText(/configuration correction, not a financial one/i)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
   });
 
   test('the officer who recorded a reading cannot certify it', async ({ page }) => {

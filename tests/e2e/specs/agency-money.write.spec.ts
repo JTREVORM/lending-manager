@@ -170,6 +170,37 @@ async function openLine(
   expect(row.status).toBe('active');
   expect(row.branch).toBe(branchCode);
 
+  // Authorise the counter staff on the line just opened.
+  //
+  // Client Rule 6, added by the Owner's decision 2: an officer who is not on
+  // an account's roster may not record against it. Every test below opens a
+  // fresh line and then records as the Secretary, so without this each one
+  // fails at the roster — which is how this whole block came to be written.
+  //
+  // Done through the harness rather than through the authorisations screen on
+  // purpose. These are tests about float trades, and if they went through that
+  // screen a regression in it would fail six tests that name float purchases,
+  // sales and transfers. The screen has its own test, which drives it as the
+  // Owner and then proves the refusal it lifts — see
+  // `agency-staffing.write.spec.ts`.
+  //
+  // Both counter officers, because `recordPurchase` and the verification that
+  // follows it are two different people, and the Manager passes the roster by
+  // the oversight clause rather than by being on it.
+  await queryHarness(
+    `insert into public.agency_account_staff
+       (float_account_id, profile_id, assigned_by, notes)
+     select $1, pr.id,
+            (select p2.id from public.profiles p2
+               join public.user_roles r2 on r2.profile_id = p2.id
+              where r2.role_key = 'owner_admin' order by p2.created_at limit 1),
+            'end-to-end counter mandate'
+       from public.profiles pr
+       join public.user_roles r on r.profile_id = pr.id
+      where r.role_key = 'secretary_treasurer' and pr.status = 'active'`,
+    [row.id],
+  );
+
   return {
     tillName,
     floatAccountId: row.id,

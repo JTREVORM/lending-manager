@@ -2419,6 +2419,37 @@ async function seedAgency() {
     commissionModel: 'immediate',
     fixed: 800,
   });
+  // A bank, provisional and on the wrong money model — which is the whole
+  // point of it.
+  //
+  // The Owner's decision 1 added a control that corrects a provisional
+  // provider's float model, and the acceptance checklist asks the Owner to
+  // exercise it. Without a provisional provider in the book there is nothing
+  // to correct, and the screen correctly reports that every provider is
+  // confirmed — so the checklist step could not be performed at all.
+  //
+  // `cash_payable` deliberately: that is the state the real provisional
+  // catalogue is in, and what the client's confirmation says is wrong. It
+  // holds no float account, which is also what makes it correctable — the
+  // function refuses a provider holding a balance.
+  //
+  // Provisional, so it cannot be posted against. Nothing here activates a
+  // provider or invents a commission rate: the rate below is a demonstration
+  // figure on a demonstration bank that no transaction can reach.
+  await addProvider({
+    code: 'DEMO_BANK',
+    name: 'Demonstration Partner Bank (provisional)',
+    category: 'agency_banking',
+    floatModel: 'cash_payable',
+    // 2220 Bank Agency Payable, which is what a bank's held customer cash is
+    // owed on. Not 2230 — that is the commission *recovery* payable, a
+    // different debt to a different party.
+    payable: '2220',
+    commissionModel: 'deferred',
+    rateBps: 90,
+    provisional: true,
+  });
+
   const mtnDeposit = await addType(mtn, {
     code: 'DEMO_MTN_DEP',
     name: 'Cash in to a wallet',

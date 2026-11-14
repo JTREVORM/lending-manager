@@ -138,14 +138,23 @@ export default async function AgencyStaffingPage({
   };
 
   /**
-   * Who may be offered for one account: an employee of that account's own
-   * branch who is not already on its roster.
+   * Who may be offered for one account: somebody the database would accept,
+   * who is not already on its roster.
    *
-   * The branch rule is the database's — `assign_agency_account_staff()`
-   * refuses a mandate across branches — and narrowing here only saves the
-   * Owner from picking a name that would be refused. An employee carrying no
-   * branch at all is excluded for the same reason: the function resolves the
-   * account's branch and compares, and a null never matches it.
+   * The branch rule is the database's, and it has two halves rather than one.
+   * `assign_agency_account_staff()` refuses an officer who *belongs to a
+   * different* branch — and explicitly allows one who belongs to none, since a
+   * head-office officer is not another branch's:
+   *
+   *     if p.branch_id is not null and p.branch_id <> f.branch_id then
+   *
+   * This list mirrored only the first half in its first version, excluding
+   * every head-office officer, with a comment asserting the database would
+   * refuse them. It would not. The browser suite found it: the seeded
+   * Secretary carries no branch, so she could not be authorised on anything,
+   * and nothing she recorded could be posted. A filter stricter than the rule
+   * it mirrors is not a safe default — it silently removes people the Owner is
+   * entitled to authorise, and shows no reason for their absence.
    */
   const candidatesFor = (
     account: AgencyStaffedAccount,
@@ -153,7 +162,9 @@ export default async function AgencyStaffingPage({
     if (!staff.ok) return [];
     const already = new Set(account.operators.map((o) => o.profileId));
     return staff.rows.filter(
-      (person) => !already.has(person.profileId) && person.branchId === account.branchId,
+      (person) =>
+        !already.has(person.profileId) &&
+        (person.branchId === null || person.branchId === account.branchId),
     );
   };
 
