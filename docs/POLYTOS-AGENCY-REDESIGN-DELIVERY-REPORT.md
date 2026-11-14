@@ -434,7 +434,7 @@ from all 220 migrations.
 
 | Suite | Command | Result |
 | --- | --- | --- |
-| Unit + integration | `npm run test:run` | **2,743 passed**, 0 failed |
+| Unit + integration | `npm run test:run` | **2,745 passed**, 0 failed |
 | Database, 13 projects | `npm run test:db` | **2,487 passed**, 0 failed |
 | — cash banking | `--project agency-cash-banking` | **29 passed** |
 | — Mobile Money | `--project agency-money` | 123 passed |
@@ -448,6 +448,9 @@ from all 220 migrations.
 | Money arithmetic | `npm run audit:money` | 268 files, no hazard |
 | Database security | `check-database-security.mjs` | no unreviewed exposure |
 | Financial certification | `npm run certify:financial` | 38 identities — 36 pass, 2 explained, **0 fail** |
+| Upgrade gate | `verify-membership-upgrade.mjs` | 99 existing migrations, a seeded book, then 121 new; **all 28 financial figures identical**; 28 new accounts, all at zero; 3 new audit rows, all configuration |
+| Upgrade gate | `verify-policy-upgrade.mjs` | 26 existing financial/identity tables preserved; ledger debits = credits |
+| **Browser E2E** | CI, `browser E2E (production build, fresh seed)` | **green, 0 failures** — see §11 |
 | Authorization probe | `probe-definer-authorization.mjs` | 4/4 new RPCs refuse a borrower with 42501 |
 
 ### Coverage against §11, item by item
@@ -498,21 +501,69 @@ prop carries no component).
 
 ## 11. CI evidence
 
-CI will run on the pull request: `.github/workflows/ci.yml` performs typecheck,
-lint, format, unit/integration, the database projects, the build, the security
-gate, the money audit, and the Playwright suites against a Docker-free stack
-(real PostgreSQL, real PostgREST, an auth shim, the production Next build).
+**CI is green on head `851030c`. All eight check runs report `success`:**
 
-**The Playwright suites were not run in this session.** The harness needs a
-PostgREST binary; this sandbox has none, and executing a freshly downloaded one
-was declined by the environment — correctly, since it is an unverified
-third-party binary. CI fetches it with a pinned SHA-256, which is the right
-place for that step. The five new browser tests for the Agency branch are
-committed and will run there.
+| Check run | Result |
+| --- | --- |
+| `checks, unit/integration, build` | success |
+| `database (real PostgreSQL)` | success |
+| `browser E2E (production build, fresh seed)` | success |
+| `security release rehearsal (PostgreSQL 17, real Auth)` | success |
 
-Until that run completes, **§11's "mobile responsiveness" and the browser-level
-rendering of the nested rail are untested claims.** They are marked as such
-above and in §15.
+(Eight runs, not four: the workflow fires on both the push and the
+`pull_request` event. The PR reports `mergeable_state: clean`.)
+
+Run: <https://github.com/JTREVORM/lending-manager/actions/runs/43596000550>
+
+The browser job also re-captured the agency screen set at four viewports:
+**60 screen/viewport pairs, no screen overflowing its viewport**, slowest
+`agency-dashboard` on desktop at 103ms median.
+
+### What the browser suite found, and why this section used to say otherwise
+
+This section previously said the Playwright suites had not run, because they
+could not run in the authoring environment: the harness needs a PostgREST
+binary, the sandbox had none, and executing a freshly downloaded one was
+declined — correctly, since it is an unverified third-party binary. CI fetches
+it with a pinned SHA-256, which is the right place for that step.
+
+That caveat earned itself. The first browser run reported **1,029 passed and 7
+failed**, and all seven were this branch's. Two were real product defects that
+no amount of jsdom testing would have found:
+
+1. **A branch label was clipped in the drawer.** `SidebarGroup` rendered its
+   label with `truncate`; "Consolidated Agency Reports" is 27 characters inside
+   a 256px drawer behind two levels of indentation. The rail's existing
+   contract is the opposite — *"the heading wraps rather than truncating — an
+   ellipsis hides information"* — and a clipped **branch** label is worse than
+   any other, because a branch is what a reader scans for. Caught by "no
+   destination label is clipped in the rail", which has guarded this since
+   Phase 9.
+
+2. **The reporting hub stopped saying what it was.** `agency.spec.ts` requires
+   the words "Agency reports" visible on `/agency/reports`. The rebuilt hub
+   headed the page with the section's label, and the default section is
+   "Overview" — so the words vanished. The assertion was right and the page was
+   wrong. `AGENCY_REPORT_SECTION_META` now carries a `label` (the rail's word)
+   and a `heading` (the page's), and the wording is pinned in a unit test so
+   the next rename breaks a one-second test rather than a 21-minute browser
+   run.
+
+The other five were selector collisions: Playwright matches an accessible name
+by substring, and with branches inside modules "Agency" also matches
+"Consolidated Agency Reports", "Reports" matches it too, and "Mobile Money"
+matches "MTN Mobile Money (demonstration)". Every rail-*header* selector in
+`navigation.spec.ts` now passes `exact: true` — strictly more precise, and it
+removes the whole class rather than the three instances that bit.
+
+One property moved rather than being fixed: `offers no destination twice,
+across every module` collects the links each module renders while open, and the
+Agency module's destinations now live inside branches that are closed at that
+moment, so it sees none of them. That uniqueness check is now held for this
+module in `agency-navigation.test.tsx`, over the whole grafted tree.
+
+**The nested rail's browser behaviour is therefore evidence rather than a
+claim**, which it was not when this report was first written.
 
 ---
 
@@ -647,7 +698,8 @@ over a period; `agency_commission_monthly` exists and is not yet on a screen.
 
 ## 15. Production readiness verdict
 
-**Ready for review. Not ready for release, and not authorised for one.**
+**Ready for review, with CI green. Not ready for release, and not authorised
+for one.**
 
 What is solid: the back end was already mature and is unchanged; the three new
 migrations are additive and apply cleanly from zero; the one new financial
@@ -660,14 +712,17 @@ it.
 
 What is not done, and must be before anyone considers a release:
 
-1. **CI has not run yet.** The Playwright suites in particular could not run
-   here. Until they pass, the nested rail's browser behaviour is a claim.
+1. ~~CI has not run yet.~~ **Closed.** CI is green on `851030c`, browser suite
+   included — and it found four defects on the way, two of them real. See §11.
 2. **Rule 2 is unresolved** (§14.1). Until the Owner confirms Stanbic's float
    model, the banking module runs on a provisional configuration that
-   contradicts the stated requirement.
+   contradicts the stated requirement. **This is the one that needs a business
+   decision, and it is the largest open item.**
 3. **Staff assignment is a decision, not a task** (§14.2).
 4. **Owner acceptance testing has not happened.** No one from the business has
-   opened these screens.
+   opened these screens. Green CI is not acceptance: it proves the screens
+   render and the postings balance, not that they are the screens the counter
+   wants.
 
 ---
 
