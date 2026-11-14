@@ -161,6 +161,20 @@ const PHASE_PREFIXES = [
   // baselines, which is what measures rather than asserts the claim that
   // banking collected cash moves not one shilling of anybody's loan.
   '20261116',
+  // The Owner's decisions on the redesign: the provider float-model
+  // correction and the agent-account roster. Unreleased like every agency
+  // phase before it.
+  //
+  // Both carry an upgrade claim worth measuring rather than asserting, which
+  // is the whole argument for applying them here. The correction refuses to
+  // move a provider that holds float or has posted history, so running it
+  // against the seeded book proves the refusal fires on real data rather than
+  // on an empty table. The roster adds a trigger to the agency transaction
+  // engine and to float trades, and a trigger on a posting path is exactly
+  // the kind of thing that silently breaks an existing book — so the
+  // financial reconciliation either side of these three files is the check
+  // that it does not.
+  '20261117',
 ];
 
 const isPhaseMigration = (name) =>
