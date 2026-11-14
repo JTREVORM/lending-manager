@@ -130,6 +130,12 @@ describeDb('the balance invariant binds every Phase 4 posting source', () => {
         'agency_float_sale_reversal',
         'agency_float_transfer',
         'agency_float_transfer_reversal',
+        // The Agency redesign. Client Rule 5: an agent banks collected cash.
+        // Dr the bank account net of the charge, Dr 5080 for the charge,
+        // Cr the branch cash at hand for the full amount — three legs that
+        // balance, and a reversal that is every one of them the other way.
+        'agency_cash_banking',
+        'agency_cash_banking_reversal',
       ]);
     });
   });
@@ -146,6 +152,8 @@ describeDb('the balance invariant binds every Phase 4 posting source', () => {
     'agency_commission_payout',
     'agency_commission_payout_reversal',
     'agency_commission_recovery',
+    'agency_cash_banking',
+    'agency_cash_banking_reversal',
     'agency_float_purchase',
     'agency_float_purchase_reversal',
     'agency_float_sale',

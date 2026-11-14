@@ -37,6 +37,9 @@ import { checkActorRateLimit } from '@/lib/security/rate-limit';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { parseSafely } from '@/lib/validation/validate';
 import {
+  agencyAccountStaffRevocationSchema,
+  agencyAccountStaffSchema,
+  agencyProviderFloatModelSchema,
   agencyTransactionIdSchema,
   agentLineClosureSchema,
   agentLineRegistrationSchema,
@@ -61,6 +64,9 @@ import {
   payableSettlementSchema,
   reconciliationApprovalSchema,
   recordAgencyTransactionSchema,
+  cashBankingReasonSchema,
+  cashBankingSchema,
+  cashBankingVerificationSchema,
   serviceLimitSchema,
   settlementReversalSchema,
 } from '@/lib/validation/agency';
@@ -88,6 +94,14 @@ function revalidateAgency(): void {
     ROUTES.agencyFloatCount,
     ROUTES.agencyReports,
     ROUTES.agencyExceptions,
+    // The Agency redesign's screens. A cash banking moves the branch cash
+    // position, which the banking overview and the consolidated report both
+    // lead with, so both are stale the moment one posts.
+    ROUTES.agencyBanking,
+    ROUTES.agencyBankingAccounts,
+    ROUTES.agencyCashBanking,
+    ROUTES.agencyTransfers,
+    ROUTES.agencyStaffing,
     ROUTES.dashboard,
   ]) {
     revalidatePath(route);
@@ -1187,6 +1201,328 @@ export async function setCommissionSourceAction(
     input.source === 'reported'
       ? 'Commission will be taken from each transaction’s confirmation message.'
       : "Commission will be computed from the provider's configured terms.",
+    data,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+//
+// Four actions and a strict division between them: recording writes a pending
+// document and posts nothing, and exactly one of the other three posts. That
+// is the maker-checker control, and it is enforced by the database — which
+// refuses the person who recorded a banking from posting it, whatever these
+// functions do. Neither the amount banked nor the charge is turned into a
+// debit or a credit here; `verify_agency_cash_banking()` builds the legs from
+// the row it locks.
+// ---------------------------------------------------------------------------
+
+/**
+ * Record an agent's deposit of collected cash into a company bank account.
+ *
+ * Takes `agency:write`, the counter capability, because the person who fills
+ * this in is the one who banked the money. Nothing moves until a second
+ * officer posts it.
+ */
+export async function recordCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:write', 'agency.record');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingSchema, {
+    bankAccountId: formData.get('bankAccountId'),
+    amount: formData.get('amount'),
+    depositReference: formData.get('depositReference'),
+    bankedBy: formData.get('bankedBy') ?? null,
+    charge: formData.get('charge') ?? null,
+    bankingDate: formData.get('bankingDate') ?? null,
+    evidenceNote: formData.get('evidenceNote') ?? null,
+    notes: formData.get('notes') ?? null,
+    branchId: formData.get('branchId') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('record_agency_cash_banking', {
+    p_bank_account_id: input.bankAccountId,
+    p_amount: input.amount,
+    p_reference: input.depositReference,
+    p_banked_by: input.bankedBy ?? null,
+    p_charge: input.charge ?? 0,
+    p_banking_date: input.bankingDate ?? null,
+    p_evidence_note: input.evidenceNote ?? null,
+    p_notes: input.notes ?? null,
+    p_branch_id: input.branchId ?? null,
+  });
+
+  return settle(
+    error,
+    'Recording a cash banking',
+    'Recorded, and waiting for a second officer. No cash has moved yet.',
+    data,
+  );
+}
+
+/**
+ * Post a recorded cash banking.
+ *
+ * Takes `agency:settlements`. The database refuses the person who recorded it
+ * and compares the revision the screen was showing against the row it locks,
+ * so a figure cannot change between the screen and the click.
+ */
+export async function verifyCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingVerificationSchema, {
+    bankingId: formData.get('bankingId'),
+    reviewedRevision: formData.get('reviewedRevision'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('verify_agency_cash_banking', {
+    p_banking_id: parsed.data.bankingId,
+    p_expected_revision: parsed.data.reviewedRevision,
+  });
+
+  return settle(
+    error,
+    'Posting a cash banking',
+    'Posted. The cash has moved from the till to the bank account.',
+    parsed.data.bankingId,
+  );
+}
+
+/** Reject a recorded cash banking, with a reason. Posts nothing. */
+export async function rejectCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:settlements', 'agency.settlement');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingReasonSchema, {
+    bankingId: formData.get('bankingId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('reject_agency_cash_banking', {
+    p_banking_id: parsed.data.bankingId,
+    p_reason: parsed.data.reason,
+  });
+
+  return settle(
+    error,
+    'Rejecting a cash banking',
+    'Rejected, with your reason on the record. Nothing was posted.',
+    parsed.data.bankingId,
+  );
+}
+
+/**
+ * Reverse a posted cash banking by contra entries.
+ *
+ * Takes `agency:reverse`, and the database additionally requires
+ * `agency:reverse_cross_day` for a banking dated before today. The original
+ * journal is never touched.
+ */
+export async function reverseCashBankingAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:reverse', 'agency.reverse');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(cashBankingReasonSchema, {
+    bankingId: formData.get('bankingId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('reverse_agency_cash_banking', {
+    p_banking_id: parsed.data.bankingId,
+    p_reason: parsed.data.reason,
+  });
+
+  return settle(
+    error,
+    'Reversing a cash banking',
+    'Reversed by contra entries. The original posting is unchanged.',
+    parsed.data.bankingId,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The agent-account roster — the Owner's decision 2, client Rule 6
+//
+// Neither of these actions is the control. The control is
+// `agency_transaction_operator_guard()` and
+// `agency_float_trade_operator_guard()`, which run on the posting paths and
+// refuse an officer who is not on the account's roster however they got
+// there. These two administer the list those triggers read.
+//
+// That distinction is why they take `agency:providers` or `agency:settlements`
+// rather than a capability of their own: `agency_staffing_actor()` resolves
+// one of those two and raises 42501 otherwise, so a Secretary with
+// `agency:write` cannot add themselves to an account and then record against
+// it. The capability check here is the early, legible refusal; the database's
+// is the one that decides.
+// ---------------------------------------------------------------------------
+
+/**
+ * Authorise an employee to operate an agent account.
+ *
+ * The database refuses an employee from another branch, a closed account, an
+ * employee who is already on it, and a caller without oversight. It does not
+ * refuse a *suspended* account: a suspension is temporary and the mandate
+ * outlives it, so the roster can be put in order while the account is paused.
+ */
+export async function assignAgencyAccountStaffAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyAccountStaffSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    profileId: formData.get('profileId'),
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('assign_agency_account_staff', {
+    p_float_account_id: input.floatAccountId,
+    p_profile_id: input.profileId,
+    p_notes: input.notes ?? null,
+  });
+
+  return settle(
+    error,
+    'Authorising an employee on an agent account',
+    'Authorised. They may now record against this account.',
+    data,
+  );
+}
+
+/**
+ * Withdraw an employee's authorisation.
+ *
+ * The row is kept and marked withdrawn rather than deleted, so a transaction
+ * posted last month still has a roster to be read against. What this stops is
+ * the next one: the guard reads active assignments only.
+ *
+ * It does not touch anything already recorded. A pending transaction submitted
+ * by someone whose mandate is withdrawn before it posts will be refused at
+ * posting, which is correct and is the case the Owner should know about — the
+ * document has to be cancelled or the mandate restored, and the register says
+ * which.
+ */
+export async function revokeAgencyAccountStaffAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyAccountStaffRevocationSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    profileId: formData.get('profileId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('revoke_agency_account_staff', {
+    p_float_account_id: input.floatAccountId,
+    p_profile_id: input.profileId,
+    p_reason: input.reason,
+  });
+
+  return settle(
+    error,
+    "Withdrawing an employee's authorisation on an agent account",
+    'Withdrawn. They may no longer record against this account.',
+    data,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Correcting a provisional provider's float model — the Owner's decision 1
+// ---------------------------------------------------------------------------
+
+/**
+ * Move a provisional provider between the two float models.
+ *
+ * Every guard worth having is in the database, and they are structural rather
+ * than advisory: the provider must still be provisional, hold no float, owe
+ * nothing on its payable, and have no posted or in-flight transaction citing
+ * the model in force. A confirmed provider is refused outright and told to
+ * settle the position it holds under the present model first.
+ *
+ * So this action adds nothing but the early capability refusal and the words
+ * for the two outcomes. In particular it does **not** pre-check whether the
+ * provider is provisional in order to hide the control: a screen that decides
+ * can be stale, and the refusal the database gives is better written than any
+ * absence of a button.
+ */
+export async function setAgencyProviderFloatModelAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderFloatModelSchema, {
+    providerId: formData.get('providerId'),
+    floatModel: formData.get('floatModel'),
+    payableAccountId: formData.get('payableAccountId') ?? null,
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('set_agency_provider_float_model', {
+    p_provider_id: input.providerId,
+    p_float_model: input.floatModel,
+    p_payable_account_id: input.payableAccountId ?? null,
+    p_reason: input.reason,
+  });
+
+  return settle(
+    error,
+    "Correcting a provider's float model",
+    input.floatModel === 'provider_float'
+      ? 'Corrected. This provider supplies electronic float, and float accounts can now be opened against it.'
+      : 'Corrected. Customer money taken on this provider is now owed on the liability you named.',
     data,
   );
 }

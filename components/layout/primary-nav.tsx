@@ -10,14 +10,20 @@ import { cn } from '@/lib/utils/cn';
 import type { Permission } from '@/lib/permissions';
 import {
   DASHBOARD_ITEM,
-  NAV_MODULES,
+  EMPTY_AGENCY_NAV,
   NOTIFICATIONS_ITEM,
   PORTAL_NAV_ITEMS,
+  activeNavGroupIds,
   canReachNavItem,
   currentNavItem,
   currentNavModuleId,
   isNavItemActive,
+  moduleItems,
   splitForBottomBar,
+  visibleNavModules,
+  withAgencyNavData,
+  type AgencyNavData,
+  type NavGroup,
   type NavItem,
   type NavModule,
   type NavModuleId,
@@ -48,6 +54,20 @@ export interface PrimaryNavProps {
    * the navigation knows about destinations and nothing about the session.
    */
   readonly sheetFooter?: ReactNode;
+  /**
+   * The banks, Mobile Money networks and agent accounts the Agency branch
+   * shows, resolved server-side.
+   *
+   * Plain serialisable data, which is the whole constraint: the rail's icons
+   * are React components and cannot cross this boundary, so anything read
+   * from the database arrives as strings and the icons stay on this side.
+   *
+   * Optional, and `EMPTY_AGENCY_NAV` when absent. A shell that could not read
+   * the provider register — a timeout, a reader with no agency capability —
+   * still renders a working rail with the Agency branch's static operations
+   * in it, rather than failing to render navigation because one query failed.
+   */
+  readonly agency?: AgencyNavData;
 }
 
 /**
@@ -94,7 +114,13 @@ export interface PrimaryNavProps {
  * The portal has a sticky header and no drawer, so its two destinations sit
  * in a bar within thumb reach below `md`.
  */
-export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryNavProps) {
+export function PrimaryNav({
+  variant,
+  menu,
+  permissions,
+  sheetFooter,
+  agency,
+}: PrimaryNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -127,31 +153,38 @@ export function PrimaryNav({ variant, menu, permissions, sheetFooter }: PrimaryN
   }
 
   return (
-    <StaffRail pathname={pathname} params={searchParams} permissions={permissions} />
+    <StaffRail
+      pathname={pathname}
+      params={searchParams}
+      permissions={permissions}
+      agency={agency ?? EMPTY_AGENCY_NAV}
+    />
   );
 }
 
 /**
  * The staff rail: the pinned dashboard, then the modules.
  *
- * Its own component because it holds the one piece of state the rail has —
- * which module the reader has opened — and that state is keyed by the page it
- * was opened on, so a navigation resets it rather than freezing yesterday's
- * choice over today's page.
+ * Its own component because it holds the two pieces of state the rail has —
+ * which module the reader has opened, and which branches inside it — and both
+ * are keyed by the page they were opened on, so a navigation resets them
+ * rather than freezing yesterday's choice over today's page.
  */
 function StaffRail({
   pathname,
   params,
   permissions,
+  agency,
 }: {
   readonly pathname: string;
   readonly params: URLSearchParams | null;
   readonly permissions: readonly Permission[];
+  readonly agency: AgencyNavData;
 }) {
-  const modules = NAV_MODULES.map((module) => ({
-    ...module,
-    items: module.items.filter((item) => canReachNavItem(item, permissions)),
-  })).filter((module) => module.items.length > 0);
+  // Capability filter first, then the data. In that order deliberately: an
+  // account a reader may not reach must never become a row, and grafting the
+  // data on first would mean filtering it off again afterwards.
+  const modules = withAgencyNavData(visibleNavModules(permissions), agency);
 
   const dashboard = canReachNavItem(DASHBOARD_ITEM, permissions) ? DASHBOARD_ITEM : null;
   const notifications = canReachNavItem(NOTIFICATIONS_ITEM, permissions)
@@ -160,11 +193,12 @@ function StaffRail({
 
   // The entry that is the page being viewed — resolved once, over what this
   // person can actually reach, so exactly one row claims it however many
-  // prefixes match.
+  // prefixes match. `moduleItems` reads through the branches as well as the
+  // module's own entries, which is what lets a line's page light its own row.
   const current = currentNavItem(
     [
       ...(dashboard === null ? [] : [dashboard]),
-      ...modules.flatMap((module) => module.items),
+      ...modules.flatMap((module) => moduleItems(module)),
       ...(notifications === null ? [] : [notifications]),
     ],
     pathname,
@@ -196,6 +230,42 @@ function StaffRail({
     setOpened({ module: openModule === id ? null : id, path: pathname });
   };
 
+  /*
+    Which branches are open, and the page they were opened on.
+
+    A set rather than a single id, because the branches nest: Mobile Money,
+    then MTN, then its agent lines is three open headers on the way to one
+    line's page, and closing the outer two to open the inner one would hide
+    it. Keyed by the same "still on that page" rule as the module, so arriving
+    anywhere re-derives the tree from the URL.
+
+    Seeded from `activeNavGroupIds`, which returns the whole path from the
+    module down to the entry being viewed — so opening a line reveals the line
+    under its provider under Mobile Money, without the reader opening three
+    headers to find where they already are.
+  */
+  const [openedGroups, setOpenedGroups] = useState<{
+    readonly ids: readonly string[];
+    readonly path: string;
+  } | null>(null);
+
+  const activeModule = modules.find((module) => module.id === openModule) ?? null;
+  const autoGroups =
+    activeModule === null ? [] : activeNavGroupIds(activeModule, current);
+
+  const openGroups = new Set(
+    openedGroups !== null && openedGroups.path === pathname
+      ? openedGroups.ids
+      : autoGroups,
+  );
+
+  const toggleGroup = (id: string): void => {
+    const next = new Set(openGroups);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setOpenedGroups({ ids: [...next], path: pathname });
+  };
+
   return (
     // The menu band: `flex-1 min-h-0 scroll-area scroll-y py-2 px-2.5
     // text-xs`. `min-h-0` is what lets it scroll inside a flex column instead
@@ -214,6 +284,8 @@ function StaffRail({
           onToggle={() => {
             toggle(module.id);
           }}
+          openGroups={openGroups}
+          onToggleGroup={toggleGroup}
           currentHref={current?.href}
         />
       ))}
@@ -268,7 +340,7 @@ function SidebarTopLink({
 }
 
 /**
- * One module: an amber header that discloses its destinations.
+ * One module: an amber header that discloses its destinations and branches.
  *
  * The header is a real `<button>` with `aria-expanded` and `aria-controls`,
  * and the panel it names carries the id — so a screen-reader user hears
@@ -281,11 +353,15 @@ function SidebarModule({
   module,
   expanded,
   onToggle,
+  openGroups,
+  onToggleGroup,
   currentHref,
 }: {
   readonly module: NavModule;
   readonly expanded: boolean;
   readonly onToggle: () => void;
+  readonly openGroups: ReadonlySet<string>;
+  readonly onToggleGroup: (id: string) => void;
   readonly currentHref?: string;
 }) {
   const panelId = useId();
@@ -328,8 +404,8 @@ function SidebarModule({
       {expanded ? (
         // The sub-tree: indented, with a translucent amber rule down the left
         // edge standing in for the tree's trunk. The children carry no icon
-        // of their own — forty glyphs down one rail is the clutter this pass
-        // exists to remove, and the module's own icon above them is what
+        // of their own — forty glyphs down one rail is the clutter this rail
+        // exists to avoid, and the module's own icon above them is what
         // names the branch.
         <ul
           id={panelId}
@@ -338,6 +414,152 @@ function SidebarModule({
           {module.items.map((item) => (
             <li key={item.href}>
               <SidebarLink item={item} isActive={item.href === currentHref} />
+            </li>
+          ))}
+          {(module.groups ?? []).map((group) => (
+            <li key={group.id}>
+              <SidebarGroup
+                group={group}
+                depth={0}
+                openGroups={openGroups}
+                onToggleGroup={onToggleGroup}
+                currentHref={currentHref}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One branch inside a module, and the branches inside it.
+ *
+ * ## Why this recurses rather than rendering two fixed levels
+ *
+ * The Agency tree is four deep in one place — Mobile Money, MTN, Agent lines,
+ * a line — and three deep in another, and which it is depends on data. Two
+ * hand-written levels would have to be three the first time a bank wanted its
+ * accounts grouped by branch, and the rendering would then exist twice.
+ *
+ * ## The active parent
+ *
+ * `containsCurrent` walks the whole branch, so every header on the path to the
+ * open page is marked. The requirement asks for the active parent to be
+ * highlighted and this is what makes it true at any depth: a reader three
+ * levels down can see which provider and which module they are inside without
+ * reading the URL.
+ *
+ * ## Depth is a visual budget, not a structural one
+ *
+ * `depth` only decides indentation and type size, and it stops tightening
+ * after the second level — a fourth-level row at 9px behind four rules would
+ * be unreadable on the phone this is used on. The structure recurses without
+ * limit; the typography does not.
+ */
+function SidebarGroup({
+  group,
+  depth,
+  openGroups,
+  onToggleGroup,
+  currentHref,
+}: {
+  readonly group: NavGroup;
+  readonly depth: number;
+  readonly openGroups: ReadonlySet<string>;
+  readonly onToggleGroup: (id: string) => void;
+  readonly currentHref?: string;
+}) {
+  const panelId = useId();
+  const Icon = group.icon;
+  const expanded = openGroups.has(group.id);
+
+  const contains = (node: NavGroup): boolean =>
+    node.items.some((item) => item.href === currentHref) ||
+    (node.groups ?? []).some((child) => contains(child));
+  const containsCurrent = contains(group);
+
+  const isEmpty = group.items.length === 0 && (group.groups?.length ?? 0) === 0;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={() => {
+          onToggleGroup(group.id);
+        }}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        className={cn(
+          'flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2.5 text-left font-semibold transition-all',
+          'lg:py-1.5',
+          depth === 0 ? 'text-[13px] lg:text-[11px]' : 'text-[12px] lg:text-[10.5px]',
+          // The branch holding the open page is marked even when closed, so a
+          // reader who collapsed it can still see where they are.
+          containsCurrent
+            ? 'bg-sidebar-active-surface text-white'
+            : 'text-blue-100 hover:bg-white/10 hover:text-white',
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {Icon === undefined ? null : (
+            <Icon aria-hidden="true" className="size-3.5 shrink-0 lg:size-3" />
+          )}
+          {/*
+            Wraps rather than truncates, which is the rule the rest of this
+            rail already follows: "the heading wraps rather than truncating —
+            an ellipsis hides information, and two lines on a small phone is
+            the better trade."
+
+            This span carried `truncate` in the first version and the browser
+            suite caught it: "Consolidated Agency Reports" is 27 characters in
+            a 256px drawer behind two levels of indentation, so it clipped —
+            and a clipped branch label is worse here than anywhere else in the
+            rail, because a branch is the thing a reader is scanning for.
+          */}
+          <span className="leading-snug">{group.label}</span>
+        </span>
+        {expanded ? (
+          <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 lg:size-3" />
+        ) : (
+          <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 lg:size-3" />
+        )}
+      </button>
+
+      {expanded ? (
+        <ul
+          id={panelId}
+          className="ml-2.5 flex flex-col gap-0.5 border-l border-amber-500/25 py-0.5 pl-2.5"
+        >
+          {isEmpty ? (
+            // A registered provider with no accounts yet is a real state, and
+            // a branch that opened onto nothing would read as a fault. This
+            // says what is missing; the permitted registration action is a row
+            // of the branch above, where the reader can act on it.
+            <li
+              className="px-2 py-1.5 text-[11px] text-blue-200/80 italic lg:text-[10px]"
+              // Not a link and not a control: a status line.
+            >
+              {group.emptyLabel ?? 'Nothing here yet'}
+            </li>
+          ) : null}
+
+          {group.items.map((item) => (
+            <li key={item.href}>
+              <SidebarLink item={item} isActive={item.href === currentHref} />
+            </li>
+          ))}
+
+          {(group.groups ?? []).map((child) => (
+            <li key={child.id}>
+              <SidebarGroup
+                group={child}
+                depth={depth + 1}
+                openGroups={openGroups}
+                onToggleGroup={onToggleGroup}
+                currentHref={currentHref}
+              />
             </li>
           ))}
         </ul>

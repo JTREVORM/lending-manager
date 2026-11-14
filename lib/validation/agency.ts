@@ -383,3 +383,129 @@ export const commissionSourceSchema = z.object({
   source: z.enum(['configured', 'reported']),
   reason: optionalString(500),
 });
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+// ---------------------------------------------------------------------------
+
+/**
+ * Recording an agent's deposit of collected cash into a company bank account.
+ *
+ * `bankAccountId` is required and `cashAccountId` is deliberately absent: the
+ * branch has exactly one cash-at-hand wallet and the database looks it up, so
+ * a form that could name it could name another branch's.
+ *
+ * The charge is optional and defaults to zero, which is the ordinary case. It
+ * is validated here only for shape — that it is a whole non-negative number;
+ * whether it is below the amount is checked by the database, against the
+ * amount it has, because a cross-field rule checked here would be checked
+ * again there anyway and the second answer is the one that decides.
+ */
+export const cashBankingSchema = z.object({
+  bankAccountId: uuidSchema,
+  amount: amountSchema,
+  depositReference: nonEmptyString('Bank deposit reference', 64),
+  /**
+   * Who physically carried the cash. Optional: the database defaults it to
+   * the person recording, which is the common case, and naming somebody else
+   * is what makes a supervisor-recorded banking accountable to the cashier
+   * who did it.
+   */
+  bankedBy: optionalField(uuidSchema),
+  charge: feeSchema.optional(),
+  bankingDate: optionalField(businessDateSchema),
+  evidenceNote: optionalString(500),
+  notes: optionalString(500),
+  /** Head Office names the branch; a branch officer's own is used. */
+  branchId: optionalField(uuidSchema),
+});
+export type CashBankingInput = z.infer<typeof cashBankingSchema>;
+
+/**
+ * Verification carries the revision the screen was showing, for the reason
+ * `verifyAgencyTransactionSchema` gives: the database compares it against the
+ * row it locks, and what this refuses is a form that lost the value and would
+ * otherwise fall back to the weaker no-token path.
+ */
+export const cashBankingVerificationSchema = z.object({
+  bankingId: uuidSchema,
+  reviewedRevision: z
+    .string()
+    .trim()
+    .min(1, 'Reload the cash banking before posting it.')
+    .regex(/^[0-9]+$/, 'Reload the cash banking before posting it.')
+    .transform((v) => Number(v))
+    .refine((v) => Number.isSafeInteger(v) && v >= 1, {
+      message: 'Reload the cash banking before posting it.',
+    }),
+});
+
+/** Rejecting or reversing one: both need a reason, and say so. */
+export const cashBankingReasonSchema = z.object({
+  bankingId: uuidSchema,
+  reason: reasonSchema,
+});
+
+// ---------------------------------------------------------------------------
+// The agent-account roster — the Agency redesign, client Rule 6
+// ---------------------------------------------------------------------------
+
+/**
+ * Putting an employee on an account's roster.
+ *
+ * Both fields are required and there is no branch field: the account names its
+ * own branch, and `assign_agency_account_staff()` refuses an employee whose
+ * branch is not that one. A form that could name a branch could name the wrong
+ * one, and the answer that decides is the database's either way.
+ *
+ * `notes` is where the authorisation gets its paper trail — the mandate
+ * reference, the board minute, whatever the bank asked for. Optional, because
+ * an assignment made by an Owner is already attributed to the Owner.
+ */
+export const agencyAccountStaffSchema = z.object({
+  floatAccountId: uuidSchema,
+  profileId: uuidSchema,
+  notes: optionalString(500),
+});
+export type AgencyAccountStaffInput = z.infer<typeof agencyAccountStaffSchema>;
+
+/**
+ * Taking one off it. The reason is required, unlike on an assignment: an
+ * assignment is self-explanatory, a withdrawal is the thing somebody will ask
+ * about later — a transfer, a suspension, a resignation, a bank revoking a
+ * mandate — and the roster keeps the row rather than deleting it precisely so
+ * that question has an answer.
+ */
+export const agencyAccountStaffRevocationSchema = z.object({
+  floatAccountId: uuidSchema,
+  profileId: uuidSchema,
+  reason: reasonSchema,
+});
+
+// ---------------------------------------------------------------------------
+// Correcting a provisional provider's float model — the Owner's decision 1
+// ---------------------------------------------------------------------------
+
+/**
+ * Moving a provider between the two float models.
+ *
+ * `payableAccountId` is optional *here* and required by the database when the
+ * target is `cash_payable`, which is the one cross-field rule this schema
+ * deliberately does not check. The reason is the same as the cash banking
+ * charge: the database checks it against the provider it locks, and a provider
+ * can stop being provisional between this screen loading and the click.
+ *
+ * The reason is required. Every other guard on this function is structural —
+ * provisional, no posted history, no float, no payable outstanding — so by the
+ * time one gets here the database has stopped asking whether the change is
+ * safe and the only open question is why somebody made it.
+ */
+export const agencyProviderFloatModelSchema = z.object({
+  providerId: uuidSchema,
+  floatModel: z.enum(['provider_float', 'cash_payable']),
+  payableAccountId: optionalField(uuidSchema),
+  reason: reasonSchema,
+});
+export type AgencyProviderFloatModelInput = z.infer<
+  typeof agencyProviderFloatModelSchema
+>;

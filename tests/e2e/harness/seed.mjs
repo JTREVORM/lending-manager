@@ -2419,6 +2419,37 @@ async function seedAgency() {
     commissionModel: 'immediate',
     fixed: 800,
   });
+  // A bank, provisional and on the wrong money model — which is the whole
+  // point of it.
+  //
+  // The Owner's decision 1 added a control that corrects a provisional
+  // provider's float model, and the acceptance checklist asks the Owner to
+  // exercise it. Without a provisional provider in the book there is nothing
+  // to correct, and the screen correctly reports that every provider is
+  // confirmed — so the checklist step could not be performed at all.
+  //
+  // `cash_payable` deliberately: that is the state the real provisional
+  // catalogue is in, and what the client's confirmation says is wrong. It
+  // holds no float account, which is also what makes it correctable — the
+  // function refuses a provider holding a balance.
+  //
+  // Provisional, so it cannot be posted against. Nothing here activates a
+  // provider or invents a commission rate: the rate below is a demonstration
+  // figure on a demonstration bank that no transaction can reach.
+  await addProvider({
+    code: 'DEMO_BANK',
+    name: 'Demonstration Partner Bank (provisional)',
+    category: 'agency_banking',
+    floatModel: 'cash_payable',
+    // 2220 Bank Agency Payable, which is what a bank's held customer cash is
+    // owed on. Not 2230 — that is the commission *recovery* payable, a
+    // different debt to a different party.
+    payable: '2220',
+    commissionModel: 'deferred',
+    rateBps: 90,
+    provisional: true,
+  });
+
   const mtnDeposit = await addType(mtn, {
     code: 'DEMO_MTN_DEP',
     name: 'Cash in to a wallet',
@@ -2471,6 +2502,38 @@ async function seedAgency() {
 
   const mtnTill = await till(mtn);
   const airtelTill = await till(airtel);
+
+  /**
+   * Put the counter staff on each account's roster.
+   *
+   * Client Rule 6, added by the Owner's decision 2: an officer who is not
+   * authorised on an account may not record or post against it, and
+   * `agency_transaction_operator_guard()` enforces that on the posting path.
+   * Without this the whole agency section of this seed is refused — which is
+   * exactly what happened, and it took three CI gates down with it, because
+   * all three run this one file.
+   *
+   * The Secretary is on the roster because she works the counter. The Manager
+   * is deliberately *not*: he passes by the oversight clause
+   * (`agency:verify`), which is the arrangement a real branch has and the one
+   * the authorisations screen explains. Seeding him onto the roster would
+   * hide a regression in that clause.
+   */
+  const staff = async (tillId) => {
+    // `q`, not `one`: the insert returns no row, and nothing here needs one.
+    // Deliberately without `on conflict do nothing` and without a catch — a
+    // duplicate or a refusal here is a real failure and this seed should stop
+    // on it. Swallowing it is how a seed starts quietly producing a book that
+    // does not demonstrate what it claims to.
+    await q(
+      `insert into public.agency_account_staff
+         (float_account_id, profile_id, assigned_by, notes)
+       values ($1, $2, $3, 'demonstration counter mandate')`,
+      [tillId, secretary.profileId, owner.profileId],
+    );
+  };
+  await staff(mtnTill);
+  await staff(airtelTill);
 
   // Moving the company's own cash into a provider's float. An Owner's, and
   // refused if the drawer cannot cover it - which is why these two figures

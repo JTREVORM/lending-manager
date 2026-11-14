@@ -75,6 +75,25 @@ export interface AgencyTransactionRow {
    * view could not be read, in which case the screen offers no Verify button.
    */
   readonly revision: number | null;
+  /**
+   * Added by the Agency redesign, for the reports.
+   *
+   * `providerCategory` is what separates an Agent Banking transaction report
+   * from a Mobile Money one without naming a provider code. The two names are
+   * the maker and the checker: §6.1 asks for "entering and verifying
+   * personnel" on a transaction report and §6.5 for a report per staff member,
+   * and a report printing two UUIDs would have to be joined back to `profiles`
+   * by every screen that showed one.
+   *
+   * All five are nullable because a draft has no verifier and a transaction
+   * against a `cash_payable` provider has no agent line, so no agent code.
+   */
+  readonly providerCategory: AgencyProviderCategory | null;
+  readonly branchName: string | null;
+  readonly submittedByName: string | null;
+  readonly verifiedByName: string | null;
+  readonly floatAccountId: string | null;
+  readonly agentCode: string | null;
 }
 
 /** One row of `agency_float_balances`. */
@@ -475,6 +494,15 @@ export interface AgencyMoneyProviderRow {
   readonly providerId: string;
   readonly providerCode: string;
   readonly providerName: string;
+  /**
+   * Which module the provider belongs to.
+   *
+   * On this row since the Owner's decision 1, which made it possible for a
+   * bank to advance electronic float. The view this comes from is scoped by
+   * float model rather than by category, so without this a consolidated float
+   * report could not say which of its rows were banks.
+   */
+  readonly providerCategory: AgencyProviderCategory;
   readonly branchId: string;
   readonly branchCode: string;
   readonly agentLines: number;
@@ -583,4 +611,340 @@ export interface OperatingBranchOption {
   readonly id: string;
   readonly branchCode: string;
   readonly name: string;
+}
+
+// ---------------------------------------------------------------------------
+// Cash banking — the Agency redesign, client Rule 5
+// ---------------------------------------------------------------------------
+
+/**
+ * The states a cash banking can be in.
+ *
+ * Four rather than two, for the reason the float trade has four: a control
+ * that can only say yes is not a control, so a rejected slip is kept with its
+ * reason, and a posted banking that turns out to have gone to the wrong
+ * account is reversed rather than edited.
+ */
+export const AGENCY_CASH_BANKING_STATUSES = [
+  'pending',
+  'posted',
+  'rejected',
+  'reversed',
+] as const;
+export type AgencyCashBankingStatus = (typeof AGENCY_CASH_BANKING_STATUSES)[number];
+
+export function isAgencyCashBankingStatus(
+  value: unknown,
+): value is AgencyCashBankingStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_CASH_BANKING_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * One row of `agency_cash_banking_register`.
+ *
+ * `netBanked` is the database's own `amount - charge`, not a subtraction done
+ * here: it is what the bank actually credited, and a screen that recomputed it
+ * would be a second opinion on a figure the journal already settled.
+ */
+export interface AgencyCashBankingRow {
+  readonly id: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly bankingDate: string;
+  readonly amount: UgxAmount;
+  readonly charge: UgxAmount;
+  readonly netBanked: UgxAmount;
+  readonly depositReference: string;
+  readonly evidenceNote: string | null;
+  readonly notes: string | null;
+  readonly status: AgencyCashBankingStatus;
+  readonly revision: number;
+  readonly cashAccountId: string;
+  readonly cashAccountCode: string;
+  readonly bankAccountId: string;
+  readonly bankAccountCode: string;
+  readonly bankAccountName: string;
+  readonly bankInstitution: string | null;
+  readonly bankedBy: string;
+  readonly bankedByName: string;
+  readonly createdBy: string;
+  readonly createdByName: string;
+  readonly createdAt: string;
+  readonly verifiedBy: string | null;
+  readonly verifiedByName: string | null;
+  readonly verifiedAt: string | null;
+  readonly rejectedReason: string | null;
+  readonly journalEntryId: string | null;
+  readonly reversalEntryId: string | null;
+  readonly reversedBy: string | null;
+  readonly reversedByName: string | null;
+  readonly reversedAt: string | null;
+  readonly reversalReason: string | null;
+}
+
+/** A bank account a cash banking may be paid into. */
+export interface BankAccountOption {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly institution: string | null;
+  readonly branchId: string;
+  readonly branchCode: string;
+}
+
+/** A staff member who may be named as having carried the cash. */
+export interface BankingStaffOption {
+  readonly profileId: string;
+  readonly fullName: string;
+  readonly branchId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Provider categories — what separates the two operational modules
+// ---------------------------------------------------------------------------
+
+/**
+ * The categories `agency_service_providers.category` admits.
+ *
+ * Declared here as the single list the navigation, the banking screens and the
+ * Mobile Money screens all read, so "which providers are banks" is one answer
+ * in one place rather than a predicate written three times. The values are the
+ * database's own CHECK from Phase 4A and are not invented here.
+ */
+export const AGENCY_PROVIDER_CATEGORIES = [
+  'mobile_money',
+  'agency_banking',
+  'utility',
+  'school_fees',
+  'tv_subscription',
+  'airtime_data',
+  'other',
+] as const;
+export type AgencyProviderCategory = (typeof AGENCY_PROVIDER_CATEGORIES)[number];
+
+export function isAgencyProviderCategory(
+  value: unknown,
+): value is AgencyProviderCategory {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_PROVIDER_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
+/** How a category is written on a screen. */
+export const AGENCY_CATEGORY_LABELS: Readonly<Record<AgencyProviderCategory, string>> = {
+  mobile_money: 'Mobile Money',
+  agency_banking: 'Agent Banking',
+  utility: 'Utilities',
+  school_fees: 'School fees',
+  tv_subscription: 'TV subscriptions',
+  airtime_data: 'Airtime & data',
+  other: 'Other services',
+};
+
+/**
+ * One agent account or agent line, with its identity and today's position.
+ *
+ * The same row shape for a bank agent account and a Mobile Money line,
+ * because in the database they are the same thing: a row of
+ * `agency_provider_float_accounts` with its own ledger account. The two
+ * modules differ in which `providerCategory` they read, not in what an
+ * account is — which is what keeps one tested aggregation behind both.
+ */
+export interface AgencyAgentAccountRow extends AgencyMoneyLineRow {
+  readonly providerCategory: AgencyProviderCategory;
+  readonly lineMsisdnMasked: string | null;
+  readonly agentCode: string | null;
+  readonly openedOn: string | null;
+  readonly closedOn: string | null;
+  readonly branchName: string;
+  readonly transactionsToday: number;
+}
+
+/**
+ * What a reader calls an account in this module.
+ *
+ * A bank calls it an agent account and prints an agent number on its
+ * statement; MTN and Airtel call it a line and it has a phone number. One
+ * screen serving both would otherwise have to pick one word and be wrong half
+ * the time.
+ */
+export function agentAccountNoun(category: AgencyProviderCategory): {
+  readonly singular: string;
+  readonly plural: string;
+} {
+  return category === 'mobile_money'
+    ? { singular: 'agent line', plural: 'agent lines' }
+    : { singular: 'agent account', plural: 'agent accounts' };
+}
+
+/**
+ * The name to show for an account: its label, else its provider identifier,
+ * else the till it is.
+ *
+ * Never the raw MSISDN, which is masked in the view it comes from.
+ */
+export function agentAccountName(row: {
+  readonly label: string | null;
+  readonly agentCode: string | null;
+  readonly lineMsisdnMasked: string | null;
+  readonly tillName: string;
+}): string {
+  return row.label ?? row.agentCode ?? row.lineMsisdnMasked ?? `Till ${row.tillName}`;
+}
+
+// ---------------------------------------------------------------------------
+// The agent-account roster — the Owner's decision 2, client Rule 6
+// ---------------------------------------------------------------------------
+
+/**
+ * One authorisation: an employee who may operate one agent account.
+ *
+ * Carries the withdrawal fields as well as the grant, because the roster keeps
+ * withdrawn rows and the screen that shows the roster is the screen that has
+ * to answer "who used to be on this account, and who took them off".
+ */
+export interface AgencyAccountOperatorRow {
+  readonly id: string;
+  readonly floatAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly accountLabel: string | null;
+  readonly accountStatus: string;
+  readonly profileId: string;
+  readonly staffName: string;
+  readonly staffStatus: string;
+  readonly status: 'active' | 'revoked';
+  readonly assignedByName: string;
+  readonly assignedAt: string;
+  readonly notes: string | null;
+  readonly revokedByName: string | null;
+  readonly revokedAt: string | null;
+  readonly revokedReason: string | null;
+}
+
+/**
+ * An agent account as the staffing screen lists it, with its roster attached.
+ *
+ * The account's own identity is repeated on every operator row in the view, so
+ * grouping is done once in the reader rather than in the page: a page that
+ * grouped would have to agree with the page that counted.
+ */
+export interface AgencyStaffedAccount {
+  readonly floatAccountId: string;
+  /**
+   * The account's branch, as an id rather than a code.
+   *
+   * Both are here because both are needed and they are not interchangeable:
+   * the code is what a reader recognises the branch by, and the id is what an
+   * employee's own `branch_id` can be compared against. Carrying only the code
+   * invites exactly that comparison against a UUID, which is silently false
+   * for every employee.
+   */
+  readonly branchId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly accountLabel: string | null;
+  readonly accountStatus: string;
+  readonly operators: readonly AgencyAccountOperatorRow[];
+  readonly withdrawn: readonly AgencyAccountOperatorRow[];
+}
+
+/**
+ * A liability account a provider's payable can be named on.
+ *
+ * The same shape as `BankAccountOption` without the institution, which a
+ * liability does not have. Kept separate rather than widened, because a form
+ * that offered both lists one type would be a form that could name a bank
+ * account as a payable — which `agency_provider_accounts_guard()` refuses, but
+ * only after somebody has chosen it.
+ */
+export interface LiabilityAccountOption {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly branchId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Commission by day — the Owner's decision 3, client Rule 3
+// ---------------------------------------------------------------------------
+
+/**
+ * One day's commission on one agent account.
+ *
+ * ## Why there is no `outstanding` field
+ *
+ * Because there is no such daily figure. Outstanding is a position — what the
+ * provider owes at a moment — and it moves with every transaction and every
+ * settlement whenever either happens. A field called `outstanding` on a row
+ * dated Tuesday would be read as "still owed for Tuesday's business", and no
+ * figure can mean that: a settlement on Friday pays down a balance, not a
+ * particular Tuesday.
+ *
+ * The standing position is `commissionOutstanding` on `AgencyLineCommissionRow`,
+ * which comes from the one view that has it. What is here is `movement`, named
+ * so it cannot be mistaken for a balance.
+ *
+ * ## Why `atPointOfSale` is separate from `earned`
+ *
+ * On a provider whose commission model is `immediate`, recognition and receipt
+ * are one event: the commission is taken at the counter and never becomes a
+ * receivable. It is inside `earned`, because it was earned, and it is given
+ * again on its own so a report does not present it as earned-but-unsettled —
+ * which would be reporting a debt that was never owed.
+ */
+export interface AgencyCommissionDailyRow {
+  readonly businessDate: string;
+  readonly floatAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: AgencyProviderCategory;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly label: string | null;
+  readonly agentCode: string | null;
+  readonly lineMsisdnMasked: string | null;
+  readonly transactions: number;
+  readonly principal: UgxAmount;
+  readonly customerFees: UgxAmount;
+  readonly earned: UgxAmount;
+  readonly atPointOfSale: UgxAmount;
+  /**
+   * What was settled *to this account* that day — a payout or a recovery.
+   *
+   * Not "what the provider paid". A provider-level settlement names a
+   * provider and a branch and no account, because a lump sum against a
+   * branch's whole position does not say which counter earned it;
+   * apportioning it would invent a fact the provider never stated. Those
+   * receipts are in `AgencyCommissionRow`, at provider level, and in the
+   * settlement register.
+   *
+   * The three words matter. A label reading just "Settled" would have a
+   * reader conclude a paying provider had paid nothing.
+   */
+  readonly settled: UgxAmount;
+  /**
+   * Earned, less what was taken at the counter, less what was settled to this
+   * account. A movement on the receivable, never a balance — and incomplete
+   * as a measure of what is owed, for the reason `settled` gives.
+   */
+  readonly movement: UgxAmount;
 }

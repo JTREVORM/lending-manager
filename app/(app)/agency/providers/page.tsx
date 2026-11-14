@@ -3,16 +3,21 @@ import { Settings2 } from 'lucide-react';
 import { AgencyReadError } from '@/components/agency/read-failure';
 
 import { ProviderReadinessBadge } from '@/components/agency/badges';
+import { FloatModelCorrectionForm } from '@/components/agency/float-model-form';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader } from '@/components/ui/card';
 import { DataTable, TableCell, TableHead, TableRow } from '@/components/ui/data-table';
 import { Money } from '@/components/ui/money';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyTableRow } from '@/components/ui/states';
 import { ROUTES } from '@/config/app';
 import { guardPermission } from '@/lib/auth/guard';
-import { getAgencyProviders, getAgencyServiceTypes } from '@/lib/data/agency';
+import {
+  getAgencyProviders,
+  getAgencyServiceTypes,
+  getLiabilityAccountOptions,
+} from '@/lib/data/agency';
 import { providerBlockedReason } from '@/lib/domain/agency';
 
 export const metadata = { title: 'Providers and services' };
@@ -20,19 +25,33 @@ export const metadata = { title: 'Providers and services' };
 /**
  * The commercial terms every posting is computed from.
  *
- * ## Why nothing here can be edited
+ * ## Why almost nothing here can be edited
  *
  * There is no authorized workflow to change a provider's terms. The database
  * grants `authenticated` nothing but SELECT on `agency_service_providers` and
- * `agency_transaction_types`, and no function exists that writes either -
- * every other agency write goes through a SECURITY DEFINER function with a
- * capability check, and these two have none because approving a provider's
- * commercial terms is a Policy 2.0 decision that has not been taken.
+ * `agency_transaction_types`, and approving a provider's commercial terms is a
+ * Policy 2.0 decision that has not been taken.
  *
  * So this screen shows the terms and says who can change them, rather than
  * offering a control that would fail. Adding one would mean inventing the
  * approval workflow the decision is waiting on, which the Phase 4D brief
  * rules out: no provider activation.
+ *
+ * ## The one exception, and why it is narrow
+ *
+ * The Owner's decision 1 added `set_agency_provider_float_model()`, and the
+ * panel at the foot of this screen calls it. It is the only writer either
+ * table has, and it writes one fact: where a *provisional* provider's money
+ * sits. It exists because the provisional catalogue recorded every bank as
+ * holding the customer's cash and owing it onward, and the client confirmed
+ * the opposite — banks advance electronic float, as MTN and Airtel do.
+ *
+ * It is not the start of an editing screen and does not weaken the paragraph
+ * above. It cannot touch commission terms, cannot make a provider live, and
+ * refuses a confirmed provider outright, because a confirmed provider's posted
+ * entries cite the model that was in force when each was made. What it can
+ * change is a provider nothing has been posted against: a configuration
+ * mistake, not a financial record.
  *
  * ## `requires_approval_above`
  *
@@ -53,9 +72,10 @@ function ratePercent(bps: number): string {
 export default async function AgencyProvidersPage() {
   await guardPermission(ROUTES.agencyProviders, 'agency:providers');
 
-  const [providers, types] = await Promise.all([
+  const [providers, types, liabilities] = await Promise.all([
     getAgencyProviders(),
     getAgencyServiceTypes(),
+    getLiabilityAccountOptions(),
   ]);
 
   const header = (
@@ -89,10 +109,11 @@ export default async function AgencyProvidersPage() {
       {header}
 
       <Alert tone="info">
-        Read-only. Registering a provider, approving its commercial terms or making it
-        live is not a screen in this release: the database has no function that writes
-        these tables, and the approval workflow for commercial terms has not been decided.
-        Ask the Owner, who changes them directly with the change recorded.
+        Registering a provider, approving its commercial terms or making it live is not a
+        screen in this release: the approval workflow for commercial terms has not been
+        decided. Ask the Owner, who changes them directly with the change recorded. The
+        one thing that can be corrected here is where a provisional provider&rsquo;s money
+        sits, at the foot of this screen.
       </Alert>
 
       <Card>
@@ -249,6 +270,40 @@ export default async function AgencyProvidersPage() {
         taken, a transaction above this figure posts exactly like one below it. The
         protection that does hold is the maximum above, which the database refuses past.
       </Alert>
+
+      <Card>
+        <CardHeader
+          title="Correct a provisional provider's money model"
+          description="Whether the provider advances electronic float, or the company holds the customer's cash and owes it onward."
+        />
+
+        <Alert tone="warning" className="mb-3">
+          <p>
+            <strong>This is a configuration correction, not a financial one.</strong> No
+            posted entry is altered, and the change is refused for any provider that holds
+            float, owes anything on its payable, or has a posted or in-flight transaction.
+            What it governs is what gets posted next.
+          </p>
+          <p className="mt-2">
+            The commercial detail each bank still owes us is separate and is not settled
+            by this control: the float facility&rsquo;s limit and terms, the commission
+            rate per transaction type, when commission is paid, and which bank account the
+            float is drawn against. A provider stays provisional until those are confirmed
+            and approved, and a provisional provider cannot be posted against.
+          </p>
+        </Alert>
+
+        {/*
+          A failed liability read is not a reason to withhold the panel. Moving a
+          provider *to* `cash_payable` needs a liability account named and would
+          have nothing to offer; moving one to `provider_float` — the direction
+          the Owner's decision 1 is actually about — needs no account at all.
+        */}
+        <FloatModelCorrectionForm
+          providers={providers.rows}
+          liabilities={liabilities.ok ? liabilities.rows : []}
+        />
+      </Card>
     </div>
   );
 }

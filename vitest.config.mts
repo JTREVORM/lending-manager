@@ -101,6 +101,10 @@ export default defineConfig({
             'tests/db/agency-money-foundation.test.ts',
             'tests/db/agency-money-commission.test.ts',
             'tests/db/agency-money-float.test.ts',
+            'tests/db/agency-cash-banking.test.ts',
+            'tests/db/agency-account-staff.test.ts',
+            'tests/db/agency-banking-float.test.ts',
+            'tests/db/agency-commission-daily.test.ts',
           ],
         },
       },
@@ -188,6 +192,69 @@ export default defineConfig({
           // commits providers, agent lines and posted transactions, suspends
           // lines and changes service ceilings — all of it visible to anything
           // sharing the database, and none of it rollback-able.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-cash-banking',
+          environment: 'node',
+          include: ['tests/db/agency-cash-banking.test.ts'],
+          // Its own database, like every other agency project. This suite
+          // commits posted bankings, reversals and a provider of its own, and
+          // it funds the branch cash wallet by a quarter of a billion
+          // shillings — a book any suite sharing the database would read.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-staff',
+          environment: 'node',
+          include: ['tests/db/agency-account-staff.test.ts'],
+          // Its own database, like every other agency project. This suite
+          // commits providers, rosters, posted transactions and a float
+          // model correction — all of it visible to anything sharing the
+          // database, and none of it rollback-able.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-banking-float',
+          environment: 'node',
+          include: ['tests/db/agency-banking-float.test.ts'],
+          // Its own database, like every other agency project. This suite
+          // commits four banking providers, four float accounts funded by
+          // twenty million each, two posted float trades and a float-model
+          // correction — and it asserts provider-level totals to the
+          // shilling, which anything else writing an agency provider in the
+          // same database would move.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-commission-daily',
+          environment: 'node',
+          include: ['tests/db/agency-commission-daily.test.ts'],
+          // Its own database, like every other agency project. It commits two
+          // providers, posted transactions on three business dates, a payout
+          // and a provider-level settlement, and it asserts commission totals
+          // to the shilling — which anything else posting an agency
+          // transaction in the same database would move.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,

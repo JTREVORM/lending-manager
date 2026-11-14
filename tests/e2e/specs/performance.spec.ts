@@ -77,6 +77,25 @@ const PAGES = [
   // the data rather than with the code.
   '/agency/money/DEMO_AIRTEL',
   '/agency/lines',
+  // The Agency redesign. Three of its five new routes, chosen the same way
+  // the five above were: where a regression would actually be felt.
+  //
+  // `/agency/cash-banking` carries the only new client component in the
+  // redesign — a form with a consequence panel, plus the checker's decision
+  // controls inside a table cell — so it is the heaviest new screen and the
+  // one the total-bundle raise was argued on. `/agency/banking` is the
+  // module's landing screen and reads three sources at once.
+  // `/agency/transfers` reuses the Phase 4E float trade form and renders a
+  // register with post, reject and reverse controls in its cells, which is
+  // the most JavaScript any agency screen ships.
+  //
+  // The other two new routes — `/agency/banking/accounts` and
+  // `/agency/accounts/[accountId]` — are Server Components rendering tables
+  // and ship no JavaScript of their own, so they would be measuring the
+  // shell.
+  '/agency/cash-banking',
+  '/agency/banking',
+  '/agency/transfers',
 ] as const;
 
 interface PageCost {

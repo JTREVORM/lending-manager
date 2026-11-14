@@ -38,8 +38,11 @@ export default async function AgencyMoneyPage() {
   await guardPermission(ROUTES.agencyMoney, 'agency:reports');
 
   const [providers, lines] = await Promise.all([
-    getAgencyMoneyConsolidated(),
-    getAgencyMoneyDashboard(),
+    // Scoped to this module. Both views are scoped by float model rather than
+    // by category, so since the Owner's decision 1 a bank corrected to
+    // `provider_float` would otherwise appear on the Mobile Money dashboard.
+    getAgencyMoneyConsolidated({ categories: ['mobile_money'] }),
+    getAgencyMoneyDashboard({ categories: ['mobile_money'] }),
   ]);
 
   const header = (

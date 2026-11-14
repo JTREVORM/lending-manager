@@ -120,6 +120,13 @@ export async function deleteTestUsers(): Promise<void> {
     // Phase 3. `client_remarks` is append-only in the same way `audit_log`
     // is, so clearing it needs the same documented owner-level exemption.
     { table: 'client_remarks', trigger: 'client_remarks_no_delete' },
+    // The Agency redesign, client Rule 6. The agent-account roster is
+    // append-only for the reason the others are — who could operate an
+    // account last March is a question an auditor asks about a transaction
+    // posted last March — and it references `profiles` three times with
+    // `on delete restrict`, so a fixture that opened a till and staffed it
+    // could no longer delete its own people.
+    { table: 'agency_account_staff', trigger: 'agency_account_staff_no_delete' },
     { table: 'clients', trigger: 'clients_guard_privileged_columns' },
     { table: 'clients', trigger: 'audit_client_change' },
     // Phase 5. The collection schedule is append-only in the same way, and
@@ -444,6 +451,12 @@ export async function deleteTestUsers(): Promise<void> {
     await query(`delete from public.guarantors`);
     await query(`delete from public.client_identities`);
     await query(`delete from public.clients`);
+
+    // The Agency redesign. Before the profiles it names: `assigned_by`,
+    // `profile_id` and `revoked_by` are all `on delete restrict`, because a
+    // roster row whose people had vanished could not answer the question it
+    // exists for.
+    await query(`delete from public.agency_account_staff`);
 
     await query(
       `delete from public.user_roles where profile_id in (
