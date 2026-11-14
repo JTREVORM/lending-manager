@@ -2472,6 +2472,38 @@ async function seedAgency() {
   const mtnTill = await till(mtn);
   const airtelTill = await till(airtel);
 
+  /**
+   * Put the counter staff on each account's roster.
+   *
+   * Client Rule 6, added by the Owner's decision 2: an officer who is not
+   * authorised on an account may not record or post against it, and
+   * `agency_transaction_operator_guard()` enforces that on the posting path.
+   * Without this the whole agency section of this seed is refused — which is
+   * exactly what happened, and it took three CI gates down with it, because
+   * all three run this one file.
+   *
+   * The Secretary is on the roster because she works the counter. The Manager
+   * is deliberately *not*: he passes by the oversight clause
+   * (`agency:verify`), which is the arrangement a real branch has and the one
+   * the authorisations screen explains. Seeding him onto the roster would
+   * hide a regression in that clause.
+   */
+  const staff = async (tillId) => {
+    // `q`, not `one`: the insert returns no row, and nothing here needs one.
+    // Deliberately without `on conflict do nothing` and without a catch — a
+    // duplicate or a refusal here is a real failure and this seed should stop
+    // on it. Swallowing it is how a seed starts quietly producing a book that
+    // does not demonstrate what it claims to.
+    await q(
+      `insert into public.agency_account_staff
+         (float_account_id, profile_id, assigned_by, notes)
+       values ($1, $2, $3, 'demonstration counter mandate')`,
+      [tillId, secretary.profileId, owner.profileId],
+    );
+  };
+  await staff(mtnTill);
+  await staff(airtelTill);
+
   // Moving the company's own cash into a provider's float. An Owner's, and
   // refused if the drawer cannot cover it - which is why these two figures
   // are well inside the cash the lending seed above leaves at hand (about
