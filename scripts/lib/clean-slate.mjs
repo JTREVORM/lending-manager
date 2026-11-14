@@ -223,6 +223,13 @@ export const TRUNCATE_TABLES = [
   // all: PostgreSQL refuses a TRUNCATE while an unlisted table references it,
   // whether or not that table holds a row.
   'agency_transactions',
+  // The Agency redesign, client Rule 6. The agent-account roster. It
+  // references `profiles` three times and `agency_provider_float_accounts`
+  // once, all `restrict`, so without it here neither the demonstration people
+  // nor the demonstration tills could be truncated. It is operational
+  // configuration rather than a financial record: a clean slate hands the
+  // client an empty book, and an empty book has no counters staffed.
+  'agency_account_staff',
   // The Agency redesign. A cash banking references `journal_entries` twice —
   // the posting and its reversal — so without it here `journal_entries` could
   // not be truncated at all, for the reason stated above: PostgreSQL refuses a

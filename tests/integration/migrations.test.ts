@@ -808,6 +808,14 @@ describe('types stay in step with the schema', () => {
       'agency_transaction_operator_guard',
       'agency_float_trade_operator_guard',
       'agency_staffing_actor',
+      // And the two the guards read. Both were granted to `authenticated` in
+      // the first draft and are now revoked from every exposed role: the
+      // predicate answers "is this profile on that account's roster" for any
+      // pair, and the assertion's message names the account, so between them
+      // they would hand out the roster. The behavioural probe is what made
+      // that visible — as a borrower they returned rather than refused.
+      'agency_may_operate_account',
+      'assert_agency_account_operator',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

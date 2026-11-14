@@ -102,6 +102,7 @@ export default defineConfig({
             'tests/db/agency-money-commission.test.ts',
             'tests/db/agency-money-float.test.ts',
             'tests/db/agency-cash-banking.test.ts',
+            'tests/db/agency-account-staff.test.ts',
           ],
         },
       },
@@ -204,6 +205,21 @@ export default defineConfig({
           // commits posted bankings, reversals and a provider of its own, and
           // it funds the branch cash wallet by a quarter of a billion
           // shillings — a book any suite sharing the database would read.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-staff',
+          environment: 'node',
+          include: ['tests/db/agency-account-staff.test.ts'],
+          // Its own database, like every other agency project. This suite
+          // commits providers, rosters, posted transactions and a float
+          // model correction — all of it visible to anything sharing the
+          // database, and none of it rollback-able.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,
