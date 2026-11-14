@@ -33,6 +33,13 @@ const MODULES = [
   'Collections',
   'Debt & Security',
   'Finance',
+  // The Agency redesign. It was absent from this list and therefore
+  // unexamined by any browser test, which is the same gap the note above
+  // records for Membership and Savings. Its contents are the three branches
+  // asserted in `the Agency branch` below, not links: every Agency
+  // destination belongs to a branch, so a module-level link check would find
+  // none and would be right to.
+  'Agency',
   'Reports',
   'Branch Network',
   'Administration',
@@ -622,5 +629,174 @@ test.describe('keyboard reach', () => {
 
     await expect(header).toHaveAttribute('aria-expanded', 'true');
     await expect(rail.getByRole('link', { name: 'Cash Position' })).toBeVisible();
+  });
+});
+
+/**
+ * The Agency branch, in a real browser.
+ *
+ * ## Why this needs a browser at all
+ *
+ * `tests/integration/agency-navigation.test.tsx` asserts the tree's shape, its
+ * data-driven branches, its authorization and which branches open — over the
+ * declared and grafted structures, in jsdom. What it cannot assert is that the
+ * rail *renders* them: that the nested panels are reachable, that a branch
+ * header is a real button with `aria-expanded`, that opening three levels down
+ * actually reveals a line, and that the row is a link somebody can press.
+ *
+ * The shell's own history is the reason this matters. Phases 1–8 shipped 2,584
+ * tests and three defects that every one of them missed, because nothing had
+ * opened the application in a browser. A recursive renderer behind a Server
+ * Component boundary is exactly the shape of change that passes in jsdom and
+ * fails in a page.
+ *
+ * ## Why these assertions name no provider
+ *
+ * The branches below the two static ones are built from the seeded providers,
+ * and the seed's names are the seed's business. So this asserts the structure
+ * — a branch exists, it discloses, its children are links — and leaves the
+ * labels to the integration tests, which control their own fixtures.
+ */
+test.describe('the Agency branch', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) <= 500, 'wide viewports only');
+
+  test('discloses three branches, none of them open', async ({ page }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    const agency = rail.getByRole('button', { name: 'Agency' });
+    await expect(agency).toHaveAttribute('aria-expanded', 'false');
+    await agency.click();
+    await expect(agency).toHaveAttribute('aria-expanded', 'true');
+
+    for (const branch of [
+      'Agent Banking',
+      'Mobile Money',
+      'Consolidated Agency Reports',
+    ]) {
+      const header = rail.getByRole('button', { name: branch });
+      await expect(header, branch).toBeVisible();
+      // Closed on arrival at the dashboard: the rail opens the branch holding
+      // the page being viewed, and the dashboard is in none of them.
+      await expect(header, branch).toHaveAttribute('aria-expanded', 'false');
+    }
+  });
+
+  test('opens Agent Banking onto its operations, including the new ones', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await rail.getByRole('button', { name: 'Agency' }).click();
+    await rail.getByRole('button', { name: 'Agent Banking' }).click();
+
+    for (const entry of [
+      'Overview',
+      'Record transaction',
+      'Cash banking',
+      'Account transfers',
+      'Float top-ups',
+    ]) {
+      await expect(
+        rail.getByRole('link', { name: entry, exact: true }),
+        entry,
+      ).toBeVisible();
+    }
+
+    // The bank register is a branch of its own, one level deeper.
+    await expect(
+      rail.getByRole('button', { name: 'Banks & Agent Accounts' }),
+    ).toBeVisible();
+  });
+
+  test('opens a provider three levels down and reaches its lines', async ({ page }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await rail.getByRole('button', { name: 'Agency' }).click();
+
+    const moneyHeader = rail.getByRole('button', { name: 'Mobile Money' });
+    await moneyHeader.click();
+
+    /*
+      Walk the tree by the panels, not by guessing labels.
+
+      Each branch header names its panel with `aria-controls`, so "the
+      providers under Mobile Money" is the buttons inside Mobile Money's own
+      panel. The seed decides which providers exist and what they are called;
+      this test is about the structure, so it takes the first one positionally
+      and never names a provider.
+    */
+    const moneyPanel = page.locator(
+      `#${String(await moneyHeader.getAttribute('aria-controls'))}`,
+    );
+    await expect(moneyPanel).toBeVisible();
+
+    const providers = moneyPanel.getByRole('button');
+    expect(
+      await providers.count(),
+      'the seed registered no Mobile Money provider',
+    ).toBeGreaterThan(0);
+
+    const provider = providers.first();
+    await provider.click();
+    await expect(provider).toHaveAttribute('aria-expanded', 'true');
+
+    const providerPanel = page.locator(
+      `#${String(await provider.getAttribute('aria-controls'))}`,
+    );
+    // The provider's own operations are links in its panel: a dashboard, its
+    // transactions, its float, its commissions, its reconciliation, its
+    // reports.
+    await expect(providerPanel.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+
+    const lines = providerPanel.getByRole('button', { name: 'Agent lines' });
+    await expect(lines).toBeVisible();
+    await lines.click();
+    await expect(lines).toHaveAttribute('aria-expanded', 'true');
+
+    /*
+      The fourth level. Either a registered line, or the empty state saying
+      there is none — both are correct and which it is depends on the seed.
+      What must not happen is a branch that opens onto nothing at all, which
+      is the failure a reader would read as a fault in the application.
+    */
+    const linesPanel = page.locator(
+      `#${String(await lines.getAttribute('aria-controls'))}`,
+    );
+    await expect(linesPanel).toBeVisible();
+    await expect(linesPanel.locator('li')).not.toHaveCount(0);
+  });
+
+  test('opens the branch holding the page being viewed, on arrival', async ({ page }) => {
+    // Navigating to a banking screen opens Agency and Agent Banking without
+    // the reader touching either. A reader who had to open two branches to
+    // find where they already are is being asked to navigate to their own
+    // location.
+    await page.goto('/agency/cash-banking');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await expect(rail.getByRole('button', { name: 'Agency' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(rail.getByRole('button', { name: 'Agent Banking' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(
+      rail.getByRole('link', { name: 'Cash banking', exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('lights exactly one reporting section', async ({ page }) => {
+    // Nine entries share the `/agency/reports` prefix and differ only by
+    // `?section=`. Two lit rows would tell the reader they are in two places.
+    await page.goto('/agency/reports?section=commission');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await expect(rail.locator('[aria-current="page"]')).toHaveCount(1);
+    await expect(rail.locator('[aria-current="page"]')).toHaveText(/Commission reports/);
   });
 });
