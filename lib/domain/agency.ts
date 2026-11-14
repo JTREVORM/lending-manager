@@ -879,3 +879,72 @@ export interface LiabilityAccountOption {
   readonly name: string;
   readonly branchId: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Commission by day — the Owner's decision 3, client Rule 3
+// ---------------------------------------------------------------------------
+
+/**
+ * One day's commission on one agent account.
+ *
+ * ## Why there is no `outstanding` field
+ *
+ * Because there is no such daily figure. Outstanding is a position — what the
+ * provider owes at a moment — and it moves with every transaction and every
+ * settlement whenever either happens. A field called `outstanding` on a row
+ * dated Tuesday would be read as "still owed for Tuesday's business", and no
+ * figure can mean that: a settlement on Friday pays down a balance, not a
+ * particular Tuesday.
+ *
+ * The standing position is `commissionOutstanding` on `AgencyLineCommissionRow`,
+ * which comes from the one view that has it. What is here is `movement`, named
+ * so it cannot be mistaken for a balance.
+ *
+ * ## Why `atPointOfSale` is separate from `earned`
+ *
+ * On a provider whose commission model is `immediate`, recognition and receipt
+ * are one event: the commission is taken at the counter and never becomes a
+ * receivable. It is inside `earned`, because it was earned, and it is given
+ * again on its own so a report does not present it as earned-but-unsettled —
+ * which would be reporting a debt that was never owed.
+ */
+export interface AgencyCommissionDailyRow {
+  readonly businessDate: string;
+  readonly floatAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: AgencyProviderCategory;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly label: string | null;
+  readonly agentCode: string | null;
+  readonly lineMsisdnMasked: string | null;
+  readonly transactions: number;
+  readonly principal: UgxAmount;
+  readonly customerFees: UgxAmount;
+  readonly earned: UgxAmount;
+  readonly atPointOfSale: UgxAmount;
+  /**
+   * What was settled *to this account* that day — a payout or a recovery.
+   *
+   * Not "what the provider paid". A provider-level settlement names a
+   * provider and a branch and no account, because a lump sum against a
+   * branch's whole position does not say which counter earned it;
+   * apportioning it would invent a fact the provider never stated. Those
+   * receipts are in `AgencyCommissionRow`, at provider level, and in the
+   * settlement register.
+   *
+   * The three words matter. A label reading just "Settled" would have a
+   * reader conclude a paying provider had paid nothing.
+   */
+  readonly settled: UgxAmount;
+  /**
+   * Earned, less what was taken at the counter, less what was settled to this
+   * account. A movement on the receivable, never a balance — and incomplete
+   * as a measure of what is owed, for the reason `settled` gives.
+   */
+  readonly movement: UgxAmount;
+}

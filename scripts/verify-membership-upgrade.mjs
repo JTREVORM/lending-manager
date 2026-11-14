@@ -175,6 +175,14 @@ const PHASE_PREFIXES = [
   // financial reconciliation either side of these three files is the check
   // that it does not.
   '20261117',
+  // The Owner's decision 3: commission earned and settled per agent account
+  // per day. Unreleased like every agency phase before it.
+  //
+  // One view and no data change, so the upgrade claim is narrow — but it is
+  // a view over `journal_lines`, and applying it against the seeded book is
+  // what shows that adding it leaves all 28 financial figures where they
+  // were.
+  '20261118',
 ];
 
 const isPhaseMigration = (name) =>

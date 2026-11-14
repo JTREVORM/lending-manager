@@ -96,6 +96,9 @@ describeDb('row level security', () => {
       'agency_cash_reconciliation_register:SELECT',
       'agency_cash_reconciliations:SELECT',
       'agency_commission_by_line:SELECT',
+      // The Owner's decision 3. SELECT only, like every other agency view:
+      // it reads the posted transactions and GL 1310 and writes nothing.
+      'agency_commission_daily:SELECT',
       'agency_commission_line_balances:SELECT',
       'agency_commission_monthly:SELECT',
       'agency_commission_reconciliation_register:SELECT',
@@ -977,6 +980,10 @@ describeDb('views', () => {
         // statement-period and float-trade registers, and the two Mobile
         // Money reports.
         'agency_commission_by_line',
+        // The Owner's decision 3: commission earned and settled per day per
+        // agent account, with no daily outstanding column because
+        // outstanding is a position and lives in the balances view below.
+        'agency_commission_daily',
         'agency_commission_line_balances',
         'agency_commission_monthly',
         'agency_commission_reconciliation_register',
@@ -1141,7 +1148,12 @@ describeDb('views', () => {
     // Money reports, and the per-line commission balances the first and last
     // of those are built from — a view rather than a DEFINER function call,
     // so the reader's own ledger permission and branch rule apply.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(68);
+    // And one from the Agency redesign, the Owner's decision 3: commission
+    // earned and settled per day per agent account. Also a view rather than a
+    // function, for the same reason — it reads the posted transactions and
+    // GL 1310, so the reader's own `ledger:view` and branch rule decide what
+    // it returns.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(69);
   });
 });
 

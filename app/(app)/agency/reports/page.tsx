@@ -16,6 +16,7 @@ import {
   getAgencyCashCounts,
   getAgencyCashMovement,
   getAgencyCommission,
+  getAgencyCommissionDaily,
   getAgencyMoneyConsolidated,
   getAgencyCommissionSettlements,
   getAgencyFloatStatements,
@@ -113,6 +114,7 @@ export default async function AgencyReportsPage({
     payableSettlements,
     bankings,
     floatByProvider,
+    commissionDaily,
   ] = await Promise.all([
     getAgencyProvidersByCategory(filter.categories),
     getAgencyAgentAccounts(accountScope),
@@ -143,6 +145,16 @@ export default async function AgencyReportsPage({
     // not float moving into or out of the provider, and adding it to either
     // total would report twice an amount that never moved.
     getAgencyMoneyConsolidated({ categories: filter.categories }),
+    // The Owner's decision 3. Every filter it names is applied: the period
+    // from the report's own range, and the provider, account and category
+    // from its scope — so the daily breakdown narrows with the report rather
+    // than being a separate screen with separate filters.
+    getAgencyCommissionDaily({
+      ...accountScope,
+      from: filter.range.from,
+      to: filter.range.to,
+      limit: 500,
+    }),
   ]);
 
   const data: AgencyReportData = {
@@ -158,6 +170,7 @@ export default async function AgencyReportsPage({
     payableSettlements,
     bankings,
     floatByProvider,
+    commissionDaily,
   };
 
   const meta = AGENCY_REPORT_SECTION_META[filter.section];

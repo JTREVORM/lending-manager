@@ -104,6 +104,7 @@ export default defineConfig({
             'tests/db/agency-cash-banking.test.ts',
             'tests/db/agency-account-staff.test.ts',
             'tests/db/agency-banking-float.test.ts',
+            'tests/db/agency-commission-daily.test.ts',
           ],
         },
       },
@@ -238,6 +239,22 @@ export default defineConfig({
           // correction — and it asserts provider-level totals to the
           // shilling, which anything else writing an agency provider in the
           // same database would move.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-commission-daily',
+          environment: 'node',
+          include: ['tests/db/agency-commission-daily.test.ts'],
+          // Its own database, like every other agency project. It commits two
+          // providers, posted transactions on three business dates, a payout
+          // and a provider-level settlement, and it asserts commission totals
+          // to the shilling — which anything else posting an agency
+          // transaction in the same database would move.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,

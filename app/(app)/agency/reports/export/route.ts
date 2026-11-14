@@ -5,6 +5,7 @@ import {
   getAgencyCashBankings,
   getAgencyCashCounts,
   getAgencyCommission,
+  getAgencyCommissionDaily,
   getAgencyCommissionSettlements,
   getAgencyMoneyConsolidated,
   getAgencyPayables,
@@ -16,6 +17,7 @@ import { toCsv } from '@/lib/domain/reporting';
 import {
   agencyCashBankingFields,
   agencyCashCountFields,
+  agencyCommissionDailyFields,
   agencyCommissionFields,
   agencyCommissionSettlementFields,
   agencyFloatFields,
@@ -153,6 +155,13 @@ export async function GET(request: Request): Promise<Response> {
             : `Provider ${filter.providerCode}`,
           filter.accountId === null ? 'Every account' : 'One agent account',
           'Every branch the reader may see',
+          // Said on the page, because the commission report has two grains
+          // and a printout of one must not be mistaken for the other.
+          filter.section === 'commission'
+            ? filter.grain === 'daily'
+              ? 'Earned by day, and settled by day to the named account — provider-level settlements are in the settlement report, and outstanding is a position and is not shown by day'
+              : 'The standing position: earned, received and outstanding'
+            : 'Every figure as at the end of the period',
         ],
         fields,
         rows,
@@ -249,6 +258,45 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     case 'commission': {
+      // Two grains, one section. A page can show the standing position and
+      // the day-by-day breakdown at once; a file is one table, so the export
+      // link says which. `position` is the default, so every link written
+      // before the Owner's decision 3 still means what it meant.
+      if (filter.grain === 'daily') {
+        const daily = await getAgencyCommissionDaily({
+          ...scope,
+          from: filter.range.from,
+          to: filter.range.to,
+          limit: 5000,
+        });
+        if (!daily.ok) return unavailable(daily.what);
+        return respond(
+          'agency-commission-daily',
+          agencyCommissionDailyFields(),
+          daily.rows,
+          [
+            money(
+              'Earned in the period',
+              daily.rows.reduce((t, r) => t + r.earned, 0),
+            ),
+            money(
+              'Taken at the counter',
+              daily.rows.reduce((t, r) => t + r.atPointOfSale, 0),
+            ),
+            money(
+              'Settled to these accounts (payouts and recoveries only)',
+              daily.rows.reduce((t, r) => t + r.settled, 0),
+            ),
+            // Named a movement, not a balance, in the document as on the
+            // screen. What is still outstanding is the other grain.
+            money(
+              'Net movement on the receivable',
+              daily.rows.reduce((t, r) => t + r.movement, 0),
+            ),
+          ],
+        );
+      }
+
       const result = await getAgencyCommission();
       if (!result.ok) return unavailable(result.what);
       return respond('agency-commission', agencyCommissionFields(), result.rows, [

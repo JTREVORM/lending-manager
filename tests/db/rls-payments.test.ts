@@ -599,6 +599,7 @@ describeDb('payment row level security', () => {
         'agency_cash_banking_register',
         'agency_cash_reconciliation_register',
         'agency_commission_by_line',
+        'agency_commission_daily',
         'agency_commission_line_balances',
         'agency_commission_monthly',
         'agency_commission_reconciliation_register',

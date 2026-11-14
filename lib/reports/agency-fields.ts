@@ -49,6 +49,7 @@ import type {
   AgencyAgentAccountRow,
   AgencyCashBankingRow,
   AgencyCashCountRow,
+  AgencyCommissionDailyRow,
   AgencyCommissionRow,
   AgencyCommissionSettlementRow,
   AgencyPayableRow,
@@ -141,6 +142,45 @@ export function agencyCommissionFields(): readonly ReportField<AgencyCommissionR
     moneyField('Received', (row) => row.received),
     moneyField('Returned', (row) => row.returned),
     moneyField('Outstanding', (row) => row.outstanding),
+  ];
+}
+
+/**
+ * The Owner's decision 3 — commission by day, provider and account.
+ *
+ * Nine columns and no "outstanding". Outstanding is a position and a day is
+ * not a position, so the column a reader might expect is deliberately absent;
+ * the export of the standing position is the same section at the other grain.
+ *
+ * `At the counter` is the part of `Earned` that an immediate-commission
+ * provider paid on the spot. It is inside Earned and shown again on its own,
+ * so a reader subtracting Settled from Earned can see why the remainder is not
+ * a debt.
+ *
+ * `Settled to the account` keeps those three words in the column heading on
+ * purpose. It counts payouts and recoveries, which name an account, and not a
+ * provider-level settlement, which names a branch; a heading reading
+ * "Settled" would have a reader of the printout conclude a paying provider
+ * had paid nothing.
+ */
+export function agencyCommissionDailyFields(): readonly ReportField<AgencyCommissionDailyRow>[] {
+  return [
+    dateField('Date', (row) => row.businessDate),
+    textField('Provider', (row) => row.providerName, { weight: 2.2 }),
+    textField(
+      'Module',
+      (row) =>
+        row.providerCategory === 'agency_banking' ? 'Agent Banking' : 'Mobile Money',
+      { weight: 1.6 },
+    ),
+    textField('Account', (row) => row.label ?? row.agentCode ?? row.tillName, {
+      weight: 2,
+    }),
+    textField('Branch', (row) => row.branchCode, { weight: 1 }),
+    countField('Transactions', (row) => row.transactions),
+    moneyField('Earned', (row) => row.earned),
+    moneyField('At the counter', (row) => row.atPointOfSale),
+    moneyField('Settled to the account', (row) => row.settled),
   ];
 }
 

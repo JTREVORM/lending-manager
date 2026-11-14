@@ -203,7 +203,33 @@ export interface AgencyReportFilter {
   readonly staffId: string | null;
   readonly period: ReportPeriod;
   readonly range: DateRange;
+  /**
+   * How finely the commission report is cut.
+   *
+   * The Owner's decision 3 asked for the daily breakdown to be exportable
+   * alongside the standing position, and a file is one table where a page can
+   * hold three. So rather than a second section with its own filters, the
+   * commission export takes a grain: `position` is the provider-level earned,
+   * received and outstanding, and `daily` is the day-by-day breakdown per
+   * account.
+   *
+   * It is read for every section and used by one. That is deliberate — a
+   * parameter that silently disappears when the section changes is a parameter
+   * an export link cannot safely carry.
+   */
+  readonly grain: AgencyReportGrain;
   readonly error: string | null;
+}
+
+/** The two grains the commission report can be cut at. */
+export const AGENCY_REPORT_GRAINS = ['position', 'daily'] as const;
+export type AgencyReportGrain = (typeof AGENCY_REPORT_GRAINS)[number];
+
+export function isAgencyReportGrain(value: unknown): value is AgencyReportGrain {
+  return (
+    typeof value === 'string' &&
+    (AGENCY_REPORT_GRAINS as readonly string[]).includes(value)
+  );
 }
 
 /** A provider code as a URL may carry it: the database's own shape, or nothing. */
@@ -237,6 +263,12 @@ function uuid(params: ParamRecord, key: string): string | null {
  * and both are monthly questions; a hub that opened on one day's figures would
  * be answering a question nobody asked and would look empty every morning.
  */
+/** The grain asked for, or the standing position, which is the default. */
+function grainOf(params: ParamRecord): AgencyReportGrain {
+  const raw = singleParam(params, 'grain');
+  return isAgencyReportGrain(raw) ? raw : 'position';
+}
+
 export function readAgencyReportFilter(
   params: ParamRecord,
   timeZone: string,
@@ -259,6 +291,7 @@ export function readAgencyReportFilter(
     staffId: uuid(params, 'staff'),
     period: resolved.period,
     range: resolved.range,
+    grain: grainOf(params),
     error: resolved.error,
   };
 }
@@ -281,6 +314,7 @@ export const AGENCY_REPORT_PARAMS = [
   'period',
   'from',
   'to',
+  'grain',
 ] as const;
 
 /** The query string for a link that keeps the current filter. */

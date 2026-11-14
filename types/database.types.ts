@@ -5926,6 +5926,31 @@ export type Database = {
         };
         Relationships: [];
       };
+      agency_commission_daily: {
+        Row: {
+          business_date: string | null;
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          provider_category: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          till_name: string | null;
+          label: string | null;
+          agent_code: string | null;
+          line_msisdn_masked: string | null;
+          transactions: number | null;
+          principal: number | null;
+          customer_fees: number | null;
+          commission_earned: number | null;
+          commission_at_point_of_sale: number | null;
+          commission_settled: number | null;
+          commission_movement: number | null;
+        };
+        Relationships: [];
+      };
       agency_commission_monthly: {
         Row: {
           float_account_id: string | null;

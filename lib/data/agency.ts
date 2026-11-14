@@ -61,6 +61,7 @@ import {
   type BankAccountOption,
   type BankingStaffOption,
   type AgencyAccountOperatorRow,
+  type AgencyCommissionDailyRow,
   type AgencyStaffedAccount,
   type LiabilityAccountOption,
   OperatingBranchOption,
@@ -1624,6 +1625,91 @@ export async function getLiabilityAccountOptions(): Promise<
       code: str(r.code),
       name: str(r.name),
       branchId: strOrNull(r.branch_id),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Commission by day — the Owner's decision 3, client Rule 3
+// ---------------------------------------------------------------------------
+
+/**
+ * Commission earned and settled, per day, per agent account.
+ *
+ * Every filter the Owner's decision 3 names is here — provider, bank account
+ * or agent line, and the reporting period — plus the category scope and the
+ * branch, so one call serves the Agent Banking module, the Mobile Money module
+ * and the consolidated report.
+ *
+ * The date bounds are applied to `business_date`, which for the earned side is
+ * the transaction's own business date and for the settled side is the journal
+ * entry's. That is the right pairing and not an accident of the view: a report
+ * for March should show what March's transactions earned and what the provider
+ * paid during March, not what was paid against March whenever it arrived.
+ * Those are different questions, and the second one is reconciliation, which
+ * has its own register and its own statement periods.
+ */
+export async function getAgencyCommissionDaily(options?: {
+  readonly from?: string;
+  readonly to?: string;
+  readonly categories?: readonly AgencyProviderCategory[];
+  readonly providerCode?: string;
+  readonly floatAccountId?: string;
+  readonly branchId?: string;
+  readonly limit?: number;
+}): Promise<AgencyRows<AgencyCommissionDailyRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_commission_daily')
+    .select('*')
+    .order('business_date', { ascending: false })
+    .order('provider_name')
+    .order('till_name');
+
+  if (options?.from !== undefined) query = query.gte('business_date', options.from);
+  if (options?.to !== undefined) query = query.lte('business_date', options.to);
+  if (options?.categories !== undefined) {
+    query = query.in('provider_category', [...options.categories]);
+  }
+  if (options?.providerCode !== undefined) {
+    query = query.eq('provider_code', options.providerCode);
+  }
+  if (options?.floatAccountId !== undefined) {
+    query = query.eq('float_account_id', options.floatAccountId);
+  }
+  if (options?.branchId !== undefined) query = query.eq('branch_id', options.branchId);
+  if (options?.limit !== undefined) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error !== null || data === null) {
+    return failed('the daily commission breakdown', error);
+  }
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      businessDate: str(r.business_date),
+      floatAccountId: str(r.float_account_id),
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      providerCategory: isAgencyProviderCategory(r.provider_category)
+        ? r.provider_category
+        : 'mobile_money',
+      branchId: str(r.branch_id),
+      branchCode: str(r.branch_code),
+      branchName: str(r.branch_name),
+      tillName: str(r.till_name),
+      label: strOrNull(r.label),
+      agentCode: strOrNull(r.agent_code),
+      lineMsisdnMasked: strOrNull(r.line_msisdn_masked),
+      transactions: num(r.transactions),
+      principal: ugx(r.principal),
+      customerFees: ugx(r.customer_fees),
+      earned: ugx(r.commission_earned),
+      atPointOfSale: ugx(r.commission_at_point_of_sale),
+      settled: ugx(r.commission_settled),
+      movement: ugx(r.commission_movement),
     })),
   };
 }

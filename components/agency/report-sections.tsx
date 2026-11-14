@@ -26,6 +26,7 @@ import type {
   AgencyCashBankingRow,
   AgencyCashCountRow,
   AgencyCashMovementRow,
+  AgencyCommissionDailyRow,
   AgencyCommissionRow,
   AgencyCommissionSettlementRow,
   AgencyFloatStatementRow,
@@ -70,6 +71,15 @@ export interface AgencyReportData {
    * figure a reader compares against a provider's own statement.
    */
   readonly floatByProvider: AgencyRows<AgencyMoneyProviderRow>;
+  /**
+   * Commission earned and settled per day per agent account, over the
+   * report's own period.
+   *
+   * The Owner's decision 3. The hub had commission per provider and commission
+   * per account as standing positions, and nothing by day — so "what did this
+   * line earn last Tuesday" had no answer anywhere in the product.
+   */
+  readonly commissionDaily: AgencyRows<AgencyCommissionDailyRow>;
 }
 
 /** The period and scope a report covers, stated above every one of them. */
@@ -620,13 +630,115 @@ function CashAndFloat({ data }: { readonly data: AgencyReportData }) {
 // ---------------------------------------------------------------------------
 
 function Commission({ data }: { readonly data: AgencyReportData }) {
+  // Totalled from the rows on display, so the figures above the table are the
+  // figures in it. Summing in SQL would be a second answer to the same
+  // question, and the two could disagree the moment either is filtered.
+  const daily = data.commissionDaily.ok ? data.commissionDaily.rows : [];
+  const dailyTotal = (pick: (row: AgencyCommissionDailyRow) => UgxAmount): UgxAmount =>
+    toUgx(daily.reduce((sum, row) => sum + pick(row), 0));
+
   return (
     <div className="min-w-0 space-y-4">
       <Alert tone="info" title="Earned is not received">
-        Client Rule 3: commission is earned every day, and that does not mean it is paid
-        every day. Earned, settled and outstanding are three columns because they are
-        three facts, and the provider&rsquo;s payment schedule is not yet confirmed.
+        <p>
+          Client Rule 3: commission is earned every day, and that does not mean it is paid
+          every day. Earned, settled and outstanding are three columns because they are
+          three facts, and the provider&rsquo;s payment schedule is not yet confirmed.
+        </p>
+        <p className="mt-2">
+          The daily table below therefore has no outstanding column.{' '}
+          <strong>Outstanding is a position, not a day&rsquo;s business</strong> — a
+          settlement on Friday pays down a balance rather than a particular Tuesday. The
+          outstanding figures are in the two tables under it, which report where the
+          balance now stands.
+        </p>
+        <p className="mt-2">
+          Its settled column counts only what was paid <em>to an account</em> — a payout
+          or a recovery. When a provider pays one sum against a whole branch it names no
+          account, and apportioning it across counters would invent a split the provider
+          never stated, so those receipts appear in the provider table below and in the
+          settlement reports instead.
+        </p>
       </Alert>
+
+      <Card>
+        <CardHeader
+          title="By day, provider and account"
+          description="What each bank agent account and agent line earned on each business date, and what the provider settled that day."
+        />
+        {data.commissionDaily.ok ? (
+          data.commissionDaily.rows.length === 0 ? (
+            <p className="text-text-muted text-sm">
+              No commission was earned or settled in this period, in this scope.
+            </p>
+          ) : (
+            <>
+              <div className="mb-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <MoneyStat
+                  label="Earned in the period"
+                  amount={dailyTotal((r) => r.earned)}
+                />
+                <MoneyStat
+                  label="Taken at the counter"
+                  amount={dailyTotal((r) => r.atPointOfSale)}
+                />
+                <MoneyStat
+                  label="Settled to these accounts"
+                  amount={dailyTotal((r) => r.settled)}
+                />
+                <MoneyStat
+                  label="Net movement on the receivable"
+                  amount={dailyTotal((r) => r.movement)}
+                />
+              </div>
+              <DataTable caption="Commission earned and settled by day, provider and account">
+                <thead>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Module</TableHead>
+                    <TableHead>Account</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead align="numeric">Transactions</TableHead>
+                    <TableHead align="numeric">Earned</TableHead>
+                    <TableHead align="numeric">At the counter</TableHead>
+                    <TableHead align="numeric">Settled to the account</TableHead>
+                  </TableRow>
+                </thead>
+                <tbody>
+                  {data.commissionDaily.rows.map((row) => (
+                    <TableRow key={`${row.businessDate}-${row.floatAccountId}`}>
+                      <TableCell>
+                        <DateValue value={row.businessDate} />
+                      </TableCell>
+                      <TableCell>{row.providerName}</TableCell>
+                      <TableCell>
+                        {row.providerCategory === 'agency_banking'
+                          ? 'Agent Banking'
+                          : 'Mobile Money'}
+                      </TableCell>
+                      <TableCell>{row.label ?? row.agentCode ?? row.tillName}</TableCell>
+                      <TableCell>{row.branchCode}</TableCell>
+                      <TableCell align="numeric">{row.transactions}</TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.earned} />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.atPointOfSale} />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.settled} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </tbody>
+              </DataTable>
+            </>
+          )
+        ) : (
+          <AgencyReadError failure={data.commissionDaily} />
+        )}
+      </Card>
 
       <Card>
         <CardHeader
@@ -1141,6 +1253,30 @@ function ExportCentre({ filter }: { readonly filter: AgencyReportFilter }) {
                       >
                         PDF
                       </a>
+                      {/*
+                        The Owner's decision 3. Commission is the one section
+                        with two grains, because a page can show the standing
+                        position and the day-by-day breakdown at once and a
+                        file cannot. The link carries `grain=daily`; every
+                        other link keeps the default, so nothing written
+                        before this changed meaning.
+                      */}
+                      {section === 'commission' ? (
+                        <>
+                          <a
+                            href={`${base}&grain=daily&format=csv`}
+                            className="text-link text-xs font-semibold hover:underline"
+                          >
+                            Daily breakdown (CSV)
+                          </a>
+                          <a
+                            href={`${base}&grain=daily&format=pdf`}
+                            className="text-link text-xs font-semibold hover:underline"
+                          >
+                            Daily breakdown (PDF)
+                          </a>
+                        </>
+                      ) : null}
                     </span>
                   </TableCell>
                 </TableRow>
