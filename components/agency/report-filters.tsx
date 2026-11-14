@@ -1,5 +1,4 @@
-import Link from 'next/link';
-
+import { FilterChips } from '@/components/agency/filter-chips';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ROUTES } from '@/config/app';
 import { REPORT_PERIOD_LABELS, REPORT_PERIODS } from '@/lib/domain/reporting';
@@ -13,43 +12,6 @@ import {
   type AgencyReportFilter,
 } from '@/lib/agency/reporting';
 import type { AgencyProviderRow } from '@/lib/domain/agency';
-
-/** A chip row: links, not controls, so the whole thing works without JavaScript. */
-function Chips({
-  label,
-  options,
-}: {
-  readonly label: string;
-  readonly options: readonly {
-    readonly href: string;
-    readonly label: string;
-    readonly active: boolean;
-  }[];
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-text-muted mb-1.5 text-[11px] font-bold tracking-wide uppercase">
-        {label}
-      </p>
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        {options.map((option) => (
-          <Link
-            key={option.href}
-            href={option.href}
-            aria-current={option.active ? 'page' : undefined}
-            className={
-              option.active
-                ? 'bg-brand rounded-full px-3 py-1.5 text-xs font-bold text-white'
-                : 'border-border bg-surface text-text hover:bg-surface-hover rounded-full border px-3 py-1.5 text-xs font-semibold'
-            }
-          >
-            {option.label}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /**
  * The reporting hub's section list and its filters.
@@ -84,7 +46,7 @@ export function AgencyReportFilters({
       />
 
       <div className="min-w-0 space-y-4">
-        <Chips
+        <FilterChips
           label="Report"
           options={AGENCY_REPORT_SECTIONS.map((section) => ({
             href: agencyReportHref(filter, section),
@@ -93,7 +55,7 @@ export function AgencyReportFilters({
           }))}
         />
 
-        <Chips
+        <FilterChips
           label="Business"
           options={AGENCY_REPORT_SCOPES.map((scope) => ({
             href: `${ROUTES.agencyReports}${agencyReportQuery(filter, { scope, provider: null })}`,
@@ -103,7 +65,7 @@ export function AgencyReportFilters({
         />
 
         {providers.length === 0 ? null : (
-          <Chips
+          <FilterChips
             label="Provider"
             options={[
               {
@@ -120,7 +82,7 @@ export function AgencyReportFilters({
           />
         )}
 
-        <Chips
+        <FilterChips
           label="Period"
           options={REPORT_PERIODS.filter((period) => period !== 'custom').map(
             (period) => ({

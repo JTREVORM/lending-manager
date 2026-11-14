@@ -288,6 +288,50 @@ describeBundle('the browser bundle', () => {
     // 676 leaves five kilobytes over the measured 671, the same headroom the
     // last raise left. A phase that needs room makes its own case here.
     //
+    // ## 676 → 687, for the Agency redesign
+    //
+    // Measured on the same machine: 108 chunks and 682 KB, against the 107
+    // and 671 the last raise recorded. Eleven kilobytes and one chunk, for
+    // five new routes and the nested navigation.
+    //
+    //   - **No new dependency.** `package.json` is untouched again, and the
+    //     largest chunk did not move at all: 72 KB before and 72 KB after,
+    //     well inside the 120 KB ceiling above — which is the assertion that
+    //     actually catches a dependency sneaking in.
+    //   - **One chunk for five routes, because there is one new client
+    //     component.** `components/agency/cash-banking-forms.tsx` is the only
+    //     `'use client'` file the redesign adds. The agent-account table, the
+    //     report filter bar, the seven report sections and the shared filter
+    //     chips are all Server Components, so `/agency/banking`,
+    //     `/agency/banking/accounts`, `/agency/accounts/[accountId]`,
+    //     `/agency/transfers` and the rebuilt `/agency/reports` ship no
+    //     JavaScript of their own at all. `/agency/transfers` reuses the
+    //     Phase 4E float trade form, which was already in the bundle.
+    //   - **The navigation grew a level and not a chunk.** `NavGroup` and the
+    //     recursive `SidebarGroup` renderer are inside `primary-nav.tsx`,
+    //     which every page already loads; the data-driven branches arrive as
+    //     plain strings on a prop, which is the server/client boundary rule
+    //     that `tests/integration/navigation.test.tsx` asserts and also, as
+    //     it happens, the cheapest way to do it.
+    //   - **Eleven kilobytes for one form.** Higher than Phase 4E's two a
+    //     chunk, and the reason is visible in the file: the cash banking form
+    //     states the two movements it will make in shillings from what has
+    //     been typed, so it carries the consequence panel and the
+    //     maker-checker decision controls that the register renders inside a
+    //     table cell. The alternative was a form that did not say what it was
+    //     about to do, on the one operation in the module people most often
+    //     get wrong.
+    //   - **The new routes are under the per-page budget.**
+    //     `/agency/cash-banking`, `/agency/banking` and `/agency/transfers`
+    //     joined the budgeted pages in `tests/e2e/specs/performance.spec.ts`,
+    //     against the same unchanged ceilings every other page is held to.
+    //     Raising a total without putting the new routes under a per-page
+    //     budget would be raising it on trust — the rule the last four raises
+    //     set, and the one that makes this number mean anything.
+    //
+    // 687 leaves five kilobytes over the measured 682, the same headroom
+    // every raise before it left.
+    //
     // It is not what a page costs. No page loads all of them: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -295,7 +339,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(676);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(687);
   });
 
   it('emits no source map for the browser', () => {
