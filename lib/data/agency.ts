@@ -301,6 +301,14 @@ function mapTransaction(r: Record<string, unknown>): AgencyTransactionRow {
     submittedBy: strOrNull(r.submitted_by),
     verifiedBy: strOrNull(r.verified_by),
     revision: intOrNull(r.revision),
+    providerCategory: isAgencyProviderCategory(r.provider_category)
+      ? r.provider_category
+      : null,
+    branchName: strOrNull(r.branch_name),
+    submittedByName: strOrNull(r.submitted_by_name),
+    verifiedByName: strOrNull(r.verified_by_name),
+    floatAccountId: strOrNull(r.float_account_id),
+    agentCode: strOrNull(r.agent_code),
   };
 }
 

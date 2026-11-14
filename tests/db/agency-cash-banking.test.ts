@@ -251,7 +251,7 @@ describeDb('Agency redesign — cash banking', () => {
     expect(r.status).toBe('posted');
     expect(r.journal_entry_id).not.toBeNull();
 
-    const lines = await linesOf(r.journal_entry_id as string);
+    const lines = await linesOf(r.journal_entry_id!);
     expect(lines).toHaveLength(2);
     expect(lines).toEqual(
       expect.arrayContaining([
@@ -277,7 +277,7 @@ describeDb('Agency redesign — cash banking', () => {
     ]);
 
     const r = await row(id);
-    const lines = await linesOf(r.journal_entry_id as string);
+    const lines = await linesOf(r.journal_entry_id!);
 
     expect(lines).toHaveLength(3);
     expect(lines).toEqual(
@@ -565,7 +565,7 @@ describeDb('Agency redesign — cash banking', () => {
       { sql: `select public.verify_agency_cash_banking($1)`, params: [id] },
     ]);
     const posted = await row(id);
-    const originalLines = await linesOf(posted.journal_entry_id as string);
+    const originalLines = await linesOf(posted.journal_entry_id!);
 
     const before = {
       cash: await balance(cashCode),
@@ -585,9 +585,9 @@ describeDb('Agency redesign — cash banking', () => {
     expect(r.status).toBe('reversed');
     expect(r.reversal_entry_id).not.toBeNull();
     // The original entry is byte-for-byte what it was.
-    expect(await linesOf(posted.journal_entry_id as string)).toEqual(originalLines);
+    expect(await linesOf(posted.journal_entry_id!)).toEqual(originalLines);
 
-    const contra = await linesOf(r.reversal_entry_id as string);
+    const contra = await linesOf(r.reversal_entry_id!);
     expect(contra).toEqual(
       expect.arrayContaining([
         { code: cashCode, debit: 800_000, credit: 0 },

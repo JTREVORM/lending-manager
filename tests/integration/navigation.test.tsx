@@ -22,11 +22,13 @@ import {
   splitForBottomBar,
   visibleNavItems,
   visibleNavModules,
+  type NavGroup,
 } from '@/components/layout/nav-items';
 import { PhasePlaceholder } from '@/components/layout/phase-placeholder';
 import { PrimaryNav } from '@/components/layout/primary-nav';
 import { ROUTES } from '@/config/app';
 import { permissionForPath } from '@/lib/auth/routing';
+import { AGENCY_REPORT_PARAMS } from '@/lib/agency/reporting';
 import {
   LOAN_REGISTER_TITLE,
   LOAN_WORKFLOW_STAGES,
@@ -202,6 +204,23 @@ describe('navigation items', () => {
       [ROUTES.settings]: ['section'],
       [ROUTES.finance]: ['section'],
       [ROUTES.collectionSummary]: ['section'],
+      // The Agency redesign. The reporting hub's nine sections, its three
+      // scopes and its provider filter are all views of one screen, declared
+      // in `lib/agency/reporting.ts` and read by `readAgencyReportFilter` —
+      // which the hub and its export route both call, so the page and the
+      // file cannot disagree about what a filter means.
+      [ROUTES.agencyReports]: [...AGENCY_REPORT_PARAMS],
+      // The transaction register, narrowed to one provider. The rail carries
+      // one of these per configured Mobile Money network.
+      [ROUTES.agencyHistory]: ['provider', 'status'],
+      // The bank agent account register, narrowed to one bank. A route per
+      // bank would be a route that has to be created when a bank is
+      // registered.
+      [ROUTES.agencyBankingAccounts]: ['provider'],
+      // The transfers screen is scoped to one provider, because a transfer's
+      // two ends must belong to one provider and offering the cross-provider
+      // pair would teach the wrong model.
+      [ROUTES.agencyTransfers]: ['provider'],
     };
 
     for (const item of NAV_ITEMS) {
@@ -290,10 +309,41 @@ describe('the modules', () => {
     }
   });
 
-  it('drops a module that filters down to nothing', () => {
+  it('drops a module, or a branch, that filters down to nothing', () => {
+    /*
+      The invariant is that nobody meets a header which opens onto nothing.
+
+      Before the rail grew a third level that was "every visible module has at
+      least one item". The Agency module has no items of its own — every one of
+      its destinations belongs to Agent Banking, Mobile Money or the
+      consolidated reports, and a loose row above those three would belong to
+      none of them — so the check now reads "has something to show", and
+      recurses into the branches to say the same of each of them.
+
+      A branch carrying an `emptyLabel` is exempt, and deliberately: "this bank
+      has no agent account registered yet" is information, not an empty list.
+      It is the difference between a branch waiting for data and one that is
+      not this reader's to see, and the second is what `visibleNavGroup`
+      removes.
+    */
+    const hasSomething = (group: NavGroup, where: string): void => {
+      if (group.emptyLabel === undefined) {
+        expect(
+          group.items.length + (group.groups?.length ?? 0),
+          `${where}/${group.id}`,
+        ).toBeGreaterThan(0);
+      }
+      for (const child of group.groups ?? []) hasSomething(child, where);
+    };
+
     for (const role of ['secretary_treasurer', 'manager', 'owner_admin'] as const) {
       for (const block of visibleNavModules(ROLE_PERMISSIONS[role])) {
-        expect(block.items.length, `${role}/${block.id}`).toBeGreaterThan(0);
+        expect(
+          block.items.length + (block.groups?.length ?? 0),
+          `${role}/${block.id}`,
+        ).toBeGreaterThan(0);
+
+        for (const group of block.groups ?? []) hasSomething(group, role);
       }
     }
 
@@ -1114,8 +1164,23 @@ describe('the menu across the server/client boundary', () => {
     const nav = read('components/layout/primary-nav.tsx');
 
     expect(nav).toContain("'use client'");
-    // Imported here, on the client side, rather than received as a prop.
-    expect(nav).toMatch(/import \{[\s\S]*?NAV_MODULES[\s\S]*?\} from '\.\/nav-items'/);
+    /*
+      The module list is resolved here, on the client side, rather than
+      received as a prop.
+
+      It used to be `NAV_MODULES` imported directly. The rail now goes through
+      `visibleNavModules`, which reads `NAV_MODULES` and applies the capability
+      filter in one place — and `withAgencyNavData`, which grafts the
+      data-driven branches onto the result. What matters is unchanged and is
+      what this asserts: the thing holding the Lucide icons is reached by an
+      import on this side of the boundary, never handed across it.
+    */
+    expect(nav).toMatch(
+      /import \{[\s\S]*?visibleNavModules[\s\S]*?\} from '\.\/nav-items'/,
+    );
+    expect(nav).toMatch(
+      /import \{[\s\S]*?withAgencyNavData[\s\S]*?\} from '\.\/nav-items'/,
+    );
     expect(nav).toContain("menu === 'portal'");
   });
 
@@ -1146,6 +1211,24 @@ describe('the menu across the server/client boundary', () => {
     expect(props).toContain('menu:');
     expect(props).toContain('permissions:');
     expect(props).not.toContain('NavItem[]');
+    /*
+      The Agency redesign added a fourth prop, and it is the one that most
+      needed this test.
+
+      The rail's Agency branch shows the configured banks, the Mobile Money
+      networks and the agent accounts registered against each, and all three
+      are read from the database by the shell — which is a Server Component.
+      So something does now cross this boundary, and `AgencyNavData` is
+      deliberately strings and string unions only: an id, a label, a status.
+
+      Had a dynamic branch been given a Lucide icon of its own, it would have
+      been a component crossing the boundary and every page in the application
+      would have failed to render. `NavGroup` documents that; this asserts the
+      prop's type is not one that holds icons.
+    */
+    expect(props).toContain('agency?:');
+    expect(props).not.toContain('NavGroup[]');
+    expect(props).not.toContain('NavModule[]');
   });
 });
 

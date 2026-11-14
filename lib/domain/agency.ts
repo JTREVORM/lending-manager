@@ -75,6 +75,25 @@ export interface AgencyTransactionRow {
    * view could not be read, in which case the screen offers no Verify button.
    */
   readonly revision: number | null;
+  /**
+   * Added by the Agency redesign, for the reports.
+   *
+   * `providerCategory` is what separates an Agent Banking transaction report
+   * from a Mobile Money one without naming a provider code. The two names are
+   * the maker and the checker: §6.1 asks for "entering and verifying
+   * personnel" on a transaction report and §6.5 for a report per staff member,
+   * and a report printing two UUIDs would have to be joined back to `profiles`
+   * by every screen that showed one.
+   *
+   * All five are nullable because a draft has no verifier and a transaction
+   * against a `cash_payable` provider has no agent line, so no agent code.
+   */
+  readonly providerCategory: AgencyProviderCategory | null;
+  readonly branchName: string | null;
+  readonly submittedByName: string | null;
+  readonly verifiedByName: string | null;
+  readonly floatAccountId: string | null;
+  readonly agentCode: string | null;
 }
 
 /** One row of `agency_float_balances`. */

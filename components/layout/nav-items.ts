@@ -1472,12 +1472,33 @@ export function visibleNavItems(
 /**
  * One group, with only the entries and branches this person may reach.
  *
- * Returns `null` for a group that filtered down to nothing *and* has no empty
- * state to show — a reader should never meet a header that opens onto
- * nothing. A group with an `emptyLabel` survives, because "this bank has no
- * agent accounts yet" is information rather than an empty list: it is the
- * difference between a branch that is waiting for data and one that is not
- * this reader's to see.
+ * `null` for a group a reader should not meet, because a header that opens
+ * onto nothing is worse than no header.
+ *
+ * ## Why "empty" is two different things
+ *
+ * A branch can end up with nothing in it for two unrelated reasons, and they
+ * call for opposite answers:
+ *
+ *   * **no data yet** — a configured bank with no agent account registered
+ *     against it, a Mobile Money network with no line. The reader may see the
+ *     branch; there is simply nothing in it. That is worth saying, which is
+ *     what `emptyLabel` is for, and omitting the branch would make a bank the
+ *     Owner has configured look identical to one nobody set up.
+ *
+ *   * **not yours** — every entry the branch declared was filtered out by the
+ *     capability check. Showing an empty state here would tell a borrower
+ *     that Mobile Money exists and is empty, which is both untrue and none of
+ *     their business.
+ *
+ * The two are told apart by what the group *declared*: a group that declared
+ * nothing of its own had nothing to filter, so an empty result means no data.
+ * A group whose declared entries are all gone was filtered, so it is dropped
+ * whatever `emptyLabel` says.
+ *
+ * Getting this wrong is not theoretical — the first version kept any group
+ * carrying an `emptyLabel`, and the navigation test caught the Agency module
+ * surviving for a borrower who holds no agency capability at all.
  */
 export function visibleNavGroup(
   group: NavGroup,
@@ -1488,10 +1509,14 @@ export function visibleNavGroup(
     .map((child) => visibleNavGroup(child, permissions))
     .filter((child): child is NavGroup => child !== null);
 
-  if (items.length === 0 && groups.length === 0 && group.emptyLabel === undefined) {
-    return null;
+  if (items.length > 0 || groups.length > 0) return { ...group, items, groups };
+
+  const declaredNothing = group.items.length === 0 && (group.groups?.length ?? 0) === 0;
+  if (declaredNothing && group.emptyLabel !== undefined) {
+    return { ...group, items, groups };
   }
-  return { ...group, items, groups };
+
+  return null;
 }
 
 /**

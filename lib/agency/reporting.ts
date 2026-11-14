@@ -37,6 +37,7 @@ import {
   type AgencyProviderCategory,
 } from '@/lib/domain/agency';
 import { ROUTES } from '@/config/app';
+import type { AgencyPerformanceRow } from '@/lib/reports/agency-fields';
 
 // ---------------------------------------------------------------------------
 // Sections
@@ -317,3 +318,96 @@ export function agencyScopeLabel(filter: AgencyReportFilter): string {
 
 /** Re-exported so a page need not import from two modules to read a filter. */
 export type { ParamRecord };
+
+// ---------------------------------------------------------------------------
+// Agent performance — the one report with no view behind it
+// ---------------------------------------------------------------------------
+
+/**
+ * What each staff member handled, tallied over transactions the database
+ * returned.
+ *
+ * ## Why this is here and not in SQL
+ *
+ * Every other figure in the Agency reports comes from a view, and should. This
+ * one is a **count of rows already read**, grouped by the officer named on
+ * each: nothing is derived, nothing is apportioned, and the amounts are the
+ * principals the journal holds. A view would be a fourth place that has to
+ * agree with the other three about what "handled" means.
+ *
+ * ## Why it is here and not in the component
+ *
+ * Because the screen's table and the exported file must be the same tally. It
+ * was in the component first, and that meant the file would have had its own
+ * copy — the exact drift `lib/reports/fields.ts` exists to prevent, one level
+ * up.
+ *
+ * ## Why verifying is its own column
+ *
+ * Verifying is a control, not counter work. Adding it to the recorded count
+ * would make the busiest checker look like the busiest cashier, and the
+ * maker-checker separation is the thing this report is most often read to
+ * confirm.
+ *
+ * ## Why there is no commission column
+ *
+ * Commission is earned by an account, not by whoever keyed the transaction.
+ * Attributing it to a person would be inventing an allocation rule the
+ * business has not stated — and §6.5 is explicit that the monetary volume of
+ * customer transactions is not profit, which is why the volume columns are
+ * named as service volume wherever they appear.
+ */
+export function tallyAgentPerformance(
+  rows: readonly {
+    readonly submittedByName: string | null;
+    readonly verifiedByName: string | null;
+    readonly status: string;
+    readonly direction: string | null;
+    readonly principalAmount: number;
+  }[],
+): readonly AgencyPerformanceRow[] {
+  const byPerson = new Map<string, Mutable<AgencyPerformanceRow>>();
+
+  const tally = (name: string): Mutable<AgencyPerformanceRow> => {
+    const existing = byPerson.get(name);
+    if (existing !== undefined) return existing;
+    const fresh: Mutable<AgencyPerformanceRow> = {
+      name,
+      recorded: 0,
+      verified: 0,
+      deposits: 0,
+      depositValue: 0,
+      withdrawals: 0,
+      withdrawalValue: 0,
+      reversed: 0,
+    };
+    byPerson.set(name, fresh);
+    return fresh;
+  };
+
+  for (const row of rows) {
+    if (row.submittedByName !== null) {
+      const t = tally(row.submittedByName);
+      t.recorded += 1;
+      if (row.status === 'reversed') t.reversed += 1;
+      // Only a posted transaction has a value in the book, so only a posted
+      // one contributes to a volume. A draft counts as recorded and as
+      // nothing else.
+      if (row.status === 'posted') {
+        if (row.direction === 'deposit') {
+          t.deposits += 1;
+          t.depositValue += row.principalAmount;
+        } else if (row.direction === 'withdrawal') {
+          t.withdrawals += 1;
+          t.withdrawalValue += row.principalAmount;
+        }
+      }
+    }
+    if (row.verifiedByName !== null) tally(row.verifiedByName).verified += 1;
+  }
+
+  return [...byPerson.values()].toSorted((a, b) => b.recorded - a.recorded);
+}
+
+/** Writable while being tallied; the returned rows are the readonly shape. */
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
