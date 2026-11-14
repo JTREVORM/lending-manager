@@ -101,6 +101,7 @@ export default defineConfig({
             'tests/db/agency-money-foundation.test.ts',
             'tests/db/agency-money-commission.test.ts',
             'tests/db/agency-money-float.test.ts',
+            'tests/db/agency-cash-banking.test.ts',
           ],
         },
       },
@@ -188,6 +189,21 @@ export default defineConfig({
           // commits providers, agent lines and posted transactions, suspends
           // lines and changes service ceilings — all of it visible to anything
           // sharing the database, and none of it rollback-able.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-cash-banking',
+          environment: 'node',
+          include: ['tests/db/agency-cash-banking.test.ts'],
+          // Its own database, like every other agency project. This suite
+          // commits posted bankings, reversals and a provider of its own, and
+          // it funds the branch cash wallet by a quarter of a billion
+          // shillings — a book any suite sharing the database would read.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,

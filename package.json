@@ -18,7 +18,7 @@
     "test": "vitest",
     "test:run": "vitest run --project unit --project integration",
     "test:coverage": "vitest run --project unit --project integration --coverage",
-    "test:db": "vitest run --project db && vitest run --project agency && vitest run --project agency-engine && vitest run --project agency-security && vitest run --project agency-settlement && vitest run --project agency-money && vitest run --project shared-till && vitest run --project seed && vitest run --project seed-reuse && vitest run --project seed-member-loans && vitest run --project seed-benefits && vitest run --project clean-slate",
+    "test:db": "vitest run --project db && vitest run --project agency && vitest run --project agency-engine && vitest run --project agency-security && vitest run --project agency-settlement && vitest run --project agency-money && vitest run --project agency-cash-banking && vitest run --project shared-till && vitest run --project seed && vitest run --project seed-reuse && vitest run --project seed-member-loans && vitest run --project seed-benefits && vitest run --project clean-slate",
     "check:env": "tsx scripts/check-env.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
