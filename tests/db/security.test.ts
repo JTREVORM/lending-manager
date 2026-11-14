@@ -82,6 +82,11 @@ describeDb('row level security', () => {
       // transaction, so a session holding INSERT could register a provider
       // whose income account was the wrong type, or a float till with no
       // ledger account behind it.
+      // The Agency redesign, client Rule 6. The roster and the view over it.
+      // SELECT-only for the same reason: the two staffing RPCs are the only
+      // writers, and a session holding INSERT could put itself on an account.
+      'agency_account_operators:SELECT',
+      'agency_account_staff:SELECT',
       // The Agency redesign. Client Rule 5's table and its register, both
       // SELECT-only for the same reason as every other agency table: the four
       // RPCs are the only writers, and a session holding INSERT could record a
@@ -442,6 +447,10 @@ describeDb('row level security', () => {
       // `agency:reports` and branch-isolated; the borrower role holds no
       // `agency:*` capability at all, so the predicate is false for them and
       // every one of these tables returns nothing.
+      // The Agency redesign, client Rule 6. A read policy only, gated on
+      // `agency:reports` and scoped to the branch of the account the
+      // assignment is for.
+      'agency_account_staff:SELECT',
       // The Agency redesign. A read policy only, gated on `agency:reports`
       // and branch-isolated in the hoisted form, like every other agency
       // table. A borrower holds no agency capability, so the predicate is
@@ -953,6 +962,11 @@ describeDb('views', () => {
         // recorded by mistake - which the Phase 4C reporting views do not
         // list. Each is `security_invoker` over a table whose policies
         // already decide what a branch may see.
+        // The Agency redesign, client Rule 6. The roster: who may operate
+        // which agent account, with who assigned them and when.
+        // `security_invoker`, so the table's own branch-scoped policy
+        // decides the rows.
+        'agency_account_operators',
         // The Agency redesign. Cash bankings with their branch, both
         // accounts and the people who banked, recorded, verified and
         // reversed them. `security_invoker`, so the table's own
@@ -1127,7 +1141,7 @@ describeDb('views', () => {
     // Money reports, and the per-line commission balances the first and last
     // of those are built from — a view rather than a DEFINER function call,
     // so the reader's own ledger permission and branch rule apply.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(67);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(68);
   });
 });
 
@@ -1193,6 +1207,13 @@ describeDb('privileged functions', () => {
       // own and is a plain `plpgsql` trigger with a pinned search_path. The
       // four RPCs are below, in their alphabetical places.
       'agency_cash_banking_guard',
+      // The Agency redesign, client Rule 6. The roster's functions.
+      // `agency_may_operate_account` and `assert_agency_account_operator` are
+      // DEFINER because they read the roster for *another* profile — a
+      // checker asking whether the recorder was assigned — and that table's
+      // policy is scoped to the reader. The two guards and
+      // `agency_staffing_actor` fire or resolve as the table owner and are
+      // revoked from every exposed role.
       'agency_commission_earned_by_line',
       'agency_commission_for',
       'agency_commission_outstanding',
@@ -1209,6 +1230,7 @@ describeDb('privileged functions', () => {
       'agency_float_account_immutable_identity',
       'agency_float_reconciliation_guard',
       'agency_float_replenishment_guard',
+      'agency_float_trade_operator_guard',
       'agency_float_trade_revision_guard',
       'agency_locked_commission_settlement',
       'agency_locked_payable_settlement',
@@ -1218,8 +1240,10 @@ describeDb('privileged functions', () => {
       // payable floor. DEFINER so it can read the ledger a counter officer
       // cannot join across; revoked from authenticated, called only from
       // post_agency_transaction().
+      'agency_may_operate_account',
       'agency_payable_outstanding',
       'agency_provider_accounts_guard',
+      'agency_staffing_actor',
       'agency_transaction_guard',
       // Phase 4A readiness gate: refuses any transaction past draft whose
       // provider is still provisional or inactive, or whose type states no
@@ -1228,6 +1252,7 @@ describeDb('privileged functions', () => {
       // Phase 4D. A trigger that counts changes to the figures, so a verifier
       // can be made to quote the version they reviewed. Revoked from every
       // exposed role: nothing but the trigger calls it.
+      'agency_transaction_operator_guard',
       'agency_transaction_revision_guard',
       // Phase 4D. Records the version the second officer was handed, so a
       // verification that quotes nothing is refused once the money moves
@@ -1241,6 +1266,7 @@ describeDb('privileged functions', () => {
       'approve_loan',
       'approve_reconciliation',
       'approve_transfer',
+      'assert_agency_account_operator',
       'assert_agency_float_available',
       'assert_agency_settlement_account',
       'assert_cash_account',
@@ -1257,6 +1283,7 @@ describeDb('privileged functions', () => {
       'assess_meeting_fine',
       'assess_meeting_fines',
       'assess_member_loan_eligibility',
+      'assign_agency_account_staff',
       'attach_benefit_document',
       'audit_actor_label',
       'audit_agency_configuration_change',
@@ -1637,6 +1664,7 @@ describeDb('privileged functions', () => {
       // which stays default-deny to every session; it re-checks
       // `settings:view` inside, because the grant alone decides nothing.
       'review_meeting_absence_notice',
+      'revoke_agency_account_staff',
       'revoke_member_beneficiary',
       'savings_account_governing_policy',
       'savings_accounts_assign_number',
@@ -1665,6 +1693,7 @@ describeDb('privileged functions', () => {
       'schedule_membership_meeting',
       'set_agency_agent_line_suspended',
       'set_agency_provider_commission_source',
+      'set_agency_provider_float_model',
       'set_agency_service_limit',
       'settings_reference_sequences',
       'submit_agency_cash_reconciliation',
@@ -1831,6 +1860,7 @@ describeDb('privileged functions', () => {
       // business, and because a date is not sensitive. Neither accepts a
       // date from a caller: `business_now` honours an override only on a
       // direct owner connection, which no application path has.
+      'assign_agency_account_staff',
       'attach_benefit_document',
       // Phase 4B-S. Like `accept_membership_policy_version`, this one names a
       // record rather than acting on the caller alone, and it is granted for
@@ -2054,6 +2084,7 @@ describeDb('privileged functions', () => {
       // has already named, and both are what the policy's live-loan rule is
       // written against — so they must give the same answer to every caller.
       'review_meeting_absence_notice',
+      'revoke_agency_account_staff',
       'revoke_member_beneficiary',
       // Restored in 20261106000600 after 20261106000400 took it away. It is
       // granted for a reason that is easy to miss and that broke 31 browser
@@ -2071,6 +2102,7 @@ describeDb('privileged functions', () => {
       'schedule_membership_meeting',
       'set_agency_agent_line_suspended',
       'set_agency_provider_commission_source',
+      'set_agency_provider_float_model',
       'set_agency_service_limit',
       'settings_reference_sequences',
       'storage_path_claim_id',

@@ -47,6 +47,8 @@ import {
   skipReason,
 } from '../helpers/db';
 
+import { staffAgentAccount } from '../helpers/agency';
+
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
   describe('agency mobile money foundation', () => {
@@ -152,6 +154,7 @@ describeDb('Phase 4E — Mobile Money foundation', () => {
       `select public.ensure_agency_float_account($1, $2) as id`,
       [pr.id, branch],
     );
+    await staffAgentAccount(till.id);
     const code = await queryOne<{ code: string }>(
       `select a.code from public.agency_provider_float_accounts f
          join public.ledger_accounts a on a.id = f.ledger_account_id

@@ -800,6 +800,14 @@ describe('types stay in step with the schema', () => {
       // is callable over the API.
       'agency_cash_banking_guard',
       'agency_cash_banking_revision_guard',
+      // The Agency redesign, client Rule 6. Two guards enforcing the roster —
+      // one on the transaction engine, one on float trades — and the helper
+      // that resolves who is staffing an account. All three fire or resolve as
+      // the table owner and are revoked from every exposed role, so none is
+      // reachable over the API.
+      'agency_transaction_operator_guard',
+      'agency_float_trade_operator_guard',
+      'agency_staffing_actor',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

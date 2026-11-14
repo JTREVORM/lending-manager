@@ -144,6 +144,15 @@
         "public_default_acl": false
       }
     },
+    "assign_agency_account_staff(p_float_account_id uuid, p_profile_id uuid, p_notes text)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC, client Rule 6. Puts a staff member on an agent account's roster, which is what decides who may record or post against it. Refuses a borrower session with SQLSTATE 42501 and the message “Not authorized to assign staff to an agent account. An Owner or a Manager does that.” before touching its arguments — measured by the behavioural probe. Needs agency:providers or agency:settlements. Also refuses an account the caller's branch cannot see (42501), a closed account, an inactive profile, a profile holding only the client role, and an officer belonging to another branch. Idempotent on an existing active assignment.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "attach_benefit_document(p_claim_id uuid, p_beneficiary_id uuid, p_kind text, p_object_path text, p_content_type text, p_byte_size bigint, p_label text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -1071,6 +1080,15 @@
         "public_default_acl": false
       }
     },
+    "revoke_agency_account_staff(p_float_account_id uuid, p_profile_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC, client Rule 6. Withdraws an assignment with a stated reason, keeping the row so the roster can be read as it stood when a past transaction was posted. Refuses a borrower session with SQLSTATE 42501 and the same message as the assignment call, before touching its arguments — measured by the behavioural probe. Needs agency:providers or agency:settlements, refuses an account the caller's branch cannot see with 42501, and refuses an empty reason. Changes no transaction: a roster change is not a correction of history.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "revoke_member_beneficiary(p_beneficiary_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Business RPC. Refuses a borrower session with SQLSTATE 42501, or an explicit authorization message, before touching its arguments — measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body.",
@@ -1137,6 +1155,15 @@
     "set_agency_provider_commission_source(p_provider_id uuid, p_source text, p_reason text)": {
       "classification": "A",
       "reason": "Phase 4E agency RPC. Sets whether a provider's commission is computed from its configuration or reported per transaction. Refuses a caller without agency:providers with SQLSTATE 42501, refuses a provider that is already confirmed because its posted snapshots cite the basis in force, and refuses the reported source while a rate or fixed amount is configured. Audited.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "set_agency_provider_float_model(p_provider_id uuid, p_float_model text, p_payable_account_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Agency redesign RPC. Corrects where a *provisional* provider's money sits — provider_float or cash_payable — which the client's confirmation that banks supply electronic float required and which nothing could do before. Refuses a borrower session with SQLSTATE 42501 and the message “Not authorized to configure agency providers.” before touching its arguments — measured by the behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body. Also refuses a confirmed provider, a provider with posted or in-flight transactions, an outstanding payable, a non-zero float balance, an unchanged model, and a move to cash_payable with no liability account named. Changes float_model and payable_account_id in one statement because two CHECK constraints make them a single fact. Writes no provider row by itself: the migration that adds it changes no data.",
       "surface": {
         "anon": false,
         "authenticated": true,

@@ -41,6 +41,58 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      // --- The Agency redesign: the agent account roster (client Rule 6) ----
+      //
+      // Which staff may operate which agent account or agent line.
+      // SELECT-only for `authenticated`: the two staffing RPCs are the only
+      // writers, and a session holding INSERT could put itself on an account.
+      // Revocation is a state rather than a delete, so the roster can be read
+      // as it stood on the day a transaction was posted.
+      agency_account_staff: {
+        Row: {
+          id: string;
+          float_account_id: string;
+          profile_id: string;
+          status: string;
+          assigned_by: string;
+          assigned_at: string;
+          notes: string | null;
+          revoked_by: string | null;
+          revoked_at: string | null;
+          revoked_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          float_account_id: string;
+          profile_id: string;
+          status?: string;
+          assigned_by: string;
+          assigned_at?: string;
+          notes?: string | null;
+          revoked_by?: string | null;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          float_account_id?: string;
+          profile_id?: string;
+          status?: string;
+          assigned_by?: string;
+          assigned_at?: string;
+          notes?: string | null;
+          revoked_by?: string | null;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       // --- The Agency redesign: cash banking (client Rule 5) ----------------
       //
       // An agent's deposit of collected physical cash into one of the
@@ -5765,6 +5817,39 @@ export type Database = {
      * here is read-only to every session.
      */
     Views: {
+      // --- The Agency redesign: the roster, as a screen reads it ------------
+      //
+      // `security_invoker`, so the table's own branch-scoped policy decides
+      // the rows.
+      agency_account_operators: {
+        Row: {
+          id: string | null;
+          float_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          provider_category: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          till_name: string | null;
+          account_label: string | null;
+          account_status: string | null;
+          profile_id: string | null;
+          staff_name: string | null;
+          staff_status: string | null;
+          status: string | null;
+          assigned_by: string | null;
+          assigned_by_name: string | null;
+          assigned_at: string | null;
+          notes: string | null;
+          revoked_by: string | null;
+          revoked_by_name: string | null;
+          revoked_at: string | null;
+          revoked_reason: string | null;
+        };
+        Relationships: [];
+      };
       // --- The Agency redesign: the cash banking register -------------------
       //
       // `security_invoker`, so the table's own branch-scoped policy decides
@@ -7828,6 +7913,34 @@ export type Database = {
     };
 
     Functions: {
+      // --- The Agency redesign: the roster and the float-model correction ---
+      //
+      // `agency_may_operate_account` is the rule every enforcing path reads:
+      // an active assignment, or agency:verify, which only the Manager and
+      // the Owner hold. `set_agency_provider_float_model` corrects where a
+      // *provisional* provider's money sits, which is what the client's
+      // confirmation that banks supply electronic float required.
+      assign_agency_account_staff: {
+        Args: {
+          p_float_account_id: string;
+          p_profile_id: string;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      revoke_agency_account_staff: {
+        Args: { p_float_account_id: string; p_profile_id: string; p_reason: string };
+        Returns: string;
+      };
+      set_agency_provider_float_model: {
+        Args: {
+          p_provider_id: string;
+          p_float_model: string;
+          p_payable_account_id?: string | null;
+          p_reason?: string | null;
+        };
+        Returns: string;
+      };
       // --- The Agency redesign: cash banking (client Rule 5) ----------------
       //
       // Recording posts nothing; verifying is the one call that writes a
