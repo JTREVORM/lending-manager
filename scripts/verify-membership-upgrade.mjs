@@ -146,6 +146,21 @@ const PHASE_PREFIXES = [
   '20261114',
   // Phase 4E, Mobile Money. Unreleased like every agency phase before it.
   '20261115',
+  // The Agency redesign. Unreleased like every agency phase before it, and in
+  // the list for the plain reason the list exists.
+  //
+  // Two of its three migrations replace agency views, and one of those reads
+  // `agency_commission_line_balances`, which `20261115001400` creates.
+  // Classified as "existing" they would run before it and fail outright —
+  // exactly the trap the comment above describes for `20261103` and
+  // `20261106`, and the reason this gate refuses an unlisted prefix rather
+  // than guessing.
+  //
+  // The third adds the cash banking engine, so applying it here is also the
+  // stronger check: it lands on a seeded book between the two financial
+  // baselines, which is what measures rather than asserts the claim that
+  // banking collected cash moves not one shilling of anybody's loan.
+  '20261116',
 ];
 
 const isPhaseMigration = (name) =>
