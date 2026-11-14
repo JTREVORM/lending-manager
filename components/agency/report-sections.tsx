@@ -29,11 +29,13 @@ import type {
   AgencyCommissionRow,
   AgencyCommissionSettlementRow,
   AgencyFloatStatementRow,
+  AgencyMoneyProviderRow,
   AgencyPayableRow,
   AgencyPayableSettlementRow,
   AgencyTransactionRow,
   AgencyVarianceRow,
 } from '@/lib/domain/agency';
+import type { UgxAmount } from '@/lib/domain/money';
 import type { AgencyRows } from '@/lib/data/agency';
 
 /**
@@ -57,6 +59,17 @@ export interface AgencyReportData {
   readonly commissionSettlements: AgencyRows<AgencyCommissionSettlementRow>;
   readonly payableSettlements: AgencyRows<AgencyPayableSettlementRow>;
   readonly bankings: AgencyRows<AgencyCashBankingRow>;
+  /**
+   * Float rolled up per provider and branch, across whichever modules the
+   * report's scope selects.
+   *
+   * Added for the Owner's decision 3: Agent Banking float has to be
+   * represented in the consolidated financial reports, and before this the
+   * provider-level roll-up existed only inside the Mobile Money module. The
+   * per-account float was always here, in `accounts`; what was missing was the
+   * figure a reader compares against a provider's own statement.
+   */
+  readonly floatByProvider: AgencyRows<AgencyMoneyProviderRow>;
 }
 
 /** The period and scope a report covers, stated above every one of them. */
@@ -289,6 +302,14 @@ function Transactions({ data }: { readonly data: AgencyReportData }) {
 // ---------------------------------------------------------------------------
 
 function CashAndFloat({ data }: { readonly data: AgencyReportData }) {
+  // Totalled here from the view's own columns rather than summed in SQL,
+  // because the point of the panel is that these four figures are separate.
+  // A single "float moved" total is exactly the double count the view was
+  // built to avoid.
+  const rollup = data.floatByProvider.ok ? data.floatByProvider.rows : [];
+  const total = (pick: (row: AgencyMoneyProviderRow) => UgxAmount): UgxAmount =>
+    toUgx(rollup.reduce((sum, row) => sum + pick(row), 0));
+
   return (
     <div className="min-w-0 space-y-4">
       <Alert tone="info" title="How the float figures are arrived at">
@@ -297,6 +318,92 @@ function CashAndFloat({ data }: { readonly data: AgencyReportData }) {
         total kept beside it. A float balance on this page is the balance of that
         account&rsquo;s own ledger account.
       </Alert>
+
+      <Card>
+        <CardHeader
+          title="Float by provider and branch"
+          description="Every provider that advances electronic float — a bank or a Mobile Money network — rolled up to the figure a provider's own statement is compared against."
+        />
+        {data.floatByProvider.ok ? (
+          rollup.length === 0 ? (
+            <p className="text-text-muted text-sm">
+              No provider in this scope advances electronic float. A provider whose
+              customers&rsquo; cash the company holds and owes onward has a payable rather
+              than a float balance, and it is in the settlement reports.
+            </p>
+          ) : (
+            <>
+              <div className="mb-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <MoneyStat label="Float held" amount={total((r) => r.floatHeld)} />
+                <MoneyStat
+                  label="Bought from providers"
+                  amount={total((r) => r.floatPurchased)}
+                />
+                <MoneyStat label="Sold back" amount={total((r) => r.floatSold)} />
+                <MoneyStat
+                  label="Moved between our own accounts"
+                  amount={total((r) => r.floatTransferredOut)}
+                />
+              </div>
+
+              <Alert tone="info" title="Why the last figure is not added to the others">
+                A transfer moves float between two accounts the business already holds, so
+                it is neither float bought from a provider nor float sold back. It appears
+                once, as the amount that left the sending account — counting it again as
+                it arrives would report twice an amount that never entered or left the
+                provider. The same reason it has its own two columns below.
+              </Alert>
+
+              <DataTable caption="Electronic float by provider and branch">
+                <thead>
+                  <TableRow>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Module</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead align="numeric">Accounts</TableHead>
+                    <TableHead align="numeric">Float held</TableHead>
+                    <TableHead align="numeric">Bought</TableHead>
+                    <TableHead align="numeric">Sold</TableHead>
+                    <TableHead align="numeric">Moved out</TableHead>
+                    <TableHead align="numeric">Moved in</TableHead>
+                  </TableRow>
+                </thead>
+                <tbody>
+                  {rollup.map((row) => (
+                    <TableRow key={`${row.providerId}-${row.branchId}`}>
+                      <TableCell>{row.providerName}</TableCell>
+                      <TableCell>
+                        {row.providerCategory === 'agency_banking'
+                          ? 'Agent Banking'
+                          : 'Mobile Money'}
+                      </TableCell>
+                      <TableCell>{row.branchCode}</TableCell>
+                      <TableCell align="numeric">{row.activeLines}</TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.floatHeld} />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.floatPurchased} />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.floatSold} />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.floatTransferredOut} />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <Money amount={row.floatTransferredIn} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </tbody>
+              </DataTable>
+            </>
+          )
+        ) : (
+          <AgencyReadError failure={data.floatByProvider} />
+        )}
+      </Card>
 
       <Card>
         <CardHeader

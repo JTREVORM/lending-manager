@@ -53,19 +53,30 @@ export default async function AgencyMoneyProviderPage({
 
   const [providers, lines, trades, accounts] = await Promise.all([
     getAgencyProviders(),
-    getAgencyMoneyDashboard({ providerCode }),
+    getAgencyMoneyDashboard({ providerCode, categories: ['mobile_money'] }),
     getAgencyFloatTrades({ providerCode, limit: 100 }),
     getLedgerAccounts({ cashOnly: true, activeOnly: true }),
   ]);
 
   // An unknown code is a 404 — but only when the provider register was
   // actually read. A failed read must not become "no such provider".
-  if (providers.ok && !providers.rows.some((p) => p.code === providerCode)) {
+  //
+  // A code that belongs to a *bank* is a 404 here too, and that is not
+  // pedantry. Since the Owner's decision 1 a bank can advance electronic
+  // float, which puts it in the dashboard view this page reads; without the
+  // category test, `/agency/money/<a bank's code>` would render that bank's
+  // agent accounts under a heading reading "Mobile Money", with a back link
+  // into the wrong module. The Agent Banking module has its own route for
+  // them.
+  if (
+    providers.ok &&
+    !providers.rows.some((p) => p.code === providerCode && p.category === 'mobile_money')
+  ) {
     notFound();
   }
 
   const provider = providers.ok
-    ? providers.rows.find((p) => p.code === providerCode)
+    ? providers.rows.find((p) => p.code === providerCode && p.category === 'mobile_money')
     : undefined;
   const providerName = provider?.name ?? providerCode;
 

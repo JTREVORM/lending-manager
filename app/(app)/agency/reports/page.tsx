@@ -16,6 +16,7 @@ import {
   getAgencyCashCounts,
   getAgencyCashMovement,
   getAgencyCommission,
+  getAgencyMoneyConsolidated,
   getAgencyCommissionSettlements,
   getAgencyFloatStatements,
   getAgencyPayableSettlements,
@@ -111,6 +112,7 @@ export default async function AgencyReportsPage({
     commissionSettlements,
     payableSettlements,
     bankings,
+    floatByProvider,
   ] = await Promise.all([
     getAgencyProvidersByCategory(filter.categories),
     getAgencyAgentAccounts(accountScope),
@@ -133,6 +135,14 @@ export default async function AgencyReportsPage({
       to: filter.range.to,
       limit: 200,
     }),
+    // The provider-and-branch float roll-up, scoped to whatever the report's
+    // scope selects — so Agent Banking float appears in a consolidated report
+    // rather than only in the Mobile Money module, which is what the Owner's
+    // decision 3 asked for. The view's own two transfer columns are carried
+    // through untouched: a transfer between two of one provider's accounts is
+    // not float moving into or out of the provider, and adding it to either
+    // total would report twice an amount that never moved.
+    getAgencyMoneyConsolidated({ categories: filter.categories }),
   ]);
 
   const data: AgencyReportData = {
@@ -147,6 +157,7 @@ export default async function AgencyReportsPage({
     commissionSettlements,
     payableSettlements,
     bankings,
+    floatByProvider,
   };
 
   const meta = AGENCY_REPORT_SECTION_META[filter.section];

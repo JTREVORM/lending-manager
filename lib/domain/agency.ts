@@ -494,6 +494,15 @@ export interface AgencyMoneyProviderRow {
   readonly providerId: string;
   readonly providerCode: string;
   readonly providerName: string;
+  /**
+   * Which module the provider belongs to.
+   *
+   * On this row since the Owner's decision 1, which made it possible for a
+   * bank to advance electronic float. The view this comes from is scoped by
+   * float model rather than by category, so without this a consolidated float
+   * report could not say which of its rows were banks.
+   */
+  readonly providerCategory: AgencyProviderCategory;
   readonly branchId: string;
   readonly branchCode: string;
   readonly agentLines: number;

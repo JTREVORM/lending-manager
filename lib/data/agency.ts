@@ -771,9 +771,17 @@ function mapLineCommission(r: Record<string, unknown>): AgencyLineCommissionRow 
   };
 }
 
-/** Commission owed to and by every agent line. */
+/**
+ * Commission owed to and by every agent line.
+ *
+ * `categories` scopes it to a module, for the same reason the two dashboard
+ * readers take one: the view carries every agent account whatever its
+ * provider's category, so a screen headed with one module's name has to say
+ * which rows it means rather than take what it is given.
+ */
 export async function getAgencyLineCommission(options?: {
   readonly providerCode?: string;
+  readonly categories?: readonly AgencyProviderCategory[];
 }): Promise<AgencyRows<AgencyLineCommissionRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
@@ -785,6 +793,9 @@ export async function getAgencyLineCommission(options?: {
   if (options?.providerCode !== undefined) {
     query = query.eq('provider_code', options.providerCode);
   }
+  if (options?.categories !== undefined) {
+    query = query.in('provider_category', [...options.categories]);
+  }
 
   const { data, error } = await query;
   if (error !== null || data === null)
@@ -793,9 +804,27 @@ export async function getAgencyLineCommission(options?: {
   return { ok: true, rows: data.map(mapLineCommission) };
 }
 
-/** One row per agent line: the provider-scoped operational dashboard. */
+/**
+ * One row per agent line: the provider-scoped operational dashboard.
+ *
+ * ## Why `categories` is not optional in practice
+ *
+ * The view is scoped by float model, not by category — it carries every
+ * provider that advances electronic float. That was the whole of Mobile Money
+ * when it was written, and it stopped being so the moment the Owner's decision
+ * 1 let a bank be corrected to `provider_float`: a corrected bank would appear
+ * on the Mobile Money dashboard, under a heading naming a module it does not
+ * belong to.
+ *
+ * So a caller says which categories it means. The Mobile Money screens pass
+ * `['mobile_money']`, the Agent Banking screens `['agency_banking']`, and the
+ * consolidated report passes whichever its scope selects. Omitting it returns
+ * both, which is right for a reader that genuinely wants every float-holding
+ * provider and wrong for either module's own screen.
+ */
 export async function getAgencyMoneyDashboard(options?: {
   readonly providerCode?: string;
+  readonly categories?: readonly AgencyProviderCategory[];
 }): Promise<AgencyRows<AgencyMoneyLineRow>> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
@@ -806,6 +835,9 @@ export async function getAgencyMoneyDashboard(options?: {
 
   if (options?.providerCode !== undefined) {
     query = query.eq('provider_code', options.providerCode);
+  }
+  if (options?.categories !== undefined) {
+    query = query.in('provider_category', [...options.categories]);
   }
 
   const { data, error } = await query;
@@ -834,19 +866,34 @@ export async function getAgencyMoneyDashboard(options?: {
  * Transfers are their own two columns here because they are their own two
  * columns in the view: adding them to the purchase or sale totals would
  * report twice an amount that never left the provider.
+ *
+ * `categories` scopes it, for the reason `getAgencyMoneyDashboard` gives at
+ * length: the view holds every provider that advances electronic float, and
+ * since the Owner's decision 1 that can include a bank.
+ *
+ * A `cash_payable` provider is absent from the view by design — it holds no
+ * electronic float, and its position is a payable rather than a float balance.
+ * So a scope of `['agency_banking']` returns the banks that advance float and
+ * says nothing about the ones that do not, which is the honest answer and not
+ * the same as "no banking float".
  */
-export async function getAgencyMoneyConsolidated(): Promise<
-  AgencyRows<AgencyMoneyProviderRow>
-> {
+export async function getAgencyMoneyConsolidated(options?: {
+  readonly categories?: readonly AgencyProviderCategory[];
+}): Promise<AgencyRows<AgencyMoneyProviderRow>> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('agency_mobile_money_consolidated')
     .select('*')
     .order('provider_name')
     .order('branch_code');
 
+  if (options?.categories !== undefined) {
+    query = query.in('provider_category', [...options.categories]);
+  }
+
+  const { data, error } = await query;
   if (error !== null || data === null)
-    return failed('the consolidated Mobile Money report', error);
+    return failed('the consolidated float report', error);
 
   return {
     ok: true,
@@ -854,6 +901,9 @@ export async function getAgencyMoneyConsolidated(): Promise<
       providerId: str(r.provider_id),
       providerCode: str(r.provider_code),
       providerName: str(r.provider_name),
+      providerCategory: isAgencyProviderCategory(r.provider_category)
+        ? r.provider_category
+        : 'mobile_money',
       branchId: str(r.branch_id),
       branchCode: str(r.branch_code),
       agentLines: num(r.agent_lines),

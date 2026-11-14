@@ -52,7 +52,9 @@ export default async function AgencyMoneyStatementsPage({
 
   const [rows, lines] = await Promise.all([
     getAgencyCommissionReconciliations({ providerCode, limit: 100 }),
-    getAgencyLineCommission({ providerCode }),
+    // Scoped to this module: the view carries bank agent accounts too, and
+    // since the Owner's decision 1 a bank can hold electronic float.
+    getAgencyLineCommission({ providerCode, categories: ['mobile_money'] }),
   ]);
 
   const canReconcile = contextCan(context, 'agency:reconcile');

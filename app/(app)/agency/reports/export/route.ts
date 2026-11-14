@@ -6,6 +6,7 @@ import {
   getAgencyCashCounts,
   getAgencyCommission,
   getAgencyCommissionSettlements,
+  getAgencyMoneyConsolidated,
   getAgencyPayables,
   getAgencyTransactions,
   getAgencyVariances,
@@ -29,6 +30,7 @@ import { letterheadMark, pdfResponse } from '@/lib/reports/export';
 import { guardExport } from '@/lib/reports/export-guard';
 import { renderReportPdf, type ReportTotal } from '@/lib/reports/pdf-report';
 import type { ReportField } from '@/lib/reports/columns';
+import type { AgencyMoneyProviderRow } from '@/lib/domain/agency';
 import {
   AGENCY_REPORT_SECTION_META,
   agencyPeriodLabel,
@@ -200,8 +202,20 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     case 'cash-float': {
-      const result = await getAgencyAgentAccounts(scope);
+      // The rows are per account, which is what a float report is read at.
+      // The roll-up is read only for the footer: a printout of this report is
+      // compared against a provider's statement, and the reader needs to see
+      // that float moved between the company's own accounts is not part of
+      // what was bought from the provider or sold back to it.
+      const [result, rollup] = await Promise.all([
+        getAgencyAgentAccounts(scope),
+        getAgencyMoneyConsolidated({ categories: filter.categories }),
+      ]);
       if (!result.ok) return unavailable(result.what);
+
+      const sum = (pick: (row: AgencyMoneyProviderRow) => number): number =>
+        rollup.ok ? rollup.rows.reduce((t, r) => t + pick(r), 0) : 0;
+
       return respond('agency-cash-and-float', agencyFloatFields(), result.rows, [
         money(
           'Float held',
@@ -211,6 +225,26 @@ export async function GET(request: Request): Promise<Response> {
           'Commission receivable',
           result.rows.reduce((t, r) => t + r.commissionOutstanding, 0),
         ),
+        // Omitted rather than shown as zero when the roll-up could not be
+        // read: a printed zero against "bought from providers" is a claim,
+        // and the one thing a financial document must not do is state a
+        // figure it does not have.
+        ...(rollup.ok
+          ? [
+              money(
+                'Float bought from providers',
+                sum((r) => r.floatPurchased),
+              ),
+              money(
+                'Float sold back to providers',
+                sum((r) => r.floatSold),
+              ),
+              money(
+                'Moved between our own accounts (not bought or sold)',
+                sum((r) => r.floatTransferredOut),
+              ),
+            ]
+          : []),
       ]);
     }
 
