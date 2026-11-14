@@ -187,6 +187,14 @@ const ROUTE_PERMISSIONS: readonly {
   // already requires to record one.
   { prefix: ROUTES.agencyCashBanking, permission: 'agency:write' },
   { prefix: ROUTES.agencyTransfers, permission: 'agency:float_trade' },
+  // The roster takes `agency:providers`, the Owner's configuration
+  // capability, and not the `agency:reports` that `/agency` would otherwise
+  // lend it by prefix. Granting a mandate is the act that decides who may
+  // move the business's money through an agent account; a Secretary who may
+  // read every agency report has no business granting one, and the database
+  // agrees — `agency_staffing_actor()` resolves `agency:providers` or
+  // `agency:settlements` and raises 42501 for anyone else.
+  { prefix: ROUTES.agencyStaffing, permission: 'agency:providers' },
   { prefix: ROUTES.agencyBankingAccounts, permission: 'agency:reports' },
   { prefix: ROUTES.agencyAccounts, permission: 'agency:reports' },
   { prefix: ROUTES.agencyBanking, permission: 'agency:reports' },

@@ -787,3 +787,86 @@ export function agentAccountName(row: {
 }): string {
   return row.label ?? row.agentCode ?? row.lineMsisdnMasked ?? `Till ${row.tillName}`;
 }
+
+// ---------------------------------------------------------------------------
+// The agent-account roster — the Owner's decision 2, client Rule 6
+// ---------------------------------------------------------------------------
+
+/**
+ * One authorisation: an employee who may operate one agent account.
+ *
+ * Carries the withdrawal fields as well as the grant, because the roster keeps
+ * withdrawn rows and the screen that shows the roster is the screen that has
+ * to answer "who used to be on this account, and who took them off".
+ */
+export interface AgencyAccountOperatorRow {
+  readonly id: string;
+  readonly floatAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly accountLabel: string | null;
+  readonly accountStatus: string;
+  readonly profileId: string;
+  readonly staffName: string;
+  readonly staffStatus: string;
+  readonly status: 'active' | 'revoked';
+  readonly assignedByName: string;
+  readonly assignedAt: string;
+  readonly notes: string | null;
+  readonly revokedByName: string | null;
+  readonly revokedAt: string | null;
+  readonly revokedReason: string | null;
+}
+
+/**
+ * An agent account as the staffing screen lists it, with its roster attached.
+ *
+ * The account's own identity is repeated on every operator row in the view, so
+ * grouping is done once in the reader rather than in the page: a page that
+ * grouped would have to agree with the page that counted.
+ */
+export interface AgencyStaffedAccount {
+  readonly floatAccountId: string;
+  /**
+   * The account's branch, as an id rather than a code.
+   *
+   * Both are here because both are needed and they are not interchangeable:
+   * the code is what a reader recognises the branch by, and the id is what an
+   * employee's own `branch_id` can be compared against. Carrying only the code
+   * invites exactly that comparison against a UUID, which is silently false
+   * for every employee.
+   */
+  readonly branchId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly accountLabel: string | null;
+  readonly accountStatus: string;
+  readonly operators: readonly AgencyAccountOperatorRow[];
+  readonly withdrawn: readonly AgencyAccountOperatorRow[];
+}
+
+/**
+ * A liability account a provider's payable can be named on.
+ *
+ * The same shape as `BankAccountOption` without the institution, which a
+ * liability does not have. Kept separate rather than widened, because a form
+ * that offered both lists one type would be a form that could name a bank
+ * account as a payable — which `agency_provider_accounts_guard()` refuses, but
+ * only after somebody has chosen it.
+ */
+export interface LiabilityAccountOption {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly branchId: string | null;
+}

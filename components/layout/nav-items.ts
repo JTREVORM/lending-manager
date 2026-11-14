@@ -1102,6 +1102,18 @@ export const NAV_MODULES: readonly NavModule[] = [
                 permission: 'agency:providers',
                 phase: 4,
               },
+              {
+                // The Owner's decision 2, client Rule 6. Scoped to this
+                // module by a query parameter rather than given a route of
+                // its own, for the reason the reporting hub gives: one
+                // roster serves both modules because a bank agent account
+                // and a Mobile Money line are one row, and two screens over
+                // one table are two sets of counts that can disagree.
+                href: `${ROUTES.agencyStaffing}?category=agency_banking`,
+                label: 'Account authorisations',
+                permission: 'agency:providers',
+                phase: 4,
+              },
             ],
             emptyLabel: 'No bank is configured yet',
           },
@@ -1116,6 +1128,14 @@ export const NAV_MODULES: readonly NavModule[] = [
             href: ROUTES.agencyMoney,
             label: 'Overview',
             permission: 'agency:reports',
+            phase: 4,
+          },
+          {
+            // The same screen as under Agent Banking, scoped to the lines.
+            // See the note there.
+            href: `${ROUTES.agencyStaffing}?category=mobile_money`,
+            label: 'Line authorisations',
+            permission: 'agency:providers',
             phase: 4,
           },
         ],

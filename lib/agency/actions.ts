@@ -37,6 +37,9 @@ import { checkActorRateLimit } from '@/lib/security/rate-limit';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { parseSafely } from '@/lib/validation/validate';
 import {
+  agencyAccountStaffRevocationSchema,
+  agencyAccountStaffSchema,
+  agencyProviderFloatModelSchema,
   agencyTransactionIdSchema,
   agentLineClosureSchema,
   agentLineRegistrationSchema,
@@ -98,6 +101,7 @@ function revalidateAgency(): void {
     ROUTES.agencyBankingAccounts,
     ROUTES.agencyCashBanking,
     ROUTES.agencyTransfers,
+    ROUTES.agencyStaffing,
     ROUTES.dashboard,
   ]) {
     revalidatePath(route);
@@ -1363,5 +1367,162 @@ export async function reverseCashBankingAction(
     'Reversing a cash banking',
     'Reversed by contra entries. The original posting is unchanged.',
     parsed.data.bankingId,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The agent-account roster — the Owner's decision 2, client Rule 6
+//
+// Neither of these actions is the control. The control is
+// `agency_transaction_operator_guard()` and
+// `agency_float_trade_operator_guard()`, which run on the posting paths and
+// refuse an officer who is not on the account's roster however they got
+// there. These two administer the list those triggers read.
+//
+// That distinction is why they take `agency:providers` or `agency:settlements`
+// rather than a capability of their own: `agency_staffing_actor()` resolves
+// one of those two and raises 42501 otherwise, so a Secretary with
+// `agency:write` cannot add themselves to an account and then record against
+// it. The capability check here is the early, legible refusal; the database's
+// is the one that decides.
+// ---------------------------------------------------------------------------
+
+/**
+ * Authorise an employee to operate an agent account.
+ *
+ * The database refuses an employee from another branch, a closed account, an
+ * employee who is already on it, and a caller without oversight. It does not
+ * refuse a *suspended* account: a suspension is temporary and the mandate
+ * outlives it, so the roster can be put in order while the account is paused.
+ */
+export async function assignAgencyAccountStaffAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyAccountStaffSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    profileId: formData.get('profileId'),
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('assign_agency_account_staff', {
+    p_float_account_id: input.floatAccountId,
+    p_profile_id: input.profileId,
+    p_notes: input.notes ?? null,
+  });
+
+  return settle(
+    error,
+    'Authorising an employee on an agent account',
+    'Authorised. They may now record against this account.',
+    data,
+  );
+}
+
+/**
+ * Withdraw an employee's authorisation.
+ *
+ * The row is kept and marked withdrawn rather than deleted, so a transaction
+ * posted last month still has a roster to be read against. What this stops is
+ * the next one: the guard reads active assignments only.
+ *
+ * It does not touch anything already recorded. A pending transaction submitted
+ * by someone whose mandate is withdrawn before it posts will be refused at
+ * posting, which is correct and is the case the Owner should know about — the
+ * document has to be cancelled or the mandate restored, and the register says
+ * which.
+ */
+export async function revokeAgencyAccountStaffAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyAccountStaffRevocationSchema, {
+    floatAccountId: formData.get('floatAccountId'),
+    profileId: formData.get('profileId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('revoke_agency_account_staff', {
+    p_float_account_id: input.floatAccountId,
+    p_profile_id: input.profileId,
+    p_reason: input.reason,
+  });
+
+  return settle(
+    error,
+    "Withdrawing an employee's authorisation on an agent account",
+    'Withdrawn. They may no longer record against this account.',
+    data,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Correcting a provisional provider's float model — the Owner's decision 1
+// ---------------------------------------------------------------------------
+
+/**
+ * Move a provisional provider between the two float models.
+ *
+ * Every guard worth having is in the database, and they are structural rather
+ * than advisory: the provider must still be provisional, hold no float, owe
+ * nothing on its payable, and have no posted or in-flight transaction citing
+ * the model in force. A confirmed provider is refused outright and told to
+ * settle the position it holds under the present model first.
+ *
+ * So this action adds nothing but the early capability refusal and the words
+ * for the two outcomes. In particular it does **not** pre-check whether the
+ * provider is provisional in order to hide the control: a screen that decides
+ * can be stale, and the refusal the database gives is better written than any
+ * absence of a button.
+ */
+export async function setAgencyProviderFloatModelAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderFloatModelSchema, {
+    providerId: formData.get('providerId'),
+    floatModel: formData.get('floatModel'),
+    payableAccountId: formData.get('payableAccountId') ?? null,
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('set_agency_provider_float_model', {
+    p_provider_id: input.providerId,
+    p_float_model: input.floatModel,
+    p_payable_account_id: input.payableAccountId ?? null,
+    p_reason: input.reason,
+  });
+
+  return settle(
+    error,
+    "Correcting a provider's float model",
+    input.floatModel === 'provider_float'
+      ? 'Corrected. This provider supplies electronic float, and float accounts can now be opened against it.'
+      : 'Corrected. Customer money taken on this provider is now owed on the liability you named.',
+    data,
   );
 }

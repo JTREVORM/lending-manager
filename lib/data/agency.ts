@@ -60,6 +60,9 @@ import {
   type AgencyProviderCategory,
   type BankAccountOption,
   type BankingStaffOption,
+  type AgencyAccountOperatorRow,
+  type AgencyStaffedAccount,
+  type LiabilityAccountOption,
   OperatingBranchOption,
 } from '@/lib/domain/agency';
 
@@ -1396,4 +1399,181 @@ export async function getBankingStaffOptions(options?: {
     });
   }
   return { ok: true, rows };
+}
+
+// ---------------------------------------------------------------------------
+// The agent-account roster — the Owner's decision 2, client Rule 6
+// ---------------------------------------------------------------------------
+
+/**
+ * Every agent account the reader may see, each with its roster.
+ *
+ * ## Why two reads rather than one
+ *
+ * `agency_account_operators` joins the roster to the account, so an account
+ * with nobody on it does not appear in it at all. That account is the one the
+ * screen most needs to show: it is the one where nothing can be posted, and
+ * the Owner's whole reason for opening this page is to put somebody on it.
+ *
+ * So the accounts are read first and the roster second, and the roster is
+ * grafted on. An account with an empty roster is then a visible, explainable
+ * state rather than an absence.
+ *
+ * ## Why withdrawn assignments come back too
+ *
+ * The roster keeps them, and this is the screen where that matters. A pending
+ * transaction submitted by somebody whose mandate has since been withdrawn
+ * will be refused at posting, and the only way to understand that refusal is
+ * to see that the mandate was withdrawn, by whom and why. The two lists are
+ * returned separately so a page cannot accidentally count a withdrawn
+ * assignment as an authorisation.
+ */
+export async function getAgencyAccountRosters(options?: {
+  readonly branchId?: string;
+}): Promise<AgencyRows<AgencyStaffedAccount>> {
+  const supabase = await createSupabaseServerClient();
+
+  let accounts = supabase
+    .from('agency_provider_float_accounts')
+    .select(
+      'id, provider_id, label, till_name, status, branch_id, branches(branch_code, name)',
+    )
+    .order('till_name', { ascending: true });
+  if (options?.branchId !== undefined) {
+    accounts = accounts.eq('branch_id', options.branchId);
+  }
+
+  // Read as three plain selects and joined here, the way the navigation does
+  // it. An embedded `!inner` filtered on the provider's category reads more
+  // directly but types as an error row against the generated schema, and a
+  // cast would be hiding that rather than answering it.
+  const [accountResult, providerResult, rosterResult] = await Promise.all([
+    accounts,
+    supabase
+      .from('agency_service_providers')
+      .select('id, code, name, category')
+      .in('category', ['agency_banking', 'mobile_money']),
+    supabase
+      .from('agency_account_operators')
+      .select('*')
+      .order('assigned_at', { ascending: false }),
+  ]);
+
+  if (accountResult.error !== null || accountResult.data === null) {
+    return failed('the agent accounts', accountResult.error);
+  }
+  if (providerResult.error !== null || providerResult.data === null) {
+    return failed('the provider register', providerResult.error);
+  }
+  if (rosterResult.error !== null || rosterResult.data === null) {
+    return failed('the agent account rosters', rosterResult.error);
+  }
+
+  const providers = new Map(
+    providerResult.data.map((p) => [
+      str(p.id),
+      { code: str(p.code), name: str(p.name), category: str(p.category) },
+    ]),
+  );
+
+  const operator = (r: Record<string, unknown>): AgencyAccountOperatorRow => ({
+    id: str(r.id),
+    floatAccountId: str(r.float_account_id),
+    providerId: str(r.provider_id),
+    providerCode: str(r.provider_code),
+    providerName: str(r.provider_name),
+    providerCategory: str(r.provider_category),
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    branchName: str(r.branch_name),
+    tillName: str(r.till_name),
+    accountLabel: strOrNull(r.account_label),
+    accountStatus: str(r.account_status),
+    profileId: str(r.profile_id),
+    staffName: str(r.staff_name),
+    staffStatus: str(r.staff_status),
+    status: r.status === 'revoked' ? 'revoked' : 'active',
+    assignedByName: str(r.assigned_by_name),
+    assignedAt: str(r.assigned_at),
+    notes: strOrNull(r.notes),
+    revokedByName: strOrNull(r.revoked_by_name),
+    revokedAt: strOrNull(r.revoked_at),
+    revokedReason: strOrNull(r.revoked_reason),
+  });
+
+  const active = new Map<string, AgencyAccountOperatorRow[]>();
+  const withdrawn = new Map<string, AgencyAccountOperatorRow[]>();
+  for (const raw of rosterResult.data) {
+    const row = operator(raw);
+    const into = row.status === 'revoked' ? withdrawn : active;
+    const list = into.get(row.floatAccountId) ?? [];
+    list.push(row);
+    into.set(row.floatAccountId, list);
+  }
+
+  return {
+    ok: true,
+    // An account whose provider is not one of the two operational categories
+    // is dropped here rather than filtered in the query: a float account on a
+    // utility-payments provider is not an agent account, and the roster has
+    // nothing to say about it.
+    rows: accountResult.data.flatMap((r) => {
+      const provider = providers.get(str(r.provider_id));
+      if (provider === undefined) return [];
+      const branch = r.branches as { branch_code?: unknown; name?: unknown } | null;
+      const id = str(r.id);
+      return [
+        {
+          floatAccountId: id,
+          branchId: str(r.branch_id),
+          providerCode: provider.code,
+          providerName: provider.name,
+          providerCategory: provider.category,
+          branchCode: branch === null ? '' : str(branch.branch_code),
+          branchName: branch === null ? '' : str(branch.name),
+          tillName: str(r.till_name),
+          accountLabel: strOrNull(r.label),
+          accountStatus: str(r.status),
+          operators: active.get(id) ?? [],
+          withdrawn: withdrawn.get(id) ?? [],
+        },
+      ];
+    }),
+  };
+}
+
+/**
+ * The liability accounts a provider's payable can be named on.
+ *
+ * Active, postable liabilities — exactly what
+ * `agency_provider_accounts_guard()` requires of one, so a name offered here
+ * is a name the database will take. The filter is the same three conditions
+ * the guard checks, written here so the two cannot drift: if the guard ever
+ * takes a fourth, this list goes on offering a choice that is then refused,
+ * which is the failure mode worth naming in a comment rather than discovering
+ * in a browser.
+ */
+export async function getLiabilityAccountOptions(): Promise<
+  AgencyRows<LiabilityAccountOption>
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('ledger_accounts')
+    .select('id, code, name, branch_id')
+    .eq('account_type', 'liability')
+    .eq('is_postable', true)
+    .eq('status', 'active')
+    .order('code', { ascending: true });
+
+  if (error !== null || data === null) return failed('the liability accounts', error);
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      id: str(r.id),
+      code: str(r.code),
+      name: str(r.name),
+      branchId: strOrNull(r.branch_id),
+    })),
+  };
 }

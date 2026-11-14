@@ -221,6 +221,11 @@ describe('navigation items', () => {
       // two ends must belong to one provider and offering the cross-provider
       // pair would teach the wrong model.
       [ROUTES.agencyTransfers]: ['provider'],
+      // The agent-account roster, scoped to one of the two operational
+      // modules. One screen for both, because a bank agent account and a
+      // Mobile Money line are one row of `agency_provider_float_accounts`,
+      // and `readCategory` on the page is what reads this.
+      [ROUTES.agencyStaffing]: ['category'],
     };
 
     for (const item of NAV_ITEMS) {

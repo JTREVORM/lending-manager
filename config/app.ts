@@ -314,6 +314,24 @@ export const ROUTES = {
   agencyCashBanking: '/agency/cash-banking',
   agencyTransfers: '/agency/transfers',
   /**
+   * The Owner's decision 2, client Rule 6. Who may operate which agent
+   * account.
+   *
+   * One route for both modules, for the reason `agencyAccounts` gives: a bank
+   * agent account and a Mobile Money line are one row, so an employee's
+   * authorisations are one list rather than two that could disagree. It is
+   * also the screen that answers the question an audit actually asks — not
+   * "what may this person do", which is the role, but "who was authorised on
+   * this account on the day that transaction posted", which is the roster.
+   *
+   * Not under `/users`. A role is an employee's standing in the company and
+   * belongs with the employee; an account mandate is a fact about the account,
+   * is granted and withdrawn by whoever runs the agency business, and in a
+   * bank's own paperwork sits with the account rather than with the staff
+   * file.
+   */
+  agencyStaffing: '/agency/staffing',
+  /**
    * Phase 18. The trial balance.
    *
    * Under `/finance` rather than `/reports`, which is where a treasurer looks
