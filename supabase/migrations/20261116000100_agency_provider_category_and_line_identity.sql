@@ -91,7 +91,13 @@ $$;
 comment on function public.mask_msisdn(text) is
   'Polytos Agency redesign. A +256 number as +256 77 *** 4567: the network prefix and the last four digits, which is what identifies a line to a person, without the six digits that would let them dial it. Returns NULL for NULL and for anything that is not a +256 number of this schema''s shape, so a malformed row can never leak through unmasked.';
 
-revoke all on function public.mask_msisdn(text) from public;
+-- `from public, anon, authenticated`, not `from public` alone. This stack
+-- grants `anon` EXECUTE directly on a new function rather than only through
+-- PUBLIC, so revoking PUBLIC leaves `anon` holding it — which the database
+-- suite's "allows anonymous execution only of readiness and the no-result
+-- request gate" assertion caught here. `mask_nin()` revokes all three for the
+-- same reason and is the precedent.
+revoke all on function public.mask_msisdn(text) from public, anon, authenticated;
 grant execute on function public.mask_msisdn(text) to authenticated;
 
 
@@ -228,11 +234,19 @@ comment on view public.agency_mobile_money_dashboard is
 -- ---------------------------------------------------------------------------
 -- 4. The consolidated per-provider roll-up + its category
 --
--- The body below is the definition `20261115001300` created, verbatim, with
+-- The body below is the definition `20261115001400` created, verbatim, with
 -- one column appended to the select list and `p.category` added to the GROUP
 -- BY. Nothing else is touched, so the "a transfer is not a purchase and not a
--- sale" rule keeps counting exactly what it counted before and the Phase 4E
--- assertions over this view keep passing unchanged.
+-- sale" rule keeps counting exactly what it counted before.
+--
+-- `20261115001400`, not `20261115001300`: the later migration replaced this
+-- view to read `agency_commission_line_balances` instead of calling
+-- `agency_commission_outstanding_by_line()` and its recovery counterpart,
+-- which are SECURITY DEFINER and revoked from `authenticated` — so a
+-- `security_invoker` view calling them is denied for exactly the reason they
+-- are revoked. Rebuilding from the earlier definition reintroduced that
+-- denial, and the Phase 4E assertion "agency_mobile_money_consolidated can
+-- be read by a signed-in officer" is what caught it.
 --
 -- ## What this view does NOT cover, and why that matters to the redesign
 --
@@ -263,10 +277,8 @@ select
   count(distinct f.id) filter (where f.status = 'active')    as active_lines,
   count(distinct f.id) filter (where f.status = 'suspended') as suspended_lines,
   coalesce(sum(bal.balance), 0)::bigint  as float_held,
-  coalesce(sum(public.agency_commission_outstanding_by_line(f.id)), 0)::bigint
-                                         as commission_outstanding,
-  coalesce(sum(public.agency_commission_recovery_outstanding_by_line(f.id)), 0)::bigint
-                                         as recovery_owed,
+  coalesce(sum(cb.commission_outstanding), 0)::bigint as commission_outstanding,
+  coalesce(sum(cb.recovery_owed), 0)::bigint          as recovery_owed,
   -- Purchases and sales are the provider's float coming in and going out.
   coalesce(sum(tr.purchased), 0)::bigint as float_purchased,
   coalesce(sum(tr.purchase_premium), 0)::bigint  as purchase_premium,
@@ -287,6 +299,7 @@ from public.agency_service_providers p
 join public.agency_provider_float_accounts f on f.provider_id = p.id
 join public.branches b on b.id = f.branch_id
 left join public.ledger_account_balances bal on bal.account_id = f.ledger_account_id
+left join public.agency_commission_line_balances cb on cb.float_account_id = f.id
 left join (
   select f2.id as float_account_id,
          coalesce(sum(t.float_amount) filter (where t.kind = 'purchase'
@@ -313,6 +326,5 @@ left join (
 ) tr on tr.float_account_id = f.id
 where p.float_model = 'provider_float'
 group by p.id, p.code, p.name, p.category, b.id, b.branch_code;
-
 comment on view public.agency_mobile_money_consolidated is
   'Phase 4E, extended by the Agency redesign. One row per provider_float provider per branch. provider_category lets the consolidated Agency report split Agent Banking from Mobile Money without re-reading the provider table. A transfer stays in its own two columns and out of float_purchased and float_sold, because a transfer between two of one provider''s lines moves no float into or out of the provider and counting it on both sides would report twice an amount that never moved. A cash_payable provider is absent by design: it holds no electronic float, and its position is in agency_payable_summary.';

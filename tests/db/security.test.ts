@@ -82,6 +82,12 @@ describeDb('row level security', () => {
       // transaction, so a session holding INSERT could register a provider
       // whose income account was the wrong type, or a float till with no
       // ledger account behind it.
+      // The Agency redesign. Client Rule 5's table and its register, both
+      // SELECT-only for the same reason as every other agency table: the four
+      // RPCs are the only writers, and a session holding INSERT could record a
+      // banking with no journal behind it.
+      'agency_cash_banking_register:SELECT',
+      'agency_cash_bankings:SELECT',
       'agency_cash_reconciliation_register:SELECT',
       'agency_cash_reconciliations:SELECT',
       'agency_commission_by_line:SELECT',
@@ -436,6 +442,11 @@ describeDb('row level security', () => {
       // `agency:reports` and branch-isolated; the borrower role holds no
       // `agency:*` capability at all, so the predicate is false for them and
       // every one of these tables returns nothing.
+      // The Agency redesign. A read policy only, gated on `agency:reports`
+      // and branch-isolated in the hoisted form, like every other agency
+      // table. A borrower holds no agency capability, so the predicate is
+      // false for them and the table returns nothing.
+      'agency_cash_bankings:SELECT',
       'agency_cash_reconciliations:SELECT',
       // Phase 4E. SELECT only, gated on agency:reports and the branch,
       // with the branch rule restated inline so PostgreSQL can hoist it.
@@ -942,6 +953,11 @@ describeDb('views', () => {
         // recorded by mistake - which the Phase 4C reporting views do not
         // list. Each is `security_invoker` over a table whose policies
         // already decide what a branch may see.
+        // The Agency redesign. Cash bankings with their branch, both
+        // accounts and the people who banked, recorded, verified and
+        // reversed them. `security_invoker`, so the table's own
+        // branch-scoped policy decides the rows.
+        'agency_cash_banking_register',
         'agency_cash_reconciliation_register',
         // Phase 4E. Commission per agent line and per calendar month, the
         // statement-period and float-trade registers, and the two Mobile
@@ -1111,7 +1127,7 @@ describeDb('views', () => {
     // Money reports, and the per-line commission balances the first and last
     // of those are built from — a view rather than a DEFINER function call,
     // so the reader's own ledger permission and branch rule apply.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(66);
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(67);
   });
 });
 
@@ -1165,6 +1181,18 @@ describeDb('privileged functions', () => {
       // Every one pins search_path and checks a capability before it reads
       // an argument, except the readers, which are revoked from every role.
       'agency_agent_line_obligations',
+      // The Agency redesign. Client Rule 5's guard: DEFINER for the reason
+      // every other agency guard is, because it reads `ledger_accounts` to
+      // check that a banking moves cash at hand to bank, both at the
+      // recording branch — an invariant spanning two tables, which a CHECK
+      // cannot express. Not reachable by a signed-in user: a trigger fires as
+      // the table owner, so the default EXECUTE grant is revoked.
+      //
+      // `agency_cash_banking_revision_guard` is deliberately absent: it reads
+      // nothing but the row being updated, so it needs no privilege of its
+      // own and is a plain `plpgsql` trigger with a pinned search_path. The
+      // four RPCs are below, in their alphabetical places.
+      'agency_cash_banking_guard',
       'agency_commission_earned_by_line',
       'agency_commission_for',
       'agency_commission_outstanding',
@@ -1552,6 +1580,7 @@ describeDb('privileged functions', () => {
       // and granted to nobody: a session that could raise a notification
       // could address one to any capability it liked.
       'raise_notification',
+      'record_agency_cash_banking',
       'record_agency_commission_payout',
       'record_agency_commission_recovery',
       'record_agency_float_trade',
@@ -1570,6 +1599,7 @@ describeDb('privileged functions', () => {
       'redeem_membership_consent_code',
       'register_agency_agent_line',
       'register_member_beneficiary',
+      'reject_agency_cash_banking',
       'reject_agency_float_trade',
       'reject_benefit_claim',
       'reject_expense',
@@ -1589,6 +1619,7 @@ describeDb('privileged functions', () => {
       'require_savings_account_access',
       'reschedule_membership_meeting',
       'return_agency_transaction',
+      'reverse_agency_cash_banking',
       'reverse_agency_float_trade',
       'reverse_agency_payable_settlement',
       'reverse_agency_transaction',
@@ -1659,6 +1690,7 @@ describeDb('privileged functions', () => {
       // internal name with no `authenticated` grant, so the Data API cannot
       // reach them. The public name above is now a thin authorized wrapper.
       'validate_loan_for_approval_internal',
+      'verify_agency_cash_banking',
       'verify_agency_float_trade',
       'verify_agency_transaction',
       'verify_benefit_document',
@@ -1906,6 +1938,7 @@ describeDb('privileged functions', () => {
       // already see. Nothing to forge.
       'mark_meeting_attendance',
       'mark_notifications_read',
+      'mask_msisdn',
       'mask_nin',
       // Polytos Phase 1. The gate every later phase posts behind: whether one
       // named activity is open on this version today. Granted for the same
@@ -1970,6 +2003,7 @@ describeDb('privileged functions', () => {
       'post_savings_deposit',
       'post_savings_withdrawal',
       'preview_membership_policy_transition',
+      'record_agency_cash_banking',
       'record_agency_commission_payout',
       'record_agency_commission_recovery',
       'record_agency_float_trade',
@@ -1987,6 +2021,7 @@ describeDb('privileged functions', () => {
       'redeem_membership_consent_code',
       'register_agency_agent_line',
       'register_member_beneficiary',
+      'reject_agency_cash_banking',
       'reject_agency_float_trade',
       'reject_benefit_claim',
       'reject_expense',
@@ -1998,6 +2033,7 @@ describeDb('privileged functions', () => {
       'request_savings_withdrawal',
       'reschedule_membership_meeting',
       'return_agency_transaction',
+      'reverse_agency_cash_banking',
       'reverse_agency_float_trade',
       'reverse_agency_payable_settlement',
       'reverse_agency_transaction',
@@ -2062,6 +2098,7 @@ describeDb('privileged functions', () => {
       'user_has_permission',
       'user_has_role',
       'validate_loan_for_approval',
+      'verify_agency_cash_banking',
       'verify_agency_float_trade',
       'verify_agency_transaction',
       'verify_benefit_document',

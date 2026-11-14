@@ -82,12 +82,17 @@
 -- ---------------------------------------------------------------------------
 -- 1. Two new journal source types
 --
--- The list below is the 37 source types the constraint allows today, read
--- back out of the live constraint rather than copied from a previous
--- migration, plus the two this migration adds. A CHECK cannot be extended in
--- place, so it is dropped and recreated whole; dropping it without restating
--- every existing value would invalidate posted history, so the full list is
--- the only safe form and the suite asserts the set afterwards.
+-- A CHECK cannot be extended in place, so it is dropped and recreated whole.
+-- Dropping it without restating every existing value would invalidate posted
+-- history, so the full list is the only safe form.
+--
+-- The 37 existing values are in the order `20261115000700` left them, with the
+-- two new ones appended. The order of a CHECK array means nothing to
+-- PostgreSQL, but `tests/db/ledger-balance-invariant.test.ts` reads the list
+-- out of the constraint and asserts it against a list grouped by the phase
+-- that added each — so re-sorting it here would have rewritten that test's
+-- narrative for no gain. Appending keeps the history legible and the diff two
+-- lines long.
 -- ---------------------------------------------------------------------------
 
 alter table public.journal_entries
@@ -97,16 +102,16 @@ alter table public.journal_entries
   add constraint journal_entries_source_valid
   check (
     source_type = any (array[
-      'adjustment', 'agency_commission_payout', 'agency_commission_payout_reversal', 'agency_commission_recovery',
-      'agency_commission_settlement', 'agency_commission_settlement_reversal', 'agency_float_purchase', 'agency_float_purchase_reversal',
-      'agency_float_replenishment', 'agency_float_sale', 'agency_float_sale_reversal', 'agency_float_transfer',
-      'agency_float_transfer_reversal', 'agency_payable_settlement', 'agency_payable_settlement_reversal', 'agency_transaction',
-      'agency_transaction_reversal', 'benefit_payment', 'benefit_payment_reversal', 'expense',
-      'expense_reversal', 'loan_disbursement', 'loan_repayment', 'membership_fee',
-      'membership_fee_reversal', 'opening_balance', 'other_income', 'other_income_reversal',
-      'payment_reversal', 'penalty_charge', 'reconciliation_adjustment', 'savings_deposit',
-      'savings_deposit_reversal', 'savings_withdrawal', 'savings_withdrawal_reversal', 'transfer',
-      'transfer_reversal', 'agency_cash_banking', 'agency_cash_banking_reversal'
+      'opening_balance', 'loan_disbursement', 'loan_repayment', 'payment_reversal',
+      'penalty_charge', 'transfer', 'transfer_reversal', 'expense',
+      'expense_reversal', 'other_income', 'other_income_reversal', 'reconciliation_adjustment',
+      'adjustment', 'membership_fee', 'membership_fee_reversal', 'savings_deposit',
+      'savings_deposit_reversal', 'savings_withdrawal', 'savings_withdrawal_reversal', 'benefit_payment',
+      'benefit_payment_reversal', 'agency_transaction', 'agency_transaction_reversal', 'agency_commission_settlement',
+      'agency_payable_settlement', 'agency_payable_settlement_reversal', 'agency_float_replenishment', 'agency_commission_settlement_reversal',
+      'agency_commission_payout', 'agency_commission_payout_reversal', 'agency_commission_recovery', 'agency_float_purchase',
+      'agency_float_purchase_reversal', 'agency_float_sale', 'agency_float_sale_reversal', 'agency_float_transfer',
+      'agency_float_transfer_reversal', 'agency_cash_banking', 'agency_cash_banking_reversal'
     ])
   );
 

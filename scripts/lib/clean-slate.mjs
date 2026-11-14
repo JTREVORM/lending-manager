@@ -223,6 +223,12 @@ export const TRUNCATE_TABLES = [
   // all: PostgreSQL refuses a TRUNCATE while an unlisted table references it,
   // whether or not that table holds a row.
   'agency_transactions',
+  // The Agency redesign. A cash banking references `journal_entries` twice —
+  // the posting and its reversal — so without it here `journal_entries` could
+  // not be truncated at all, for the reason stated above: PostgreSQL refuses a
+  // TRUNCATE while an unlisted table references the target, whether or not
+  // that table holds a row.
+  'agency_cash_bankings',
   'agency_float_trades',
   'agency_float_replenishments',
   'agency_cash_reconciliations',
