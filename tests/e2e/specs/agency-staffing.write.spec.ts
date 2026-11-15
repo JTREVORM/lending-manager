@@ -221,8 +221,31 @@ test.describe('the agent account roster, through the screen', () => {
       });
       await withdraw.getByLabel(/withdraw, because/i).fill('acceptance walk-through');
       await withdraw.getByRole('button', { name: /^withdraw$/i }).click();
+
+      /*
+        Assert what a reader can actually see, which is not the action's
+        message.
+
+        `revokeAgencyAccountStaffAction` returns "They may no longer record
+        against this account", and that alert renders *inside* this form — but
+        the form belongs to the person's row in the Authorised list, and the
+        withdrawal removes them from it. So the form unmounts carrying its own
+        confirmation away. The first version of this test waited for that
+        message and could never have seen it.
+
+        What remains observable is the outcome: the person's withdraw form is
+        gone because they are no longer authorised, and the account's Withdrawn
+        group now has a row. That is a weaker confirmation than a sentence, and
+        it is recorded as a known shortcoming rather than papered over here —
+        a consequential action should say that it worked.
+      */
       await expect(
-        withdraw.getByText(/may no longer record against this account/i),
+        withdraw,
+        'the withdrawal left the person on the authorised list',
+      ).toHaveCount(0);
+      await expect(
+        owner.page.getByText('Withdrawn (1)').first(),
+        'the withdrawn authorisation is not kept on the record',
       ).toBeVisible();
 
       const withdrawn = await queryHarnessOne<{
