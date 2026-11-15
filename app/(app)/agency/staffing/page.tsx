@@ -284,6 +284,7 @@ export default async function AgencyStaffingPage({
                               floatAccountId={account.floatAccountId}
                               profileId={operator.profileId}
                               staffName={operator.staffName}
+                              accountName={`${account.providerName} — ${accountName(account)}`}
                             />
                           </div>
                         </li>

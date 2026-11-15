@@ -216,8 +216,15 @@ test.describe('the agent account roster, through the screen', () => {
       expect(after.count).toBe('1');
 
       // And withdraw it, with a reason, which the row keeps.
+      // Scoped to this account. One employee may be authorised on several
+      // accounts, and each renders a withdraw form for them — so a locator
+      // naming only the person matched every one of those forms once the
+      // acceptance suite started authorising the same people more widely. The
+      // form now carries its account in its accessible name, which is both
+      // what makes this unique and what tells a screen-reader user which
+      // counter they are withdrawing from.
       const withdraw = owner.page.getByRole('form', {
-        name: new RegExp(`Withdraw ${chosen}`),
+        name: new RegExp(`Withdraw ${chosen} from .*${label}`),
       });
       await withdraw.getByLabel(/withdraw, because/i).fill('acceptance walk-through');
       await withdraw.getByRole('button', { name: /^withdraw$/i }).click();

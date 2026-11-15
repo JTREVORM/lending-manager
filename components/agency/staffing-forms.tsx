@@ -196,10 +196,26 @@ export function RevokeOperatorForm({
   floatAccountId,
   profileId,
   staffName,
+  accountName: account,
 }: {
   readonly floatAccountId: string;
   readonly profileId: string;
   readonly staffName: string;
+  /**
+   * What to call the account this mandate is on.
+   *
+   * Part of the form's accessible name, for the reason the authorise form
+   * carries it: one employee may be authorised on several accounts, so each of
+   * them renders a withdraw form for the same person. Named only after the
+   * person, every one of those forms has the same accessible name — which
+   * tells somebody tabbing through the page nothing about which counter they
+   * are withdrawing from, and makes the forms indistinguishable to any
+   * by-name lookup.
+   *
+   * The sibling form was given its account when the browser suite found it
+   * unnamed; this one was left behind, and it took a suite failure to notice.
+   */
+  readonly accountName: string;
 }) {
   const [result, submit, pending] = useActionState<
     AgencyActionResult | undefined,
@@ -211,7 +227,7 @@ export function RevokeOperatorForm({
   return (
     <form
       action={submit}
-      aria-label={`Withdraw ${staffName}`}
+      aria-label={`Withdraw ${staffName} from ${account}`}
       className="min-w-0 space-y-2"
     >
       <input type="hidden" name="floatAccountId" value={floatAccountId} />

@@ -1,6 +1,21 @@
 /**
  * The Owner's acceptance checklist, executed.
  *
+ * ## Why the name says `.write`
+ *
+ * It moves money: it records and posts transfers and cash bankings, grants and
+ * withdraws mandates, and corrects a provider's float model. The Playwright
+ * config excludes `*.write.spec.ts` from the mobile project precisely so those
+ * flows run once — "running every write twice would double the money in the
+ * seeded database".
+ *
+ * Named `agency-acceptance.spec.ts` at first, it ran on mobile too, and CI
+ * found three distinct consequences in one go: the rail is a drawer at 390px
+ * so navigation assertions met hidden elements, an account label was present
+ * but off-screen, and the export steps came back **429** because the desktop
+ * project had already spent the export rate limit. All three are the config's
+ * reasoning playing out exactly as its comment predicted.
+ *
  * ## Why this file exists
  *
  * `docs/POLYTOS-AGENCY-OWNER-ACCEPTANCE.md` is 53 numbered steps the Owner
