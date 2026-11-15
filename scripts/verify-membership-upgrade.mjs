@@ -183,6 +183,17 @@ const PHASE_PREFIXES = [
   // what shows that adding it leaves all 28 financial figures where they
   // were.
   '20261118',
+  // The guarantor concentration ceiling (20261119000100). Unreleased, like
+  // everything above it, and listed here for the reason the list exists.
+  //
+  // It is also the strongest possible place to apply it: the ceiling adds a
+  // trigger to the path a loan takes to `active`, and a trigger on the
+  // disbursement path is exactly the kind of change that silently breaks an
+  // existing book. Applying it between the two financial baselines is what
+  // measures, rather than asserts, that it moves not one shilling of any loan
+  // already on the books — and that no already-active loan is retrospectively
+  // refused by a ceiling that did not exist when it was disbursed.
+  '20261119',
 ];
 
 const isPhaseMigration = (name) =>

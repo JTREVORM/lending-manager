@@ -1457,6 +1457,16 @@ describeDb('privileged functions', () => {
       'loan_recovery_actions_stamp_author',
       'loans_assign_loan_number',
       'loans_enforce_active_limit',
+      // 20261119000100. The guarantor concentration ceiling
+      // (`guarantor_max_active_loans`) was previously asked only when a
+      // guarantor was attached to a draft, where the count of their active
+      // loans was almost always zero, so the ceiling bound nothing. This
+      // fires on the transition to `active` and holds an advisory lock per
+      // guarantor, so concurrent disbursements serialise. SECURITY DEFINER
+      // for the same reason as the rule above it: it reads
+      // `business_settings` and every loan the guarantor backs, which the
+      // session's own role is not entitled to.
+      'loans_enforce_guarantor_concentration',
       // Polytos Phase 3. Makes `membership_id` and `interest_basis` on a loan
       // write-once at approval, for every caller including service_role. A
       // second trigger rather than an edit to `loans_guard_transition`, so the
