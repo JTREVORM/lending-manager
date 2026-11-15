@@ -588,8 +588,18 @@ describeDb('payment row level security', () => {
         // policies already decide what a branch may see — and the per-line
         // commission figures come from the same functions the posting
         // refusals use, so a screen cannot promise what a refusal denies.
+        // The Agency redesign, client Rule 6. The roster view:
+        // `security_invoker` over `agency_account_staff`, whose own
+        // branch-scoped policy decides the rows.
+        'agency_account_operators',
+        // The Agency redesign. Client Rule 5's register: `security_invoker`
+        // over `agency_cash_bankings`, whose own branch-scoped policy decides
+        // the rows, so the view adds names and nets the charge and grants
+        // nothing.
+        'agency_cash_banking_register',
         'agency_cash_reconciliation_register',
         'agency_commission_by_line',
+        'agency_commission_daily',
         'agency_commission_line_balances',
         'agency_commission_monthly',
         'agency_commission_reconciliation_register',

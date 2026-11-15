@@ -41,6 +41,8 @@ import {
   skipReason,
 } from '../helpers/db';
 
+import { staffAgentAccount } from '../helpers/agency';
+
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
   describe('agency transaction engine', () => {
@@ -240,6 +242,7 @@ describeDb('Phase 4B — agency transaction engine', () => {
         [provider.id, opts.branch ?? branchA],
       );
       tillId = till.id;
+      await staffAgentAccount(tillId);
       const acct = await queryOne<{ code: string }>(
         `select a.code from public.agency_provider_float_accounts f
            join public.ledger_accounts a on a.id = f.ledger_account_id
@@ -1301,6 +1304,7 @@ describeDb('Phase 4B — agency transaction engine', () => {
         `select public.ensure_agency_float_account($1, $2) as id`,
         [seeded.id, branchA],
       );
+      await staffAgentAccount(till.id);
       const draft = await asUserCommitted(secretary, [
         {
           sql: `select public.create_agency_transaction($1, 1000, $2, '+256770000005', 'C', 'SEED-1') as id`,
@@ -1424,6 +1428,7 @@ describeDb('Phase 4B — agency transaction engine', () => {
         `select public.ensure_agency_float_account($1, $2, 'counter2') as id`,
         [mtnDeposit.providerId, branchA],
       );
+      await staffAgentAccount(second.id);
       const secondCode = (
         await queryOne<{ code: string }>(
           `select a.code from public.agency_provider_float_accounts f
@@ -2132,6 +2137,7 @@ describeDb('Phase 4B — agency transaction engine', () => {
           [svc.providerId, branchB],
         )
       ).id;
+      await staffAgentAccount(tillB);
       const codeB = (
         await queryOne<{ code: string }>(
           `select a.code from public.agency_provider_float_accounts f

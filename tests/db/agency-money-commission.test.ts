@@ -36,6 +36,8 @@ import {
 } from '../helpers/auth-fixtures';
 import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
 
+import { staffAgentAccount } from '../helpers/agency';
+
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
   describe('agency mobile money commission', () => {
@@ -238,6 +240,7 @@ describeDb('Phase 4E — commission payout and recovery', () => {
         `select public.ensure_agency_float_account($1, $2, $3) as id`,
         [pr.id, branch, till],
       );
+      await staffAgentAccount(id.id);
       const code = await queryOne<{ code: string }>(
         `select a.code from public.agency_provider_float_accounts f
            join public.ledger_accounts a on a.id = f.ledger_account_id

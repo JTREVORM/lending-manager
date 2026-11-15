@@ -19,6 +19,22 @@ import { expect, stateFile, test } from './fixtures';
 
 test.use({ storageState: stateFile('owner') });
 
+/*
+  Every selector that names a rail *header* in this file passes `exact: true`.
+
+  Playwright matches an accessible name by substring unless told otherwise, and
+  the rail now has branches inside its modules — so "Agency" also matches
+  "Consolidated Agency Reports", "Reports" matches it too, and "Mobile Money"
+  matches "MTN Mobile Money (demonstration)". The loops that click each module
+  in turn hit exactly that: once the Agency module was open, `{ name: 'Reports' }`
+  resolved to two elements and the click failed on strict mode.
+
+  A header's accessible name *is* its label, so `exact: true` is strictly more
+  precise everywhere and removes the whole class of failure rather than the
+  three instances that happened to bite. The "Close navigation", "Close menu"
+  and "main menu" controls are not headers and are left as they were.
+*/
+
 /** The modules an Owner sees, in rail order. */
 const MODULES = [
   'Clients',
@@ -33,6 +49,13 @@ const MODULES = [
   'Collections',
   'Debt & Security',
   'Finance',
+  // The Agency redesign. It was absent from this list and therefore
+  // unexamined by any browser test, which is the same gap the note above
+  // records for Membership and Savings. Its contents are the three branches
+  // asserted in `the Agency branch` below, not links: every Agency
+  // destination belongs to a branch, so a module-level link check would find
+  // none and would be right to.
+  'Agency',
   'Reports',
   'Branch Network',
   'Administration',
@@ -77,7 +100,7 @@ test.describe('the phone and tablet drawer', () => {
     await expect(rail.getByRole('link', { name: 'Notifications' })).toBeVisible();
 
     for (const block of MODULES) {
-      const header = rail.getByRole('button', { name: block });
+      const header = rail.getByRole('button', { name: block, exact: true });
       await expect(header, block).toBeVisible();
       await expect(header, block).toHaveAttribute('aria-expanded', 'false');
     }
@@ -89,7 +112,7 @@ test.describe('the phone and tablet drawer', () => {
 
     await page.getByRole('button', { name: /main menu/i }).click();
 
-    const header = rail.getByRole('button', { name: 'Finance' });
+    const header = rail.getByRole('button', { name: 'Finance', exact: true });
     await header.click();
     await expect(header).toHaveAttribute('aria-expanded', 'true');
 
@@ -119,14 +142,13 @@ test.describe('the phone and tablet drawer', () => {
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
     await page.getByRole('button', { name: /main menu/i }).click();
 
-    await rail.getByRole('button', { name: 'Clients' }).click();
+    await rail.getByRole('button', { name: 'Clients', exact: true }).click();
     await expect(rail.getByRole('link', { name: 'Client Register' })).toBeVisible();
 
-    await rail.getByRole('button', { name: 'Finance' }).click();
-    await expect(rail.getByRole('button', { name: 'Clients' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    await rail.getByRole('button', { name: 'Finance', exact: true }).click();
+    await expect(
+      rail.getByRole('button', { name: 'Clients', exact: true }),
+    ).toHaveAttribute('aria-expanded', 'false');
     await expect(rail.getByRole('link', { name: 'Client Register' })).toBeHidden();
   });
 
@@ -180,7 +202,7 @@ test.describe('the phone and tablet drawer', () => {
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
     await page.getByRole('button', { name: /main menu/i }).click();
-    await rail.getByRole('button', { name: 'Collections' }).click();
+    await rail.getByRole('button', { name: 'Collections', exact: true }).click();
     await rail.getByRole('link', { name: 'Payment History', exact: true }).click();
 
     await expect(page).toHaveURL(/\/payments/);
@@ -203,7 +225,7 @@ test.describe('the phone and tablet drawer', () => {
     const menu = page.locator('nav[aria-label="Main navigation"] .scroll-area');
 
     for (const block of MODULES) {
-      await rail.getByRole('button', { name: block }).click();
+      await rail.getByRole('button', { name: block, exact: true }).click();
 
       // The menu band only. The brand block clamps a long company name to two
       // lines and the footer truncates a long person's name on purpose, and
@@ -307,7 +329,10 @@ test.describe('the desktop rail', () => {
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
     for (const block of MODULES) {
-      await expect(rail.getByRole('button', { name: block }), block).toBeVisible();
+      await expect(
+        rail.getByRole('button', { name: block, exact: true }),
+        block,
+      ).toBeVisible();
     }
 
     // Collapsed, so the two pinned rows are the only links in the band.
@@ -322,10 +347,10 @@ test.describe('the desktop rail', () => {
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
     for (const block of MODULES) {
-      await expect(rail.getByRole('button', { name: block }), block).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      );
+      await expect(
+        rail.getByRole('button', { name: block, exact: true }),
+        block,
+      ).toHaveAttribute('aria-expanded', 'false');
     }
   });
 
@@ -333,7 +358,7 @@ test.describe('the desktop rail', () => {
     await page.goto('/');
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
-    const header = rail.getByRole('button', { name: 'Debt & Security' });
+    const header = rail.getByRole('button', { name: 'Debt & Security', exact: true });
     await header.click();
 
     await expect(header).toHaveAttribute('aria-expanded', 'true');
@@ -348,15 +373,14 @@ test.describe('the desktop rail', () => {
     await page.goto('/');
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
-    await rail.getByRole('button', { name: 'Clients' }).click();
+    await rail.getByRole('button', { name: 'Clients', exact: true }).click();
     await expect(rail.getByRole('link', { name: 'Client Register' })).toBeVisible();
 
-    await rail.getByRole('button', { name: 'Finance' }).click();
+    await rail.getByRole('button', { name: 'Finance', exact: true }).click();
 
-    await expect(rail.getByRole('button', { name: 'Clients' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    await expect(
+      rail.getByRole('button', { name: 'Clients', exact: true }),
+    ).toHaveAttribute('aria-expanded', 'false');
     await expect(rail.getByRole('link', { name: 'Client Register' })).toBeHidden();
     await expect(rail.getByRole('link', { name: 'Cash Position' })).toBeVisible();
   });
@@ -414,10 +438,10 @@ test.describe('the desktop rail', () => {
       await page.goto(path);
       const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
-      await expect(rail.getByRole('button', { name: opens }), path).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      );
+      await expect(
+        rail.getByRole('button', { name: opens, exact: true }),
+        path,
+      ).toHaveAttribute('aria-expanded', 'true');
       await expect(
         rail.getByRole('link', { name: entry, exact: true }),
         path,
@@ -426,7 +450,7 @@ test.describe('the desktop rail', () => {
       // And only that module.
       for (const other of MODULES.filter((name) => name !== opens)) {
         await expect(
-          rail.getByRole('button', { name: other }),
+          rail.getByRole('button', { name: other, exact: true }),
           `${path} also opened ${other}`,
         ).toHaveAttribute('aria-expanded', 'false');
       }
@@ -440,7 +464,7 @@ test.describe('the desktop rail', () => {
     // No "Insights" block any more — reporting is its own module.
     await expect(rail.getByText('Insights', { exact: true })).toHaveCount(0);
 
-    await rail.getByRole('button', { name: 'Reports' }).click();
+    await rail.getByRole('button', { name: 'Reports', exact: true }).click();
     // Phase 16's four groups, from `lib/reports/registry.ts` — not its ten
     // report definitions.
     for (const entry of [
@@ -468,10 +492,10 @@ test.describe('the desktop rail', () => {
 
     // And nothing opened to show it, because it belongs to no module.
     for (const block of MODULES) {
-      await expect(rail.getByRole('button', { name: block }), block).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      );
+      await expect(
+        rail.getByRole('button', { name: block, exact: true }),
+        block,
+      ).toHaveAttribute('aria-expanded', 'false');
     }
   });
 
@@ -479,7 +503,7 @@ test.describe('the desktop rail', () => {
     await page.goto('/');
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
-    await rail.getByRole('button', { name: 'Debt & Security' }).click();
+    await rail.getByRole('button', { name: 'Debt & Security', exact: true }).click();
 
     for (const entry of [
       'Overdue Loans',
@@ -508,7 +532,7 @@ test.describe('the desktop rail', () => {
     await page.goto('/');
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
 
-    await rail.getByRole('button', { name: 'Finance' }).click();
+    await rail.getByRole('button', { name: 'Finance', exact: true }).click();
 
     for (const entry of [
       'Cash Position',
@@ -576,7 +600,7 @@ test.describe('the desktop rail', () => {
 
     const hrefs: string[] = ['/'];
     for (const block of MODULES) {
-      await rail.getByRole('button', { name: block }).click();
+      await rail.getByRole('button', { name: block, exact: true }).click();
       hrefs.push(
         ...(await rail
           .locator('.scroll-area ul a')
@@ -615,12 +639,181 @@ test.describe('keyboard reach', () => {
   }) => {
     await page.goto('/');
     const rail = page.getByRole('navigation', { name: 'Main navigation' });
-    const header = rail.getByRole('button', { name: 'Finance' });
+    const header = rail.getByRole('button', { name: 'Finance', exact: true });
 
     await header.focus();
     await page.keyboard.press('Enter');
 
     await expect(header).toHaveAttribute('aria-expanded', 'true');
     await expect(rail.getByRole('link', { name: 'Cash Position' })).toBeVisible();
+  });
+});
+
+/**
+ * The Agency branch, in a real browser.
+ *
+ * ## Why this needs a browser at all
+ *
+ * `tests/integration/agency-navigation.test.tsx` asserts the tree's shape, its
+ * data-driven branches, its authorization and which branches open — over the
+ * declared and grafted structures, in jsdom. What it cannot assert is that the
+ * rail *renders* them: that the nested panels are reachable, that a branch
+ * header is a real button with `aria-expanded`, that opening three levels down
+ * actually reveals a line, and that the row is a link somebody can press.
+ *
+ * The shell's own history is the reason this matters. Phases 1–8 shipped 2,584
+ * tests and three defects that every one of them missed, because nothing had
+ * opened the application in a browser. A recursive renderer behind a Server
+ * Component boundary is exactly the shape of change that passes in jsdom and
+ * fails in a page.
+ *
+ * ## Why these assertions name no provider
+ *
+ * The branches below the two static ones are built from the seeded providers,
+ * and the seed's names are the seed's business. So this asserts the structure
+ * — a branch exists, it discloses, its children are links — and leaves the
+ * labels to the integration tests, which control their own fixtures.
+ */
+test.describe('the Agency branch', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) <= 500, 'wide viewports only');
+
+  test('discloses three branches, none of them open', async ({ page }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    const agency = rail.getByRole('button', { name: 'Agency', exact: true });
+    await expect(agency).toHaveAttribute('aria-expanded', 'false');
+    await agency.click();
+    await expect(agency).toHaveAttribute('aria-expanded', 'true');
+
+    for (const branch of [
+      'Agent Banking',
+      'Mobile Money',
+      'Consolidated Agency Reports',
+    ]) {
+      const header = rail.getByRole('button', { name: branch, exact: true });
+      await expect(header, branch).toBeVisible();
+      // Closed on arrival at the dashboard: the rail opens the branch holding
+      // the page being viewed, and the dashboard is in none of them.
+      await expect(header, branch).toHaveAttribute('aria-expanded', 'false');
+    }
+  });
+
+  test('opens Agent Banking onto its operations, including the new ones', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await rail.getByRole('button', { name: 'Agency', exact: true }).click();
+    await rail.getByRole('button', { name: 'Agent Banking', exact: true }).click();
+
+    for (const entry of [
+      'Overview',
+      'Record transaction',
+      'Cash banking',
+      'Account transfers',
+      'Float top-ups',
+    ]) {
+      await expect(
+        rail.getByRole('link', { name: entry, exact: true }),
+        entry,
+      ).toBeVisible();
+    }
+
+    // The bank register is a branch of its own, one level deeper.
+    await expect(
+      rail.getByRole('button', { name: 'Banks & Agent Accounts', exact: true }),
+    ).toBeVisible();
+  });
+
+  test('opens a provider three levels down and reaches its lines', async ({ page }) => {
+    await page.goto('/');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await rail.getByRole('button', { name: 'Agency', exact: true }).click();
+
+    const moneyHeader = rail.getByRole('button', { name: 'Mobile Money', exact: true });
+    await moneyHeader.click();
+
+    /*
+      Walk the tree by the panels, not by guessing labels.
+
+      Each branch header names its panel with `aria-controls`, so "the
+      providers under Mobile Money" is the buttons inside Mobile Money's own
+      panel. The seed decides which providers exist and what they are called;
+      this test is about the structure, so it takes the first one positionally
+      and never names a provider.
+    */
+    const moneyPanel = page.locator(
+      `#${String(await moneyHeader.getAttribute('aria-controls'))}`,
+    );
+    await expect(moneyPanel).toBeVisible();
+
+    const providers = moneyPanel.getByRole('button');
+    expect(
+      await providers.count(),
+      'the seed registered no Mobile Money provider',
+    ).toBeGreaterThan(0);
+
+    const provider = providers.first();
+    await provider.click();
+    await expect(provider).toHaveAttribute('aria-expanded', 'true');
+
+    const providerPanel = page.locator(
+      `#${String(await provider.getAttribute('aria-controls'))}`,
+    );
+    // The provider's own operations are links in its panel: a dashboard, its
+    // transactions, its float, its commissions, its reconciliation, its
+    // reports.
+    await expect(
+      providerPanel.getByRole('link', { name: 'Dashboard', exact: true }),
+    ).toBeVisible();
+
+    const lines = providerPanel.getByRole('button', { name: 'Agent lines', exact: true });
+    await expect(lines).toBeVisible();
+    await lines.click();
+    await expect(lines).toHaveAttribute('aria-expanded', 'true');
+
+    /*
+      The fourth level. Either a registered line, or the empty state saying
+      there is none — both are correct and which it is depends on the seed.
+      What must not happen is a branch that opens onto nothing at all, which
+      is the failure a reader would read as a fault in the application.
+    */
+    const linesPanel = page.locator(
+      `#${String(await lines.getAttribute('aria-controls'))}`,
+    );
+    await expect(linesPanel).toBeVisible();
+    await expect(linesPanel.locator('li')).not.toHaveCount(0);
+  });
+
+  test('opens the branch holding the page being viewed, on arrival', async ({ page }) => {
+    // Navigating to a banking screen opens Agency and Agent Banking without
+    // the reader touching either. A reader who had to open two branches to
+    // find where they already are is being asked to navigate to their own
+    // location.
+    await page.goto('/agency/cash-banking');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await expect(
+      rail.getByRole('button', { name: 'Agency', exact: true }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      rail.getByRole('button', { name: 'Agent Banking', exact: true }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      rail.getByRole('link', { name: 'Cash banking', exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('lights exactly one reporting section', async ({ page }) => {
+    // Nine entries share the `/agency/reports` prefix and differ only by
+    // `?section=`. Two lit rows would tell the reader they are in two places.
+    await page.goto('/agency/reports?section=commission');
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+
+    await expect(rail.locator('[aria-current="page"]')).toHaveCount(1);
+    await expect(rail.locator('[aria-current="page"]')).toHaveText(/Commission reports/);
   });
 });

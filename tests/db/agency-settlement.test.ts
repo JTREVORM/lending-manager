@@ -24,6 +24,8 @@ import {
   skipReason,
 } from '../helpers/db';
 
+import { staffAgentAccount } from '../helpers/agency';
+
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
   describe('agency settlement', () => {
@@ -152,6 +154,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
           [pr.id, opts.branch],
         )
       ).id;
+      await staffAgentAccount(tillId);
       floatCode = (
         await queryOne<{ code: string }>(
           `select a.code from public.agency_provider_float_accounts f
@@ -972,6 +975,7 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         `select public.ensure_agency_float_account($1,$2,'second-till') as id`,
         [svc.providerId, branchA],
       );
+      await staffAgentAccount(second.id);
       expect(second.id).not.toBe(svc.tillId);
       const secondCode = (
         await queryOne<{ code: string }>(
@@ -1781,6 +1785,9 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         branch,
         secC.profileId,
       ]);
+      // Staffed after the people exist, for the reason `provider()` cannot:
+      // it rosters whoever is on the books when the till is made.
+      await staffAgentAccount(svc.tillId!);
 
       await post(svc, 200_000, secC, mgrC); // 10,000 accrued at this branch
       const settled = await asUserCommitted(mgrC, [

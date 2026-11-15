@@ -50,6 +50,9 @@ function randomDigits(count: number): string {
 
 /** One suite run's worth of unique names and references. */
 const run = Math.random().toString(36).slice(2, 7).toUpperCase();
+
+/** Distinguishes this run's second, third and fourth branches from each other. */
+let branchSequence = 0;
 let sequence = 0;
 function unique(prefix: string): string {
   sequence += 1;
@@ -169,6 +172,37 @@ async function openLine(
 
   expect(row.status).toBe('active');
   expect(row.branch).toBe(branchCode);
+
+  // Authorise the counter staff on the line just opened.
+  //
+  // Client Rule 6, added by the Owner's decision 2: an officer who is not on
+  // an account's roster may not record against it. Every test below opens a
+  // fresh line and then records as the Secretary, so without this each one
+  // fails at the roster — which is how this whole block came to be written.
+  //
+  // Done through the harness rather than through the authorisations screen on
+  // purpose. These are tests about float trades, and if they went through that
+  // screen a regression in it would fail six tests that name float purchases,
+  // sales and transfers. The screen has its own test, which drives it as the
+  // Owner and then proves the refusal it lifts — see
+  // `agency-staffing.write.spec.ts`.
+  //
+  // Both counter officers, because `recordPurchase` and the verification that
+  // follows it are two different people, and the Manager passes the roster by
+  // the oversight clause rather than by being on it.
+  await queryHarness(
+    `insert into public.agency_account_staff
+       (float_account_id, profile_id, assigned_by, notes)
+     select $1, pr.id,
+            (select p2.id from public.profiles p2
+               join public.user_roles r2 on r2.profile_id = p2.id
+              where r2.role_key = 'owner_admin' order by p2.created_at limit 1),
+            'end-to-end counter mandate'
+       from public.profiles pr
+       join public.user_roles r on r.profile_id = pr.id
+      where r.role_key = 'secretary_treasurer' and pr.status = 'active'`,
+    [row.id],
+  );
 
   return {
     tillName,
@@ -897,7 +931,23 @@ async function secondBranch(): Promise<{
   // told to leave alone. So the fixture avoids provoking it rather than
   // papering over it, and the finding is written down where the Product Owner
   // will see it before a second branch opens.
-  const branchCode = `Z${run}${randomDigits(2)}`;
+  /*
+    A counter, not two random digits.
+
+    `run` is fixed for the module, so the only thing separating the three
+    callers of this fixture was `randomDigits(2)` — a hundred possible codes
+    for three draws, which is a birthday collision about three times in a
+    hundred runs. It duly collided in CI with
+    `duplicate key value violates unique constraint "branches_branch_code_key"`,
+    and the test that failed was about the operating branch rather than about
+    anything random.
+
+    A counter cannot collide with itself, and `run` still separates one run
+    from the next. `Z` + five characters + a digit or two stays inside
+    `branches_code_shape`, which allows 2 to 16 of `[A-Z0-9-]`.
+  */
+  branchSequence += 1;
+  const branchCode = `Z${run}${String(branchSequence)}`;
   const branch = await queryHarnessOne<{ id: string }>(
     `insert into public.branches
        (branch_code, name, location, district, status, opened_on, notes)

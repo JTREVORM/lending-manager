@@ -171,6 +171,43 @@ const ROUTE_PERMISSIONS: readonly {
   // route of their own - they are actions on a transaction's own page, where
   // the control is rendered or explained according to the capability.
   { prefix: ROUTES.agencyRecord, permission: 'agency:write' },
+  // The Agency redesign. Longest-prefix first again, so
+  // `/agency/banking/accounts` is not swallowed by `/agency/banking` and
+  // neither is swallowed by `/agency`.
+  //
+  // Cash banking takes `agency:write`, not `agency:settlements`: recording an
+  // agent's deposit slip is a counter action, and the Secretary/Treasurer who
+  // runs the counter holds `agency:write`. Posting it needs
+  // `agency:settlements` and the database refuses anyone else — which is where
+  // that control belongs, because it is a control on the posting rather than
+  // on the screen. Giving the screen the stronger capability would hide the
+  // form from the only person who fills it in.
+  //
+  // Transfers take `agency:float_trade`, the capability the Phase 4E engine
+  // already requires to record one.
+  { prefix: ROUTES.agencyCashBanking, permission: 'agency:write' },
+  { prefix: ROUTES.agencyTransfers, permission: 'agency:float_trade' },
+  // The roster takes `agency:settlements`, which is held by the Manager and
+  // the Owner and by nobody else — exactly the two `agency_staffing_actor()`
+  // admits.
+  //
+  // Not `agency:reports`, which `/agency` would otherwise lend it by prefix:
+  // granting a mandate decides who may move the business's money through an
+  // agent account, and a Secretary who may read every agency report has no
+  // business granting one. The database agrees and refuses her with 42501.
+  //
+  // And not `agency:providers` either, which is where this started. That is
+  // the Owner's alone, and it locked the Manager out of a screen the database
+  // intends them to use — `tests/db/agency-account-staff.test.ts` asserts "a
+  // Manager assigns too, which is the oversight the decision asked for", and
+  // the function's own refusal reads "An Owner or a Manager does that". An
+  // application stricter than the control it administers is still a defect:
+  // with the Owner away, nobody could authorise a cashier, which is the
+  // deadlock the oversight clause exists to prevent, arriving by another door.
+  { prefix: ROUTES.agencyStaffing, permission: 'agency:settlements' },
+  { prefix: ROUTES.agencyBankingAccounts, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyAccounts, permission: 'agency:reports' },
+  { prefix: ROUTES.agencyBanking, permission: 'agency:reports' },
   { prefix: ROUTES.agencyCashCount, permission: 'agency:reconcile' },
   { prefix: ROUTES.agencyFloatCount, permission: 'agency:reconcile' },
   { prefix: ROUTES.agencyReplenish, permission: 'agency:settlements' },

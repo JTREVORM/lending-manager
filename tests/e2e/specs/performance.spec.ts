@@ -77,6 +77,41 @@ const PAGES = [
   // the data rather than with the code.
   '/agency/money/DEMO_AIRTEL',
   '/agency/lines',
+  // The Agency redesign. Three of its five new routes, chosen the same way
+  // the five above were: where a regression would actually be felt.
+  //
+  // `/agency/cash-banking` carries the only new client component in the
+  // redesign — a form with a consequence panel, plus the checker's decision
+  // controls inside a table cell — so it is the heaviest new screen and the
+  // one the total-bundle raise was argued on. `/agency/banking` is the
+  // module's landing screen and reads three sources at once.
+  // `/agency/transfers` reuses the Phase 4E float trade form and renders a
+  // register with post, reject and reverse controls in its cells, which is
+  // the most JavaScript any agency screen ships.
+  //
+  // The other two new routes — `/agency/banking/accounts` and
+  // `/agency/accounts/[accountId]` — are Server Components rendering tables
+  // and ship no JavaScript of their own, so they would be measuring the
+  // shell.
+  '/agency/cash-banking',
+  '/agency/banking',
+  '/agency/transfers',
+  // The Owner's decisions. Both routes that gained a client component, for
+  // the same reason as every entry above: this round raised the bundle-total
+  // ceiling from 687 to 693, and a total raised without the new routes under
+  // a per-page budget would be a total raised on trust.
+  //
+  // `/agency/staffing` renders a card per agent account, each carrying an
+  // authorise form and a withdraw form per authorised person — so like
+  // `/agency/lines` it grows with the data rather than with the code, which
+  // is what makes it worth a budget.
+  //
+  // `/agency/providers` was a Server Component shipping nothing and now
+  // carries the float-model correction form, which is the one writer either
+  // provider table has. The route is otherwise unchanged, so this budget is
+  // measuring exactly that form.
+  '/agency/staffing',
+  '/agency/providers',
 ] as const;
 
 interface PageCost {

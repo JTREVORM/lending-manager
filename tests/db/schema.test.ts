@@ -46,6 +46,10 @@ describeDb('tables', () => {
     // There is no agency commission *receivable* table: the receivable is GL
     // 1310 and is cleared in aggregate, because providers remit in batches
     // covering many transactions (correction C7).
+    // The Agency redesign, client Rule 6. Which staff may operate which agent
+    // account. SELECT-only for authenticated, like every other agency table.
+    'agency_account_staff',
+    'agency_cash_bankings',
     'agency_cash_reconciliations',
     'agency_commission_reconciliations',
     'agency_commission_recoveries',
@@ -359,6 +363,27 @@ describeDb('foreign keys', () => {
       // profile references included: these tables carry no label column to keep
       // the name a posting was recorded under, so SET NULL would erase who
       // verified or reversed it. Profiles are archived, not deleted.
+      // The Agency redesign. Nine references, every one `restrict`: a cash
+      // banking is evidence of a movement between two named accounts, and a
+      // branch, a profile or a journal entry that could be deleted out from
+      // under one would leave a posting nobody could re-check.
+      // The Agency redesign, client Rule 6. Four references, every one
+      // `restrict`: a roster entry names an account and up to three people,
+      // and a profile deleted out from under one would leave a posted
+      // transaction whose authorisation could no longer be read.
+      'agency_account_staff.assigned_by -> profiles (r)',
+      'agency_account_staff.float_account_id -> agency_provider_float_accounts (r)',
+      'agency_account_staff.profile_id -> profiles (r)',
+      'agency_account_staff.revoked_by -> profiles (r)',
+      'agency_cash_bankings.bank_account_id -> ledger_accounts (r)',
+      'agency_cash_bankings.banked_by -> profiles (r)',
+      'agency_cash_bankings.branch_id -> branches (r)',
+      'agency_cash_bankings.cash_account_id -> ledger_accounts (r)',
+      'agency_cash_bankings.created_by -> profiles (r)',
+      'agency_cash_bankings.journal_entry_id -> journal_entries (r)',
+      'agency_cash_bankings.reversal_entry_id -> journal_entries (r)',
+      'agency_cash_bankings.reversed_by -> profiles (r)',
+      'agency_cash_bankings.verified_by -> profiles (r)',
       'agency_cash_reconciliations.branch_id -> branches (r)',
       'agency_cash_reconciliations.cash_account_id -> ledger_accounts (r)',
       'agency_cash_reconciliations.created_by -> profiles (r)',

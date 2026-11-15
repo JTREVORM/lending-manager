@@ -790,6 +790,32 @@ describe('types stay in step with the schema', () => {
       'agency_commission_settlement_destination_guard',
       'agency_float_trade_revision_guard',
       'audit_agency_configuration_change',
+      // The Agency redesign. Two guards on `agency_cash_bankings`, both of
+      // the same kind as the four above. One asserts what a CHECK cannot,
+      // because it spans `ledger_accounts`: that a cash banking moves
+      // cash_at_hand to bank, both postable, both active and both at the
+      // recording branch. The other keeps the verification revision and
+      // refuses an edit to a banking that is no longer pending. Both fire as
+      // the table owner and are revoked from every exposed role, so neither
+      // is callable over the API.
+      'agency_cash_banking_guard',
+      'agency_cash_banking_revision_guard',
+      // The Agency redesign, client Rule 6. Two guards enforcing the roster —
+      // one on the transaction engine, one on float trades — and the helper
+      // that resolves who is staffing an account. All three fire or resolve as
+      // the table owner and are revoked from every exposed role, so none is
+      // reachable over the API.
+      'agency_transaction_operator_guard',
+      'agency_float_trade_operator_guard',
+      'agency_staffing_actor',
+      // And the two the guards read. Both were granted to `authenticated` in
+      // the first draft and are now revoked from every exposed role: the
+      // predicate answers "is this profile on that account's roster" for any
+      // pair, and the assertion's message names the account, so between them
+      // they would hand out the roster. The behavioural probe is what made
+      // that visible — as a borrower they returned rather than refused.
+      'agency_may_operate_account',
+      'assert_agency_account_operator',
       // Polytos business-policy update. Four guards, three numbering helpers
       // and two notification hooks, all called by the database.
       'membership_policy_terms_guard',

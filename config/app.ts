@@ -258,6 +258,80 @@ export const ROUTES = {
   agencyMoney: '/agency/money',
   agencyLines: '/agency/lines',
   /**
+   * The Agency redesign. Agent Banking as its own branch of the module.
+   *
+   * The client's confirmed requirements put Agent Banking and Mobile Money in
+   * two separate operational modules, and the schema has carried that
+   * distinction since Phase 4A in `agency_service_providers.category`. What
+   * was missing was anywhere to stand: a bank had no overview, no register of
+   * its agent accounts and no page for one account, so "Stanbic's agent
+   * accounts" was a question the application could not answer even though the
+   * rows were there.
+   *
+   * `/agency/banking` is that branch. It is **not** a second counter — a
+   * customer deposit or withdrawal is still recorded at `/agency/record`, on
+   * the Phase 4B engine — and it is not a second reporting pipeline. It is the
+   * place a bank, its agent accounts and one account's own position are read.
+   *
+   * The two deeper routes are dynamic on purpose: `[providerCode]` is a
+   * provider's own code and `[accountId]` an agent account's id, so a bank
+   * registered next year appears with no code change. Nothing here names
+   * STANBIC.
+   */
+  agencyBanking: '/agency/banking',
+  agencyBankingAccounts: '/agency/banking/accounts',
+  /**
+   * The Agency redesign. Two operations the module could not perform.
+   *
+   * `/agency/cash-banking` is client Rule 5: an agent banking collected
+   * physical cash into the company's own bank account, which is a movement
+   * from Cash at Hand to a bank account and is none of a customer deposit, a
+   * float top-up or revenue. It had no screen and no posting path before, and
+   * the three ways it might have been recorded instead each misclassified it.
+   *
+   * `/agency/transfers` is the register and the form for moving float and
+   * cash between authorised accounts — the Phase 4E float trades, which had a
+   * posting engine, a maker-checker control and a register component but only
+   * appeared inside one provider's Mobile Money screen. A transfer between a
+   * bank agent account and another is the same operation, so it gets a place
+   * of its own rather than a second implementation.
+   */
+  /**
+   * The Agency redesign. One agent account or agent line, in detail.
+   *
+   * Deliberately **not** two routes. A bank calls it an agent account and a
+   * Mobile Money network calls it a line, but in the database they are one
+   * row of `agency_provider_float_accounts` with one ledger account of its
+   * own, and the per-account figures a supervisor asks for — float, today's
+   * deposits and withdrawals, today's commission, what is pending, what is
+   * unreconciled — come from one view for both. Two detail pages would be two
+   * sets of figures that could disagree with each other and with the ledger.
+   *
+   * So the route is keyed on the account alone. Which module a reader came
+   * from is a fact about the page's own breadcrumb, not about the account.
+   */
+  agencyAccounts: '/agency/accounts',
+  agencyCashBanking: '/agency/cash-banking',
+  agencyTransfers: '/agency/transfers',
+  /**
+   * The Owner's decision 2, client Rule 6. Who may operate which agent
+   * account.
+   *
+   * One route for both modules, for the reason `agencyAccounts` gives: a bank
+   * agent account and a Mobile Money line are one row, so an employee's
+   * authorisations are one list rather than two that could disagree. It is
+   * also the screen that answers the question an audit actually asks — not
+   * "what may this person do", which is the role, but "who was authorised on
+   * this account on the day that transaction posted", which is the roster.
+   *
+   * Not under `/users`. A role is an employee's standing in the company and
+   * belongs with the employee; an account mandate is a fact about the account,
+   * is granted and withdrawn by whoever runs the agency business, and in a
+   * bank's own paperwork sits with the account rather than with the staff
+   * file.
+   */
+  agencyStaffing: '/agency/staffing',
+  /**
    * Phase 18. The trial balance.
    *
    * Under `/finance` rather than `/reports`, which is where a treasurer looks

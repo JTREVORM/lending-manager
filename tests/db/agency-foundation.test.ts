@@ -40,6 +40,8 @@ import {
   skipReason,
 } from '../helpers/db';
 
+import { staffAgentAccount } from '../helpers/agency';
+
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
   describe('agency foundation', () => {
@@ -148,12 +150,14 @@ describeDb('Phase 4A — agency banking foundation', () => {
         [mtnProviderId, headOffice],
       )
     ).id;
+    await staffAgentAccount(headTill);
     otherTill = (
       await queryOne<{ id: string }>(
         `select public.ensure_agency_float_account($1, $2) as id`,
         [mtnProviderId, otherBranch],
       )
     ).id;
+    await staffAgentAccount(otherTill);
     headTillAccount = (
       await queryOne<{ ledger_account_id: string }>(
         `select ledger_account_id from public.agency_provider_float_accounts where id = $1`,
@@ -187,6 +191,7 @@ describeDb('Phase 4A — agency banking foundation', () => {
         [liveProviderId, headOffice],
       )
     ).id;
+    await staffAgentAccount(liveTill);
   });
 
   afterAll(async () => {

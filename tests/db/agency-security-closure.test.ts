@@ -27,6 +27,8 @@ import {
   skipReason,
 } from '../helpers/db';
 
+import { staffAgentAccount } from '../helpers/agency';
+
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
   describe('agency security closure', () => {
@@ -124,6 +126,7 @@ describeDb('Phase 4B-S — security and financial control closure', () => {
         `select public.ensure_agency_float_account($1, $2) as id`,
         [pr.id, branch],
       );
+      await staffAgentAccount(till.id);
       tillId = till.id;
       floatCode = (
         await queryOne<{ code: string }>(
@@ -521,6 +524,9 @@ describeDb('Phase 4B-S — security and financial control closure', () => {
         `update public.profiles set branch_id = $1 where id = any($2::uuid[])`,
         [br, [raceSec.profileId, raceMgr.profileId]],
       );
+      // Staffed after the people exist. `service()` rosters whoever is on
+      // the books when the till is made, and these two are made afterwards.
+      await staffAgentAccount(svc2.tillId!);
 
       const w1 = await txAt(svc2, raceSec, raceMgr, 'submitted', 60_000);
       const w2 = await txAt(svc2, raceSec, raceMgr, 'submitted', 60_000);

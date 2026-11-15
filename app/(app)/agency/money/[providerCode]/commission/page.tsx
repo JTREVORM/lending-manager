@@ -47,7 +47,9 @@ export default async function AgencyMoneyCommissionPage({
   const context = await guardPermission(ROUTES.agencyMoney, 'agency:reports');
 
   const [lines, months] = await Promise.all([
-    getAgencyLineCommission({ providerCode }),
+    // Scoped to this module: the view carries bank agent accounts too, and
+    // since the Owner's decision 1 a bank can hold electronic float.
+    getAgencyLineCommission({ providerCode, categories: ['mobile_money'] }),
     getAgencyCommissionMonths({ providerCode, limit: 60 }),
   ]);
 
