@@ -263,6 +263,43 @@ Named so they are decisions rather than omissions.
 
 ---
 
+## 3A. The one release-ordering prerequisite
+
+Found by the independent review, and it is a sequencing step rather than a
+defect.
+
+**The roster ships empty, and that is deliberate.** `agency_account_staff`
+has no backfill: nothing infers a mandate from "this person recorded here
+once". Inferring one would grant authorisations nobody approved and quietly
+restore the permissive model your decision 2 replaced, and every mandate
+carries an `assigned_by` who would have to be invented.
+
+The consequence is a sequencing rule. Once these migrations are applied, an
+officer who is not on an account's roster cannot record against it — which is
+the control working. With an empty roster, that means **only an Owner or a
+Manager can record** until each account is staffed, because they pass by the
+oversight clause.
+
+**Today this affects nobody, and here is why.** Every provider in the
+catalogue carries `is_provisional = true`, and **no migration, function, RPC
+or server action anywhere sets it to false** — the review grepped for it. The
+live-readiness trigger refuses any posting past draft against a provisional
+provider. So no agency transaction can have been posted in production, there
+are no staffed counters, and nothing is locked out.
+
+It becomes live the moment you confirm a provider. So the release order is:
+
+1. Apply the migrations (additive; the previous application build runs against
+   the new schema unchanged).
+2. Deploy the new application.
+3. **Staff each agent account** — §2.6 of this document is that walk-through.
+4. Only then confirm a provider and open the counter.
+
+Taking step 4 before step 3 would leave cashiers refused at the counter with a
+correct message and no mandate to satisfy it.
+
+---
+
 ## 4. Evidence as at this document
 
 Every figure below is from a run on this branch. The gates are in CI and were
