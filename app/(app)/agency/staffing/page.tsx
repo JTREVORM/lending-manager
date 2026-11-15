@@ -286,6 +286,7 @@ export default async function AgencyStaffingPage({
                     <AssignOperatorForm
                       account={account}
                       candidates={candidatesFor(account)}
+                      staffUnavailable={!staff.ok}
                     />
                   </div>
 

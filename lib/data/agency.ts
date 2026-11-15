@@ -1426,7 +1426,28 @@ export async function getBankingStaffOptions(options?: {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('profiles')
-    .select('id, full_name, branch_id, user_roles!inner(role_key)')
+    /*
+      `user_roles!user_roles_profile_id_fkey` names the foreign key, because
+      `user_roles` reaches `profiles` twice: once as the profile the role
+      belongs to, and once as `granted_by`. Left unqualified, PostgREST
+      refuses the request (PGRST201) rather than guessing — "Could not embed
+      because more than one relationship was found" — and this reader returns
+      a failure.
+
+      `lib/data/users.ts` carries the same hint, with a note saying it exists
+      because the user directory would not load without it. This reader was
+      written later and without it, and the cost was exactly what that note
+      warns of: the authorisations screen could offer nobody to authorise, so
+      no mandate could be granted through the application at all, and the
+      cash banking form could not name who carried the cash. Both failed
+      quietly — the screens said what they could not do and kept rendering.
+
+      `!inner` as well as the hint: a profile with no staff role is not a
+      candidate, and an outer join would return it with an empty roles array.
+    */
+    .select(
+      'id, full_name, branch_id, user_roles!user_roles_profile_id_fkey!inner(role_key)',
+    )
     .eq('status', 'active')
     .neq('user_roles.role_key', 'client')
     .order('full_name', { ascending: true });

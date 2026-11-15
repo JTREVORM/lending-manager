@@ -59,9 +59,20 @@ function accountName(account: AgencyStaffedAccount): string {
 export function AssignOperatorForm({
   account,
   candidates,
+  staffUnavailable = false,
 }: {
   readonly account: AgencyStaffedAccount;
   readonly candidates: readonly BankingStaffOption[];
+  /**
+   * Whether the employee list could not be read at all.
+   *
+   * Separate from an empty `candidates`, because the two are different facts
+   * and the first version of this component stated the wrong one. With the
+   * employee list unreadable it told every card "everybody who could be
+   * authorised already is" — a confident claim about a list nobody had. The
+   * page carried a warning at the top and the card contradicted it.
+   */
+  readonly staffUnavailable?: boolean;
 }) {
   const [result, submit, pending] = useActionState<
     AgencyActionResult | undefined,
@@ -88,6 +99,16 @@ export function AssignOperatorForm({
       <p className="text-text-muted text-sm">
         This account is closed. Its roster is kept as it stood, and nobody new is
         authorised on an account that takes no transactions.
+      </p>
+    );
+  }
+
+  if (staffUnavailable) {
+    return (
+      <p className="text-text-muted text-sm">
+        The employee list could not be read, so there is nobody to offer. That is a read
+        that failed, not a statement about who may be authorised. The roster above is
+        current.
       </p>
     );
   }

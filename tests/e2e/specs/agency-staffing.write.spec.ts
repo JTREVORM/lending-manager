@@ -125,6 +125,25 @@ test.describe('the agent account roster, through the screen', () => {
       [tillName],
     );
 
+    /*
+      Give it an explicit label, and locate by that.
+
+      `ensure_agency_float_account` sets no label and the column defaults to
+      the empty string, so the name the screen shows for this account depends
+      on which branch of its naming rule is taken — the label if there is one,
+      else "Till <till name>". The first version of this test assumed the
+      second branch and asserted a name the page may never have rendered,
+      which is a test that can fail while the screen is right.
+
+      With a label set there is one answer, and it is the same answer in the
+      card heading and in the form's accessible name.
+    */
+    const label = `Roster line ${tillName}`;
+    await queryHarness(
+      `update public.agency_provider_float_accounts set label = $2 where id = $1`,
+      [created.id, label],
+    );
+
     const before = await queryHarnessOne<{ count: string }>(
       `select count(*)::text as count from public.agency_account_staff
         where float_account_id = $1 and status = 'active'`,
@@ -147,17 +166,25 @@ test.describe('the agent account roster, through the screen', () => {
           .first(),
       ).toBeVisible();
 
+      // Two assertions rather than one, because the first version of this
+      // test could not tell them apart: is the account missing from the
+      // register, or is it listed with no form? That distinction is the whole
+      // diagnosis, and a single locator for the form answered neither.
+      await expect(
+        owner.page.getByText(label, { exact: false }).first(),
+        'the account is not listed in the register at all',
+      ).toBeVisible();
+
       // The form for *this* account, named rather than taken positionally.
-      // The first version of this test took `.first()`, which is whichever
-      // account happens to sort first and had nothing to do with the one it
-      // had just created — and it also looked for a role the form did not
-      // have, because an unnamed `<form>` has no `form` role at all. Both
-      // showed up as "the select offers nobody", which was true of a locator
-      // that matched nothing.
-      const form = owner.page.getByRole('form', {
-        name: new RegExp(`Till ${tillName}`),
-      });
-      await expect(form).toBeVisible();
+      // An earlier version took `.first()` — whichever account sorts first,
+      // which had nothing to do with the one just created — and looked for a
+      // role the form did not have, because an unnamed `<form>` has no `form`
+      // role at all.
+      const form = owner.page.getByRole('form', { name: new RegExp(label) });
+      await expect(
+        form,
+        'the account is listed but offers no way to authorise anybody',
+      ).toBeVisible();
 
       // The select must offer somebody. It offered nobody in the first
       // version of this screen, because the filter was stricter than the
@@ -213,22 +240,20 @@ test.describe('the agent account roster, through the screen', () => {
       await owner.context.close();
     }
 
-    // Tidy up the line this test made, so the register stays readable for the
-    // screens the other suites assert on. Nothing was posted against it, so
-    // there is nothing financial to preserve. The roster rows go first: they
-    // reference the account with `on delete restrict`, which is right —
-    // a mandate whose account had vanished could not answer the question it
-    // exists for.
-    await queryHarness(
-      `delete from public.agency_account_staff where float_account_id = $1`,
-      [created.id],
-    );
-    await queryHarness(
-      `delete from public.agency_provider_float_accounts
-        where id = $1
-          and not exists (select 1 from public.agency_transactions
-                           where float_account_id = $1)`,
-      [created.id],
-    );
+    /*
+      No cleanup, deliberately.
+
+      Both tables this test writes to are append-only by design:
+      `agency_provider_float_accounts_no_delete` and
+      `agency_account_staff_no_delete` are `reject_mutation()` triggers, and
+      they are right — an agent account that could be deleted would take its
+      postings' meaning with it, and a mandate whose row had vanished could
+      not answer the question the roster exists for.
+
+      So this test leaves one line behind per run, exactly as `openLine` in the
+      float-trade suite already does. Writing a `delete` here looked tidy and
+      would have been refused by the database; it is removed rather than
+      worked around.
+    */
   });
 });
