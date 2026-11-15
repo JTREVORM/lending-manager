@@ -211,8 +211,24 @@ export default async function AgencyProvidersPage() {
                 <TableHead align="numeric" width="money">
                   Maximum one transaction
                 </TableHead>
+                {/*
+                  The header carries the qualification, not just the struck-out
+                  value below it.
+
+                  "Approval threshold" on its own is a claim that a threshold
+                  triggers an approval, and this one does not: decision L is
+                  unresolved and no posting path reads the column. The value is
+                  rendered struck through and an alert at the foot of the page
+                  explains it — but a strikethrough is a hint rather than a
+                  statement, a struck-out *number* reads as easily as "this
+                  figure is void" as "this control is off", and the alert is
+                  below the table a reader is scanning.
+
+                  A column about money that is not enforced says so in its own
+                  heading, where it cannot be missed or scrolled past.
+                */}
                 <TableHead align="numeric" width="money">
-                  Approval threshold
+                  Approval threshold (not enforced)
                 </TableHead>
                 <TableHead width="status">Active</TableHead>
               </tr>

@@ -187,14 +187,24 @@ const ROUTE_PERMISSIONS: readonly {
   // already requires to record one.
   { prefix: ROUTES.agencyCashBanking, permission: 'agency:write' },
   { prefix: ROUTES.agencyTransfers, permission: 'agency:float_trade' },
-  // The roster takes `agency:providers`, the Owner's configuration
-  // capability, and not the `agency:reports` that `/agency` would otherwise
-  // lend it by prefix. Granting a mandate is the act that decides who may
-  // move the business's money through an agent account; a Secretary who may
-  // read every agency report has no business granting one, and the database
-  // agrees — `agency_staffing_actor()` resolves `agency:providers` or
-  // `agency:settlements` and raises 42501 for anyone else.
-  { prefix: ROUTES.agencyStaffing, permission: 'agency:providers' },
+  // The roster takes `agency:settlements`, which is held by the Manager and
+  // the Owner and by nobody else — exactly the two `agency_staffing_actor()`
+  // admits.
+  //
+  // Not `agency:reports`, which `/agency` would otherwise lend it by prefix:
+  // granting a mandate decides who may move the business's money through an
+  // agent account, and a Secretary who may read every agency report has no
+  // business granting one. The database agrees and refuses her with 42501.
+  //
+  // And not `agency:providers` either, which is where this started. That is
+  // the Owner's alone, and it locked the Manager out of a screen the database
+  // intends them to use — `tests/db/agency-account-staff.test.ts` asserts "a
+  // Manager assigns too, which is the oversight the decision asked for", and
+  // the function's own refusal reads "An Owner or a Manager does that". An
+  // application stricter than the control it administers is still a defect:
+  // with the Owner away, nobody could authorise a cashier, which is the
+  // deadlock the oversight clause exists to prevent, arriving by another door.
+  { prefix: ROUTES.agencyStaffing, permission: 'agency:settlements' },
   { prefix: ROUTES.agencyBankingAccounts, permission: 'agency:reports' },
   { prefix: ROUTES.agencyAccounts, permission: 'agency:reports' },
   { prefix: ROUTES.agencyBanking, permission: 'agency:reports' },

@@ -1111,7 +1111,7 @@ export const NAV_MODULES: readonly NavModule[] = [
                 // one table are two sets of counts that can disagree.
                 href: `${ROUTES.agencyStaffing}?category=agency_banking`,
                 label: 'Account authorisations',
-                permission: 'agency:providers',
+                permission: 'agency:settlements',
                 phase: 4,
               },
             ],
@@ -1135,7 +1135,7 @@ export const NAV_MODULES: readonly NavModule[] = [
             // See the note there.
             href: `${ROUTES.agencyStaffing}?category=mobile_money`,
             label: 'Line authorisations',
-            permission: 'agency:providers',
+            permission: 'agency:settlements',
             phase: 4,
           },
         ],

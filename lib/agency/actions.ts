@@ -1399,7 +1399,10 @@ export async function assignAgencyAccountStaffAction(
   _previous: AgencyActionResult | undefined,
   formData: FormData,
 ): Promise<AgencyActionResult> {
-  const allowed = await authorize('agency:providers', 'agency.configure');
+  // `agency:settlements`, held by the Manager and the Owner, which is exactly
+  // who `agency_staffing_actor()` admits. It was `agency:providers` — the
+  // Owner's alone — and that was stricter than the database it fronts.
+  const allowed = await authorize('agency:settlements', 'agency.configure');
   if (!allowed.ok) return { ok: false, message: allowed.message };
 
   const parsed = parseSafely(agencyAccountStaffSchema, {
@@ -1444,7 +1447,9 @@ export async function revokeAgencyAccountStaffAction(
   _previous: AgencyActionResult | undefined,
   formData: FormData,
 ): Promise<AgencyActionResult> {
-  const allowed = await authorize('agency:providers', 'agency.configure');
+  // The same capability as granting: withdrawing a mandate is the same
+  // decision in the other direction.
+  const allowed = await authorize('agency:settlements', 'agency.configure');
   if (!allowed.ok) return { ok: false, message: allowed.message };
 
   const parsed = parseSafely(agencyAccountStaffRevocationSchema, {

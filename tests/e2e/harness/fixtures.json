@@ -7,27 +7,27 @@
   },
   "borrower": "+256772110008",
   "clients": {
-    "arrears": "78de3c25-e037-4a80-af69-a882d68a2d98",
-    "current": "76689a25-c939-4678-87ca-218167675aa0"
+    "arrears": "07bf1f87-60ce-454e-9c69-4d06da67ff62",
+    "current": "d29e821f-3f9f-4893-a093-ccbfe7f2eb8f"
   },
   "loans": {
-    "current": "77406624-20d9-4078-a8c7-0de85d7e9da4",
-    "arrears": "b7449787-9c3a-4303-8ec7-a1f1c1eefe6d",
-    "charged": "8e7ef7af-3c85-4bd0-913e-ee08e7216d0f",
-    "grace": "01240e40-0f81-4c00-bde9-e0b34cc773c4",
-    "pending": "67ad6140-1211-49e8-9508-2e303adbe5ae",
-    "draft": "f23320c8-8c98-4374-abb6-19b6b068c1a6",
-    "approvedNotDisbursed": "03dae1ac-53f6-462f-9f27-c421b390d570"
+    "current": "a608cc5b-c431-4224-9631-2875b264f0fb",
+    "arrears": "ccda88f7-bae4-428a-b12c-97e0735c044d",
+    "charged": "f61cf1a7-9311-4b69-b9e4-cf3e5089c835",
+    "grace": "4a509c89-6027-4fa0-9203-7f871e6b5aea",
+    "pending": "c379fba6-ab71-492c-94a0-6251c51ce3be",
+    "draft": "9bef8c58-7e43-4c4b-a64f-0d370ae5ed5a",
+    "approvedNotDisbursed": "e235b995-9107-49d0-b164-ea4f8a3370ba"
   },
   "memberships": {
-    "qualified": "0a9dc695-d381-403a-a24c-4500d7bccdee",
-    "gapped": "850f7309-2d2c-4051-b88a-9cafb0848a3d",
-    "saving": "fa10e9b0-e78d-441a-8bd1-a0b2e919572d",
-    "withdrawn": "092bf259-99a0-4119-8ce1-adac306ecc6b",
-    "pendingConsent": "bb4cecf4-f479-4e14-991e-cb26777f08c8",
-    "borrowing": "c046c6a9-4785-44f4-83fd-7010634c709a",
-    "applying": "1fe0939c-fd4c-4eae-808f-0b0251e699e6",
-    "approving": "23cb68fd-afe0-4ef2-848d-c49994bad31b"
+    "qualified": "3415841b-8f3c-43dc-a435-320a5cac1f13",
+    "gapped": "68d2c17a-4e74-4163-adad-6f5cc12d0b54",
+    "saving": "df180bf7-9230-4deb-8971-ca1b28dc63e4",
+    "withdrawn": "33ad2eac-1d02-45eb-bb0a-6581a73264bc",
+    "pendingConsent": "93b26c75-3e2e-4252-862f-e9c1a8fe99e5",
+    "borrowing": "746131f2-81de-4204-b5f4-2a3f9c34e1c7",
+    "applying": "52fc484d-dc41-4921-9753-a31b2a691e44",
+    "approving": "73797831-3790-4a9b-98b0-7aff2a779eb4"
   },
   "membershipNumbers": {
     "qualified": "MB260001",
@@ -35,27 +35,27 @@
     "borrowing": "MB260006"
   },
   "savings": {
-    "qualified": "17ea864c-2b8c-46da-9240-091e115a4d44",
-    "gapped": "db9dc2fe-91d8-49a7-8b9b-ce68e9e76b72",
-    "saving": "3836991b-7553-4c1c-b796-0478bb352d40",
-    "withdrawn": "5a8341d7-8024-42c5-a8f3-072c0168693d",
-    "borrowing": "c0fa34a8-31e4-4dbf-a91c-a4801c9693d1"
+    "qualified": "fe7e1a57-3a41-4929-a077-cf09cba2a2d1",
+    "gapped": "d98efbcb-b975-42e3-b81a-a16589087c1a",
+    "saving": "6b659563-d2f2-4a7d-8c28-dc7744b642fc",
+    "withdrawn": "c23ff446-f1fb-43b6-aff3-8d516abd57af",
+    "borrowing": "3332e964-cce0-4f0e-916b-5f02b4fd7fa9"
   },
   "savingsAccountNumbers": {
     "qualified": "SA260001",
     "withdrawn": "SA260004"
   },
   "memberClients": {
-    "borrowing": "4425f4e6-dadf-487f-9514-522a78e1ba5b",
-    "applying": "1161d209-d138-4e48-b91a-06d9335413ce",
-    "approving": "0d88e483-632f-403a-9944-fc81670f7e37"
+    "borrowing": "f5ce835a-06ad-4b87-bc8d-c5962c8a244d",
+    "applying": "c662d60c-4496-4de8-b803-cfc0e2d1313a",
+    "approving": "6a3d6baf-15f0-4860-a452-35fd3f4e62c4"
   },
   "memberLoans": {
-    "active": "0aab166e-608f-4f81-9d48-6aca7084a44c",
+    "active": "a0ad2df8-2ec1-49ce-93ce-ab54d5611b06",
     "activeNumber": "LN260015",
-    "draft": "a1dc670f-4fb0-4bc8-b846-75aa30ed96f5",
+    "draft": "afcecb7f-b4b0-4596-acdd-e667414937c3",
     "draftNumber": "LN260016",
-    "toApprove": "631acb1c-380a-4790-b218-f096c3d9c5e3",
+    "toApprove": "d25bd938-1a5a-4724-8699-3fa1665a664a",
     "toApproveNumber": "LN260017",
     "toApprovePrincipal": 250000,
     "principal": 300000,
@@ -71,8 +71,8 @@
     "maxTermMonths": 5
   },
   "withdrawals": {
-    "paid": "ec7f497a-8f33-4e24-9c5e-ed16af049e49",
-    "pending": "fa54a675-02d4-4801-a562-87af53072516"
+    "paid": "d0a9e2c3-18fd-42ad-83e6-4bf0619e9a7f",
+    "pending": "dc7e7c50-40f2-4b4e-88c8-d73a4e88a097"
   },
   "policy": {
     "version": "998.2",
@@ -81,30 +81,30 @@
     "activitiesClosed": 1
   },
   "beneficiaries": {
-    "verified": "37d6e7db-a186-4f78-bebc-20af3462cdfa",
-    "pending": "1731dcd3-2685-406f-98f3-e41bd01f9d23"
+    "verified": "89f77d5b-0ef7-42bd-b092-2133eab0c974",
+    "pending": "8a7ecc83-3abf-4ed1-a353-0fe47591b1cc"
   },
   "fines": {
-    "unpaid": "a7d7796d-4ae8-4d9d-84f5-790e5e1afa80"
+    "unpaid": "9c33089e-1e9d-4aa5-8f38-16821e6067e7"
   },
   "benefitClaims": {
-    "paid": "b268b610-3168-4e27-ac14-8cdb2fc09160",
+    "paid": "41f0c0c8-0e0e-493f-8750-e3f0aae3243e",
     "paidNumber": "BC2600001",
     "paidAmount": 20000,
-    "toApprove": "3bbe61b6-393e-4b2e-b0a1-6effd306b501",
+    "toApprove": "83aeb63e-2bef-4b21-ae93-ed2208f22ff1",
     "toApproveNumber": "BC2600002",
     "toApproveAmount": 13000,
-    "awaiting": "5602132b-88cd-4ae0-98e7-c1fc10f77135",
+    "awaiting": "6def7c4c-ce9a-4a9a-942c-ceac578660f2",
     "awaitingNumber": "BC2600003",
-    "held": "c9668488-778d-4cfc-98a2-d6c4d9b8b82b",
+    "held": "94b6a18b-a08a-440c-a86d-43d8a2b7633f",
     "heldNumber": "BC2600004"
   },
   "meetings": {
-    "held": "3a294c81-a9ed-407e-88df-2b64dcae08f6",
+    "held": "89eac9b9-1a99-4379-8d26-01a351997e41",
     "heldNumber": "MM260001",
-    "upcoming": "6a463752-fc14-4fff-b0d3-aa8de45e53cb",
+    "upcoming": "61ce3a98-7734-43f5-b921-06da29f4894c",
     "upcomingNumber": "MM260002",
-    "toWorkOn": "9b88f5da-93b2-4ce5-b289-267d1952f787",
+    "toWorkOn": "3bfacf3f-77e4-4eb8-bf6f-12a43d99f0c5",
     "toWorkOnNumber": "MM260003"
   },
   "benefitPolicy": {
@@ -115,32 +115,32 @@
   },
   "agency": {
     "providers": {
-      "mtn": "6078b803-5816-4380-b7e1-f8ec717dd00a",
-      "airtel": "0ce95ddc-4fe9-4093-9ae2-25ab7b8e72cb",
-      "nwsc": "89913e5a-0582-4c38-adc4-5cba3fafaa30"
+      "mtn": "90761619-6a57-4039-8275-63129e89d01e",
+      "airtel": "17f1118a-ed5f-4ee9-80d2-cea117ad6e43",
+      "nwsc": "5b340dfe-d115-4109-939c-ccab59012440"
     },
     "types": {
-      "mtnDeposit": "340233ea-e51a-49ed-b3ed-1189bfb9e382",
-      "mtnWithdrawal": "16a02dbe-4bd5-40d6-a49d-3df7d261f0c5",
-      "waterBill": "1e24f3de-0552-481f-9557-663d338b0627"
+      "mtnDeposit": "7fb424c2-bc03-4105-8338-d832dc4f2541",
+      "mtnWithdrawal": "7eaf8e04-1c34-4354-8b71-beb076314898",
+      "waterBill": "49813cd7-36a6-4d26-b0f1-1e5fec2aa6c9"
     },
     "tills": {
-      "mtn": "277c0e60-6013-4a8d-aa6f-8c8b7887517e",
-      "airtel": "4fa9e43d-6142-47d7-9128-4803241d4c7e"
+      "mtn": "92131d98-da58-4ae8-bb61-fb6575cf8301",
+      "airtel": "98d3bb70-d19d-421f-8d9e-d4848f0f9fa5"
     },
     "transactions": {
-      "awaitingVerification": "92d45908-5939-4936-bded-8920c3aa38b7",
-      "draft": "306c4a68-f855-4067-8a89-11b05825a83b",
-      "reversed": "b097b875-5ff4-40fd-8e8e-96c2c821c985",
-      "commissionException": "202ce33a-62b0-4e88-9390-2bf9e643f6c6"
+      "awaitingVerification": "c3765e2a-0374-45e3-80f6-32472a2ae089",
+      "draft": "42aad6ed-e46f-45bf-9be1-9d70e6238ee4",
+      "reversed": "4fd95637-6133-4eaf-b31c-29e1d8c7207b",
+      "commissionException": "2c0a3efd-50a9-4d10-9815-3fd6e8530d44"
     },
     "settlements": {
-      "commission": "58f00c9e-8bb9-42e3-8615-5733f434aea9",
-      "payable": "e983d141-bde3-4806-ae88-ddccebdbee51"
+      "commission": "5ceec7ce-a42f-4322-a28d-9c998e07ed42",
+      "payable": "4baaf46d-d639-46d0-8181-84068aaba774"
     },
     "reconciliations": {
-      "certifiedCashCount": "ead30e92-90e6-4ddd-8ce6-6edf54afbbb1",
-      "openFloatStatement": "4ca68c80-1e21-4a10-a4f8-a83e45c4ba72"
+      "certifiedCashCount": "1469c3be-2da8-4ce3-8176-c009b7a6574a",
+      "openFloatStatement": "12e25009-5eb3-461d-90b6-e08873d732cd"
     }
   }
 }

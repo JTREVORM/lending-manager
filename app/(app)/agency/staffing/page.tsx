@@ -83,6 +83,15 @@ function accountName(account: AgencyStaffedAccount): string {
  * staff must not be able to record or post financial transactions against
  * those accounts."
  *
+ * ## Who reaches this screen
+ *
+ * An Owner or a Manager, which is `agency:settlements` — exactly the two
+ * `agency_staffing_actor()` admits, and not the Secretary/Treasurer who works
+ * the counter. The route required `agency:providers` in an earlier draft,
+ * which is the Owner's alone and locked out a Manager the database intends to
+ * let in; with the Owner away, nobody could then authorise a cashier, which is
+ * the deadlock the oversight clause below exists to prevent.
+ *
  * ## Why this screen is not the control
  *
  * It administers a list. The control is two triggers, one on the agency
@@ -114,7 +123,12 @@ export default async function AgencyStaffingPage({
 }: {
   readonly searchParams: Promise<SearchParams>;
 }) {
-  await guardPermission(ROUTES.agencyStaffing, 'agency:providers');
+  // `agency:settlements`, matching the route map and the two server actions.
+  // This line said `agency:providers` while the other three said otherwise,
+  // which is how a Manager stayed locked out after the route was corrected:
+  // the capability is restated in four places and only three were changed.
+  // `tests/integration/agency-page-guards.test.ts` now compares them.
+  await guardPermission(ROUTES.agencyStaffing, 'agency:settlements');
 
   const category = readCategory(await searchParams);
 

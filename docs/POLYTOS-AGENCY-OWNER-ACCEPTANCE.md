@@ -113,7 +113,7 @@ see refused**, because in this module the refusals are most of the control.
 | 1.1 | Sign in as the Owner. Look at the sidebar. | **AGENCY** with three branches: Agent Banking, Mobile Money, Consolidated Agency Reports. No flat list. |
 | 1.2 | Expand Mobile Money. | MTN and Airtel, each from the database. Expand one: its agent line. |
 | 1.3 | Expand Agent Banking. | Banks & Agent Accounts, with the configured banks under it. A bank with no account shows an empty state rather than vanishing. |
-| 1.4 | Sign in as the Secretary/Treasurer. | The branches she may use, and no Owner-only entry (Register a bank, Account authorisations). |
+| 1.4 | Sign in as the Secretary/Treasurer. | The branches she may use, and neither supervisory entry: Register a bank (Owner only) nor Account authorisations (Owner or Manager). |
 
 ### 2.2 Agent Banking
 
@@ -168,7 +168,7 @@ see refused**, because in this module the refusals are most of the control.
 | 6.5 | As the Owner, withdraw Peter's authorisation with a reason. | The row is **kept**, marked withdrawn, with who withdrew it and why. |
 | 6.6 | As Peter, try to record again. | **Refused.** |
 | 6.7 | Authorise one officer on accounts at **two different providers**. Record against both. | Both accepted. One agent, several banks — the other half of Rule 6. |
-| 6.8 | As a Manager, try to authorise somebody. | **Refused.** Granting a mandate is the Owner's. |
+| 6.8 | As a **Secretary/Treasurer**, try to authorise somebody (type `/agency/staffing` into the address bar). | **Refused.** Granting a mandate decides who may move money through an agent account, and a cashier does not grant her own. A **Manager may** — that is the oversight your decision 2 asked for, and it is what stops a branch being unable to authorise a cashier while you are away. |
 
 ### 2.7 Commission (client Rule 3)
 
@@ -292,6 +292,14 @@ Two kinds of answer, and they are different:
 - **A refusal you did not expect** is usually the control working, and the
   message is written to say which one. Items 2.4.3, 2.5.4, 2.6.3, 2.6.6,
   2.6.8, 2.8.7, 2.9.5 and 2.9.6 are all *meant* to be refused.
+
+- **Who may grant a mandate**, because it is easy to assume it is you alone:
+  an **Owner or a Manager** may, and a Secretary/Treasurer may not. The
+  database decides this, not the screen — `agency_staffing_actor()` admits
+  `agency:providers` or `agency:settlements` and refuses anyone else with
+  42501. The review that produced this edition found the screen enforcing
+  Owner-only, stricter than the control it administers, which would have left
+  a branch unable to authorise a cashier whenever you were away.
 - **Anything else** — a figure that disagrees with another screen, a blank
   panel, a heading naming the wrong module — is a defect. Note the screen, the
   filter and the figure; the filter is part of the report.
