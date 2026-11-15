@@ -96,6 +96,22 @@ const PAGES = [
   '/agency/cash-banking',
   '/agency/banking',
   '/agency/transfers',
+  // The Owner's decisions. Both routes that gained a client component, for
+  // the same reason as every entry above: this round raised the bundle-total
+  // ceiling from 687 to 693, and a total raised without the new routes under
+  // a per-page budget would be a total raised on trust.
+  //
+  // `/agency/staffing` renders a card per agent account, each carrying an
+  // authorise form and a withdraw form per authorised person — so like
+  // `/agency/lines` it grows with the data rather than with the code, which
+  // is what makes it worth a budget.
+  //
+  // `/agency/providers` was a Server Component shipping nothing and now
+  // carries the float-model correction form, which is the one writer either
+  // provider table has. The route is otherwise unchanged, so this budget is
+  // measuring exactly that form.
+  '/agency/staffing',
+  '/agency/providers',
 ] as const;
 
 interface PageCost {

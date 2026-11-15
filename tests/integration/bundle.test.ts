@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 676 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 693 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -332,6 +332,39 @@ describeBundle('the browser bundle', () => {
     // 687 leaves five kilobytes over the measured 682, the same headroom
     // every raise before it left.
     //
+    // ## 687 → 693, for the Owner's decisions
+    //
+    // Measured on the same machine: 110 chunks and 688 KB, against the 108
+    // and 682 the raise above recorded. Six kilobytes and two chunks, for
+    // two new client components.
+    //
+    //   - **No new dependency.** `package.json`'s only change on this branch
+    //     is the `test:db` script gaining four project names. And the largest
+    //     chunk did not move again: 72 KB before and 72 KB after, against the
+    //     120 KB ceiling above, which is the assertion that actually catches
+    //     a dependency sneaking in.
+    //   - **Two chunks for two components, and nothing else.**
+    //     `components/agency/staffing-forms.tsx` carries the authorise and
+    //     withdraw forms for the Rule 6 roster;
+    //     `components/agency/float-model-form.tsx` carries the float-model
+    //     correction. Both are forms with controlled fields and a
+    //     consequence panel, which is the shape the 11 KB raise above was
+    //     argued on — these two together cost about half of that one.
+    //   - **The daily commission report added none.** It is the largest piece
+    //     of work in this round by line count and it ships no JavaScript:
+    //     `report-sections.tsx` grew by 249 lines of Server Component, the
+    //     new view is read on the server, and the export is a route handler.
+    //     Three kilobytes of the six are the two forms' shared field and
+    //     select code; the report contributed nothing measurable.
+    //   - **Both new client routes are under the per-page budget.**
+    //     `/agency/staffing` and `/agency/providers` joined the budgeted
+    //     pages in `tests/e2e/specs/performance.spec.ts`, against the same
+    //     unchanged ceilings. Raising a total without that would be raising
+    //     it on trust — the rule the last five raises set.
+    //
+    // 693 leaves five kilobytes over the measured 688, the same headroom as
+    // every raise before it.
+    //
     // It is not what a page costs. No page loads all of them: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -339,7 +372,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(687);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(693);
   });
 
   it('emits no source map for the browser', () => {
