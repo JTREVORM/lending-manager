@@ -27,8 +27,8 @@ POLYTOS module against its documented business rules.
 The arithmetic is right. The lending engine, the double-entry ledger, the
 savings module, the benefits module, the meetings module and both agency lines
 compute correct financial results and enforce their documented business
-decisions in the configuration that is actually installed. Of 468 inventoried
-rules, **453 pass on measured evidence**. Every cross-module reconciliation
+decisions in the configuration that is actually installed. Of 469 inventoried
+rules, **454 pass on measured evidence**. Every cross-module reconciliation
 identity recomputed from base tables — loans receivable, interest income,
 penalty income, the savings subledger, the schedules, the arrears, the
 penalties — reconciled **to the shilling, with zero difference**, and did so
@@ -108,7 +108,7 @@ Every figure in this report was produced from data this audit created.
 | Database functions | **397** |
 | PostgREST relations / relationships / functions exposed | 164 / 154 / 249 |
 | Application routes and server actions | audited by reading |
-| Business rules inventoried | **468** (§C) |
+| Business rules inventoried | **469** (§B) |
 
 ### The isolated environment, and how isolation was proved
 
@@ -154,19 +154,19 @@ Expected values were **not** taken from the implementation under test:
 
 ## B. Business-rule compliance matrix
 
-**468 rules**, inventoried from the migrations, the approved policy
+**469 rules**, inventoried from the migrations, the approved policy
 configuration and the documents listed in the scope section. The tally:
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| `PASS` | **453** | measured and correct |
+| `PASS` | **454** | measured and correct |
 | `BLOCKED` (correct) | **9** | the system correctly refuses because a business decision is outstanding — a pass for the software, an open item for the business |
 | `FAIL` | **3** | GAP-001: FIN-018, FIN-019 and the cash half of CONC-021. Known, documented, reproduced live, **not fixed** |
 | `FAIL → FIXED` | **2** | DEFECT-001 (GUAR-006) and its concurrent form (CONC-008); fixed on this branch, **not merged** |
 | `NOT TESTED` | **1** | the real-Auth rehearsal, which needs a container image unavailable here |
 
 Rules by module: LOAN 72 · AGENCY 43 · FIN 40 · PAY 39 · BEN 37 · SEC 31 ·
-SAV 30 · MLOAN 27 · POLICY 26 · REP 23 · GUAR 23 · CONC 22 · MEET 20 ·
+SAV 30 · MLOAN 27 · POLICY 26 · REP 24 · GUAR 23 · CONC 22 · MEET 20 ·
 MM 18 · CLIENT 17.
  **The latest implemented migrations and the
 approved policy configuration are treated as authoritative**; historical
