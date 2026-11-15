@@ -50,6 +50,9 @@ function randomDigits(count: number): string {
 
 /** One suite run's worth of unique names and references. */
 const run = Math.random().toString(36).slice(2, 7).toUpperCase();
+
+/** Distinguishes this run's second, third and fourth branches from each other. */
+let branchSequence = 0;
 let sequence = 0;
 function unique(prefix: string): string {
   sequence += 1;
@@ -928,7 +931,23 @@ async function secondBranch(): Promise<{
   // told to leave alone. So the fixture avoids provoking it rather than
   // papering over it, and the finding is written down where the Product Owner
   // will see it before a second branch opens.
-  const branchCode = `Z${run}${randomDigits(2)}`;
+  /*
+    A counter, not two random digits.
+
+    `run` is fixed for the module, so the only thing separating the three
+    callers of this fixture was `randomDigits(2)` — a hundred possible codes
+    for three draws, which is a birthday collision about three times in a
+    hundred runs. It duly collided in CI with
+    `duplicate key value violates unique constraint "branches_branch_code_key"`,
+    and the test that failed was about the operating branch rather than about
+    anything random.
+
+    A counter cannot collide with itself, and `run` still separates one run
+    from the next. `Z` + five characters + a digit or two stays inside
+    `branches_code_shape`, which allows 2 to 16 of `[A-Z0-9-]`.
+  */
+  branchSequence += 1;
+  const branchCode = `Z${run}${String(branchSequence)}`;
   const branch = await queryHarnessOne<{ id: string }>(
     `insert into public.branches
        (branch_code, name, location, district, status, opened_on, notes)
