@@ -119,22 +119,64 @@ async function openAccount(
     );
   }
   if (options.staff === true) {
+    /*
+      Exactly one cashier: the seeded counter Secretary, who is the oldest
+      active `secretary_treasurer` and the one the browser signs in as.
+
+      The first version staffed *every* active cashier, and the harness
+      database holds throwaway profiles other suites create — including two
+      different people both named "Isolated boundary secretary_treasurer".
+      That made the roster non-deterministic and the accessible names
+      ambiguous, so a by-name assertion could not tell two forms apart. A
+      fixture that depends on who else happens to be in the database is not a
+      fixture.
+    */
     await queryHarness(
       `insert into public.agency_account_staff
          (float_account_id, profile_id, assigned_by, notes)
-       select $1, pr.id,
-              (select p2.id from public.profiles p2
-                 join public.user_roles r2 on r2.profile_id = p2.id
-                where r2.role_key = 'owner_admin'
-                order by p2.created_at limit 1),
-              'acceptance mandate'
-         from public.profiles pr
-         join public.user_roles r on r.profile_id = pr.id
-        where r.role_key = 'secretary_treasurer' and pr.status = 'active'`,
+       values (
+         $1,
+         (select pr.id from public.profiles pr
+            join public.user_roles r on r.profile_id = pr.id
+           where r.role_key = 'secretary_treasurer' and pr.status = 'active'
+           order by pr.created_at limit 1),
+         (select p2.id from public.profiles p2
+            join public.user_roles r2 on r2.profile_id = p2.id
+           where r2.role_key = 'owner_admin'
+           order by p2.created_at limit 1),
+         'acceptance mandate')`,
       [created.id],
     );
   }
   return { id: created.id, label, ledger: ledger.code };
+}
+
+/**
+ * A fresh provisional bank on the cash-payable model, holding no float.
+ *
+ * Its own, rather than the seeded `DEMO_BANK`, because correcting a provider
+ * is a one-way move: once step 9.3 has run, the seeded bank is no longer
+ * provisional and no longer `cash_payable`, so a second run in the same
+ * database finds nothing to correct. CI builds the database fresh each time
+ * and would never have seen it — but a test that only passes on a virgin
+ * database is one nobody can re-run while working, and it would equally fail
+ * the moment anything else corrected that provider first.
+ */
+async function openProvisionalBank(): Promise<{ id: string; name: string }> {
+  const code = `ACC${String(Date.now() % 1000000)}${String(++sequence)}`;
+  const row = await queryHarnessOne<{ id: string; name: string }>(
+    `insert into public.agency_service_providers
+       (code, name, category, float_model, payable_account_id, income_account_id,
+        commission_model, commission_source, commission_rate_bps, commission_fixed,
+        is_provisional, is_active)
+     values ($1, $2, 'agency_banking', 'cash_payable',
+             (select id from public.ledger_accounts where code = '2220'),
+             (select id from public.ledger_accounts where code = '4520'),
+             'deferred', 'configured', 100, null, true, true)
+     returning id::text as id, name`,
+    [code, `Acceptance Bank ${code}`],
+  );
+  return row;
 }
 
 /** Fund a ledger account so a float or cash operation has something to move. */
@@ -1245,30 +1287,70 @@ test.describe('6. Account authorisations', () => {
   }) => {
     const fresh = await openAccount('DEMO_AIRTEL', { staff: true });
 
+    let withdrawnName = '';
+
     await signedIn(browser, 'owner', async (page) => {
       await page.goto('/agency/staffing');
+      await expectNoErrorBoundary(page);
+
+      /*
+        Scoped to *this* account's withdraw forms, and nothing else.
+
+        Three things were wrong here, and only one of them failed loudly. A
+        bare `new RegExp(label)` matched three forms once both the authorise
+        and the withdraw forms began carrying the account in their accessible
+        names — a strict-mode violation, which is the one CI caught. Worse,
+        the form being submitted was `/^Withdraw /` with `.first()` and no
+        account at all: it would have withdrawn a mandate from whichever
+        account sorted first and passed while testing the wrong one. And the
+        database assertion below read the most recently revoked row in the
+        whole table rather than this account's.
+
+        `openAccount({ staff: true })` puts every active cashier on the
+        roster, so this account has more than one withdraw form; taking the
+        first of *its own* is deliberate.
+      */
       const withdraw = page
-        .getByRole('form', { name: /^Withdraw / })
-        .filter({ has: page.getByLabel(/withdraw, because/i) })
+        .getByRole('form', { name: new RegExp(`^Withdraw .* from .*${fresh.label}`) })
         .first();
-      // Scope to this account's card by locating its own withdraw form.
-      const card = page.getByRole('form', { name: new RegExp(fresh.label) });
-      await expect(card).toBeVisible();
+      await expect(withdraw).toBeVisible();
+
+      const name = (await withdraw.getAttribute('aria-label')) ?? '';
+      withdrawnName = /^Withdraw (.*) from /.exec(name)?.[1] ?? '';
+      expect(withdrawnName, `could not read the operator's name from ${name}`).not.toBe(
+        '',
+      );
+
       await withdraw.getByLabel(/withdraw, because/i).fill('acceptance walk-through');
       await withdraw.getByRole('button', { name: /^withdraw$/i }).click();
-      await expect(page.getByText(/Withdrawn \(/).first()).toBeVisible();
+
+      // That person's form is gone from this account, because they are no
+      // longer on its roster. The fixture staffs exactly one cashier, so the
+      // account's withdraw forms go from one to none.
+      await expect(
+        page.getByRole('form', {
+          name: new RegExp(`^Withdraw ${withdrawnName} from .*${fresh.label}`),
+        }),
+      ).toHaveCount(0);
     });
 
     const row = await queryHarnessOne<{
       status: string;
       reason: string | null;
       by: string | null;
+      who: string;
     }>(
-      `select s.status, s.revoked_reason as reason, p.full_name as by
+      // This account's withdrawn row, not the table's most recent one.
+      `select s.status, s.revoked_reason as reason,
+              revoker.full_name as by, held.full_name as who
          from public.agency_account_staff s
-         left join public.profiles p on p.id = s.revoked_by
-        where s.status = 'revoked'
-        order by s.revoked_at desc nulls last limit 1`,
+         join public.profiles held on held.id = s.profile_id
+         left join public.profiles revoker on revoker.id = s.revoked_by
+        where s.float_account_id = $1 and s.status = 'revoked'`,
+      [fresh.id],
+    );
+    expect(row.who, 'a different operator was withdrawn than the screen showed').toBe(
+      withdrawnName,
     );
     // Kept, not deleted: a transaction posted while the mandate stood has to
     // remain readable against the roster as it was.
@@ -1767,12 +1849,7 @@ test.describe('9. The float-model correction', () => {
   test('[9.3] correcting a provisional bank to electronic float clears its payable', async ({
     browser,
   }) => {
-    const bank = await queryHarnessOne<{ id: string; name: string }>(
-      `select id::text as id, name from public.agency_service_providers
-        where is_provisional and float_model = 'cash_payable'
-          and category = 'agency_banking'
-        order by code limit 1`,
-    );
+    const bank = await openProvisionalBank();
 
     await signedIn(browser, 'owner', async (page) => {
       await page.goto('/agency/providers');
