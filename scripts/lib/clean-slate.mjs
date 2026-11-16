@@ -187,6 +187,16 @@ export const TRUNCATE_TABLES = [
   'account_reconciliations',
   'expenses',
   'other_income',
+  // Decision A. The two registers that restrict what the company may spend:
+  // which counter receipts have been counted, and which bank deposits have
+  // cleared. Both reference `journal_entries`, so leaving either out would
+  // make the books untruncatable rather than merely leave stale rows —
+  // PostgreSQL refuses a TRUNCATE while an unlisted table references the
+  // target. Neither carries a statement-level TRUNCATE guard; their
+  // append-only protection is against row DELETE, which TRUNCATE does not
+  // fire.
+  'cash_receipt_confirmations',
+  'bank_deposits',
   // --- membership, savings, benefits, meetings ---------------------------
   'memberships',
   'membership_status_history',
@@ -322,6 +332,9 @@ export const RESET_SEQUENCES = [
   'other_income',
   'transfer',
   'reconciliation',
+  // Decision A. `bank_deposits` is truncated above, so its counter resets
+  // with the rest: the client's first banking is BD2600001.
+  'bank_deposit',
   // membership, savings, benefits, meetings
   'membership',
   'membership_fee',

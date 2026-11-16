@@ -173,3 +173,31 @@ export async function closePool(): Promise<void> {
   }
   testBusinessClock = undefined;
 }
+
+/**
+ * Count the money a fixture has just recorded as received.
+ *
+ * Decision A (migration `20261120000100`) restricts a cash receipt until a
+ * second officer confirms it: the borrower's arrears fall immediately, and
+ * the company may not spend the money until somebody has looked in the
+ * drawer. That is the rule working, and it means a fixture that records a
+ * receipt and then expects the business to spend it has to do what the
+ * business does in between.
+ *
+ * Called from the receipt fixtures rather than from each test, so a test
+ * whose subject is something else — a benefit payment, a savings withdrawal,
+ * a reconciliation — reads the way it always did. The tests whose subject
+ * *is* the confirmation rule confirm explicitly and do not use this.
+ */
+export async function confirmRecordedReceipts(): Promise<void> {
+  if (!hasDatabase) return;
+
+  await query(
+    `update public.cash_receipt_confirmations
+        set state = 'confirmed',
+            confirmed_by_label = 'Fixture count',
+            confirmed_at = now(),
+            confirmation_note = 'Counted by the fixture that recorded it'
+      where state = 'pending'`,
+  );
+}

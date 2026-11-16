@@ -161,9 +161,17 @@ configuration and the documents listed in the scope section. The tally:
 | --- | ---: | --- |
 | `PASS` | **454** | measured and correct |
 | `BLOCKED` (correct) | **9** | the system correctly refuses because a business decision is outstanding — a pass for the software, an open item for the business |
-| `FAIL` | **3** | GAP-001: FIN-018, FIN-019 and the cash half of CONC-021. Known, documented, reproduced live, **not fixed** |
-| `FAIL → FIXED` | **2** | DEFECT-001 (GUAR-006) and its concurrent form (CONC-008); fixed on this branch, **not merged** |
+| `FAIL` | **0** | — |
+| `FAIL → FIXED` | **5** | DEFECT-001 (GUAR-006) and its concurrent form (CONC-008); and GAP-001 (FIN-018, FIN-019, the cash half of CONC-021). All five fixed on this branch, **not merged** |
 | `NOT TESTED` | **1** | the real-Auth rehearsal, which needs a container image unavailable here |
+
+The five counts sum to 469. They were re-derived from this document's own
+tables after the Decision A work, by parsing every rule row and tallying its
+status column: 470 rows carrying a `MODULE-NNN` identifier, of which one is
+`DEFECT-001` in the defect register in §D rather than a rule in this matrix,
+leaving 469 rules with no duplicate identifier. The per-module figures below
+sum to the same 469. This is the validated inventory the pull request
+descriptions were corrected against.
 
 Rules by module: LOAN 72 · AGENCY 43 · FIN 40 · PAY 39 · BEN 37 · SEC 31 ·
 SAV 30 · MLOAN 27 · POLICY 26 · REP 24 · GUAR 23 · CONC 22 · MEET 20 ·
@@ -180,11 +188,11 @@ rules in force.
 | `IND` | **Independently verified by this audit** — recomputed from the business rule or from base tables, never from the code under test. The measurement is given in §C. |
 | `SCHEMA` | The constraint, trigger, index or function was read in the **live migrated database** (`pg_constraint`, `pg_indexes`, `pg_get_functiondef`) and matches the rule. |
 | `DB:<file>` | That specific file in `tests/db/` — run by this audit against a real PostgreSQL cluster, passed, **and** its coverage of this rule confirmed by reading the test itself or by the repository's own documentation citing it. |
-| `DB-SUITE` | Covered by the repository's database suite as a whole — **103 files, 2,541 tests, run in full by this audit against a real PostgreSQL cluster, all passing** — without this audit confirming which individual file asserts this particular rule. Weaker than `DB:<file>`, and marked differently so the distinction is visible. |
-| `CERT` | One of the 38 identities in `npm run certify:financial`, run by this audit. |
+| `DB-SUITE` | Covered by the repository's database suite as a whole — **104 files, 2,567 tests, run in full by this audit against a real PostgreSQL cluster, all passing** — without this audit confirming which individual file asserts this particular rule. Weaker than `DB:<file>`, and marked differently so the distinction is visible. |
+| `CERT` | One of the 41 identities in `npm run certify:financial`, run by this audit — 38 as inherited, plus the three cash-sufficiency identities Decision A added. |
 | `SEC` | `npm run check:security` — run by this audit, "no unreviewed privileged exposure". |
-| `UNIT` | The repository's unit and integration suite — **90 files, 2,764 tests, run in full by this audit, all passing**. |
-| `MONEY` | `npm run audit:money` — **273 financial files scanned, no float hazard found**, five money engines verified to reach only integer helpers, and the scanner itself verified against a positive control. |
+| `UNIT` | The repository's unit and integration suite — **90 files, 2,770 tests, run in full by this audit, all passing**. |
+| `MONEY` | `npm run audit:money` — **277 financial files scanned, no float hazard found**, five money engines verified to reach only integer helpers, and the scanner itself verified against a positive control. |
 | `PW` | The Playwright browser suite, run by this audit against the production build on the clean rebuilt stack. |
 
 `PASS` means measured and correct. `BLOCKED` means the system correctly
@@ -574,11 +582,11 @@ The three policy versions in the certified database, measured directly:
 | FIN-015 | One cash-at-hand, one MTN and one Airtel float per branch; several banks allowed | partial unique index | present | SCHEMA | PASS |
 | FIN-016 | `ledger:post` is Owner only | as measured | `owner_admin` only | IND | PASS |
 | FIN-017 | Cash balances equal the authoritative ledger balances | equal | measured: `branch_cash_position` = raw `journal_lines` per account, exactly | IND-4 | PASS |
-| FIN-018 | No cash account is negative | none | **FAILS in general.** 0 negative on the seeded book, but **−345,000 reproduced live** on a branch till when a loan was disbursed from an unfunded branch. See GAP-001 | IND-4, IND-16 | **FAIL** |
-| FIN-019 | Overdraft refused unless explicitly permitted | refused on every money-out path | **Partially enforced.** `assert_cash_available` is correctly written — it reads `allow_negative_cash` itself, so no caller can opt out — but it is **not reached from loan disbursement, savings-withdrawal payout or benefit payment**. See GAP-001 | SCHEMA, IND-16 | **FAIL** |
+| FIN-018 | No cash account is negative | none | **FAIL → FIXED.** −345,000 was reproduced live; migration `20261120000400` now refuses at commit any line that would leave a till, wallet, bank or transit account below zero available. See GAP-001 | IND-4, IND-16, DB:cash-sufficiency | **FAIL → FIXED** |
+| FIN-019 | Overdraft refused on every money-out path, with no override | refused everywhere | **FAIL → FIXED.** All three unprotected paths now check available funds by name, and a deferred constraint trigger binds every caller including `service_role`. `allow_negative_cash` is read by nothing and its column comment says `INERT` | SCHEMA, IND-16, DB:cash-sufficiency | **FAIL → FIXED** |
 | FIN-020 | The overdraft check runs at posting, not submission | at posting | documented and implemented | SCHEMA | PASS |
 | FIN-021 | Trial balance foots | debit total = credit total | `trial_balance` columns foot to the same figure | CERT | PASS |
-| FIN-022 | No unexplained difference remains in the trial balance | none | **38 identities: 36 pass, 2 explained as composition differences, 0 vacuous, 0 fail** | CERT | PASS |
+| FIN-022 | No unexplained difference remains in the trial balance | none | **41 identities: 39 pass, 2 explained as composition differences, 0 vacuous, 0 fail** | CERT | PASS |
 | FIN-023 | Interest and penalty income are refused to `record_other_income` | refused | 4100 and 4200 rejected by name | SCHEMA | PASS |
 | FIN-024 | An expense category *is* a ledger account | no second table | no `expense_categories` table exists | SCHEMA | PASS |
 | FIN-025 | Transfers post Dr destination / Cr source | as documented | `account_transfers` | SCHEMA, DB-SUITE | PASS |
@@ -758,7 +766,7 @@ The three policy versions in the certified database, measured directly:
 | CONC-018 | Authorisation withdrawn while a transaction is submitted | refused at posting | operator re-checked at posting | DB-SUITE | PASS |
 | CONC-019 | Simultaneous post and reverse of one record | one wins | revision guards | DB-SUITE | PASS |
 | CONC-020 | No partially committed journal, ever | atomic | the deferred balance trigger evaluates the whole entry at commit | SCHEMA, IND-4 | PASS |
-| CONC-021 | No unauthorised negative balance under concurrency | none | 0 negative savings balances and 0 negative loan outstandings throughout. **Cash accounts are the exception — not through a race, but because three money-out paths never check sufficiency at all. See GAP-001** | IND-4, IND-8, IND-16, CERT | **FAIL** (cash) / PASS (savings, loans) |
+| CONC-021 | No unauthorised negative balance under concurrency | none | **FAIL → FIXED** for cash; savings and loan outstandings were never affected. Two concurrent disbursements against one till now resolve to exactly one, under the account lock `post_journal` already took | IND-4, IND-8, IND-16, CERT, DB:cash-sufficiency | **FAIL → FIXED** |
 | CONC-022 | Frozen agreements cannot be mutated under any race | immutable | append-only snapshots bind `service_role` | SCHEMA, DB:loan-snapshots | PASS |
 
 ---
@@ -1266,7 +1274,7 @@ re-running:
 | `tests/db/guarantor-concentration.test.ts` | 5 passed |
 | `tests/db/loan-concurrency.test.ts` (which the first attempt broke) | 13 passed |
 | `tests/db/security.test.ts` SECURITY DEFINER inventory | passed, after the new trigger function was added to the stated inventory |
-| **Full `npm run test:db`** | **2,541 passed, 0 failed** |
+| **Full `npm run test:db`** | **2,567 passed, 0 failed** |
 | `npm run typecheck` / `lint` / `format:check` | passed |
 | Migration applies to an empty database in order | yes — all 225 migrations |
 
@@ -1285,7 +1293,7 @@ re-running:
 | --- | --- |
 | **Severity** | **High.** A ledger that states a negative till is a false statement about where the company's money is, and the till is what a cash count is reconciled against. |
 | **Rules affected** | FIN-018, FIN-019, CONC-021 (cash) |
-| **Status** | **Known, documented and analysed before this audit** — see `docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` §1.2 and §1.4. **Reproduced live here**, which is this audit's contribution. **Not fixed**, because the remedy is the subject of an open business decision ("Decision A"), not a bug fix. |
+| **Status** | **FIXED on this branch, 2026-11-16.** Known, documented and analysed before this audit (`docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` §1.2, §1.4); **reproduced live here**; and closed by the Owner's decision of 2026-11-16 in migrations `20261120000100`–`20261120000400`. See `docs/POLYTOS-DECISION-A-DELIVERY.md`. **Not merged.** |
 
 #### Reproduced, live, in the certified book
 
@@ -1366,9 +1374,10 @@ minus three hundred and forty-five thousand shillings is perfectly consistent.
 Adding that one identity would have surfaced this on the first CI run after
 the first unfunded disbursement. It is recommended in §J as **H7**.
 
-#### Why this audit did not fix it
+#### Why the audit itself did not fix it, and what changed
 
-Three reasons, in order of weight:
+At the time of the audit, three reasons, in order of weight — all of which
+the Owner's decision of the following day resolved:
 
 1. **The remedy is a business decision, not a code change.** Refusing a
    disbursement for want of till cash changes what the business can do at the
@@ -1386,8 +1395,30 @@ Three reasons, in order of weight:
    funding-account question would produce a control that refuses the right
    transactions for the wrong reason and cannot be configured per branch.
 
-What this audit adds is the live reproduction: the gap is not theoretical, and
-it occurred during ordinary use of the application in a single test run.
+What this audit added was the live reproduction: the gap was not theoretical,
+and it occurred during ordinary use of the application in a single test run.
+
+#### How it was closed
+
+The Owner ruled on it the next day — **APPROVED: NO UNFUNDED PAYOUTS**, with
+eleven instructions — and it is implemented on this branch. In summary:
+
+| | |
+| --- | --- |
+| **The model** | `available = booked − receipts nobody has confirmed`, derived per account, never cached, never aggregated across accounts or branches |
+| **The three paths** | `disburse_loan`, `post_savings_withdrawal` and `post_benefit_payment` now call `assert_cash_funds_available` on the one account money leaves |
+| **The backstop** | `journal_lines_assert_funded`, a **deferred** constraint trigger: at commit, any line taking money out of a till, wallet, bank or transit account must leave it at or above zero available. Binds `service_role`, a hand-written INSERT, and any path written later |
+| **The override** | removed. `allow_negative_cash` is read by nothing; its column comment says `INERT`; a test turns it on and still gets a refusal |
+| **Cash received** | restricted until a different officer confirms it — the borrower's figures are untouched, only the company's spending is |
+| **Cash banked** | `1050 Cash in Transit`, spendable by nobody, until a different officer verifies the bank's own reference and value date |
+| **The missing identity** | added. The certification harness now asserts that no cash account holds a negative available balance, and distinguishes a historical exception from a newly prohibited payout |
+
+The reproduction is now a regression test
+(`tests/db/cash-sufficiency.test.ts`): the same unfunded 400,000 payout is
+refused, and the assertion is that **no entry, no line, no schedule and no
+status change survives**.
+
+Full detail: `docs/POLYTOS-DECISION-A-DELIVERY.md`.
 
 ### Observations that are not defects
 
@@ -1478,7 +1509,7 @@ than the database rule it mirrors, and no PostgREST embed is ambiguous.
 
 Expected refusals were tested as carefully as successful actions: the agency
 acceptance suite alone carries explicit `REFUSAL —` cases, and the database
-suite's refusal assertions are what most of its 2,541 tests measure.
+suite's refusal assertions are what most of its 2,567 tests measure.
 
 ### Cross-branch access
 
@@ -1589,12 +1620,12 @@ run in CI: this is a local execution and is reported as one.
 | `npm run typecheck` | **PASS** (exit 0) |
 | `npm run lint` | **PASS** (exit 0) |
 | `npm run format:check` | **PASS** (exit 0) |
-| `npm run audit:money` | **PASS** — 273 financial files scanned, no hazard; five engines reach only integer money helpers; 6 acknowledged exemptions each verified present; scanner verified against a positive control |
-| `npm run test:run` (unit + integration) | **PASS** — **90 files, 2,764 tests, 2,764 passed, 0 failed, 0 skipped** |
-| `npm run test:db` (17 projects) | **PASS** — **103 files, 2,541 tests, 2,541 passed, 0 failed** |
+| `npm run audit:money` | **PASS** — 277 financial files scanned, no hazard; five engines reach only integer money helpers; 6 acknowledged exemptions each verified present; scanner verified against a positive control |
+| `npm run test:run` (unit + integration) | **PASS** — **90 files, 2,770 tests, 2,770 passed, 0 failed, 0 skipped** |
+| `npm run test:db` (17 projects) | **PASS** — **104 files, 2,567 tests, 2,567 passed, 0 failed** |
 | `npm run build` | **PASS** — performed as part of `npm run e2e:up`, twice |
 | `npm run check:security` | **PASS** — "No unreviewed privileged exposure" |
-| `npm run certify:financial` | **PASS** — **38 identities: 36 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
+| `npm run certify:financial` | **PASS** — **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
 | `node scripts/verify-membership-upgrade.mjs` | **PASS** — 99 existing migrations, a seeded book, then 126 new ones; **all 28 financial figures identical** |
 | `node scripts/verify-policy-upgrade.mjs` | **PASS** — 26 existing financial/identity tables verified; all records, balances and historical approvals preserved; ledger debits = credits = 17,779,483 |
 | `npx playwright test` | **PASS** — **1,151 tests: 1,098 passed, 0 failed, 53 skipped**, in 22.5 minutes, single worker, no retries, against the production build |
@@ -1607,7 +1638,7 @@ real PostgreSQL cluster, with the database rebuilt from every migration first:
 
 | Project | Tests |
 | --- | ---: |
-| `db` (86 files) | **1,972** |
+| `db` (87 files) | **1,998** |
 | `agency` | 66 |
 | `agency-engine` | 78 |
 | `agency-security` | 21 |
@@ -1623,14 +1654,14 @@ real PostgreSQL cluster, with the database rebuilt from every migration first:
 | `seed-member-loans` | 24 |
 | `seed-benefits` | 25 |
 | `clean-slate` | 37 |
-| **Total** | **2,541** |
+| **Total** | **2,567** |
 
 0 failed, 0 skipped.
 
 ### H.4 Browser end-to-end
 
 `npx playwright test --trace off`, run against the **clean rebuilt stack**
-(database dropped and re-migrated from all 225 migrations, re-seeded, Next.js
+(database dropped and re-migrated from all 229 migrations, re-seeded, Next.js
 rebuilt) so that the result measures one consistent state:
 
 | | |
@@ -1694,7 +1725,7 @@ Broken out, the 22 checks of the second run and what each returned:
 | No duplicate journal per source event | **0 duplicates** |
 | No savings journal touches an income account | **0** |
 | `branch_cash_position` agrees with raw journal lines | agrees exactly |
-| **No cash account is negative** | **1 negative — FAILS. See GAP-001** |
+| **No cash account is negative** | **1 negative — FAILED when measured. See GAP-001.** Re-measured after the Decision A fix on a book rebuilt from all 229 migrations: **0 negative**, and the identity is now a permanent gate in `npm run certify:financial` (§C, CASH SUFFICIENCY) rather than a one-off measurement |
 | `current_due` = arrears + due today | 13 loans, **0 failures** |
 | `current_due` = scheduled-to-date − paid-to-date | 13 loans, **0 failures** |
 | `total_outstanding` = contractual + unpaid penalty | 13 loans, **0 failures** |
@@ -1819,8 +1850,8 @@ Ranked as the brief asks.
 
 | # | Item |
 | --- | --- |
-| C0 | **Decide "Decision A" and close GAP-001.** Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists, and a branch till reached **−345,000** during this audit's own run with `allow_negative_cash = false`. The analysis, the implementation plan, the accountant review package and the technical acceptance checklist are already in `docs/`. This is ranked first because it is the one finding that makes a *reported financial position* untrue, and because a cash count is reconciled against the very figure that can go negative. It is a business decision — refusing a disbursement for want of till cash changes what happens at the counter — so it needs the Owner, not a patch. |
-| C1 | **Review and decide on DEFECT-001's fix** (migration `20261119000100`). The guarantor concentration ceiling the business configured does not currently bind: one guarantor can stand behind any number of active loans. The fix makes it bind at disbursement. It changes what can be disbursed, so it needs the Owner's decision — either accept the fix, or decide that the ceiling is advisory and change the column's documented meaning to match. **Leaving it as it is means the configured figure means nothing, which is the worst of the three outcomes.** |
+| ~~C0~~ | **DONE, 2026-11-16.** The Owner decided: no unfunded payouts, approved with eleven instructions, implemented on this branch in migrations `20261120000100`–`20261120000400` and recorded in `docs/POLYTOS-DECISION-A-DELIVERY.md`. The original item read: **Decide "Decision A" and close GAP-001.** Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists, and a branch till reached **−345,000** during this audit's own run with `allow_negative_cash = false`. The analysis, the implementation plan, the accountant review package and the technical acceptance checklist are already in `docs/`. This is ranked first because it is the one finding that makes a *reported financial position* untrue, and because a cash count is reconciled against the very figure that can go negative. It is a business decision — refusing a disbursement for want of till cash changes what happens at the counter — so it needs the Owner, not a patch. |
+| ~~C1~~ | **DECIDED, 2026-11-16.** The Owner approved the guarantor ceiling as a mandatory control, enforced on the transition to active with correct locking. The fix in PR #35 stands, subject to code review and CI. The original item read: **Review and decide on DEFECT-001's fix** (migration `20261119000100`). The guarantor concentration ceiling the business configured does not currently bind: one guarantor can stand behind any number of active loans. The fix makes it bind at disbursement. It changes what can be disbursed, so it needs the Owner's decision — either accept the fix, or decide that the ceiling is advisory and change the column's documented meaning to match. **Leaving it as it is means the configured figure means nothing, which is the worst of the three outcomes.** |
 | C2 | **Approve a membership policy version, or accept that the membership programme cannot operate.** Both 1.0 and 2.0 are drafts. Nothing in the membership, savings, member-lending, benefits or meeting-fine modules can run until one is approved with an authorisation reference. |
 
 ### High — resolve before the affected service accepts financial transactions
@@ -1833,7 +1864,7 @@ Ranked as the brief asks.
 | H4 | **Decide the calendar-monthly collection anchor** before offering member loans of three to five months. The cadence is inactive and the anchor NULL; approving such a loan is refused with `cadence_anchor_undecided`. |
 | H5 | **Activate the Member Loans product last, not first.** Its interest basis and method come from the member's own policy version; activation before a policy is approved would create a product that cannot price a loan. |
 | H6 | **Run the real-Auth release rehearsal** (`real-auth.release.spec.ts`) in CI, where the GoTrue image is available. It was NOT TESTED in this environment, and it is the one component the harness substitutes. |
-| H7 | **Add a "no cash account holds a negative balance" identity to `scripts/certify-financial-reconciliation.mjs`.** The harness already has exactly this identity for loan outstandings and for savings balances; cash is the one of the three that lacks it, and its three cash identities test agreement with the general ledger rather than plausibility — so they pass happily on a till of −345,000. One identity would have turned GAP-001 from a documented analysis into a failing build. This is cheap, it is independent of the Decision A outcome, and it should be done first so the decision can be verified when it lands. |
+| ~~H7~~ | **DONE.** The identity is in `scripts/certify-financial-reconciliation.mjs` as the `cash sufficiency` group, and it distinguishes a balance that went negative before the rule began to bind from one created after. The original item read: **Add a "no cash account holds a negative balance" identity to `scripts/certify-financial-reconciliation.mjs`.** The harness already has exactly this identity for loan outstandings and for savings balances; cash is the one of the three that lacks it, and its three cash identities test agreement with the general ledger rather than plausibility — so they pass happily on a till of −345,000. One identity would have turned GAP-001 from a documented analysis into a failing build. This is cheap, it is independent of the Decision A outcome, and it should be done first so the decision can be verified when it lands. |
 
 ### Medium — resolve before business launch
 

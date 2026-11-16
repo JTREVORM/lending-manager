@@ -5807,15 +5807,197 @@ export type Database = {
         };
         Relationships: [];
       };
-    };
 
-    /**
-     * Phase 6. Balances are derived rather than stored, so they live in views.
-     *
-     * Every one sets `security_invoker = true`, so reading a view applies the
-     * caller's Row Level Security on the underlying tables. `Row` only: a view
-     * here is read-only to every session.
-     */
+      /**
+       * Phase 6. Balances are derived rather than stored, so they live in views.
+       *
+       * Every one sets `security_invoker = true`, so reading a view applies the
+       * caller's Row Level Security on the underlying tables. `Row` only: a view
+       * here is read-only to every session.
+       */
+      /**
+       * Decision A. The restriction on money received physically or by wallet:
+       * one row per cash line of a receipt journal, pending until a different
+       * authorised officer confirms it. `available = booked - pending`.
+       */
+      cash_receipt_confirmations: {
+        Row: {
+          id: string;
+          journal_entry_id: string;
+          account_id: string;
+          branch_id: string;
+          amount: number;
+          source_type: string;
+          state: string;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          confirmed_by: string | null;
+          confirmed_by_label: string | null;
+          confirmed_at: string | null;
+          confirmation_note: string | null;
+          void_reason: string | null;
+          voided_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          journal_entry_id: string;
+          account_id: string;
+          branch_id: string;
+          amount: number;
+          source_type: string;
+          state?: string;
+          recorded_by?: string | null;
+          recorded_by_label: string;
+          confirmed_by?: string | null;
+          confirmed_by_label?: string | null;
+          confirmed_at?: string | null;
+          confirmation_note?: string | null;
+          void_reason?: string | null;
+          voided_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          journal_entry_id?: string;
+          account_id?: string;
+          branch_id?: string;
+          amount?: number;
+          source_type?: string;
+          state?: string;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          confirmed_by?: string | null;
+          confirmed_by_label?: string | null;
+          confirmed_at?: string | null;
+          confirmation_note?: string | null;
+          void_reason?: string | null;
+          voided_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bank_deposits: {
+        Row: {
+          id: string;
+          deposit_number: string;
+          branch_id: string;
+          from_account_id: string;
+          transit_account_id: string;
+          bank_account_id: string;
+          amount: number;
+          deposit_date: string;
+          description: string | null;
+          status: string;
+          bank_value_date: string | null;
+          bank_reference: string | null;
+          deposit_slip_path: string | null;
+          clearance_notes: string | null;
+          investigation_opened_at: string | null;
+          investigation_opened_by: string | null;
+          investigation_reason: string | null;
+          return_confirmed_at: string | null;
+          return_confirmed_by: string | null;
+          return_evidence_note: string | null;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          verified_by: string | null;
+          verified_by_label: string | null;
+          verified_at: string | null;
+          reversed_by: string | null;
+          reversed_by_label: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+          deposit_journal_entry_id: string;
+          clearance_journal_entry_id: string | null;
+          return_journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          idempotency_key: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          deposit_number: string;
+          branch_id: string;
+          from_account_id: string;
+          transit_account_id: string;
+          bank_account_id: string;
+          amount: number;
+          deposit_date: string;
+          description?: string | null;
+          status?: string;
+          bank_value_date?: string | null;
+          bank_reference?: string | null;
+          deposit_slip_path?: string | null;
+          clearance_notes?: string | null;
+          investigation_opened_at?: string | null;
+          investigation_opened_by?: string | null;
+          investigation_reason?: string | null;
+          return_confirmed_at?: string | null;
+          return_confirmed_by?: string | null;
+          return_evidence_note?: string | null;
+          recorded_by?: string | null;
+          recorded_by_label: string;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          verified_at?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string | null;
+          deposit_journal_entry_id: string;
+          clearance_journal_entry_id?: string | null;
+          return_journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          idempotency_key: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          deposit_number?: string;
+          branch_id?: string;
+          from_account_id?: string;
+          transit_account_id?: string;
+          bank_account_id?: string;
+          amount?: number;
+          deposit_date?: string;
+          description?: string | null;
+          status?: string;
+          bank_value_date?: string | null;
+          bank_reference?: string | null;
+          deposit_slip_path?: string | null;
+          clearance_notes?: string | null;
+          investigation_opened_at?: string | null;
+          investigation_opened_by?: string | null;
+          investigation_reason?: string | null;
+          return_confirmed_at?: string | null;
+          return_confirmed_by?: string | null;
+          return_evidence_note?: string | null;
+          recorded_by?: string | null;
+          recorded_by_label?: string;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          verified_at?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string | null;
+          deposit_journal_entry_id?: string;
+          clearance_journal_entry_id?: string | null;
+          return_journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          idempotency_key?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
       // --- The Agency redesign: the roster, as a screen reads it ------------
       //
@@ -6834,6 +7016,26 @@ export type Database = {
        * Phase 10. Cash at Hand, the two wallets and the bank, per branch,
        * with their total. The liquidity cards on the dashboard read this.
        */
+      /**
+       * Decision A. Per cash account: what the ledger says, what is still
+       * awaiting a second officer, and what may actually be paid out. No
+       * aggregate column, because a branch total is never a funding source.
+       */
+      cash_account_availability: {
+        Row: {
+          account_id: string | null;
+          code: string | null;
+          name: string | null;
+          cash_kind: string | null;
+          branch_id: string | null;
+          status: string | null;
+          booked: number | null;
+          pending_confirmation: number | null;
+          available: number | null;
+          pending_receipts: number | null;
+        };
+        Relationships: [];
+      };
       branch_cash_position: {
         Row: {
           branch_id: string;
@@ -6847,8 +7049,11 @@ export type Database = {
           total_liquidity: number;
           // Phase 4A. Appended after the total, because `create or replace
           // view` can only add a column at the end. total_liquidity is every
-          // account with a cash_kind, so this is one of its five components.
+          // account with a cash_kind, so this is one of its components.
           agency_float: number;
+          // Decision A. Money that has left a till for the bank and has not
+          // been cleared. Inside book liquidity, spendable by nobody.
+          in_transit: number;
         };
         Relationships: [];
       };
@@ -9573,7 +9778,100 @@ export type Database = {
         Returns: string;
       };
       disburse_loan: {
-        Args: { p_loan_id: string };
+        // Decision A. The funding account is optional: omitted, the loan is
+        // paid out of its branch's till exactly as before.
+        Args: { p_loan_id: string; p_funding_account_id?: string | null };
+        Returns: string;
+      };
+      cash_account_available_balance: {
+        Args: { p_account_id: string };
+        Returns: number;
+      };
+      cash_account_pending_amount: {
+        Args: { p_account_id: string };
+        Returns: number;
+      };
+      // Decision A. The two assertions the payout paths call. Neither is
+      // reachable by a signed-in user — EXECUTE is revoked from `anon` and
+      // `authenticated` — but both are ordinary functions rather than
+      // triggers, so the generator emits them.
+      assert_spendable_account: {
+        Args: { p_account_id: string; p_role: string };
+        Returns: undefined;
+      };
+      assert_cash_funds_available: {
+        Args: { p_account_id: string; p_amount: number };
+        Returns: undefined;
+      };
+      receipt_requires_confirmation: {
+        Args: { p_source_type: string };
+        Returns: boolean;
+      };
+      register_receipt_restrictions: {
+        Args: {
+          p_entry_id: string;
+          p_source_type: string;
+          p_branch_id: string;
+          p_recorded_by: string | null;
+          p_recorded_by_label: string | null;
+          p_entry_date?: string | null;
+        };
+        Returns: number;
+      };
+      release_or_assert_receipt_reversal: {
+        Args: { p_original_entry_id: string; p_account_id: string; p_amount: number };
+        Returns: undefined;
+      };
+      void_pending_cash_receipt: {
+        Args: { p_journal_entry_id: string; p_reason: string };
+        Returns: number;
+      };
+      ensure_branch_transit_account: {
+        Args: { p_branch_id: string };
+        Returns: string;
+      };
+      bank_deposit_actor: {
+        Args: { p_capability: string };
+        Returns: string;
+      };
+      confirm_cash_receipt: {
+        Args: { p_confirmation_id: string; p_note?: string | null };
+        Returns: string;
+      };
+      confirm_cash_receipts: {
+        Args: { p_confirmation_ids: string[]; p_note?: string | null };
+        Returns: { confirmation_id: string; outcome: string; detail: string | null }[];
+      };
+      record_bank_deposit: {
+        Args: {
+          p_from_account_id: string;
+          p_bank_account_id: string;
+          p_amount: number;
+          p_description: string | null;
+          p_idempotency_key: string;
+        };
+        Returns: string;
+      };
+      verify_bank_deposit: {
+        Args: {
+          p_deposit_id: string;
+          p_bank_reference: string;
+          p_bank_value_date: string;
+          p_deposit_slip_path?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      open_deposit_investigation: {
+        Args: { p_deposit_id: string; p_reason: string };
+        Returns: string;
+      };
+      confirm_physical_cash_return: {
+        Args: { p_deposit_id: string; p_evidence_note: string };
+        Returns: string;
+      };
+      reverse_bank_clearance: {
+        Args: { p_deposit_id: string; p_reason: string };
         Returns: string;
       };
       loan_outstanding: {

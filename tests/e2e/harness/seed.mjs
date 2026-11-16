@@ -1058,6 +1058,54 @@ const polytos = polytosPresent.present
   : (console.log('membership and savings skipped: the Polytos schema is not present'),
     null);
 
+/**
+ * Decision A. Count the counter takings whose day has closed.
+ *
+ * A registration fee, a savings deposit, a loan repayment and other income are
+ * all cash over the counter, so each reaches the till carrying a confirmation
+ * restriction: the company may not spend it until a second officer has counted
+ * the drawer. This harness stands in for months of counter work, so it counts
+ * the money belonging to days that have ended and deliberately leaves
+ * *today's* takings pending — that is the state the Cash Received screen
+ * exists to clear, and the browser suite needs something in it.
+ *
+ * Called wherever the book is about to pay money out, because a payout reads
+ * availability rather than the booked balance, and once more at the end for
+ * whatever the later phases recorded.
+ */
+async function cashConfirmationsExist() {
+  const row = await one(
+    `select to_regclass('public.cash_receipt_confirmations') is not null as ready`,
+  );
+  return row.ready === true;
+}
+
+async function countHistoricalCashReceipts(label) {
+  // The membership and policy upgrade gates seed this book on the schema as it
+  // stands *before* the migration under test, then apply it and compare every
+  // financial figure either side. On that pass the register does not exist
+  // yet, nothing restricts anything, and there is nothing to count.
+  if (!(await cashConfirmationsExist())) return;
+
+  await db.query(
+    `with historical as (
+       select c.id
+         from public.cash_receipt_confirmations c
+         join public.journal_entries e on e.id = c.journal_entry_id
+        where c.state = 'pending' and e.entry_date < public.business_date()
+     )
+     update public.cash_receipt_confirmations c
+        set state = 'confirmed',
+            confirmed_by = null,
+            confirmed_by_label = $1,
+            confirmed_at = public.business_now(),
+            confirmation_note = 'Counted at the close of the day it was taken'
+       from historical h
+      where c.id = h.id`,
+    [label],
+  );
+}
+
 async function seedMembershipAndSavings() {
   // A policy version in force, with the savings rules decided — which is what
   // `is_savings_enabled` waits on, and therefore what makes the savings module
@@ -1263,6 +1311,11 @@ async function seedMembershipAndSavings() {
     [2, [60_000]],
     [1, [60_000]],
   ]);
+
+  // Decision A. The withdrawal below is paid out of the branch till, and the
+  // till holds only deposits nobody has counted yet. The close-of-day count
+  // has to happen before the payout rather than at the end of the run.
+  await countHistoricalCashReceipts('End-of-day count');
 
   // The withdrawal. Prepared as the Secretary and decided as the Manager,
   // through real `authenticated` sessions — so `decide_savings_withdrawal`'s
@@ -2866,11 +2919,128 @@ console.log(
 // already posted, which is the same idempotency the migration relies on.
 // ---------------------------------------------------------------------------
 {
+  // -------------------------------------------------------------------------
+  // Decision A, before the replay.
+  //
+  // Two things have to happen in this order, and the order is the point.
+  //
+  // First the count. Every receipt above was posted through the real
+  // functions with the business clock wound back, so each carries a `pending`
+  // restriction dated the day it was taken. In a business that has been
+  // running for months somebody counted that drawer at the end of each of
+  // those days, so the seed does what that business did: it confirms
+  // everything dated before today and leaves **today's** receipts pending.
+  //
+  // That is deliberately not "confirm everything". A demonstration book whose
+  // confirmation queue is always empty would never show the control working,
+  // and the browser suite could not reach the screen that clears it. What the
+  // book shows is the true position of a branch at opening time: months of
+  // counted money it may spend, and this morning's takings it may not.
+  //
+  // Then the capital the replay needs. The replay below pays every historical
+  // disbursement out of Cash at Hand, and under Decision A a payout is
+  // measured against *available* funds — booked less every receipt nobody has
+  // counted — rather than against the booked balance.
+  //
+  // `backfill_ledger_history` sizes its own opening entry so that replaying
+  // the loans alone keeps the till non-negative, exactly to zero at its
+  // lowest point and not one shilling more. That figure was right when booked
+  // was the only measure and is short of enough now, for two reasons that are
+  // both the harness's doing rather than the rule's: this morning's takings
+  // are deliberately left uncounted, and this book also carries savings
+  // withdrawals, expenses and agency movements that the backfill's loan-only
+  // calculation never saw.
+  //
+  // So the harness funds the branch for the whole replay before it starts,
+  // the way a lender with a loan book that size would be funded. The figure
+  // is measured, not chosen: the principal still to be paid out, less what
+  // the till can already cover. It is capital — Dr the till / Cr `3000 Owner
+  // Capital`, dated before the first disbursement — the same shape and the
+  // same account the backfill's own opening entry uses, so the trial balance
+  // and every reconciliation identity are unaffected.
+  // -------------------------------------------------------------------------
+  await countHistoricalCashReceipts('End-of-day count');
+
+  // Skipped on the pre-upgrade pass for the reason given in
+  // `countHistoricalCashReceipts`: with no availability rule in the schema,
+  // the replay needs no funding beyond the backfill's own opening entry, and
+  // `cash_account_available_balance` does not exist to be asked.
+  const decisionAInForce = await cashConfirmationsExist();
+
+  const funding = decisionAInForce
+    ? await one(
+        `select b.id as branch_id,
+            public.branch_cash_account(b.id, 'cash_at_hand') as account_id,
+            (select coalesce(pg_catalog.sum(l.principal_amount), 0)
+               from public.loans l
+              where l.disbursed_at is not null
+                and not exists (select 1 from public.journal_entries e
+                                 where e.source_type = 'loan_disbursement'
+                                   and e.source_id = l.id))::text as to_pay_out
+       from public.branches b
+      order by b.branch_code
+      limit 1`,
+      )
+    : null;
+
+  const availableNow = funding
+    ? await one(`select public.cash_account_available_balance($1)::text as available`, [
+        funding.account_id,
+      ])
+    : null;
+
+  const shortfall =
+    funding && availableNow
+      ? Number(funding.to_pay_out) - Number(availableNow.available)
+      : 0;
+
+  if (funding && shortfall > 0) {
+    await one(
+      `select public.post_journal(
+                $1::uuid,
+                coalesce((select pg_catalog.min(disbursed_at::date) - 1
+                            from public.loans where disbursed_at is not null),
+                         public.business_date()),
+                'Opening capital for the loan book',
+                'opening_balance', null, null, null,
+                jsonb_build_array(
+                  jsonb_build_object('account_id', $2::uuid,
+                                     'debit', $3::bigint, 'credit', 0),
+                  jsonb_build_object('account_id', public.ledger_account_by_code('3000'),
+                                     'debit', 0, 'credit', $3::bigint)
+                )) as id`,
+      [funding.branch_id, funding.account_id, String(shortfall)],
+    );
+    console.log(
+      `cash slack: ${String(shortfall)} of opening capital added so the replay ` +
+        `of ${funding.to_pay_out} in disbursements is funded`,
+    );
+  }
+
   const ledger = await one(`select * from public.backfill_ledger_history()`);
   console.log(
     `ledger: opening ${ledger.opening}, ${ledger.disbursements} disbursements, ` +
       `${ledger.repayments} repayments, ${ledger.reversals} reversals`,
   );
+
+  // The same count again, over whatever the replay itself recorded.
+  await countHistoricalCashReceipts('End-of-day count');
+
+  if (decisionAInForce) {
+    const position = await one(
+      `select
+         (select count(*) from public.cash_receipt_confirmations
+           where state = 'confirmed')::text as confirmed,
+         (select count(*) from public.cash_receipt_confirmations
+           where state = 'pending')::text as pending,
+         (select coalesce(sum(amount), 0) from public.cash_receipt_confirmations
+           where state = 'pending')::text as pending_amount`,
+    );
+    console.log(
+      `cash confirmation: ${position.confirmed} counted, ${position.pending} awaiting ` +
+        `a second officer (${position.pending_amount} restricted)`,
+    );
+  }
 
   const trial = await one(
     `select sum(total_debit)::text as debits, sum(total_credit)::text as credits

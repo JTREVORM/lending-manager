@@ -59,6 +59,9 @@ export type RateLimitedAction =
   | 'finance.income'
   | 'finance.reconciliation'
   | 'finance.reconciliation_decision'
+  | 'finance.receipt_confirmation'
+  | 'finance.deposit'
+  | 'finance.deposit_decision'
   | 'settings.product'
   | 'settings.update'
   | 'reports.export'
@@ -501,6 +504,32 @@ export const LIMITS: Readonly<Record<RateLimitedAction, RateLimitRule>> = {
     windowSeconds: 600,
     onStoreFailure: 'open',
     message: 'Too many counts just now. Try again in a few minutes.',
+  },
+  // Decision A. Confirming a drawer of receipts is ordinary end-of-day work
+  // and is batched, so the ceiling is generous and a counter that cannot
+  // count fails open — the confirmation releases money the business already
+  // has, and blocking it would strand the till rather than protect it.
+  'finance.receipt_confirmation': {
+    limit: 60,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Receipts are being confirmed faster than expected. Try again in a moment.',
+  },
+  'finance.deposit': {
+    limit: 30,
+    windowSeconds: 60,
+    onStoreFailure: 'open',
+    message: 'Deposits are being recorded faster than expected. Try again in a moment.',
+  },
+  // Verifying a clearance, opening an investigation, confirming a physical
+  // return and reversing a clearance are decisions rather than throughput, so
+  // they are slower and fail closed — the same shape as every other decision
+  // in this module.
+  'finance.deposit_decision': {
+    limit: 20,
+    windowSeconds: 3600,
+    onStoreFailure: 'closed',
+    message: 'Too many deposit decisions in the last hour. Try again shortly.',
   },
   'finance.reconciliation_decision': {
     limit: 20,

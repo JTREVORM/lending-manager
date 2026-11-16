@@ -153,6 +153,41 @@ export const PERMISSIONS = [
   /** Add or retire a ledger account, including an expense or income category. */
   'finance:accounts',
 
+  // --- Decision A: no unfunded payouts ------------------------------------
+  /** Read the register of cash receipts awaiting confirmation. */
+  'receipts:view',
+  /**
+   * Confirm that money recorded as received is physically in the till.
+   *
+   * A receipt counts for the borrower the moment it is recorded — their
+   * arrears fall, their deadline moves — and counts for the *company* only
+   * once a second person has seen the cash. Refused for a receipt the
+   * confirmer recorded themselves, at the function layer and as a CHECK.
+   */
+  'receipts:confirm',
+  /** Read the bank deposit register. */
+  'deposits:view',
+  /**
+   * Record that cash has left a till for the bank.
+   *
+   * It moves into Cash in Transit, where it is spendable by nobody — which is
+   * the honest position until the bank says otherwise.
+   */
+  'deposits:create',
+  /**
+   * Verify the bank's clearance, open an investigation, or confirm that
+   * unbanked cash physically came back. Never the person who recorded it.
+   */
+  'deposits:verify',
+  /**
+   * Reverse a verified clearance.
+   *
+   * The Owner's alone, and never the officer who verified it — an Owner holds
+   * `deposits:verify` too, so without that rule one person could clear a
+   * deposit and then unclear it.
+   */
+  'deposits:reverse',
+
   // --- Phase 13 -----------------------------------------------------------
   /**
    * Publish a new version of the undertaking a guarantor signs.
@@ -672,6 +707,15 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'income:create',
     'reconciliation:view',
     'reconciliation:perform',
+
+    // Decision A. The treasurer is the person who physically handles the
+    // money, so they record what came in and take it to the bank. They
+    // confirm neither: a receipt they recorded is confirmed by somebody else,
+    // and the bank's clearance is verified by somebody else. That separation
+    // is the whole of the control.
+    'receipts:view',
+    'deposits:view',
+    'deposits:create',
     'products:view',
 
     // Operational client work: find a client, check their details, correct a
@@ -813,6 +857,15 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'reconciliation:view',
     'reconciliation:perform',
     'reconciliation:approve',
+
+    // Decision A. The Manager is the second person: they confirm the cash a
+    // cashier recorded and verify what the bank did with a deposit. Reversing
+    // a clearance is not theirs — that is the Owner's, and never the verifier.
+    'receipts:view',
+    'receipts:confirm',
+    'deposits:view',
+    'deposits:create',
+    'deposits:verify',
     'products:view',
 
     // The Manager runs lending operations, so clients and guarantors are
@@ -975,6 +1028,15 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'reconciliation:approve',
     'finance:settings',
     'finance:accounts',
+
+    // Decision A. Everything the Manager holds, and the one act reserved to
+    // the Owner: unwinding a clearance that has already been verified.
+    'receipts:view',
+    'receipts:confirm',
+    'deposits:view',
+    'deposits:create',
+    'deposits:verify',
+    'deposits:reverse',
     'products:view',
     'products:manage',
     // Phase 13. The words a guarantor signs.

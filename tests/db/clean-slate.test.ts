@@ -240,6 +240,7 @@ describeDb('the clean slate', () => {
       other_income: 'other_income',
       transfer: 'account_transfers',
       reconciliation: 'account_reconciliations',
+      bank_deposit: 'bank_deposits',
       membership: 'memberships',
       membership_fee: 'membership_fee_receipts',
       membership_card: 'membership_cards',

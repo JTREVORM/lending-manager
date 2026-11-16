@@ -306,6 +306,15 @@
         "public_default_acl": false
       }
     },
+    "cash_account_available_balance(p_account_id uuid)": {
+      "classification": "A",
+      "reason": "Decision A read. One account's spendable figure: its booked balance less every receipt on it nobody has counted yet. Refuses a borrower session with 42501 - 'Not authorized to view company ledger balances.' - because it passes through ledger_account_balance(), which carries the capability check; measured by the Phase 2 behavioural probe (scripts/probe-definer-authorization.mjs), not inferred from its body. Discloses one company cash figure and no borrower data. Its sibling cash_account_pending_amount() has no gate of its own and is therefore NOT granted.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "certify_agency_commission_reconciliation(p_reconciliation_id uuid, p_notes text)": {
       "classification": "A",
       "reason": "Phase 4E agency RPC, decisions OD-9 and OD-2. Certifies a commission reconciliation: a second officer has seen the difference. Writes no journal line of any kind, so certification never changes a balance. Refuses a caller without agency:reconcile with 42501 via agency_actor(), a reconciliation from another branch, one already certified, and the person who submitted it.",
@@ -345,6 +354,33 @@
     "condolence_next_of_kin_status(p_claim_id uuid)": {
       "classification": "PENDING-REVIEW",
       "reason": "Behavioural probe (borrower session, null arguments) produced no authorization refusal, and this function takes a third-party identifier. NOT yet retested with a real identifier, so it is neither confirmed safe nor confirmed leaking. Carried as an open Phase 3 item in docs/POLYTOS-SECURITY-RISK-INVENTORY.md.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "confirm_cash_receipt(p_confirmation_id uuid, p_note text)": {
+      "classification": "A",
+      "reason": "Decision A RPC, Owner instruction 6. Counts one receipt of physical cash so the company may spend it. Refuses without receipts:confirm with 42501 - 'Confirming a receipt requires the receipts:confirm capability.' - measured by the behavioural probe. Refuses the officer who recorded the receipt (instruction 8, self-verification), a receipt already confirmed or voided, and one outside the caller's branch. It moves no money: it lifts a restriction on money already booked, so no journal is written and no borrower record changes.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "confirm_cash_receipts(p_confirmation_ids uuid[], p_note text)": {
+      "classification": "A",
+      "reason": "Decision A RPC, Owner instruction 6, the auditable batch form of the above - a drawer is counted as one act. Refuses without receipts:confirm with 42501, measured by the behavioural probe. Every per-receipt check is re-applied inside the batch rather than once for the set, and the result names each receipt's outcome, so a batch cannot confirm by majority. Bounded to 200 ids by the application schema.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "confirm_physical_cash_return(p_deposit_id uuid, p_evidence_note text)": {
+      "classification": "A",
+      "reason": "Decision A RPC. The one safe exit from an investigation: the cash came back to the till and a second officer counted it, so it leaves transit and re-enters the drawer as a fresh confirmed receipt. Refuses without deposits:verify with 42501, measured by the behavioural probe, and refuses the officer who recorded the deposit.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -441,9 +477,9 @@
         "public_default_acl": false
       }
     },
-    "disburse_loan(p_loan_id uuid)": {
+    "disburse_loan(p_loan_id uuid, p_funding_account_id uuid)": {
       "classification": "A",
-      "reason": "Business RPC. The borrower probe was inconclusive because argument validation fired before any authorization check; its capability check is asserted by the domain security suite for its area.",
+      "reason": "Business RPC, re-signed by Decision A with an optional funding account; omitted, the loan is paid from its branch's till exactly as before. The authorization it had is unchanged - it refuses a session without the disbursement capability before it looks at its arguments. The probe reaches 'No such loan.' for a NULL argument, which is the same inconclusive result its single-argument predecessor gave; its refusals are asserted behaviourally in tests/db/rls-loans.test.ts and the loan lifecycle suite. Decision A adds two refusals before any posting: the account must be spendable and in the loan's own branch, and it must hold the principal as available funds.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -603,6 +639,15 @@
         "public_default_acl": false
       }
     },
+    "open_deposit_investigation(p_deposit_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Decision A RPC. Marks a deposit the bank has not acknowledged as under investigation. Refuses without deposits:verify with 42501, measured by the behavioural probe. Deliberately posts nothing: an unexplained deposit is a question, not an accounting treatment, and inventing one is what blocker B-1 in docs/POLYTOS-DECISION-A-DELIVERY.md exists to prevent.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
     "open_savings_account(p_membership_id uuid)": {
       "classification": "A",
       "reason": "Business RPC. The borrower probe was inconclusive because argument validation fired before any authorization check; its capability check is asserted by the domain security suite for its area.",
@@ -714,6 +759,15 @@
     "record_agency_float_trade(p_kind text, p_float_account_id uuid, p_float_amount bigint, p_reference text, p_counter_float_account_id uuid, p_settlement_account_id uuid, p_cash_amount bigint, p_fee_amount bigint, p_source_kind text, p_counterparty_name text, p_trade_date date, p_notes text)": {
       "classification": "A",
       "reason": "Phase 4E agency RPC, decision OD-7. Records a float purchase, sale or line-to-line transfer as pending and posts no journal, so it moves no balance. Refuses a caller without agency:float_trade with SQLSTATE 42501 via agency_actor(), a line the caller's branch cannot see, a transfer into a branch the caller does not administer with 42501, a closed line, a purchase into a line that is not active, a cross-provider or self transfer, a provider that holds no float, and a missing or repeated reference.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "record_bank_deposit(p_from_account_id uuid, p_bank_account_id uuid, p_amount bigint, p_description text, p_idempotency_key uuid)": {
+      "classification": "A",
+      "reason": "Decision A RPC, Owner instruction 7. Takes counted cash out of a till and into 1050 Cash in Transit, which is not spendable, so banking money does not make it available before the bank has it. Refuses without deposits:create with 42501 - 'This requires the deposits:create capability.' - measured by the behavioural probe. Idempotent on the supplied key through journal_entries_one_per_source.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -984,6 +1038,15 @@
     "reverse_agency_transaction(p_transaction_id uuid, p_reason text)": {
       "classification": "A",
       "reason": "Phase 4B agency RPC. Reverses a posted transaction by mirroring its journal. Refuses a caller without agency:reverse with 42501, and a prior-day reversal without agency:reverse_cross_day with 42501. Refuses a reversal whose deferred commission has already been settled.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "reverse_bank_clearance(p_deposit_id uuid, p_reason text)": {
+      "classification": "A",
+      "reason": "Decision A RPC, Owner instruction 11. Undoes a clearance that should not have been given, by contra-entry - the original journal is never altered or reclassified. Refuses without deposits:reverse with 42501 - 'This requires the deposits:reverse capability.' - measured by the behavioural probe; only Owner holds that capability, and the reverser may not be the officer who verified.",
       "surface": {
         "anon": false,
         "authenticated": true,
@@ -1353,6 +1416,15 @@
     "verify_agency_transaction(p_transaction_id uuid, p_expected_revision integer)": {
       "classification": "A",
       "reason": "Phase 4B agency RPC, extended in Phase 4D. Verifies a submitted transaction and posts its journal. Refuses a caller without agency:verify with 42501, and refuses the submitter verifying their own with 42501 — which the verifier_not_submitter CHECK also refuses independently. The Phase 4D second argument is the revision the verifier reviewed: verification is refused when it is not the current one, and a call quoting no revision is refused once the figures changed after submission, so a manager cannot post a commission exception authorised behind a screen they had already loaded. Asserted in tests/db/agency-transaction-engine.test.ts and tests/db/agency-settlement.test.ts.",
+      "surface": {
+        "anon": false,
+        "authenticated": true,
+        "public_default_acl": false
+      }
+    },
+    "verify_bank_deposit(p_deposit_id uuid, p_bank_reference text, p_bank_value_date date, p_deposit_slip_path text, p_notes text)": {
+      "classification": "A",
+      "reason": "Decision A RPC, Owner instructions 7 and 8. Clears a deposit - out of transit, into the bank account - once a second officer has the bank's own evidence. Refuses without deposits:verify with 42501 - 'This requires the deposits:verify capability.' - measured by the behavioural probe, and refuses the officer who recorded the deposit at both the function and a CHECK constraint, so self-verification cannot be reached by any route including service_role.",
       "surface": {
         "anon": false,
         "authenticated": true,

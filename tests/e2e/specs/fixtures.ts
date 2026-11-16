@@ -367,6 +367,45 @@ export async function queryHarness<Row extends Record<string, unknown>>(
   }
 }
 
+/**
+ * Decision A: put capital in the till a loan is about to be paid out of.
+ *
+ * `disburse_loan` refuses a payout the funding account cannot cover, which is
+ * the rule working. A browser spec that registers a borrower at a branch
+ * opened by another spec is paying out of a drawer nobody has put money in,
+ * so the refusal it meets says nothing about the buttons under test. This does
+ * what the business does first: posts opening capital, Dr the branch till / Cr
+ * `3000 Owner Capital`, for the shortfall only.
+ *
+ * Through the harness connection rather than a screen, deliberately: there is
+ * no capital-injection page, and inventing one for a test would be inventing
+ * a product.
+ */
+export async function fundTillForLoan(loanId: string): Promise<void> {
+  await queryHarness(
+    `select public.post_journal(
+              l.branch_id, public.business_date(), 'Opening capital for the branch',
+              'opening_balance', null, null, null,
+              jsonb_build_array(
+                jsonb_build_object('account_id',
+                                   public.branch_cash_account(l.branch_id, 'cash_at_hand'),
+                                   'debit', g.shortfall, 'credit', 0),
+                jsonb_build_object('account_id', public.ledger_account_by_code('3000'),
+                                   'debit', 0, 'credit', g.shortfall)
+              ))
+       from public.loans l
+       cross join lateral (
+         select greatest(
+                  l.principal_amount
+                    - public.cash_account_available_balance(
+                        public.branch_cash_account(l.branch_id, 'cash_at_hand')),
+                  0)::bigint as shortfall
+       ) g
+      where l.id = $1 and g.shortfall > 0`,
+    [loanId],
+  );
+}
+
 /** The one row a query returned, or a failure that says which query. */
 export async function queryHarnessOne<Row extends Record<string, unknown>>(
   sql: string,

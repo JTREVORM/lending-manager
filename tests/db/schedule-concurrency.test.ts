@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { deleteTestUsers } from '../helpers/auth-fixtures';
 import {
@@ -7,6 +7,7 @@ import {
   createLoanScenario,
   deleteTestLoans,
   disburseLoan,
+  fundBranchTill,
 } from '../helpers/loan-fixtures';
 import {
   closePool,
@@ -89,6 +90,16 @@ describeDb('repayment schedules under concurrency', () => {
   beforeAll(async () => {
     await deleteTestLoans();
     await deleteTestUsers();
+  });
+
+  // Decision A: a disbursement needs the money to be in the till. These tests
+  // race `disburse_loan` directly, so the branch is funded generously — the
+  // subject here is the schedule, never the balance.
+  beforeEach(async () => {
+    const branch = await queryOne<{ id: string }>(
+      `select id from public.branches order by branch_code limit 1`,
+    );
+    await fundBranchTill(branch.id, 500_000_000);
   });
 
   afterAll(async () => {

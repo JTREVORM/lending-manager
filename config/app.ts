@@ -212,6 +212,10 @@ export const ROUTES = {
   otherIncome: '/finance/income',
   newIncome: '/finance/income/new',
   reconciliation: '/finance/reconciliation',
+  /** Decision A. Cash recorded as received, awaiting a second officer. */
+  receipts: '/finance/receipts',
+  /** Decision A. Cash taken to the bank, and what the bank did with it. */
+  deposits: '/finance/deposits',
   newReconciliation: '/finance/reconciliation/new',
   ledger: '/finance/ledger',
 

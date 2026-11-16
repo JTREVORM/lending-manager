@@ -142,6 +142,20 @@ export async function makeBenefitMember(
     );
   }
 
+  // Decision A. A benefit is paid out of the branch till, and the till is now
+  // only as spendable as the money physically counted into it. Registration
+  // fees alone do not cover a bereavement benefit, so the fixture gives the
+  // branch opening capital — recorded as `opening_balance`, which is the
+  // company putting its own money in rather than cash taken over the counter,
+  // and therefore carries no confirmation restriction. Tops up the shortfall
+  // only, so a suite calling this for twenty members does not post twenty
+  // journals.
+  // Both spendable wallets, because a benefit may be paid in cash or by Mobile
+  // Money and each account's availability stands on its own.
+  const { fundBranchCash } = await import('./loan-fixtures');
+  await fundBranchCash(branch.id, 'cash_at_hand', 200_000_000);
+  await fundBranchCash(branch.id, 'mtn_mobile_money', 200_000_000);
+
   const membership = await queryOne<{ membership_number: string }>(
     `select membership_number from public.memberships where id = $1`,
     [membershipId],

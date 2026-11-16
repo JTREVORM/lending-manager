@@ -231,6 +231,15 @@ describe('authorization matrix', () => {
     'finance:settings': ['owner_admin'],
     'finance:accounts': ['owner_admin'],
 
+    // Decision A. The treasurer records money in and takes it to the bank;
+    // the Manager confirms both; the Owner alone may unwind a clearance.
+    'receipts:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'receipts:confirm': ['manager', 'owner_admin'],
+    'deposits:view': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'deposits:create': ['secretary_treasurer', 'manager', 'owner_admin'],
+    'deposits:verify': ['manager', 'owner_admin'],
+    'deposits:reverse': ['owner_admin'],
+
     // --- Phase 12: loan products --------------------------------------------
     // Everybody who sells a loan needs to know what the business offers;
     // only the Owner sets the price.

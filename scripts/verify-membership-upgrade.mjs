@@ -194,6 +194,19 @@ const PHASE_PREFIXES = [
   // already on the books — and that no already-active loan is retrospectively
   // refused by a ceiling that did not exist when it was disbursed.
   '20261119',
+  // Decision A, no unfunded payouts (20261120000100-000400). Unreleased, like
+  // everything above it.
+  //
+  // This is the one in the list with the most to prove. It adds a refusal to
+  // every path money leaves the company by, a sixth cash kind, two registers
+  // and a DEFERRED constraint trigger on `journal_lines` — the posting table
+  // itself. A change of that shape either leaves an existing book exactly
+  // where it was or it is not shippable, and the only way to know which is to
+  // apply it between the two financial baselines on a seeded book and compare
+  // every figure. In particular it must not retrospectively refuse a loan
+  // already disbursed, must not restate one shilling of any historical
+  // journal, and must not change what any borrower owes.
+  '20261120',
 ];
 
 const isPhaseMigration = (name) =>

@@ -52,6 +52,9 @@ export const REFERENCE_SCOPES = [
   'expense',
   'other_income',
   'reconciliation',
+  // Decision A. Cash taken from a till to the bank. Five digits like the
+  // other finance documents, because a busy branch banks most days.
+  'bank_deposit',
   // Polytos Phase 1. Membership numbers, e.g. MB260001.
   'membership',
   // Polytos Phase 2. Each document the membership and savings workflows
@@ -100,6 +103,7 @@ export const REFERENCE_SCOPE_LABELS: Readonly<Record<ReferenceScope, string>> = 
   expense: 'Expenses',
   other_income: 'Other income',
   reconciliation: 'Daily counts',
+  bank_deposit: 'Bank deposits',
   membership: 'Memberships',
   membership_fee: 'Registration fee receipts',
   savings_account: 'Savings accounts',
@@ -148,6 +152,9 @@ export const REFERENCE_FORMAT_DEFAULTS: Readonly<
   expense: { scope: 'expense', prefix: 'EX', padding: 5 },
   other_income: { scope: 'other_income', prefix: 'OI', padding: 5 },
   reconciliation: { scope: 'reconciliation', prefix: 'RC', padding: 5 },
+  // 'BD' for bank deposit. Not 'BK', which reads as a bank account rather
+  // than the act of taking cash to one.
+  bank_deposit: { scope: 'bank_deposit', prefix: 'BD', padding: 5 },
   // Padded to four like loans and payments rather than three like clients: a
   // membership number is quoted on a card and in a meeting register, and
   // widening it later would put two shapes into circulation.

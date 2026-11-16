@@ -150,3 +150,66 @@ export const rejectReconciliationSchema = z.object({
   reconciliationId: uuidSchema,
   reason: reasonSchema,
 });
+
+// ---------------------------------------------------------------------------
+// Decision A — confirming cash, and banking it
+// ---------------------------------------------------------------------------
+
+/**
+ * One or more receipts a second officer has counted.
+ *
+ * A list rather than a single id because confirming is end-of-day work over a
+ * whole drawer, and the database performs every per-receipt check inside the
+ * batch — the ones this officer recorded themselves are refused by name and
+ * the rest are confirmed. Capped so a form cannot ask the database to walk
+ * the register.
+ */
+export const confirmReceiptsSchema = z.object({
+  confirmationIds: z
+    .array(uuidSchema)
+    .min(1, { message: 'Choose at least one receipt to confirm.' })
+    .max(200, { message: 'Confirm at most 200 receipts at a time.' }),
+  note: optionalString(500),
+});
+
+export const recordDepositSchema = z.object({
+  fromAccountId: uuidSchema,
+  bankAccountId: uuidSchema,
+  amount: movementAmountSchema,
+  description: optionalString(500),
+  idempotencyKey: uuidSchema,
+});
+
+/**
+ * The bank's own evidence that the money arrived.
+ *
+ * The value date is the bank's, and may be earlier than today — a credit
+ * dated Friday is verified on Monday. It may not be later, because a bank
+ * cannot have valued money it has not yet received. The accounting entry is
+ * dated today whatever this says; the database decides that, not the form.
+ */
+export const verifyDepositSchema = z.object({
+  depositId: uuidSchema,
+  bankReference: nonEmptyString('Bank reference', 64).refine(
+    (value) => value.trim().length >= 4,
+    { message: 'Enter the reference the bank gave for the credit.' },
+  ),
+  bankValueDate: businessDateSchema,
+  notes: optionalString(500),
+});
+
+export const depositReasonSchema = z.object({
+  depositId: uuidSchema,
+  reason: reasonSchema,
+});
+
+export const depositReturnSchema = z.object({
+  depositId: uuidSchema,
+  evidenceNote: nonEmptyString('Evidence', 500).refine(
+    (value) => value.trim().length >= 4,
+    {
+      message:
+        'Record what was physically handed back, by whom and when. A return nobody described is not evidence.',
+    },
+  ),
+});

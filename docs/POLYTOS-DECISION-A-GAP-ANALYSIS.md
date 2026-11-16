@@ -12,6 +12,31 @@ remains NO-GO.**
 
 ---
 
+> ## Status note, 2026-11-16 — superseded in part
+>
+> This audit was written against **161 migrations** on an unmerged branch, and
+> three of its premises have since moved. It is retained because its analysis
+> of the gap is still the best record of *why* it existed; its statements about
+> the code are now historical. Read it with these corrections.
+>
+> | What this document says | What is true at `main` + the 229-migration branch |
+> | --- | --- |
+> | The locking Decision A depends on "lives in the unmerged PR stack #19 → #27" (§0, §1.7, §11.1) | **Merged.** `lock_ledger_balances` and the `post_journal` lock are in the base schema. D9 is closed. |
+> | "Decision A must be built on PR #25 or above" (§1.7) | Satisfied. It is built on `89ebb2c` plus the guarantor-ceiling fix of PR #35. |
+> | Rules 1, 4, 5, 7, 8 **NOT MET**; D1–D7 open (§0, §3) | **Closed** by migrations `20261120000100`–`20261120000400`, under the Owner's decision of 2026-11-16. See `POLYTOS-DECISION-A-DELIVERY.md`. |
+> | D8 — `allow_negative_cash` is the only sufficiency control and is Owner-settable | **Closed.** The flag is read by nothing and its column comment says `INERT`. |
+> | D12 — `branch_cash_position` invites cross-account reasoning | **Partly closed.** The view gains an `in_transit` component and keeps `total_liquidity`, which remains informational; the spendable figure now lives in `cash_account_availability`, per account, with no total. |
+> | D14 — the `cleared` naming collision must be avoided | **Resolved as A-13 directs**: `bank_deposits.status = 'cleared'` and `loans.status = 'cleared'` coexist in separate status domains, with a test asserting that clearing a deposit alters no loan. |
+> | D4 — a disbursement cannot name a funding account | **Closed.** `disburse_loan(p_loan_id, p_funding_account_id default null)`. |
+> | §11.2 steps 5a, 7a, 8 — branch grants, the D-2 accounts, the refusal log | **Still open**, and deliberately so. None is a precondition of no-unfunded-payouts; each is its own authorized change. |
+> | Blockers **B-1** (the accountant's determination on `1190`/`2900`) and **B-2** (the three reconciliation paths) | **Still open.** Deposit ageing, recovery and loss write-off are therefore *not* implemented: an unresolved deposit stays `under_investigation` rather than receiving an invented accounting treatment. |
+>
+> The nine open items of §15 stand, except item 5 — a finance evidence bucket —
+> which is not yet needed: clearance and physical-return evidence are recorded
+> as text on the deposit and in the audit trail, and no file is uploaded.
+
+---
+
 ## 0. Verdict at a glance
 
 The approved rules are measured against what the code does **today**, on the

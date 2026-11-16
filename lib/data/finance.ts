@@ -29,6 +29,10 @@ import {
   type TrialBalanceSummary,
 } from '@/lib/domain/trial-balance';
 import {
+  type BankDepositRow,
+  type BankDepositStatus,
+  type CashAccountAvailability,
+  type PendingReceiptRow,
   isAccountType,
   isCashKind,
   isIncomeStatus,
@@ -616,4 +620,131 @@ export async function getTrialBalance(): Promise<TrialBalanceSummary | null> {
   });
 
   return summariseTrialBalance(accounts);
+}
+
+// ---------------------------------------------------------------------------
+// Decision A — available funds, confirmation and bank clearance
+// ---------------------------------------------------------------------------
+
+/**
+ * What each cash account may actually pay out.
+ *
+ * Reads `cash_account_availability`, which derives booked and pending from
+ * the ledger and the restriction register. Nothing here adds anything up: a
+ * second derivation of an available balance is a second answer to the one
+ * question this whole module exists to settle.
+ */
+export async function getCashAvailability(): Promise<readonly CashAccountAvailability[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('cash_account_availability')
+    .select(
+      `account_id, code, name, cash_kind, branch_id, booked, pending_confirmation, available, pending_receipts`,
+    )
+    .order('code');
+
+  if (error !== null) {
+    logger.warn('Could not read cash availability.', { code: error.code });
+    return [];
+  }
+
+  return (data ?? []).map((row): CashAccountAvailability => {
+    const raw = row as Raw;
+    return {
+      accountId: text(raw.account_id),
+      code: text(raw.code),
+      name: text(raw.name),
+      cashKind: text(raw.cash_kind),
+      branchId: text(raw.branch_id),
+      booked: money(raw.booked),
+      pendingConfirmation: money(raw.pending_confirmation),
+      available: money(raw.available),
+      pendingReceipts: Number(raw.pending_receipts ?? 0),
+    };
+  });
+}
+
+/** Receipts waiting for a second officer to say the money is really there. */
+export async function getPendingReceipts(
+  limit = FINANCE_PAGE_SIZE,
+): Promise<readonly PendingReceiptRow[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('cash_receipt_confirmations')
+    .select(
+      `id, journal_entry_id, account_id, branch_id, amount, source_type, recorded_by_label, created_at`,
+    )
+    .eq('state', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  if (error !== null) {
+    logger.warn('Could not read pending receipts.', { code: error.code });
+    return [];
+  }
+
+  // The account's name is not on the restriction row — it belongs to the
+  // chart — so it is looked up once rather than embedded, which would make
+  // the read depend on a foreign-key path PostgREST has to disambiguate.
+  const accounts = await getLedgerAccounts();
+  const names = new Map(accounts.map((a) => [a.accountId, a.name]));
+
+  return (data ?? []).map((row): PendingReceiptRow => {
+    const raw = row as Raw;
+    const accountId = text(raw.account_id);
+    return {
+      id: text(raw.id),
+      journalEntryId: text(raw.journal_entry_id),
+      accountId,
+      accountName: names.get(accountId) ?? 'That account',
+      branchId: text(raw.branch_id),
+      amount: money(raw.amount),
+      sourceType: text(raw.source_type),
+      recordedByLabel: text(raw.recorded_by_label),
+      createdAt: text(raw.created_at),
+    };
+  });
+}
+
+/** Cash taken to the bank, and what the bank did with it. */
+export async function getBankDeposits(
+  limit = FINANCE_PAGE_SIZE,
+): Promise<readonly BankDepositRow[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('bank_deposits')
+    .select(
+      `id, deposit_number, branch_id, amount, deposit_date, status, from_account_id, bank_account_id, bank_reference, bank_value_date, description, recorded_by_label, verified_by_label, investigation_reason`,
+    )
+    .order('deposit_date', { ascending: false })
+    .order('deposit_number', { ascending: false })
+    .limit(limit);
+
+  if (error !== null) {
+    logger.warn('Could not read bank deposits.', { code: error.code });
+    return [];
+  }
+
+  return (data ?? []).map((row): BankDepositRow => {
+    const raw = row as Raw;
+    return {
+      id: text(raw.id),
+      depositNumber: text(raw.deposit_number),
+      branchId: text(raw.branch_id),
+      amount: money(raw.amount),
+      depositDate: text(raw.deposit_date),
+      status: text(raw.status) as BankDepositStatus,
+      fromAccountId: text(raw.from_account_id),
+      bankAccountId: text(raw.bank_account_id),
+      bankReference: nullableText(raw.bank_reference),
+      bankValueDate: nullableText(raw.bank_value_date),
+      description: nullableText(raw.description),
+      recordedByLabel: text(raw.recorded_by_label),
+      verifiedByLabel: nullableText(raw.verified_by_label),
+      investigationReason: nullableText(raw.investigation_reason),
+    };
+  });
 }

@@ -353,3 +353,87 @@ export const JOURNAL_SOURCE_LABELS: Readonly<Record<string, string>> = {
 export function describeJournalSource(sourceType: string): string {
   return JOURNAL_SOURCE_LABELS[sourceType] ?? sourceType;
 }
+
+// ---------------------------------------------------------------------------
+// Decision A — available funds, confirmation and bank clearance
+// ---------------------------------------------------------------------------
+
+/**
+ * What one cash account may actually pay out.
+ *
+ * Three figures rather than one, and the distinction is the point. `booked` is
+ * what the ledger says. `pendingConfirmation` is money that has been received
+ * and recorded — so it counts for the borrower who paid it — and that nobody
+ * has yet counted, so it does not count for the company. `available` is the
+ * difference, and it is the only one a payout is measured against.
+ *
+ * There is deliberately no branch total here. A branch's liquidity is never a
+ * funding source: the money has to be in the account it is leaving.
+ */
+export interface CashAccountAvailability {
+  readonly accountId: string;
+  readonly code: string;
+  readonly name: string;
+  readonly cashKind: string;
+  readonly branchId: string;
+  readonly booked: UgxAmount;
+  readonly pendingConfirmation: UgxAmount;
+  readonly available: UgxAmount;
+  readonly pendingReceipts: number;
+}
+
+/** A receipt waiting for a second officer to say the money is really there. */
+export interface PendingReceiptRow {
+  readonly id: string;
+  readonly journalEntryId: string;
+  readonly accountId: string;
+  readonly accountName: string;
+  readonly branchId: string;
+  readonly amount: UgxAmount;
+  readonly sourceType: string;
+  readonly recordedByLabel: string;
+  readonly createdAt: string;
+}
+
+export const RECEIPT_SOURCE_LABELS: Readonly<Record<string, string>> = {
+  loan_repayment: 'Loan repayment',
+  savings_deposit: 'Savings deposit',
+  membership_fee: 'Registration fee',
+  other_income: 'Other income',
+};
+
+export type BankDepositStatus =
+  'submitted' | 'cleared' | 'under_investigation' | 'returned_to_till' | 'reversed';
+
+/**
+ * Labels that say where the money is, not how the paperwork feels.
+ *
+ * "In transit" rather than "pending", because a cashier reading "pending"
+ * reasonably assumes the bank has it and the record is catching up. It has
+ * not: the money is out of the till, not yet at the bank, and spendable by
+ * nobody.
+ */
+export const DEPOSIT_STATUS_LABELS: Readonly<Record<BankDepositStatus, string>> = {
+  submitted: 'In transit',
+  cleared: 'Cleared by the bank',
+  under_investigation: 'Under investigation',
+  returned_to_till: 'Returned to the till',
+  reversed: 'Clearance reversed',
+};
+
+export interface BankDepositRow {
+  readonly id: string;
+  readonly depositNumber: string;
+  readonly branchId: string;
+  readonly amount: UgxAmount;
+  readonly depositDate: string;
+  readonly status: BankDepositStatus;
+  readonly fromAccountId: string;
+  readonly bankAccountId: string;
+  readonly bankReference: string | null;
+  readonly bankValueDate: string | null;
+  readonly description: string | null;
+  readonly recordedByLabel: string;
+  readonly verifiedByLabel: string | null;
+  readonly investigationReason: string | null;
+}
