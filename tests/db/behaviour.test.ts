@@ -8,7 +8,9 @@ import {
   inRollbackTransaction,
   query,
   queryOne,
+  RESTRICT_VIOLATION,
   skipReason,
+  sqlstateOf,
 } from '../helpers/db';
 
 /**
@@ -186,9 +188,11 @@ describeDb('profiles constraints are enforced, not merely declared', () => {
         [profileId],
       );
 
-      await expect(
-        client.query(`delete from public.profiles where id = $1`, [profileId]),
-      ).rejects.toMatchObject({ code: '23503' });
+      expect(
+        await sqlstateOf(
+          client.query(`delete from public.profiles where id = $1`, [profileId]),
+        ),
+      ).toMatch(RESTRICT_VIOLATION);
     });
   });
 });
@@ -898,9 +902,9 @@ describeDb('role assignments', () => {
         [profile.rows[0]?.id],
       );
 
-      await expect(
-        client.query(`delete from public.roles where key = 'manager'`),
-      ).rejects.toMatchObject({ code: '23503' });
+      expect(
+        await sqlstateOf(client.query(`delete from public.roles where key = 'manager'`)),
+      ).toMatch(RESTRICT_VIOLATION);
     });
   });
 });

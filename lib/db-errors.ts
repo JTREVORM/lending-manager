@@ -32,6 +32,15 @@ export interface PostgresErrorLike {
 const SQLSTATE = {
   UNIQUE_VIOLATION: '23505',
   FOREIGN_KEY_VIOLATION: '23503',
+  /**
+   * `ON DELETE RESTRICT` / `ON UPDATE RESTRICT`, which PostgreSQL 18 reports
+   * under its own code where 17 and earlier reported `23503`. Both mean the
+   * same thing to a user — a linked record is still in use — so both map to
+   * the same message. Listed separately rather than merged because the server
+   * version decides which one arrives, and a reader needs to know why there
+   * are two.
+   */
+  RESTRICT_VIOLATION: '23001',
   NOT_NULL_VIOLATION: '23502',
   CHECK_VIOLATION: '23514',
   EXCLUSION_VIOLATION: '23P01',
@@ -79,6 +88,7 @@ export function mapDatabaseError(error: unknown, resourceLabel = 'record'): AppE
       });
 
     case SQLSTATE.FOREIGN_KEY_VIOLATION:
+    case SQLSTATE.RESTRICT_VIOLATION:
       return new ValidationError(
         `Foreign key violated on ${resourceLabel}.`,
         {},
