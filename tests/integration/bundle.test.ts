@@ -107,7 +107,7 @@ describeBundle('the browser bundle', () => {
     ).toBeLessThanOrEqual(120);
   });
 
-  it('keeps every chunk the application has under 693 KB gzipped in total', () => {
+  it('keeps every chunk the application has under 702 KB gzipped in total', () => {
     // The sum of every chunk, which is the ceiling on what the application
     // could *ever* ask a phone to download across a whole session. It was
     // 410 KB over forty chunks when this was written, and 506 KB over
@@ -365,6 +365,30 @@ describeBundle('the browser bundle', () => {
     // 693 leaves five kilobytes over the measured 688, the same headroom as
     // every raise before it.
     //
+    // ## 693 → 702, for Decision A's two screens
+    //
+    // Cash Received and Bank Deposits. Measured 697 across 112 chunks, so 702
+    // keeps the five kilobytes of headroom every raise before this one left.
+    //
+    // This raise is the smaller half of what the test found. The first
+    // measurement was 828 KB with a single 133 KB chunk — a 135 KB jump, and
+    // `/finance/deposits` at 1,009 KB uncompressed first load, 245 KB more
+    // than any other route in the application and 450 KB more than its own
+    // sibling `/finance/receipts`. The cause was one line:
+    // `import { randomUUID } from 'node:crypto'` in a client component, which
+    // pulled the Node polyfill into that route. The Web Crypto API has
+    // `randomUUID` in every browser the application supports and in the Node
+    // that renders it, so the fallback it was written for does not exist.
+    // Removing it took the route to 568 KB, in line with its siblings, and
+    // the largest-chunk assertion above passes unchanged.
+    //
+    // What is left — nine kilobytes for two interactive screens — is what
+    // they genuinely cost. Both are client components by necessity: the
+    // receipt list selects rows to confirm as a batch, and the deposit
+    // register carries a verify, investigate or reverse form per row. The
+    // registers could not be server-rendered without taking the interaction
+    // away from the control they exist to operate.
+    //
     // It is not what a page costs. No page loads all of them: a measured
     // page transfers 155-165 KB of JavaScript, and that figure — the one
     // that is actually somebody's airtime — is asserted in a real browser by
@@ -372,7 +396,7 @@ describeBundle('the browser bundle', () => {
     // which chunks a route pulls.
     const total = chunks.reduce((sum, path) => sum + gzippedSize(path), 0);
 
-    expect(Math.round(total / 1024)).toBeLessThanOrEqual(693);
+    expect(Math.round(total / 1024)).toBeLessThanOrEqual(702);
   });
 
   it('emits no source map for the browser', () => {

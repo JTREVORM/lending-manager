@@ -1,7 +1,6 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { randomUUID } from 'node:crypto';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -34,11 +33,20 @@ export interface BankDepositRegisterProps {
   readonly className?: string;
 }
 
-/** A key the browser mints, so a double submission records one deposit. */
+/**
+ * A key the browser mints, so a double submission records one deposit.
+ *
+ * `globalThis.crypto`, not `node:crypto`. This is a client component, and
+ * importing the Node module pulled its browser polyfill into this route's
+ * first load — 133 KB gzipped in one chunk, which took `/finance/deposits` to
+ * 1,009 KB uncompressed, 245 KB more than any other route in the
+ * application and 450 KB more than its own sibling. `tests/integration/bundle.test.ts`
+ * is the test that caught it. The Web Crypto API has `randomUUID` in every
+ * browser the application supports and in the Node that renders it, so the
+ * fallback it was there for does not exist.
+ */
 function newKey(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : randomUUID();
+  return globalThis.crypto.randomUUID();
 }
 
 export function BankDepositRegister({

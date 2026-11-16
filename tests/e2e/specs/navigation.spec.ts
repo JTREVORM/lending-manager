@@ -305,6 +305,10 @@ test.describe('the phone and tablet drawer', () => {
       '/finance',
       '/finance?section=cash',
       '/finance/ledger',
+      // Decision A. Both are wide registers, which is the shape that scrolls
+      // a phone sideways first.
+      '/finance/receipts',
+      '/finance/deposits',
       '/account',
       '/account/password',
     ]) {
@@ -388,6 +392,8 @@ test.describe('the desktop rail', () => {
   test('the module holding the open page expands by itself', async ({ page }) => {
     const cases = [
       { path: '/finance/expenses', opens: 'Finance', entry: 'Expenses' },
+      { path: '/finance/receipts', opens: 'Finance', entry: 'Cash Received' },
+      { path: '/finance/deposits', opens: 'Finance', entry: 'Bank Deposits' },
       { path: '/clients?status=suspended', opens: 'Clients', entry: 'Suspended Clients' },
       {
         path: '/loans?stage=awaiting_disbursement',

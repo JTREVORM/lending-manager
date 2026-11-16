@@ -498,6 +498,139 @@ describeDb('Decision A — no unfunded payouts', () => {
   });
 
   // =========================================================================
+  describe('the approval-controlled paths', () => {
+    // The Owner's instruction to verify transfers, expenses, Mobile Money and
+    // Agency transactions explicitly, and to introduce no second definition
+    // of available balance.
+    //
+    // These four are the ones that already asked `assert_cash_available`
+    // before Decision A, so they were never part of the defect. What has to
+    // be shown is that they now get the *new* rule rather than the old one —
+    // which they do because `assert_cash_available` was redefined to delegate
+    // rather than left beside its replacement — and that an approval is
+    // checked when it posts rather than only when it was raised. A transfer
+    // raised this morning above the threshold posts this afternoon, and what
+    // the till holds then is what matters.
+
+    it('refuses an approved transfer whose funds have gone since it was raised', async () => {
+      // Raised when the money is there.
+      const entry = await receiveCash(branch, till, 500_000);
+      const confirmation = await queryOne<{ id: string }>(
+        `select id from public.cash_receipt_confirmations where journal_entry_id = $1`,
+        [entry],
+      );
+      await query(`select public.confirm_cash_receipt($1, 'Counted')`, [confirmation.id]);
+      expect((await availability(till)).available).toBe(500_000);
+
+      const settings = await queryOne<{ threshold: string | null }>(
+        `select transfer_approval_threshold::text as threshold
+           from public.finance_settings where id = 1`,
+      );
+
+      await query(
+        `update public.finance_settings set transfer_approval_threshold = 1 where id = 1`,
+      );
+
+      try {
+        const raisedId = await queryOne<{ id: string }>(
+          `select public.record_transfer($1, $2, 400000, current_date,
+                                         'Banking the takings') as id`,
+          [till, bank],
+        );
+        const raised = await queryOne<{ id: string; status: string }>(
+          `select id, status from public.account_transfers where id = $1`,
+          [raisedId.id],
+        );
+        expect(raised.status).toBe('pending_approval');
+
+        // Nothing has moved yet: a transfer awaiting approval is not a
+        // transfer that has happened.
+        expect((await availability(till)).available).toBe(500_000);
+
+        // Then the money leaves by another route before anybody approves.
+        const drained = await attemptCommitted(payoutOf(branch, till, 450_000));
+        expect(drained).toBeNull();
+        expect((await availability(till)).available).toBe(50_000);
+
+        // The approval must now be refused. The check belongs where the
+        // journal is posted, not where the document was raised.
+        const approval = await attemptCommitted([
+          { sql: `select public.approve_transfer($1)`, params: [raised.id] },
+        ]);
+        expect(approval).not.toBeNull();
+        expect(approval).toMatch(/less than the|does not hold it/i);
+
+        const after = await queryOne<{ status: string }>(
+          `select status from public.account_transfers where id = $1`,
+          [raised.id],
+        );
+        expect(after.status).toBe('pending_approval');
+      } finally {
+        await query(
+          `update public.finance_settings set transfer_approval_threshold = $1 where id = 1`,
+          [settings.threshold],
+        );
+      }
+    });
+
+    it('asks one question, in one place, for every payout path', async () => {
+      // There must be exactly one definition of available funds. Every path
+      // that asks about cash reaches `assert_cash_funds_available`, either by
+      // name or through `assert_cash_available`, which since this migration
+      // only delegates to it. A second implementation anywhere would be a
+      // second answer, and sooner or later a different one.
+      const callers = await query<{ name: string; direct: boolean }>(
+        `select p.proname as name,
+                pg_get_functiondef(p.oid) ~ 'assert_cash_funds_available' as direct
+           from pg_proc p
+           join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            -- prokind first: pg_get_functiondef() raises on an aggregate,
+            -- and this schema holds a few.
+            and p.prokind = 'f'
+            and pg_get_functiondef(p.oid) ~ 'assert_cash(_funds)?_available'
+            and p.proname not in ('assert_cash_available', 'assert_cash_funds_available')
+          order by p.proname`,
+      );
+
+      // Every money-out path the Owner named, and the three that were missing.
+      const names = callers.map((c) => c.name);
+      for (const required of [
+        'post_disbursement_journal',
+        'post_savings_withdrawal',
+        'post_benefit_payment',
+        'post_transfer_journal',
+        'post_expense_journal',
+        'post_agency_transaction',
+      ]) {
+        expect(names, `${required} must ask about available funds`).toContain(required);
+      }
+
+      // A reversal asks through one more step, and has to: reversing a
+      // receipt nobody confirmed should *release* its restriction, while
+      // reversing one that was confirmed is a payout like any other. One
+      // function decides which, and `post_reversal_journal` calls it.
+      expect(names).toContain('release_or_assert_receipt_reversal');
+      const reversal = await queryOne<{ body: string }>(
+        `select pg_get_functiondef(p.oid) as body
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = 'post_reversal_journal'`,
+      );
+      expect(reversal.body).toMatch(/release_or_assert_receipt_reversal/);
+
+      // And `assert_cash_available` is now a delegation, not a second rule:
+      // its whole body is one `perform` of the other function.
+      const legacy = await queryOne<{ body: string }>(
+        `select pg_get_functiondef(p.oid) as body
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = 'assert_cash_available'`,
+      );
+      expect(legacy.body).toMatch(/assert_cash_funds_available/);
+      expect(legacy.body).not.toMatch(/allow_negative_cash/);
+    });
+  });
+
+  // =========================================================================
   describe('the loan path, end to end', () => {
     it('refuses a disbursement the branch cannot fund, and leaves the loan approved', async () => {
       const borrower = await createLoanScenario();
