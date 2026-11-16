@@ -129,7 +129,8 @@ describeDb('who may move the company money', () => {
 
   async function accountByCashKind(kind: string): Promise<string> {
     const row = await queryOne<{ id: string }>(
-      `select id from public.ledger_accounts where cash_kind = $1 limit 1`,
+      `select id from public.ledger_accounts where cash_kind = $1
+        order by code limit 1`,
       [kind],
     );
     return row.id;

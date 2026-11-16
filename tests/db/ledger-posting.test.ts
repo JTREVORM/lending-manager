@@ -83,10 +83,24 @@ async function balance(code: string): Promise<number> {
   return Number(row.balance);
 }
 
-async function cashCode(kind: string): Promise<string> {
+/**
+ * The code of a loan's own branch cash account of a given kind.
+ *
+ * Named by the loan rather than by kind alone. `where cash_kind = $1 limit 1`
+ * returned whichever row the planner reached first, which was the right one
+ * only while the database held a single branch — and fixtures in this suite
+ * now open more than one, so the assertion compared a payment's cash leg
+ * against another branch's till and found nothing there. It passed or failed
+ * on row order, which is no assertion at all.
+ */
+async function cashCode(kind: string, loanId: string): Promise<string> {
   const row = await queryOne<{ code: string }>(
-    `select code from public.ledger_accounts where cash_kind = $1 limit 1`,
-    [kind],
+    `select a.code
+       from public.loans l
+       join public.ledger_accounts a
+         on a.id = public.branch_cash_account(l.branch_id, $2)
+      where l.id = $1`,
+    [loanId, kind],
   );
   return row.code;
 }
@@ -123,7 +137,7 @@ describeDb('a disbursement and its journal are one transaction', () => {
 
     expect(await legs(entries[0]!.id)).toEqual({
       '1200': 750_000,
-      [await cashCode('cash_at_hand')]: -750_000,
+      [await cashCode('cash_at_hand', loanId)]: -750_000,
     });
   });
 
@@ -201,7 +215,9 @@ describeDb('a payment and its journal are one transaction', () => {
       [paymentId],
     );
 
-    expect(posted[await cashCode('cash_at_hand')]).toBe(Number(allocation.amount));
+    expect(posted[await cashCode('cash_at_hand', loanId)]).toBe(
+      Number(allocation.amount),
+    );
     expect(posted['1200'] ?? 0).toBe(-Number(allocation.principal));
     expect(posted['4100'] ?? 0).toBe(-Number(allocation.interest));
   });
@@ -242,7 +258,7 @@ describeDb('a reversal posts the exact contra', () => {
     await disburseApprovedLoan(loanId, scenario);
     const minimum = (await readMinimum(loanId)) ?? 50_000;
 
-    const cash = await cashCode('cash_at_hand');
+    const cash = await cashCode('cash_at_hand', loanId);
     const cashBefore = await balance(cash);
     const receivableBefore = await balance('1200');
     const interestBefore = await balance('4100');
@@ -301,7 +317,7 @@ describeDb('Bank is a payment method', () => {
     await disburseApprovedLoan(loanId, scenario);
     const minimum = (await readMinimum(loanId)) ?? 50_000;
 
-    const bank = await cashCode('bank');
+    const bank = await cashCode('bank', loanId);
     const before = await balance(bank);
 
     const paymentId = await postPayment(loanId, scenario.secretary, {

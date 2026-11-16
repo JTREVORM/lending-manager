@@ -1611,7 +1611,7 @@ run in CI: this is a local execution and is reported as one.
 | Node | v22.23.4 |
 | Next.js | 16.4.1, **production build** (`next build` + `next start`) |
 | Chromium | Playwright 1.63.0, revision 1243 |
-| Business clock | `Africa/Kampala`; session `TimeZone` `Etc/UTC`; `business_date()` = 2026-11-15 |
+| Business clock | `Africa/Kampala`; session `TimeZone` `Etc/UTC`; `business_date()` = 2026-11-15, re-run 2026-11-16 |
 
 ### H.2 Required suites
 
@@ -1626,7 +1626,7 @@ run in CI: this is a local execution and is reported as one.
 | `npm run build` | **PASS** — performed as part of `npm run e2e:up`, twice |
 | `npm run check:security` | **PASS** — "No unreviewed privileged exposure" |
 | `npm run certify:financial` | **PASS** — **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
-| `node scripts/verify-membership-upgrade.mjs` | **PASS** — 99 existing migrations, a seeded book, then 126 new ones; **all 28 financial figures identical** |
+| `node scripts/verify-membership-upgrade.mjs` | **PASS** — 99 existing migrations, a seeded book, then 130 new ones; **all 28 financial figures identical**, the four journal figures among them |
 | `node scripts/verify-policy-upgrade.mjs` | **PASS** — 26 existing financial/identity tables verified; all records, balances and historical approvals preserved; ledger debits = credits = 17,779,483 |
 | `npx playwright test` | **PASS** — **1,151 tests: 1,098 passed, 0 failed, 53 skipped**, in 22.5 minutes, single worker, no retries, against the production build |
 | `node scripts/certify-production-readonly.mjs` | **DELIBERATELY NOT RUN.** It issues GET requests to the hosted Vercel application. This audit did not contact production. |
@@ -1763,6 +1763,38 @@ was changed to make anything pass.** The three test-inventory registrations are
 additions to deliberately exhaustive allowlists, each of which refused to infer
 the new function — which is those controls doing their job, and is why they are
 listed here rather than buried.
+
+Then, on the Owner's decision of 2026-11-16, the Decision A work:
+`docs/POLYTOS-DECISION-A-DELIVERY.md` accounts for all of it, and PR #36
+carries it. Four additive migrations, one new 26-test suite, three new
+certification identities, two screens, six capabilities, and the fixture and
+inventory changes those required. Three existing assertions were inverted;
+each is listed with its reason in §5.4 of the delivery note, and each inversion
+is the Owner's ruling taking effect rather than a test being made to pass.
+
+### H.6.1 A third defect, found in CI rather than in the product
+
+The `database` CI job takes the newest PostgreSQL on the runner image
+(`ls -d /usr/lib/postgresql/*/bin | tail -1`). That version moved between the
+green run on `main` at `89ebb2c` and the first run of PR #35 nine hours later,
+and with it the SQLSTATE for a refused `ON DELETE RESTRICT`: **`23001
+restrict_violation` where it had been `23503 foreign_key_violation`.** Three
+tests assert the exact code, and all three failed on CI while passing locally
+on 16. Nothing in the code under test had changed.
+
+The application carried the same assumption, and that was the more serious
+half. `lib/db-errors.ts` switched on `23503` to tell staff *"a linked record is
+missing or still in use"*. On the newer server a RESTRICT refusal fell through
+to the generic database error, so deleting a guarantor who still backs a frozen
+loan snapshot would have shown an unexplained failure rather than the reason.
+Both codes now map to the same message, and the three tests assert the class of
+refusal rather than one server's spelling of it. Fixed in `21dcf32` on PR #35,
+separately from both findings, because it is neither of them.
+
+This is worth recording as a method note rather than only a fix: a local suite
+that is green on one server version is not evidence about another, and the only
+reason it surfaced is that CI deliberately runs the newest PostgreSQL available
+rather than a pinned one.
 
 ### H.7 Not tested, and why
 
