@@ -35,29 +35,47 @@ penalties — reconciled **to the shilling, with zero difference**, and did so
 again when re-measured while the browser suite was actively writing money.
 
 It is **not** "functionally certified", and the reason is specific. Two
-findings stand between this system and that verdict:
+control failures were found, and both have since been ruled on by the Owner
+and fixed on these branches:
 
 | | Finding | Severity | State |
 | --- | --- | --- | --- |
-| **DEFECT-001** | The guarantor concentration ceiling the business configured did not bind at all | High | found, reproduced, **fixed on this branch**, regression-tested, **not merged** |
-| **GAP-001** | Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists. A branch till reached **−345,000** during this audit's own test run, with `allow_negative_cash = false` | High | **already known and documented** by the project; **reproduced live here**; **not fixed**, because the remedy is an open business decision |
+| **DEFECT-001** | The guarantor concentration ceiling the business configured did not bind at all | High | found, reproduced, **fixed and regression-tested**, approved by the Owner on 2026-11-16, **not merged** — PR #35 |
+| **GAP-001** | Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists. A branch till reached **−345,000** during this audit's own test run, with `allow_negative_cash = false` | High | **already known and documented** by the project; **reproduced live here**; ruled on by the Owner as *"APPROVED: NO UNFUNDED PAYOUTS"*; **fixed in four additive migrations**, **not merged** — PR #36 |
 
-Neither is an arithmetic error. Both are *control* failures: a configured
+Neither was an arithmetic error. Both were *control* failures: a configured
 credit limit that did nothing, and a cash-sufficiency check that three paths
 never reach. A financial system whose ledger can state a negative till is
 making a false claim about where the company's money is, and the till is
 exactly what a cash count is reconciled against.
 
+Two further defects were found while implementing those fixes. Neither is a
+financial-control defect and both are fixed:
+
+| | Finding | Severity | State |
+| --- | --- | --- | --- |
+| **Third** | A refused `ON DELETE RESTRICT` reports `23001` on the PostgreSQL the CI runner now provides, not `23503`. Three tests and — more seriously — `lib/db-errors.ts` assumed the old code, so staff would have seen an unexplained failure instead of *"a linked record is still in use"* | Medium | found by CI, **fixed** — §H.6.1 |
+| **Fourth** | One `import { randomUUID } from 'node:crypto'` in a client component put 441 KB of Node polyfill into a route's browser bundle, taking `/finance/deposits` to 1,009 KB uncompressed first load | Medium | found by CI, **fixed** — §H.6.2 |
+
+Both were caught by gates this repository already had, and neither by a local
+run. That is recorded as a method note rather than only as a fix: §H.6.1 and
+§H.6.2 say why a green local suite was not evidence in either case.
+
 Beyond those two, the verdict carries three further qualifications:
 
-**1. The two findings above are the whole of what went wrong.** No third
-defect was found, and no financial calculation was wrong anywhere. DEFECT-001
-is fixed on this branch in migration `20261119000100` with a five-case
-regression test whose discriminating power was proved by removing the
-migration — three of the five fail without it, including the concurrent form,
-in which two simultaneous disbursements both succeeded. **The fix changes what
-the business can disburse and has not been merged.** GAP-001 is deliberately
-not fixed; §E explains why in full, and §J ranks it.
+**1. No financial calculation was wrong anywhere.** Every defect found was a
+control or a test assumption, never an amount. DEFECT-001 is fixed in
+migration `20261119000100` with a five-case regression test whose
+discriminating power was proved by removing the migration — three of the five
+fail without it, including the concurrent form, in which two simultaneous
+disbursements both succeeded. **The fix changes what the business can disburse
+and has not been merged.** GAP-001 is fixed in migrations `20261120000100`
+through `20261120000400` with a 28-test suite, three new permanent
+certification identities and an upgrade gate that reports **all 28 financial
+figures identical** across the change — so not one borrower-facing amount
+moved. §E states the finding, §H.6 what was built, and
+`docs/POLYTOS-DECISION-A-DELIVERY.md` accounts for it in full. **Also not
+merged.**
 
 **2. The membership programme is not commercially authorised, and the system
 correctly refuses to run it.** Policy version 1.0 and the official version 2.0
@@ -85,11 +103,14 @@ Banking and Mobile Money were therefore certified against synthetic
 ### What this verdict is not
 
 It is **not** a statement that POLYTOS is ready to accept live public money.
-That requires, at minimum: a resolution of GAP-001, so that the ledger cannot
-state cash the business does not hold; a decision on DEFECT-001's fix; the
-Owner's approval of a membership policy version; the six outstanding business
-decisions; and activation of the real providers under their own commercial
-agreements. Those are ranked in §J.
+Both control failures are now fixed, which removes two of the five
+prerequisites; what remains is: **merging both pull requests once every CI
+check passes**; the §11.4 cash cutover — signed per-account till counts, bank
+confirmations and an Owner-approved initial verified position, which a
+migration cannot establish and `docs/POLYTOS-DECISION-A-DELIVERY.md` says so;
+the Owner's approval of a membership policy version; the six outstanding
+business decisions; and activation of the real providers under their own
+commercial agreements. Those are ranked in §J.
 
 It is also not a claim that synthetic testing substitutes for live operation.
 Every figure in this report was produced from data this audit created.
@@ -102,10 +123,10 @@ Every figure in this report was produced from data this audit created.
 
 | | Count |
 | --- | ---: |
-| Database migrations applied, in order, to an empty database | **224** at the audited commit; **225** with this audit's fix |
-| Base tables in the resulting schema | **95**, every one with Row Level Security enabled |
-| Views | **69** |
-| Database functions | **397** |
+| Database migrations applied, in order, to an empty database | **224** at the audited commit; **225** with DEFECT-001's fix; **229** with Decision A |
+| Base tables in the resulting schema | **95** at the audited commit; **97** with Decision A's two registers, every one with Row Level Security enabled |
+| Views | **69**; **70** with Decision A's availability view |
+| Database functions | **397**; **419** with both fixes |
 | PostgREST relations / relationships / functions exposed | 164 / 154 / 249 |
 | Application routes and server actions | audited by reading |
 | Business rules inventoried | **469** (§B) |
@@ -188,7 +209,7 @@ rules in force.
 | `IND` | **Independently verified by this audit** — recomputed from the business rule or from base tables, never from the code under test. The measurement is given in §C. |
 | `SCHEMA` | The constraint, trigger, index or function was read in the **live migrated database** (`pg_constraint`, `pg_indexes`, `pg_get_functiondef`) and matches the rule. |
 | `DB:<file>` | That specific file in `tests/db/` — run by this audit against a real PostgreSQL cluster, passed, **and** its coverage of this rule confirmed by reading the test itself or by the repository's own documentation citing it. |
-| `DB-SUITE` | Covered by the repository's database suite as a whole — **104 files, 2,567 tests, run in full by this audit against a real PostgreSQL cluster, all passing** — without this audit confirming which individual file asserts this particular rule. Weaker than `DB:<file>`, and marked differently so the distinction is visible. |
+| `DB-SUITE` | Covered by the repository's database suite as a whole — **104 files, 2,569 tests, run in full by this audit against a real PostgreSQL cluster, all passing** — without this audit confirming which individual file asserts this particular rule. Weaker than `DB:<file>`, and marked differently so the distinction is visible. |
 | `CERT` | One of the 41 identities in `npm run certify:financial`, run by this audit — 38 as inherited, plus the three cash-sufficiency identities Decision A added. |
 | `SEC` | `npm run check:security` — run by this audit, "no unreviewed privileged exposure". |
 | `UNIT` | The repository's unit and integration suite — **90 files, 2,770 tests, run in full by this audit, all passing**. |
@@ -1274,7 +1295,7 @@ re-running:
 | `tests/db/guarantor-concentration.test.ts` | 5 passed |
 | `tests/db/loan-concurrency.test.ts` (which the first attempt broke) | 13 passed |
 | `tests/db/security.test.ts` SECURITY DEFINER inventory | passed, after the new trigger function was added to the stated inventory |
-| **Full `npm run test:db`** | **2,567 passed, 0 failed** |
+| **Full `npm run test:db`** | **2,569 passed, 0 failed** |
 | `npm run typecheck` / `lint` / `format:check` | passed |
 | Migration applies to an empty database in order | yes — all 225 migrations |
 
@@ -1509,7 +1530,7 @@ than the database rule it mirrors, and no PostgREST embed is ambiguous.
 
 Expected refusals were tested as carefully as successful actions: the agency
 acceptance suite alone carries explicit `REFUSAL —` cases, and the database
-suite's refusal assertions are what most of its 2,567 tests measure.
+suite's refusal assertions are what most of its 2,569 tests measure.
 
 ### Cross-branch access
 
@@ -1622,7 +1643,7 @@ run in CI: this is a local execution and is reported as one.
 | `npm run format:check` | **PASS** (exit 0) |
 | `npm run audit:money` | **PASS** — 277 financial files scanned, no hazard; five engines reach only integer money helpers; 6 acknowledged exemptions each verified present; scanner verified against a positive control |
 | `npm run test:run` (unit + integration) | **PASS** — **90 files, 2,770 tests, 2,770 passed, 0 failed, 0 skipped** |
-| `npm run test:db` (17 projects) | **PASS** — **104 files, 2,567 tests, 2,567 passed, 0 failed** |
+| `npm run test:db` (17 projects) | **PASS** — **104 files, 2,569 tests, 2,569 passed, 0 failed** |
 | `npm run build` | **PASS** — performed as part of `npm run e2e:up`, twice |
 | `npm run check:security` | **PASS** — "No unreviewed privileged exposure" |
 | `npm run certify:financial` | **PASS** — **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
@@ -1638,7 +1659,7 @@ real PostgreSQL cluster, with the database rebuilt from every migration first:
 
 | Project | Tests |
 | --- | ---: |
-| `db` (87 files) | **1,998** |
+| `db` (87 files) | **2,000** |
 | `agency` | 66 |
 | `agency-engine` | 78 |
 | `agency-security` | 21 |
@@ -1654,7 +1675,7 @@ real PostgreSQL cluster, with the database rebuilt from every migration first:
 | `seed-member-loans` | 24 |
 | `seed-benefits` | 25 |
 | `clean-slate` | 37 |
-| **Total** | **2,567** |
+| **Total** | **2,569** |
 
 0 failed, 0 skipped.
 
@@ -1796,6 +1817,50 @@ that is green on one server version is not evidence about another, and the only
 reason it surfaced is that CI deliberately runs the newest PostgreSQL available
 rather than a pinned one.
 
+### H.6.2 A fourth defect, which only CI could have caught
+
+`tests/integration/bundle.test.ts` asserts what the application asks a phone
+to download. It skips when there is no build, and otherwise measures whatever
+`.next` happens to hold — which locally was a build from before the Decision A
+screens existed, so it passed on stale evidence three times. CI builds first,
+every time. It failed, and it was right.
+
+One line did it. `components/finance/bank-deposit-register.tsx` is a client
+component and imported `randomUUID` from `node:crypto` as the fallback half of
+a helper whose first branch already used the Web Crypto API. Next bundles that
+import for the browser, so the polyfill went out with the route:
+
+| | With the import | Without it |
+| --- | ---: | ---: |
+| Largest single chunk, gzipped | **133 KB** (budget 120) | 71 KB |
+| Every chunk, gzipped | **828 KB** (budget 693) | 697 KB |
+| `/finance/deposits` first load, uncompressed | **1,009 KB** | 568 KB |
+| The next largest route in the application | 764 KB | 764 KB |
+| Its own sibling `/finance/receipts` | 561 KB | 561 KB |
+
+The Web Crypto API has `randomUUID` in every browser the application supports
+and in the Node that server-renders the page, so the fallback was dead code
+that cost 441 KB more than the thing it guarded.
+
+The total budget was then raised **693 → 702**, which is the honest remainder:
+nine kilobytes for two screens, both client components by necessity — the
+receipt list selects rows to confirm as a batch, and the deposit register
+carries a verify, investigate or reverse form per row. 702 keeps the five
+kilobytes over the measured 697 that each of the five previous raises left, and
+the reasoning is written into the test beside them. The largest-chunk ceiling
+of 120 KB was **not** raised and passes unchanged.
+
+Two method notes, both about this audit rather than about the product:
+
+1. A gate that measures build output is only as current as the build. The
+   three green local runs were not wrong about the tree they measured; they
+   were measuring the wrong tree. A gate that skips rather than fails when its
+   input is missing can also pass when its input is stale.
+2. Both new screens were absent from the browser sweeps — the accessibility
+   pass, the sideways-scroll check and the nav-expansion check — and the full
+   1,151-test suite passed without touching either of them. They are in those
+   lists now. A suite that is green is not a suite that looked.
+
 ### H.7 Not tested, and why
 
 | Item | Why |
@@ -1885,6 +1950,8 @@ Ranked as the brief asks.
 | ~~C0~~ | **DONE, 2026-11-16.** The Owner decided: no unfunded payouts, approved with eleven instructions, implemented on this branch in migrations `20261120000100`–`20261120000400` and recorded in `docs/POLYTOS-DECISION-A-DELIVERY.md`. The original item read: **Decide "Decision A" and close GAP-001.** Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists, and a branch till reached **−345,000** during this audit's own run with `allow_negative_cash = false`. The analysis, the implementation plan, the accountant review package and the technical acceptance checklist are already in `docs/`. This is ranked first because it is the one finding that makes a *reported financial position* untrue, and because a cash count is reconciled against the very figure that can go negative. It is a business decision — refusing a disbursement for want of till cash changes what happens at the counter — so it needs the Owner, not a patch. |
 | ~~C1~~ | **DECIDED, 2026-11-16.** The Owner approved the guarantor ceiling as a mandatory control, enforced on the transition to active with correct locking. The fix in PR #35 stands, subject to code review and CI. The original item read: **Review and decide on DEFECT-001's fix** (migration `20261119000100`). The guarantor concentration ceiling the business configured does not currently bind: one guarantor can stand behind any number of active loans. The fix makes it bind at disbursement. It changes what can be disbursed, so it needs the Owner's decision — either accept the fix, or decide that the ceiling is advisory and change the column's documented meaning to match. **Leaving it as it is means the configured figure means nothing, which is the worst of the three outcomes.** |
 | C2 | **Approve a membership policy version, or accept that the membership programme cannot operate.** Both 1.0 and 2.0 are drafts. Nothing in the membership, savings, member-lending, benefits or meeting-fine modules can run until one is approved with an authorisation reference. |
+| C3 | **Merge PR #35, then PR #36, and only when every CI check on each is green.** #36 branches from #35, so the order is not a preference. Both change what happens at a counter — a disbursement can now be refused for a guarantor at the ceiling, and any payout can be refused for want of available cash — so each wants the Owner's explicit go-ahead rather than an auto-merge. |
+| C4 | **Complete the §11.4 cash cutover before Decision A's rule binds on live data.** The migrations take "no restriction recorded" to mean "available", which is what guarantees that no historical figure moved — and it is *not* evidence that legacy till cash is physically present. Signed per-account till counts, a bank confirmation for every bank account and an Owner-approved initial verified position are required, and no migration can establish them. Stated in `docs/POLYTOS-DECISION-A-DELIVERY.md` §4. |
 
 ### High — resolve before the affected service accepts financial transactions
 
@@ -1896,6 +1963,7 @@ Ranked as the brief asks.
 | H4 | **Decide the calendar-monthly collection anchor** before offering member loans of three to five months. The cadence is inactive and the anchor NULL; approving such a loan is refused with `cadence_anchor_undecided`. |
 | H5 | **Activate the Member Loans product last, not first.** Its interest basis and method come from the member's own policy version; activation before a policy is approved would create a product that cannot price a loan. |
 | H6 | **Run the real-Auth release rehearsal** (`real-auth.release.spec.ts`) in CI, where the GoTrue image is available. It was NOT TESTED in this environment, and it is the one component the harness substitutes. |
+| H8 | **Decide what happens to a bank deposit the bank does not acknowledge** — blocker B-1. `record_bank_deposit` and `verify_bank_deposit` cover the ordinary path, and `open_deposit_investigation` records an unacknowledged deposit without posting anything, deliberately: a bounced deposit, a partial clearance and the ageing, recovery and loss treatments are accounting decisions, not implementation details. Until they are decided, cash in transit that never clears stays in transit and visible rather than being written off by a guess. |
 | ~~H7~~ | **DONE.** The identity is in `scripts/certify-financial-reconciliation.mjs` as the `cash sufficiency` group, and it distinguishes a balance that went negative before the rule began to bind from one created after. The original item read: **Add a "no cash account holds a negative balance" identity to `scripts/certify-financial-reconciliation.mjs`.** The harness already has exactly this identity for loan outstandings and for savings balances; cash is the one of the three that lacks it, and its three cash identities test agreement with the general ledger rather than plausibility — so they pass happily on a till of −345,000. One identity would have turned GAP-001 from a documented analysis into a failing build. This is cheap, it is independent of the Decision A outcome, and it should be done first so the decision can be verified when it lands. |
 
 ### Medium — resolve before business launch
@@ -1914,4 +1982,7 @@ Ranked as the brief asks.
 | L1 | Teach `scripts/check-database-security.mjs` to recognise `agency_actor()` as an authorisation helper, so its advisory list stops naming ~30 functions that are in fact properly guarded. It is honest about being advisory, but a list that is mostly false positives is a list people stop reading. |
 | L2 | Make `stack.sh`'s cleanup match on the executable rather than the command line, so a shell whose arguments merely mention `postgrest` is not killed. |
 | L3 | Consider surfacing a guarantor's current concentration on the approval screen. The fix added the failure code; showing the count before somebody commits to an application would turn a refusal into a decision. |
+| L4 | Make `tests/integration/bundle.test.ts` fail, rather than skip, when `.next` is older than the newest source file it would measure. It skips when there is no build, which is right; it also passes against a stale one, which is how a 441 KB regression survived three green local runs (§H.6.2). |
+| L5 | Add a browser spec for Cash Received and Bank Deposits beyond the sweeps they were just added to. The full 1,151-test suite passed without touching either screen, which is worth remembering: a suite that is green is not a suite that looked. The database suite proves the rules; what is missing is a journey that confirms a receipt and clears a deposit through the two buttons an officer presses. |
+| L6 | Consider pinning the `database` CI job's PostgreSQL major version, or asserting it. The job takes the newest on the runner image, which is the stronger test and is how the `23001` change was caught at all (§H.6.1) — but it means the runner image can turn a green build red with no commit behind it, and the first symptom is three unrelated-looking test failures. |
 
