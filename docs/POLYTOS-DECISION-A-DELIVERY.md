@@ -200,12 +200,12 @@ production build. Nothing hosted was contacted.
 | `npm run typecheck` / `lint` / `format:check` | pass |
 | `npm run audit:money` | pass — 277 financial files, no float hazard, five engines reaching only integer helpers |
 | `npm run test:run` (unit + integration) | **90 files, 2,770 tests, 0 failed** |
-| `npm run test:db` (17 projects) | **104 files, 2,567 tests, 0 failed** |
+| `npm run test:db` (17 projects) | **104 files, 2,569 tests, 0 failed** |
 | `npm run check:security` | "No unreviewed privileged exposure" |
 | `npm run certify:financial` | **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
 | `node scripts/verify-membership-upgrade.mjs` | pass — **all 28 financial figures identical** across the upgrade |
 | `node scripts/verify-policy-upgrade.mjs` | pass — 26 tables preserved |
-| `npx playwright test --trace off` | **1,151 tests, 0 failed, 53 skipped** |
+| `npx playwright test --trace off` | **1,155 tests, 0 failed, 53 skipped**, against a stack rebuilt from zero |
 
 ### 5.1 The reproduction, before and after
 
@@ -272,3 +272,35 @@ decision taking effect rather than a test being made to pass:
 
 Everything else was a fixture putting money in before taking it out, which is
 what a business does. No expected financial value was changed anywhere.
+
+### 5.5 The approval-controlled paths, verified explicitly
+
+The Owner asked for these four by name, and for no second definition of
+available balance.
+
+Transfers, expenses, Mobile Money and Agency transactions were never part of
+the defect: all four already called `assert_cash_available`. What had to be
+shown is that they now get the *new* rule rather than the old one, which they
+do because `assert_cash_available` was **redefined to delegate** to
+`assert_cash_funds_available` rather than left standing beside it. Nothing had
+to be re-pointed, and nothing could be missed.
+
+Two tests hold it:
+
+- *"refuses an approved transfer whose funds have gone since it was raised"* —
+  the threshold is lowered so the transfer is held for approval, the till is
+  then drained by another route, and `approve_transfer` is refused. The check
+  belongs where the journal is posted, not where the document was raised, and
+  the transfer is left `pending_approval` rather than failed.
+- *"asks one question, in one place, for every payout path"* — reads
+  `pg_get_functiondef` for every function in `public` and asserts that each of
+  the seven payout paths reaches the availability rule, that
+  `assert_cash_available`'s whole body is a delegation to it, and that its text
+  no longer mentions `allow_negative_cash`. A second implementation anywhere
+  would be a second answer, and sooner or later a different one.
+
+`post_reversal_journal` asks through one more step, deliberately:
+`release_or_assert_receipt_reversal` decides whether reversing a receipt
+*releases* its restriction — because nobody had counted the money — or is a
+payout like any other, because somebody had. The test asserts that chain by
+name rather than accepting its absence.

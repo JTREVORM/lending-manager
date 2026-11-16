@@ -1787,7 +1787,7 @@ listed here rather than buried.
 
 Then, on the Owner's decision of 2026-11-16, the Decision A work:
 `docs/POLYTOS-DECISION-A-DELIVERY.md` accounts for all of it, and PR #36
-carries it. Four additive migrations, one new 26-test suite, three new
+carries it. Four additive migrations, one new 28-test suite, three new
 certification identities, two screens, six capabilities, and the fixture and
 inventory changes those required. Three existing assertions were inverted;
 each is listed with its reason in §5.4 of the delivery note, and each inversion
@@ -1890,7 +1890,7 @@ inspected. The production build tested here was built and served locally on
 | Thing | Changed? |
 | --- | --- |
 | Production data | **No.** Not one row. |
-| Production migrations | **No.** The new migration was applied only to throwaway local databases. |
+| Production migrations | **No.** All five new migrations — DEFECT-001's one and Decision A's four — were applied only to throwaway local databases, each built from zero. |
 | Production users or authentication | **No.** Every account used was synthetic and local. |
 | Production membership policies | **No.** Policy 1.0 and 2.0 were **read only**; both remain `draft` and unapproved. |
 | Production provider activation states | **No.** No `is_provisional` flag was changed anywhere. No provider was activated. |
