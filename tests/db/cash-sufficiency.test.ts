@@ -766,6 +766,46 @@ describeDb('Decision A — no unfunded payouts', () => {
       expect([a, b].filter(Boolean)).toHaveLength(1);
       expect((await availability(till)).available).toBe(0);
     });
+
+    it('a benefit payment and another payout cannot both take the last of the till', async () => {
+      // The Owner's list names this race by itself, so it is tested by itself
+      // rather than by analogy with the one above. Both movements are company
+      // money leaving the same drawer, and only one of them may.
+      await fundBranchTill(branch, 250_000);
+      expect((await availability(till)).available).toBe(250_000);
+
+      const [benefit, other] = await Promise.all([
+        attemptCommitted(payoutOf(branch, till, 250_000, 'benefit_payment')),
+        attemptCommitted(payoutOf(branch, till, 250_000, 'savings_withdrawal')),
+      ]);
+
+      expect([benefit, other].filter((m) => m === null)).toHaveLength(1);
+      expect((await availability(till)).available).toBe(0);
+    });
+
+    it('a payout and a banking cannot both take the last of the till', async () => {
+      // Banking cash takes it out of the drawer as surely as paying it out
+      // does, so the two contend for the same available balance. The Owner's
+      // list names this one too.
+      await fundBranchTill(branch, 500_000);
+
+      const banking = async (): Promise<string | null> =>
+        attemptCommitted([
+          {
+            sql: `select public.record_bank_deposit($1, $2, 500000, 'To the bank',
+                                                   gen_random_uuid())`,
+            params: [till, bank],
+          },
+        ]);
+
+      const [paid, banked] = await Promise.all([
+        attemptCommitted(payoutOf(branch, till, 500_000)),
+        banking(),
+      ]);
+
+      expect([paid, banked].filter((m) => m === null)).toHaveLength(1);
+      expect((await availability(till)).available).toBe(0);
+    });
   });
 
   // =========================================================================

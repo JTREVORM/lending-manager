@@ -209,7 +209,7 @@ rules in force.
 | `IND` | **Independently verified by this audit** — recomputed from the business rule or from base tables, never from the code under test. The measurement is given in §C. |
 | `SCHEMA` | The constraint, trigger, index or function was read in the **live migrated database** (`pg_constraint`, `pg_indexes`, `pg_get_functiondef`) and matches the rule. |
 | `DB:<file>` | That specific file in `tests/db/` — run by this audit against a real PostgreSQL cluster, passed, **and** its coverage of this rule confirmed by reading the test itself or by the repository's own documentation citing it. |
-| `DB-SUITE` | Covered by the repository's database suite as a whole — **104 files, 2,569 tests, run in full by this audit against a real PostgreSQL cluster, all passing** — without this audit confirming which individual file asserts this particular rule. Weaker than `DB:<file>`, and marked differently so the distinction is visible. |
+| `DB-SUITE` | Covered by the repository's database suite as a whole — **104 files, 2,571 tests, run in full by this audit against a real PostgreSQL cluster, all passing** — without this audit confirming which individual file asserts this particular rule. Weaker than `DB:<file>`, and marked differently so the distinction is visible. |
 | `CERT` | One of the 41 identities in `npm run certify:financial`, run by this audit — 38 as inherited, plus the three cash-sufficiency identities Decision A added. |
 | `SEC` | `npm run check:security` — run by this audit, "no unreviewed privileged exposure". |
 | `UNIT` | The repository's unit and integration suite — **90 files, 2,770 tests, run in full by this audit, all passing**. |
@@ -1295,7 +1295,7 @@ re-running:
 | `tests/db/guarantor-concentration.test.ts` | 5 passed |
 | `tests/db/loan-concurrency.test.ts` (which the first attempt broke) | 13 passed |
 | `tests/db/security.test.ts` SECURITY DEFINER inventory | passed, after the new trigger function was added to the stated inventory |
-| **Full `npm run test:db`** | **2,569 passed, 0 failed** |
+| **Full `npm run test:db`** | **2,571 passed, 0 failed** |
 | `npm run typecheck` / `lint` / `format:check` | passed |
 | Migration applies to an empty database in order | yes — all 225 migrations |
 
@@ -1530,7 +1530,7 @@ than the database rule it mirrors, and no PostgREST embed is ambiguous.
 
 Expected refusals were tested as carefully as successful actions: the agency
 acceptance suite alone carries explicit `REFUSAL —` cases, and the database
-suite's refusal assertions are what most of its 2,569 tests measure.
+suite's refusal assertions are what most of its 2,571 tests measure.
 
 ### Cross-branch access
 
@@ -1643,13 +1643,13 @@ run in CI: this is a local execution and is reported as one.
 | `npm run format:check` | **PASS** (exit 0) |
 | `npm run audit:money` | **PASS** — 277 financial files scanned, no hazard; five engines reach only integer money helpers; 6 acknowledged exemptions each verified present; scanner verified against a positive control |
 | `npm run test:run` (unit + integration) | **PASS** — **90 files, 2,770 tests, 2,770 passed, 0 failed, 0 skipped** |
-| `npm run test:db` (17 projects) | **PASS** — **104 files, 2,569 tests, 2,569 passed, 0 failed** |
+| `npm run test:db` (17 projects) | **PASS** — **104 files, 2,571 tests, 2,571 passed, 0 failed** |
 | `npm run build` | **PASS** — performed as part of `npm run e2e:up`, twice |
 | `npm run check:security` | **PASS** — "No unreviewed privileged exposure" |
 | `npm run certify:financial` | **PASS** — **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
 | `node scripts/verify-membership-upgrade.mjs` | **PASS** — 99 existing migrations, a seeded book, then 130 new ones; **all 28 financial figures identical**, the four journal figures among them |
 | `node scripts/verify-policy-upgrade.mjs` | **PASS** — 26 existing financial/identity tables verified; all records, balances and historical approvals preserved; ledger debits = credits = 17,779,483 |
-| `npx playwright test` | **PASS** — **1,151 tests: 1,098 passed, 0 failed, 53 skipped**, in 22.5 minutes, single worker, no retries, against the production build |
+| `npx playwright test` | **PASS** — **1,155 tests: 1,102 passed, 0 failed, 53 skipped**, in 20.3 minutes, single worker, no retries, against the production build on a stack rebuilt from zero. Four more than the audited commit: the two new screens in the accessibility sweep and in the sideways-scroll check |
 | `node scripts/certify-production-readonly.mjs` | **DELIBERATELY NOT RUN.** It issues GET requests to the hosted Vercel application. This audit did not contact production. |
 
 ### H.3 Database suite, project by project
@@ -1659,7 +1659,7 @@ real PostgreSQL cluster, with the database rebuilt from every migration first:
 
 | Project | Tests |
 | --- | ---: |
-| `db` (87 files) | **2,000** |
+| `db` (87 files) | **2,002** |
 | `agency` | 66 |
 | `agency-engine` | 78 |
 | `agency-security` | 21 |
@@ -1675,7 +1675,7 @@ real PostgreSQL cluster, with the database rebuilt from every migration first:
 | `seed-member-loans` | 24 |
 | `seed-benefits` | 25 |
 | `clean-slate` | 37 |
-| **Total** | **2,569** |
+| **Total** | **2,571** |
 
 0 failed, 0 skipped.
 
@@ -1687,8 +1687,8 @@ rebuilt) so that the result measures one consistent state:
 
 | | |
 | --- | ---: |
-| Total tests | **1,151** |
-| **Passed** | **1,098** |
+| Total tests | **1,155** |
+| **Passed** | **1,102** |
 | **Failed** | **0** |
 | Skipped | **53** |
 | Duration | 22.5 minutes |
@@ -1787,7 +1787,7 @@ listed here rather than buried.
 
 Then, on the Owner's decision of 2026-11-16, the Decision A work:
 `docs/POLYTOS-DECISION-A-DELIVERY.md` accounts for all of it, and PR #36
-carries it. Four additive migrations, one new 28-test suite, three new
+carries it. Four additive migrations, one new 30-test suite, three new
 certification identities, two screens, six capabilities, and the fixture and
 inventory changes those required. Three existing assertions were inverted;
 each is listed with its reason in §5.4 of the delivery note, and each inversion

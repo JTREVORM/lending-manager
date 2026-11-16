@@ -200,12 +200,12 @@ production build. Nothing hosted was contacted.
 | `npm run typecheck` / `lint` / `format:check` | pass |
 | `npm run audit:money` | pass — 277 financial files, no float hazard, five engines reaching only integer helpers |
 | `npm run test:run` (unit + integration) | **90 files, 2,770 tests, 0 failed** |
-| `npm run test:db` (17 projects) | **104 files, 2,569 tests, 0 failed** |
+| `npm run test:db` (17 projects) | **104 files, 2,571 tests, 0 failed** |
 | `npm run check:security` | "No unreviewed privileged exposure" |
 | `npm run certify:financial` | **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
 | `node scripts/verify-membership-upgrade.mjs` | pass — **all 28 financial figures identical** across the upgrade |
 | `node scripts/verify-policy-upgrade.mjs` | pass — 26 tables preserved |
-| `npx playwright test --trace off` | **1,155 tests, 0 failed, 53 skipped**, against a stack rebuilt from zero |
+| `npx playwright test --trace off` | **1,155 tests: 1,102 passed, 0 failed, 53 skipped**, against a stack rebuilt from zero |
 
 ### 5.1 The reproduction, before and after
 
@@ -223,7 +223,9 @@ and it is the act reproduced here, on the same migrated schema, with
 | `journal_lines` afterwards | 2 | **0** |
 | The till's booked and available balance | **−400,000** | **0 and 0** |
 
-`tests/db/cash-sufficiency.test.ts`, *"refuses the −345,000 scenario the audit
+`tests/db/cash-sufficiency.test.ts` holds **30 tests**, one for each scenario
+the ruling names and several for the ones its implementation implied. Its
+first, *"refuses the −345,000 scenario the audit
 found, and writes nothing"*, asserts the zeroes rather than only the refusal: a
 guard that raised *after* posting would pass a test that checked the message
 alone. The transaction is genuinely committed rather than rolled back, because
@@ -304,3 +306,32 @@ Two tests hold it:
 *releases* its restriction — because nobody had counted the money — or is a
 payout like any other, because somebody had. The test asserts that chain by
 name rather than accepting its absence.
+
+### 5.6 The fifteen scenarios the ruling lists, and where each is tested
+
+Every one is in `tests/db/cash-sufficiency.test.ts` unless another file is
+named. The last two races were added after the first pass of this note, so
+that the list is covered literally rather than by analogy with a neighbouring
+test.
+
+| # | Scenario | Test |
+| --- | --- | --- |
+| 1 | Sufficient funds | *permits a payout the account can cover* |
+| 2 | Insufficient funds | *refuses a payout one shilling beyond the balance* |
+| 3 | Zero balance | *refuses a payout from an account holding nothing* |
+| 4 | Booked but pending | *refuses a payout covered only by money nobody has confirmed*; *permits it once a different officer has confirmed the receipt* |
+| 5 | Deposits awaiting clearance | *leaves the till, and is spendable from neither the till nor the bank* |
+| 6 | Separate bank and cash accounts | *a funded bank account does not fund a payout from the till* |
+| 7 | Concurrent disbursements | *two concurrent disbursements cannot both take the last of the till* — two real connections, the till funded for exactly one |
+| 8 | Disbursement versus savings withdrawal | *a disbursement and another payout cannot both take the last of the till* |
+| 9 | Benefit payment versus another payout | *a benefit payment and another payout cannot both take the last of the till* |
+| 10 | Payout versus bank clearance | *a payout and a banking cannot both take the last of the till* |
+| 11 | Unauthorised verification | *refuses the officer who recorded it as the one who verifies it* — two real named sessions, not two nulls |
+| 12 | Reversal and duplicate posting | *releases the restriction when an unconfirmed receipt is reversed*; *treats the reversal of a confirmed receipt as a payout like any other*; *confirms a receipt once, however many times it is asked*; *records a deposit once, however many times the same key is used* |
+| 13 | Branch isolation | *one branch cannot fund another branch, in either direction* |
+| 14 | PostgREST and RLS access | *hides the confirmation register from a borrower, and shows it to a manager*; *grants the new capabilities to the roles the ruling names*; and `tests/db/postgrest-columns.test.ts`, which parses every `.select()` the application issues against the live schema |
+| 15 | Full application and reporting accuracy | *keeps the six components of branch liquidity summing to the total*; *reports availability per account, with no aggregate column*; and the three new identities in §5.2, which the CI database job runs with `--require-complete` |
+
+Plus the approval-controlled paths of §5.5, the inert switch, transit
+unspendability from three directions, investigation posting nothing, and the
+loan path end to end.
