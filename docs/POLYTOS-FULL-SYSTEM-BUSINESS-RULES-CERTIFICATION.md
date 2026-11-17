@@ -1948,6 +1948,95 @@ Not changed here, because it is not a Decision A defect: it is a system-wide
 boundary working as designed, and narrowing it is a decision about every
 module's error messages, not this one's. Recorded as **L7** in §J.
 
+### H.9 L7 delivered: a separation-of-duties refusal has its own SQLSTATE
+
+L7 asked whether a maker-checker refusal may say why. The Owner decided it
+may, system-wide, and the fix is in `20261121000100`.
+
+**The defect had two causes, and §H.8 only found one of them.** The first is
+the one recorded above: `verify_bank_deposit` raised `42501`, which is also
+what a Row Level Security denial raises, so `mapDatabaseError` could not tell
+a maker-checker refusal from a missing capability. The second was found only
+when L5's own journey was pointed at the new sentence and read the screen:
+`lib/finance/actions.ts` returns `mapDatabaseError(error).message` — the
+*developer* field — from about a dozen handlers. `AuthorizationError`'s
+`message` is literally `Privilege denied on ${resourceLabel}.`, so the exact
+sentence L7 was filed about came half from the wrong error class and half
+from the wrong field. Staff were never shown the `userMessage` the
+architecture intends.
+
+**Fourteen guards, not fifteen.** Audited from the live schema through
+`pg_get_functiondef` rather than from the migration files, because later
+migrations supersede earlier definitions. `submit_benefit_claim` matched only
+on `submitted_by = v_actor` inside an `UPDATE SET`, which is attribution.
+
+| | Functions | Code before |
+| --- | ---: | --- |
+| `42501` | 6 | indistinguishable from an RLS denial |
+| `P0001` | 8 | what every business rule in this schema raises |
+
+**`SD001`, measured through the real PostgREST rather than chosen from the
+appendix.** The first candidate, `PT001`, produced no usable HTTP response at
+all: PostgREST reserves the `PT` class, where `PTxxx` sets the response
+status, so `PT001` asks for HTTP status `001`. Nothing in PostgreSQL's
+SQLSTATE appendix would have warned about that. `SD001` answers **HTTP 400**
+with `{"code":"SD001"}`, the code reaching the client intact — the status
+`P0001` already had. A consequence worth recording: the six guards on `42501`
+answered **401**, which is the one status a client may fairly read as "your
+session is the problem". A maker-checker refusal is not an authentication
+problem, and they answer 400 now.
+
+**One line per function, and preservation measured.** Each function was
+replaced from the definition the database held, with exactly one line
+different. Rebuilding without the migration and comparing `pg_proc` showed
+signatures, return types, `SECURITY DEFINER`, `search_path`, volatility,
+leakproof, language, owner and grants identical for all fourteen. The
+migration asserts its own result and fails if any of the fourteen stops
+raising `SD001`.
+
+**What did not change.** `42501` still maps to `AuthorizationError` and still
+reads "You do not have permission to do this." Of the existing tests that
+asserted an old code, only the two asserting a genuine self-action refusal
+changed; the ones asserting capability denials — a Secretary without
+`agency:verify`, an officer without `agency:variance_adjustment`, a borrower
+against every settlement RPC — still assert `42501`, which is the distinction
+the change exists to draw. `approve_expense` and `approve_transfer` needed no
+test change at all, because their capability check runs before their
+self-guard.
+
+**Measured on the combined tree** — this report's state plus the Next.js
+16.4.6 security update:
+
+| | |
+| --- | --- |
+| `test:run` | 2,778 passed, 0 failed |
+| `test:db` (16 projects) | 2,580 passed, 0 failed |
+| `check:security` | no unreviewed privileged exposure |
+| `certify:financial` | 41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail |
+| membership upgrade gate | 99 existing migrations, a seeded book, then 131 new; all 28 financial figures identical |
+| policy upgrade gate | 26 tables; debits = credits |
+| `npx playwright test --trace off` | 1,108 passed, 0 failed, 53 skipped, against a stack rebuilt and reseeded from zero |
+
+`20261121` is registered in the membership gate's `PHASE_PREFIXES`, which is
+what makes that row mean something: L7 lands on a seeded book between the two
+financial baselines, so "replacing fourteen function bodies moved no money"
+is measured rather than asserted. It is the mistake a mechanical rewrite is
+most likely to make.
+
+**Discriminating power.** `tests/db/separation-of-duties.test.ts` carries nine
+tests; with the migration removed, **four fail** — exactly the four that
+assert `SD001`. The other five assert *preserved* behaviour and pass either
+way on purpose, which is what they are for.
+
+**A method note, and the third of its kind in this engagement.** The first
+full-suite run after L7 showed all six cash-sufficiency journeys failing on
+`the seed should leave takings to count`. They were not failing: an earlier
+run of that one spec had already counted the drawer, and the suite was then
+run again without re-seeding. §H.8 recorded the lesson once as "the browser
+suite owns the checkout while it runs"; the fuller statement is that these
+`.write.` journeys spend the seed's money, so **a run is only evidence if the
+stack was reseeded immediately before it.**
+
 ### H.7 Not tested, and why
 
 | Item | Why |
@@ -2037,7 +2126,7 @@ Ranked as the brief asks.
 | ~~C0~~ | **DONE, 2026-11-16.** The Owner decided: no unfunded payouts, approved with eleven instructions, implemented on this branch in migrations `20261120000100`–`20261120000400` and recorded in `docs/POLYTOS-DECISION-A-DELIVERY.md`. The original item read: **Decide "Decision A" and close GAP-001.** Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists, and a branch till reached **−345,000** during this audit's own run with `allow_negative_cash = false`. The analysis, the implementation plan, the accountant review package and the technical acceptance checklist are already in `docs/`. This is ranked first because it is the one finding that makes a *reported financial position* untrue, and because a cash count is reconciled against the very figure that can go negative. It is a business decision — refusing a disbursement for want of till cash changes what happens at the counter — so it needs the Owner, not a patch. |
 | ~~C1~~ | **DECIDED, 2026-11-16.** The Owner approved the guarantor ceiling as a mandatory control, enforced on the transition to active with correct locking. The fix in PR #35 stands, subject to code review and CI. The original item read: **Review and decide on DEFECT-001's fix** (migration `20261119000100`). The guarantor concentration ceiling the business configured does not currently bind: one guarantor can stand behind any number of active loans. The fix makes it bind at disbursement. It changes what can be disbursed, so it needs the Owner's decision — either accept the fix, or decide that the ceiling is advisory and change the column's documented meaning to match. **Leaving it as it is means the configured figure means nothing, which is the worst of the three outcomes.** |
 | C2 | **Approve a membership policy version, or accept that the membership programme cannot operate.** Both 1.0 and 2.0 are drafts. Nothing in the membership, savings, member-lending, benefits or meeting-fine modules can run until one is approved with an authorisation reference. |
-| C3 | **Merge PR #35, then PR #36, and only when every CI check on each is green.** #36 branches from #35, so the order is not a preference. Both change what happens at a counter — a disbursement can now be refused for a guarantor at the ceiling, and any payout can be refused for want of available cash — so each wants the Owner's explicit go-ahead rather than an auto-merge. |
+| ~~C3~~ | **DONE, 2026-11-17.** Both merged in order, each with all four CI gates green on its own head: `dd5f581` (PR #35) and `32226b6` (PR #36). The original item read: **Merge PR #35, then PR #36, and only when every CI check on each is green.** #36 branches from #35, so the order is not a preference. Both change what happens at a counter — a disbursement can now be refused for a guarantor at the ceiling, and any payout can be refused for want of available cash — so each wants the Owner's explicit go-ahead rather than an auto-merge. |
 | C4 | **Complete the cash cutover before Decision A's rule binds on live data.** The checklist is now written: `docs/POLYTOS-CASH-CUTOVER-CHECKLIST.md`, prepared on the Owner's instruction of 2026-11-17 and **not started** — signed per-till counts with two signatures each, the bank's own confirmation for every bank account, transit at zero, every difference explained before sign-off, and an Owner-approved opening verified position. It also asks that at least two officers per branch hold `receipts:confirm` and `deposits:verify`, because a branch with one cannot clear its own deposits: the rule that the verifier may not be the recorder will stop it, correctly. The migrations take "no restriction recorded" to mean "available", which is what guarantees that no historical figure moved — and it is *not* evidence that legacy till cash is physically present. Signed per-account till counts, a bank confirmation for every bank account and an Owner-approved initial verified position are required, and no migration can establish them. Stated in `docs/POLYTOS-DECISION-A-DELIVERY.md` §4. |
 
 ### High — resolve before the affected service accepts financial transactions
@@ -2071,6 +2160,6 @@ Ranked as the brief asks.
 | L3 | Consider surfacing a guarantor's current concentration on the approval screen. The fix added the failure code; showing the count before somebody commits to an application would turn a refusal into a decision. |
 | L4 | Make `tests/integration/bundle.test.ts` fail, rather than skip, when `.next` is older than the newest source file it would measure. It skips when there is no build, which is right; it also passes against a stale one, which is how a 441 KB regression survived three green local runs (§H.6.2). |
 | ~~L5~~ | **DONE, 2026-11-17.** `tests/e2e/specs/cash-sufficiency.write.spec.ts` — six journeys covering receipt confirmation, batch confirmation, bank-deposit clearance, maker-checker rejection, investigation and reversal, each asserting the resulting available balances against the ledger. Discriminating power measured: dropping the maker-checker CHECK fails all six. §H.8. The original item read: **Add a browser spec for Cash Received and Bank Deposits beyond the sweeps they were just added to.** The full 1,151-test suite passed without touching either screen, which is worth remembering: a suite that is green is not a suite that looked. |
-| L7 | **Decide whether a maker-checker refusal may say why.** A Manager who banks cash and then tries to clear it themselves is told "Privilege denied on record." — which points at the wrong cause, because they *hold* `deposits:verify` and what stopped them is separation of duties. `mapDatabaseError` generalises every database message by design, so this is a decision about the boundary rather than a defect in Decision A: either a small set of functions is allowed to pass a staff-facing sentence through, or the screens carry the explanation and the alert stays generic. Found by L5's own journeys; §H.8. |
+| ~~L7~~ | **DECIDED AND DONE, 2026-11-17.** The Owner chose the system-wide fix: a dedicated SQLSTATE for separation of duties, mapped to one curated sentence held in TypeScript. All **fourteen** maker-checker guards now raise `SD001`, and `mapDatabaseError` renders "A different authorized officer must complete this action. You cannot approve or verify your own work." §H.9. The original item read: **Decide whether a maker-checker refusal may say why.** A Manager who banks cash and then tries to clear it themselves is told "Privilege denied on record." — which points at the wrong cause, because they *hold* `deposits:verify` and what stopped them is separation of duties. Found by L5's own journeys; §H.8. |
 | L6 | Consider pinning the `database` CI job's PostgreSQL major version, or asserting it. The job takes the newest on the runner image, which is the stronger test and is how the `23001` change was caught at all (§H.6.1) — but it means the runner image can turn a green build red with no commit behind it, and the first symptom is three unrelated-looking test failures. |
 
