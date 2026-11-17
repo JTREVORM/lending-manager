@@ -871,6 +871,13 @@ describe('types stay in step with the schema', () => {
       'loans_assign_loan_number',
       'loans_guard_transition',
       'loans_enforce_active_limit',
+      // 20261119000100. The same kind of rule as the one above it, and a
+      // trigger for the same reason: the guarantor concentration ceiling
+      // spans `loan_guarantors`, `loans` and `business_settings`, so it
+      // cannot be a CHECK, and it needs an advisory lock per guarantor to be
+      // true under concurrent disbursements. Not reachable by a signed-in
+      // user — a trigger fires as the table owner and needs no EXECUTE grant.
+      'loans_enforce_guarantor_concentration',
       'audit_loan_change',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',

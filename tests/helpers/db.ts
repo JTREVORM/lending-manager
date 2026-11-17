@@ -62,6 +62,39 @@ function getPool(): Pool {
 }
 
 /**
+ * The SQLSTATE an `ON DELETE RESTRICT` refusal arrives as.
+ *
+ * PostgreSQL 18 reports it as `23001 restrict_violation`. PostgreSQL 17 and
+ * earlier reported the same refusal as `23503 foreign_key_violation`. Both
+ * are class 23, integrity constraint violation, and both mean exactly what
+ * these tests assert: the delete was refused because a row still points at
+ * the target.
+ *
+ * Matched as either rather than pinned to one, so one suite certifies the
+ * same behaviour on whichever server it meets — the `database` CI job takes
+ * the newest PostgreSQL on the runner image, and that version moved under it.
+ * `lib/db-errors.ts` maps both codes to the same user-facing message for the
+ * same reason.
+ */
+export const RESTRICT_VIOLATION = /^(?:23001|23503)$/;
+
+/**
+ * The SQLSTATE a statement was refused with, or `null` if it succeeded.
+ *
+ * For assertions about a *class* of refusal rather than one exact code, where
+ * `rejects.toMatchObject` cannot carry a pattern without an `any`.
+ */
+export async function sqlstateOf(attempt: Promise<unknown>): Promise<string | null> {
+  try {
+    await attempt;
+    return null;
+  } catch (error) {
+    const code = (error as { readonly code?: unknown }).code;
+    return typeof code === 'string' ? code : '';
+  }
+}
+
+/**
  * Run a parameterised query.
  *
  * Values are always passed as parameters, never interpolated, so the tests

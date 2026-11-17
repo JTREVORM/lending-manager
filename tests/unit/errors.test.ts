@@ -154,6 +154,10 @@ describe('mapDatabaseError', () => {
     const cases = [
       ['23505', ConflictError, 'CONFLICT'],
       ['23503', ValidationError, 'VALIDATION_FAILED'],
+      // PostgreSQL 18 reports an `ON DELETE RESTRICT` refusal under its own
+      // code rather than as a foreign-key violation. Same thing to a user, so
+      // the same error.
+      ['23001', ValidationError, 'VALIDATION_FAILED'],
       ['23502', ValidationError, 'VALIDATION_FAILED'],
       ['23514', BusinessRuleError, 'BUSINESS_RULE_VIOLATION'],
       ['23P01', BusinessRuleError, 'BUSINESS_RULE_VIOLATION'],

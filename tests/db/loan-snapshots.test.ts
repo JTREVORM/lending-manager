@@ -8,7 +8,15 @@ import {
   narrowLendingRules,
   type LoanScenario,
 } from '../helpers/loan-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  hasDatabase,
+  query,
+  queryOne,
+  RESTRICT_VIOLATION,
+  skipReason,
+  sqlstateOf,
+} from '../helpers/db';
 
 /**
  * Loan snapshots, and the thing that makes them worth having.
@@ -387,9 +395,11 @@ describeDb('loan snapshots', () => {
 
       // `on delete restrict`. The snapshot holds the details, and the
       // reference is what lets somebody follow it back to the live person.
-      await expect(
-        query(`delete from public.guarantors where id = $1`, [own.guarantorId]),
-      ).rejects.toMatchObject({ code: '23503' });
+      expect(
+        await sqlstateOf(
+          query(`delete from public.guarantors where id = $1`, [own.guarantorId]),
+        ),
+      ).toMatch(RESTRICT_VIOLATION);
     });
   });
 
