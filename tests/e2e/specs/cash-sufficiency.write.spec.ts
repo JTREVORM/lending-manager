@@ -48,6 +48,21 @@ import {
  * `.write.spec.ts`, so it runs on desktop only and nobody mistakes it for a
  * read-only sweep. It confirms receipts, banks cash and reverses a clearance
  * in the demonstration book, which is what the seed exists for.
+ *
+ * ## It needs a freshly seeded stack, and that is not a flaw
+ *
+ * These journeys spend the seed's money: they count this morning's uncounted
+ * takings and then bank some of what they released. Run twice against the
+ * same stack without re-seeding, the second run finds the drawer already
+ * counted and the till already spent down, and the first journey rightly
+ * fails its own precondition.
+ *
+ * That is how the suite is run — `npm run e2e:up` rebuilds the database and
+ * re-seeds before Playwright starts, in CI and locally — and it is the same
+ * contract every other `.write.` spec here works under. Said out loud only
+ * because the failure mode looks alarming and is not: if you re-run this file
+ * alone and the first journey complains the drawer has nothing to count,
+ * rebuild the stack rather than hunting a regression.
  */
 
 import type { Page } from '@playwright/test';
