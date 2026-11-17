@@ -272,7 +272,41 @@ test.describe('counting the drawer', () => {
     await expect(button).toBeEnabled();
     await button.click();
 
-    await expect(page.getByText(/confirmed/i).first()).toBeVisible({ timeout: 20_000 });
+    // Wait for the batch to have **committed**, not for the page to contain a
+    // word.
+    //
+    // This read `page.getByText(/confirmed/i).first()`, and it could not
+    // fail. This screen renders the availability card, whose own copy reads
+    // "Available is the ledger balance less the receipts nobody has
+    // confirmed yet." — so `/confirmed/i` matched static text on every
+    // render, before the button was pressed, and the ledger read below raced
+    // the Server Action's commit.
+    //
+    // Losing that race reads a change of **exactly zero**, because the
+    // confirmation is one transaction: either all of it is visible or none of
+    // it is. That is the fingerprint, and it is what CI run 44088627144
+    // reported — expected 77,000, received 0 — on a stack it had seeded
+    // itself, so nothing about the seed explains it. The third instance of
+    // the mistake L5 was written about, in L5's own file.
+    //
+    // Two real waits instead, in order:
+    //
+    //   1. the action's own sentence, which names the count. A partial batch
+    //      — "1 confirmed, 1 refused", which is what a receipt the confirmer
+    //      recorded themselves produces — fails here, loudly, instead of
+    //      arriving below as an arithmetic mismatch nobody can read;
+    //   2. the chosen rows leaving the queue, which is the screen agreeing
+    //      the transaction committed rather than the test hoping it did.
+    await expect(
+      page.getByText(
+        `${String(chosen.length)} receipts confirmed. The money is now available.`,
+      ),
+    ).toBeVisible({ timeout: 20_000 });
+
+    for (const receipt of chosen) {
+      await expect(receiptRow(page, receipt.id)).toHaveCount(0, { timeout: 20_000 });
+    }
+
     await expectNoErrorBoundary(page);
 
     // --- the identity, two ways -------------------------------------------
