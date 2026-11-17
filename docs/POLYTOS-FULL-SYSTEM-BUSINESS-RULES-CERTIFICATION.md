@@ -1708,7 +1708,7 @@ rebuilt) so that the result measures one consistent state:
 | **Passed** | **1,108** |
 | **Failed** | **0** |
 | Skipped | **53** |
-| Duration | 22.5 minutes |
+| Duration | 18.6 minutes |
 | Workers | 1 (`fullyParallel: false` — the specs share seeded money) |
 | Retries | 0 |
 | Exit code | 0 |
