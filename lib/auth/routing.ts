@@ -163,6 +163,12 @@ const ROUTE_PERMISSIONS: readonly {
   { prefix: ROUTES.otherIncome, permission: 'income:view' },
   { prefix: ROUTES.reconciliation, permission: 'reconciliation:view' },
   { prefix: ROUTES.ledger, permission: 'ledger:view' },
+  // Decision A. Both sit under /finance, so they come before the /finance
+  // rule for the same reason the transfer and expense registers do: a
+  // Secretary/Treasurer holds `receipts:view` and `deposits:view` without
+  // holding `ledger:view`, and must reach their own screens.
+  { prefix: ROUTES.receipts, permission: 'receipts:view' },
+  { prefix: ROUTES.deposits, permission: 'deposits:view' },
   { prefix: ROUTES.finance, permission: 'ledger:view' },
   // Phase 4D. Agency banking. Listed longest-prefix first, as everywhere in
   // this table, so `/agency/record` is not swallowed by `/agency`. The four

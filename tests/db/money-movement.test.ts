@@ -46,7 +46,8 @@ beforeEach(async () => {
 
 async function accountId(cashKind: string): Promise<string> {
   const row = await queryOne<{ id: string }>(
-    `select id from public.ledger_accounts where cash_kind = $1 limit 1`,
+    `select id from public.ledger_accounts where cash_kind = $1
+      order by code limit 1`,
     [cashKind],
   );
   return row.id;
@@ -105,8 +106,11 @@ describeDb('a transfer moves money without creating or destroying any', () => {
   it('debits the destination, credits the source, and leaves liquidity unchanged', async () => {
     await fund('cash_at_hand', 5_000_000);
 
+    // Summed across branches: the view holds a row per branch, and the claim
+    // under test is that a transfer changes no total anywhere.
     const before = await queryOne<{ total: string }>(
-      `select total_liquidity::text as total from public.branch_cash_position`,
+      `select coalesce(sum(total_liquidity),0)::text as total
+         from public.branch_cash_position`,
     );
 
     const cash = await accountId('cash_at_hand');
@@ -121,7 +125,8 @@ describeDb('a transfer moves money without creating or destroying any', () => {
     expect(await balance(bank)).toBe(500_000);
 
     const after = await queryOne<{ total: string }>(
-      `select total_liquidity::text as total from public.branch_cash_position`,
+      `select coalesce(sum(total_liquidity),0)::text as total
+         from public.branch_cash_position`,
     );
 
     // The whole point: a transfer is neither income nor an expense.
@@ -147,7 +152,16 @@ describeDb('a transfer moves money without creating or destroying any', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('permits an overdraft only when the business has said so', async () => {
+  it('refuses an overdraft even when allow_negative_cash is on', async () => {
+    // This test read the other way round until the Owner's ruling of
+    // 2026-11-16. `allow_negative_cash` was the one switch that let a
+    // transfer overdraw an account, and the ruling withdrew it: *"
+    // `allow_negative_cash` must not bypass the available-funds requirement
+    // for these controlled payouts."*
+    //
+    // So the setting is now inert — the column's own comment says so — and
+    // the expectation is inverted rather than deleted, because what matters
+    // is that turning the old switch on changes nothing.
     await query(
       `update public.finance_settings set allow_negative_cash = true where id = 1`,
     );
@@ -155,14 +169,26 @@ describeDb('a transfer moves money without creating or destroying any', () => {
     const airtel = await accountId('airtel_money');
     const bank = await accountId('bank');
 
-    await query(
-      `select public.record_transfer($1, $2, 100000, current_date, 'Deliberate overdraft')`,
-      [airtel, bank],
-    );
+    try {
+      await expect(
+        query(
+          `select public.record_transfer($1, $2, 100000, current_date, 'Deliberate overdraft')`,
+          [airtel, bank],
+        ),
+      ).rejects.toThrow(/less than the/i);
 
-    expect(await balance(airtel)).toBe(-100_000);
-    const { debits, credits } = await trialBalance();
-    expect(debits).toBe(credits);
+      // Nothing moved, and nothing was written.
+      expect(await balance(airtel)).toBe(0);
+      const rows = await query(`select 1 from public.account_transfers`);
+      expect(rows).toHaveLength(0);
+
+      const { debits, credits } = await trialBalance();
+      expect(debits).toBe(credits);
+    } finally {
+      await query(
+        `update public.finance_settings set allow_negative_cash = false where id = 1`,
+      );
+    }
   });
 
   it('refuses a leg that is not a cash account, and one that is the same account twice', async () => {
@@ -790,9 +816,16 @@ describeDb('the registers agree with the ledger', () => {
       mtn,
     ]);
 
+    // Scoped to the branch these two accounts belong to. The view carries a
+    // row per branch, so naming the branch is what makes this a statement
+    // about the accounts under test rather than about how many branches an
+    // earlier suite happened to open.
     const position = await queryOne<{ cash: string; mtn: string }>(
-      `select cash_at_hand::text as cash, mtn_mobile_money::text as mtn
-         from public.branch_cash_position`,
+      `select p.cash_at_hand::text as cash, p.mtn_mobile_money::text as mtn
+         from public.branch_cash_position p
+         join public.ledger_accounts a on a.branch_id = p.branch_id
+        where a.id = $1`,
+      [cash],
     );
 
     expect(Number(position.cash)).toBe(await balance(cash));

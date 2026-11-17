@@ -84,6 +84,12 @@ const SCREENS = [
   '/settings?section=finance',
   '/finance?section=cash',
   '/finance/trial-balance',
+  // Decision A. Both new screens put a control inside a table — a selection
+  // checkbox per receipt, and a verify, investigate or reverse form per
+  // deposit — which is where a label association or a focus order goes wrong
+  // first, and both carry money columns on a tinted surface.
+  '/finance/receipts',
+  '/finance/deposits',
   '/payments/summary?section=branch',
   '/account',
   '/account/password',

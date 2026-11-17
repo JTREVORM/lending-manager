@@ -620,6 +620,11 @@ describeDb('payment row level security', () => {
         'benefit_claim_register',
         'benefit_payment_register',
         'branch_cash_position',
+        // Decision A. `security_invoker` over `ledger_accounts` and
+        // `journal_lines`, so the booked figure a user sees is still the one
+        // their own policies allow — the view derives availability, it does
+        // not widen what anybody may read.
+        'cash_account_availability',
         'collections_today',
         'company_identity',
         'dashboard_collection_summary',

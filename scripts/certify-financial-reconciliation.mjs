@@ -400,6 +400,113 @@ async function cash() {
 }
 
 // ===========================================================================
+// 4a. Cash sufficiency — Decision A
+//
+// The Owner's ruling of 2026-11-16: no unfunded payouts. The full-system
+// audit found a branch till at -345,000 and every one of the 38 identities
+// still passed, because the three cash identities ask whether the views agree
+// with the general ledger — and they agree perfectly well when the ledger
+// says minus three hundred and forty-five thousand. There was a no-negative
+// identity for loan balances and one for savings balances, and none for cash.
+//
+// This is that identity. It distinguishes two things the summary must never
+// confuse: a balance that went negative BEFORE the rule began to bind, which
+// is a historical exception the Owner's cutover has to resolve account by
+// account, and one created AFTER it, which is a control failure.
+// ===========================================================================
+async function cashSufficiency() {
+  const g = 'cash sufficiency';
+
+  const enforced = await one(
+    `select coalesce(cash_sufficiency_enforced_at::text, '') as since
+       from public.finance_settings where id = 1`,
+  );
+
+  const subjects = await one(
+    `select count(*)::text as accounts
+       from public.ledger_accounts
+      where cash_kind is not null and cash_kind <> 'agency_float'`,
+  );
+
+  // Agency float is excluded throughout: it has its own rule and its own
+  // setting, which the ruling expressly preserves.
+  const negative = await many(
+    `select a.code, a.name, v.booked::text as booked, v.available::text as available,
+            coalesce(b.last_movement_on::text, '') as last_movement
+       from public.cash_account_availability v
+       join public.ledger_accounts a on a.id = v.account_id
+       left join public.ledger_account_balances b on b.account_id = v.account_id
+      where a.cash_kind <> 'agency_float'
+        and v.available < 0
+      order by a.code`,
+  );
+
+  const sinceDate = enforced.since === '' ? null : enforced.since.slice(0, 10);
+  const historical = negative.filter(
+    (r) => sinceDate !== null && r.last_movement !== '' && r.last_movement < sinceDate,
+  );
+  const prohibited = negative.filter((r) => !historical.includes(r));
+
+  assertion(
+    g,
+    'no cash account holds a negative available balance',
+    prohibited.length === 0,
+    prohibited.length === 0
+      ? negative.length === 0
+        ? 'every till, wallet, bank and transit account is at or above zero'
+        : `${historical.length} account(s) were already negative before the rule began ` +
+          `to bind on ${sinceDate}, and are the Owner's cutover to resolve: ` +
+          historical.map((r) => `${r.code} ${r.available}`).join(', ')
+      : `${prohibited.length} account(s) are overdrawn under the rule: ` +
+          prohibited
+            .map((r) => `${r.code} available ${r.available} (booked ${r.booked})`)
+            .join(', '),
+    subjects.accounts,
+  );
+
+  // Every restriction is about a line that actually exists, and no restriction
+  // exceeds what was received. A pending figure that outran its receipt would
+  // understate availability and refuse payouts the business could make.
+  const orphaned = await one(
+    `select count(*)::text as n
+       from public.cash_receipt_confirmations c
+      where not exists (
+        select 1 from public.journal_lines l
+         where l.entry_id = c.journal_entry_id
+           and l.account_id = c.account_id
+           and (l.debit - l.credit) = c.amount)`,
+  );
+  assertion(
+    g,
+    'every receipt restriction matches a real cash line',
+    big(orphaned.n) === 0n,
+    big(orphaned.n) === 0n
+      ? 'each restriction names an entry, an account and an amount that exist'
+      : `${orphaned.n} restriction(s) do not match their journal line`,
+    await one(`select count(*)::text as n from public.cash_receipt_confirmations`).then(
+      (r) => r.n,
+    ),
+  );
+
+  // Availability is derived, not stored: the view and the function must give
+  // the same answer for every account, or one of them is a second opinion.
+  const drift = await one(
+    `select count(*)::text as n
+       from public.cash_account_availability v
+      where v.available <> public.cash_account_available_balance(v.account_id)`,
+  );
+  assertion(
+    g,
+    'the availability view and the availability function agree',
+    big(drift.n) === 0n,
+    big(drift.n) === 0n
+      ? 'one answer per account, from one derivation'
+      : `${drift.n} account(s) disagree between the view and the function`,
+    subjects.accounts,
+  );
+}
+
+// ===========================================================================
 // 5. The loan book: dashboard against loan_balances, and against the GL
 // ===========================================================================
 async function loanBook() {
@@ -925,6 +1032,7 @@ async function main() {
   await generalLedger();
   await accountingEquation();
   await cash();
+  await cashSufficiency();
   await loanBook();
   await arrears();
   await savings();

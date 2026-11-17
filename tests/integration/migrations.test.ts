@@ -878,6 +878,18 @@ describe('types stay in step with the schema', () => {
       // true under concurrent disbursements. Not reachable by a signed-in
       // user — a trigger fires as the table owner and needs no EXECUTE grant.
       'loans_enforce_guarantor_concentration',
+
+      // --- Decision A -------------------------------------------------------
+      // Four guards, none callable over the API. The first two are append-only
+      // guards on the two new registers; the third numbers a bank deposit; the
+      // fourth is the DEFERRED constraint trigger that refuses, at COMMIT, any
+      // cash line that would leave an account overdrawn — the storage-level
+      // backstop behind `assert_cash_funds_available`, so that a payout path
+      // added later cannot forget to ask.
+      'cash_receipt_confirmations_guard',
+      'bank_deposits_guard',
+      'bank_deposits_assign_number',
+      'journal_lines_assert_funded',
       'audit_loan_change',
       'audit_loan_snapshot_created',
       'audit_loan_terms_locked',

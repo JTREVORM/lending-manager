@@ -68,6 +68,7 @@ describeDb('tables', () => {
     // deceased family member may stand in. `condolence_eligible` is NULL on
     // every row, because the client has not defined an eligible family
     // member and a default would be an invented eligibility rule.
+    'bank_deposits',
     'beneficiary_relationships',
     // Polytos Phase 4: the benefit workflow. The assessment a claim was
     // decided on (append-only), the claim itself, its evidence, the document
@@ -89,6 +90,7 @@ describeDb('tables', () => {
     // Phase 3: the lending-business customer record, its sensitive half, the
     // guarantors who vouch for them, the association between the two, and the
     // append-only staff commentary.
+    'cash_receipt_confirmations',
     'client_guarantors',
     'client_identities',
     'client_remarks',
@@ -491,6 +493,19 @@ describeDb('foreign keys', () => {
       // would be an action assigned to nobody, which is the thing the
       // profile reference exists to prevent; staff accounts are archived
       // rather than deleted, so `r` costs nothing.
+      'bank_deposits.bank_account_id -> ledger_accounts (r)',
+      'bank_deposits.branch_id -> branches (r)',
+      'bank_deposits.clearance_journal_entry_id -> journal_entries (c)',
+      'bank_deposits.deposit_journal_entry_id -> journal_entries (c)',
+      'bank_deposits.from_account_id -> ledger_accounts (r)',
+      'bank_deposits.investigation_opened_by -> profiles (r)',
+      'bank_deposits.recorded_by -> profiles (r)',
+      'bank_deposits.return_confirmed_by -> profiles (r)',
+      'bank_deposits.return_journal_entry_id -> journal_entries (c)',
+      'bank_deposits.reversal_entry_id -> journal_entries (c)',
+      'bank_deposits.reversed_by -> profiles (r)',
+      'bank_deposits.transit_account_id -> ledger_accounts (r)',
+      'bank_deposits.verified_by -> profiles (r)',
       'benefit_assessment_snapshots.assessed_by -> profiles (n)',
       'benefit_assessment_snapshots.beneficiary_id -> member_beneficiaries (r)',
       'benefit_assessment_snapshots.claim_id -> benefit_claims (r)',
@@ -549,6 +564,11 @@ describeDb('foreign keys', () => {
       // evidence. `n` nulls: provenance degrades gracefully, because `created_by`
       // naming a deleted account is less useful than NULL and the audit trail
       // holds the authoritative record either way.
+      'cash_receipt_confirmations.account_id -> ledger_accounts (r)',
+      'cash_receipt_confirmations.branch_id -> branches (r)',
+      'cash_receipt_confirmations.confirmed_by -> profiles (r)',
+      'cash_receipt_confirmations.journal_entry_id -> journal_entries (c)',
+      'cash_receipt_confirmations.recorded_by -> profiles (r)',
       'client_guarantors.client_id -> clients (c)',
       'client_guarantors.created_by -> profiles (n)',
       'client_guarantors.detached_by -> profiles (n)',

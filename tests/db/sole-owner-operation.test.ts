@@ -99,6 +99,15 @@ async function fundCashAccount(
   ]);
 
   if (!funded.ok) throw new Error(`could not fund the till: ${funded.message ?? ''}`);
+
+  // Decision A. Other income is cash over the counter, so it reaches the till
+  // restricted until a second officer has counted the drawer. The subject of
+  // this suite is the approval threshold, not the count, so the fixture
+  // standing in for the officer who received the money counts it here —
+  // otherwise every transfer below would be refused for having no available
+  // funds and the threshold would never be reached.
+  const { confirmRecordedReceipts } = await import('../helpers/db');
+  await confirmRecordedReceipts();
 }
 
 describeDb('a sole Owner can run the business', () => {

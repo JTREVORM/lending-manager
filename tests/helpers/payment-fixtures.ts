@@ -125,7 +125,15 @@ export async function postPayment(
       return String(rows[0]?.id);
     },
     options.businessNow,
-  );
+  ).then(async (id) => {
+    // Decision A. The receipt is restricted until a second officer counts the
+    // drawer. A fixture recording a repayment is standing in for a business
+    // that counted it at the end of that day, so it counts it here — and the
+    // tests whose subject *is* the confirmation rule do not use this helper.
+    const { confirmRecordedReceipts } = await import('./db');
+    await confirmRecordedReceipts();
+    return id;
+  });
 }
 
 /** Record a payment, reporting a refusal rather than throwing. */

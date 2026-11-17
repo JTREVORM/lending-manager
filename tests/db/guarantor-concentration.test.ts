@@ -22,6 +22,7 @@ import {
   createLoanScenario,
   disburseApprovedLoan,
   disburseLoan,
+  fundBranchTill,
   submitLoan,
   tryApproveSubmittedLoan,
 } from '../helpers/loan-fixtures';
@@ -217,6 +218,17 @@ describe('the guarantor concentration ceiling', () => {
       await submitLoan(app.loanId, app.borrower);
       await approveLoan(app.loanId, app.borrower);
     }
+
+    // Decision A: both disbursements are raced directly rather than through
+    // the fixture that funds, so the branch is given enough for both. The
+    // subject here is the guarantor ceiling, not the balance — if the till
+    // were short, the second would be refused for the wrong reason and the
+    // test would pass without proving anything.
+    const branchRow = await queryOne<{ id: string }>(
+      `select branch_id as id from public.loans where id = $1`,
+      [first.loanId],
+    );
+    await fundBranchTill(branchRow.id, 50_000_000);
 
     // Two real connections, impersonating two real officers, so the two
     // disbursements genuinely contend in the database.

@@ -364,12 +364,33 @@ describeDb('Phase 4A — agency banking foundation', () => {
     it('allows an ordinary cash transfer once the account is funded', async () => {
       // And with money in it, the same call succeeds — so the refusal above
       // really was the balance and nothing else.
+      //
+      // Decision A. This test used to reach that state by switching
+      // `allow_negative_cash` on, which is no longer funding anything: the
+      // Owner withdrew the switch for controlled payouts, so an account with
+      // nothing in it is refused whatever the setting says. The account is
+      // therefore funded the way a business funds one — capital in, Dr the
+      // till / Cr `3000 Owner Capital` — which is what the test's own name
+      // has always claimed it did.
       const cashAtHand = await accountId('1010-BR2601');
       const bank = await accountId('1040-BR2601');
+      const branch = await queryOne<{ id: string }>(
+        `select branch_id as id from public.ledger_accounts where id = $1`,
+        [cashAtHand],
+      );
+
       const err = await expectError(
         `do $$
          begin
-           update public.finance_settings set allow_negative_cash = true where id = 1;
+           perform public.post_journal(
+             ${lit(branch.id)}::uuid, current_date, 'Opening capital',
+             'opening_balance', null, null, null,
+             jsonb_build_array(
+               jsonb_build_object('account_id', ${lit(cashAtHand)}::uuid,
+                                  'debit', 5000::bigint, 'credit', 0),
+               jsonb_build_object('account_id', public.ledger_account_by_code('3000'),
+                                  'debit', 0, 'credit', 5000::bigint)
+             ));
            perform public.record_transfer(${lit(cashAtHand)}::uuid, ${lit(bank)}::uuid,
                                           1000, current_date, 'ordinary transfer');
          end $$;`,

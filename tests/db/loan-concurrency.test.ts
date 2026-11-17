@@ -1,10 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { deleteTestUsers } from '../helpers/auth-fixtures';
 import {
   approveLoan,
   createDraftLoan,
   createLoanScenario,
+  fundBranchTill,
   submitLoan,
 } from '../helpers/loan-fixtures';
 import {
@@ -66,6 +67,19 @@ async function raceAs(
 describeDb('loans under concurrency', () => {
   beforeAll(async () => {
     await deleteTestUsers();
+  });
+
+  // Decision A (20261120000400): a disbursement is refused unless the branch
+  // till holds the money as available. These tests race `disburse_loan`
+  // directly rather than through the fixture that funds, so the branch is
+  // funded here — generously, because the subject of every test below is a
+  // lock or a limit and never the balance. The one test that *is* about the
+  // balance lives in `cash-sufficiency.test.ts` and drains the till itself.
+  beforeEach(async () => {
+    const branch = await queryOne<{ id: string }>(
+      `select id from public.branches order by branch_code limit 1`,
+    );
+    await fundBranchTill(branch.id, 500_000_000);
   });
 
   afterAll(async () => {

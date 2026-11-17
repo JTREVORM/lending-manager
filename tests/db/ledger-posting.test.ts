@@ -83,10 +83,24 @@ async function balance(code: string): Promise<number> {
   return Number(row.balance);
 }
 
-async function cashCode(kind: string): Promise<string> {
+/**
+ * The code of a loan's own branch cash account of a given kind.
+ *
+ * Named by the loan rather than by kind alone. `where cash_kind = $1 limit 1`
+ * returned whichever row the planner reached first, which was the right one
+ * only while the database held a single branch — and fixtures in this suite
+ * now open more than one, so the assertion compared a payment's cash leg
+ * against another branch's till and found nothing there. It passed or failed
+ * on row order, which is no assertion at all.
+ */
+async function cashCode(kind: string, loanId: string): Promise<string> {
   const row = await queryOne<{ code: string }>(
-    `select code from public.ledger_accounts where cash_kind = $1 limit 1`,
-    [kind],
+    `select a.code
+       from public.loans l
+       join public.ledger_accounts a
+         on a.id = public.branch_cash_account(l.branch_id, $2)
+      where l.id = $1`,
+    [loanId, kind],
   );
   return row.code;
 }
@@ -123,7 +137,7 @@ describeDb('a disbursement and its journal are one transaction', () => {
 
     expect(await legs(entries[0]!.id)).toEqual({
       '1200': 750_000,
-      [await cashCode('cash_at_hand')]: -750_000,
+      [await cashCode('cash_at_hand', loanId)]: -750_000,
     });
   });
 
@@ -201,7 +215,9 @@ describeDb('a payment and its journal are one transaction', () => {
       [paymentId],
     );
 
-    expect(posted[await cashCode('cash_at_hand')]).toBe(Number(allocation.amount));
+    expect(posted[await cashCode('cash_at_hand', loanId)]).toBe(
+      Number(allocation.amount),
+    );
     expect(posted['1200'] ?? 0).toBe(-Number(allocation.principal));
     expect(posted['4100'] ?? 0).toBe(-Number(allocation.interest));
   });
@@ -242,7 +258,7 @@ describeDb('a reversal posts the exact contra', () => {
     await disburseApprovedLoan(loanId, scenario);
     const minimum = (await readMinimum(loanId)) ?? 50_000;
 
-    const cash = await cashCode('cash_at_hand');
+    const cash = await cashCode('cash_at_hand', loanId);
     const cashBefore = await balance(cash);
     const receivableBefore = await balance('1200');
     const interestBefore = await balance('4100');
@@ -301,7 +317,7 @@ describeDb('Bank is a payment method', () => {
     await disburseApprovedLoan(loanId, scenario);
     const minimum = (await readMinimum(loanId)) ?? 50_000;
 
-    const bank = await cashCode('bank');
+    const bank = await cashCode('bank', loanId);
     const before = await balance(bank);
 
     const paymentId = await postPayment(loanId, scenario.secretary, {
@@ -452,9 +468,13 @@ describeDb('the books reconcile after a full lifecycle', () => {
     expect(trial.debits).toBe(trial.credits);
 
     // The branch view is the sum of that branch's cash accounts, not a
-    // separately maintained figure.
+    // separately maintained figure. Summed over every branch rather than read
+    // from one row: the view carries a row per branch, and a suite running
+    // before this one may have opened a second, which would make a
+    // single-row read fail on the row count rather than on the identity.
     const position = await queryOne<{ view_total: string; account_total: string }>(
-      `select (select total_liquidity from public.branch_cash_position)::text as view_total,
+      `select (select coalesce(sum(total_liquidity),0) from public.branch_cash_position)::text
+                as view_total,
               (select coalesce(sum(balance),0) from public.ledger_account_balances
                 where cash_kind is not null)::text as account_total`,
     );
@@ -470,16 +490,25 @@ describeDb('the books reconcile after a full lifecycle', () => {
     );
     expect(receivable.ledger).toBe(receivable.portfolio);
 
-    // Cash is negative at this point, and correctly so: a fixture loan was
-    // paid out of an account nobody has put money into. Deriving the opening
-    // capital is what fixes that, and the figure is not chosen — it is the
-    // deepest the position ever reaches. Running the backfill here posts it
-    // (the disbursement and the payments are already posted and are skipped)
-    // and is the test of that derivation.
+    // No cash account is negative, and under Decision A none ever can be: the
+    // fixture funds the branch before it disburses, because the database now
+    // refuses to pay money out of an account that does not hold it.
+    //
+    // This assertion used to read the other way round. It asserted that cash
+    // *was* negative at this point — "a fixture loan was paid out of an
+    // account nobody has put money into" — and then that running the backfill
+    // derived the opening capital that fixed it. That was true of the system
+    // as it stood, and the Owner's ruling of 2026-11-16 is precisely that it
+    // should never have been: a payout from an unfunded till is the defect
+    // GAP-001 reported, reproduced at -345,000 on a live branch.
+    //
+    // What the backfill derives is still worth testing and is still tested:
+    // it must leave the books balanced and must not invent an opening entry
+    // for a position that never went short.
     const negativeBefore = await query(
       `select 1 from public.ledger_account_balances where cash_kind is not null and balance < 0`,
     );
-    expect(negativeBefore.length).toBeGreaterThan(0);
+    expect(negativeBefore).toHaveLength(0);
 
     await query(`select * from public.backfill_ledger_history()`);
 

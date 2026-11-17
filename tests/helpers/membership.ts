@@ -47,6 +47,11 @@ export async function satisfyActivationPreconditions(
     [membershipId, witnessProfileId],
   );
 
+  // Decision A. The fee is cash over the counter, so it carries a
+  // restriction; a fixture standing in for a branch that took it counts it.
+  const { confirmRecordedReceipts } = await import('./db');
+  await confirmRecordedReceipts();
+
   return receipt.id;
 }
 
@@ -82,6 +87,15 @@ export async function enrolMember(
       options.initialDeposit ?? null,
     ],
   );
+
+  // Decision A. `enrol_member` takes the registration fee — and, when one is
+  // given, an opening deposit — over the counter in cash, so both reach the
+  // till carrying a confirmation restriction. A fixture standing in for a
+  // branch that physically received and counted the money confirms it here,
+  // so that suites whose subject is membership, benefits or meetings have a
+  // till they can spend from rather than a till of unconfirmed receipts.
+  const { confirmRecordedReceipts } = await import('./db');
+  await confirmRecordedReceipts();
 
   const account = await query<{ id: string }>(
     `select id from public.savings_accounts where membership_id = $1`,
@@ -403,6 +417,13 @@ export async function depositOn(
 
     await client.query('reset role');
     await client.query('commit');
+
+    // Decision A. A deposit is restricted until a second officer counts the
+    // drawer; a fixture standing in for months of savings counts it here, so
+    // that the tests whose subject is savings read as they always did.
+    const { confirmRecordedReceipts } = await import('./db');
+    await confirmRecordedReceipts();
+
     return (posted.rows[0] as { id: string }).id;
   } catch (error) {
     await client.query('rollback').catch(() => undefined);

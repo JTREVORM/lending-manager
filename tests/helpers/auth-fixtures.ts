@@ -151,6 +151,15 @@ export async function deleteTestUsers(): Promise<void> {
     { table: 'expenses', trigger: 'expenses_no_delete' },
     { table: 'other_income', trigger: 'other_income_no_delete' },
     { table: 'account_reconciliations', trigger: 'account_reconciliations_no_delete' },
+    // Decision A. Both reference `journal_entries` with `on delete cascade`,
+    // and a cascade is still a DELETE, so their append-only guards are
+    // suspended here exactly as `journal_lines`' is.
+    {
+      table: 'cash_receipt_confirmations',
+      trigger: 'cash_receipt_confirmations_no_delete',
+    },
+    { table: 'bank_deposits', trigger: 'bank_deposits_no_delete' },
+    { table: 'bank_deposits', trigger: 'bank_deposits_guard' },
     { table: 'journal_lines', trigger: 'journal_lines_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_guard_update' },
@@ -412,6 +421,8 @@ export async function deleteTestUsers(): Promise<void> {
     await query(`delete from public.expenses`);
     await query(`delete from public.other_income`);
     await query(`delete from public.account_reconciliations`);
+    await query(`delete from public.bank_deposits`);
+    await query(`delete from public.cash_receipt_confirmations`);
     await query(`delete from public.journal_entries`);
 
     // Phase 4 rows first: `loans.client_id` is `on delete restrict`, so loans

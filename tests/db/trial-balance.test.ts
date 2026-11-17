@@ -56,7 +56,8 @@ async function accountIdByCode(code: string): Promise<string> {
 
 async function cashAccountId(): Promise<string> {
   const row = await queryOne<{ id: string }>(
-    `select id from public.ledger_accounts where cash_kind = 'cash_at_hand' limit 1`,
+    `select id from public.ledger_accounts where cash_kind = 'cash_at_hand'
+      order by code limit 1`,
   );
   return row.id;
 }

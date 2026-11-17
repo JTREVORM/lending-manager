@@ -932,6 +932,21 @@ export const NAV_MODULES: readonly NavModule[] = [
         phase: 11,
       },
       {
+        // Decision A. What has come in and has not been counted yet. Placed
+        // before Reconciliation because confirming a receipt is a daily act
+        // and counting a drawer is a periodic one.
+        href: ROUTES.receipts,
+        label: 'Cash Received',
+        permission: 'receipts:view',
+        phase: 11,
+      },
+      {
+        href: ROUTES.deposits,
+        label: 'Bank Deposits',
+        permission: 'deposits:view',
+        phase: 11,
+      },
+      {
         href: ROUTES.reconciliation,
         label: 'Reconciliation',
         permission: 'reconciliation:view',

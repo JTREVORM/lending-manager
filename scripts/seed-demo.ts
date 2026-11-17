@@ -1084,6 +1084,35 @@ async function seedMember(
     }
   }
 
+  // --- The end-of-day count -----------------------------------------------
+  //
+  // Decision A. A registration fee and a savings deposit are cash over the
+  // counter, so each reaches the till carrying a confirmation restriction and
+  // the company may not spend it until a second officer has counted the
+  // drawer. This script stands in for months of counter work, so it counts
+  // the money whose day has closed — and deliberately leaves *today's*
+  // takings pending, which is the state the Cash Received screen exists to
+  // clear and the one a demonstration should show.
+  //
+  // Member E's withdrawal below is paid out of this till, so the count has to
+  // happen before it rather than at the end of the run.
+  await client.query(
+    `with historical as (
+       select c.id
+         from public.cash_receipt_confirmations c
+         join public.journal_entries e on e.id = c.journal_entry_id
+        where c.state = 'pending' and e.entry_date < public.business_date()
+     )
+     update public.cash_receipt_confirmations c
+        set state = 'confirmed',
+            confirmed_by = null,
+            confirmed_by_label = 'DEMONSTRATION end-of-day count',
+            confirmed_at = public.business_now(),
+            confirmation_note = 'Counted at the close of the day it was taken'
+       from historical h
+      where c.id = h.id`,
+  );
+
   // --- Member E's withdrawal, and the reversal -------------------------
   if (member.letter === 'E') {
     await seedWithdrawal(client, {

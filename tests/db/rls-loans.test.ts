@@ -13,6 +13,7 @@ import {
   createDraftLoan,
   createLoanScenario,
   disburseLoan,
+  fundForDisbursement,
   submitLoan,
   type LoanScenario,
 } from '../helpers/loan-fixtures';
@@ -448,8 +449,14 @@ describeDb('loan row level security', () => {
       const loanId = await createDraftLoan(own.clientId);
       await approveLoan(loanId, own);
 
+      // Decision A. The subject here is the policy — may an Owner call
+      // `disburse_loan` at all — so the branch is funded first. Without this
+      // the call is refused for having no available cash and the test would
+      // read as a policy refusal, which is the one thing it must not do.
+      await fundForDisbursement(loanId);
+
       const result = await asUser(own.owner, `select public.disburse_loan($1)`, [loanId]);
-      expect(result.ok).toBe(true);
+      expect(result.ok, result.message).toBe(true);
     });
 
     it('cancels a pre-disbursement loan', async () => {

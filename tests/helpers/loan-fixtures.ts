@@ -23,9 +23,22 @@ function nextPhone(): string {
   return `+2567000${String(80_000 + (counter % 19_000)).padStart(5, '0')}`;
 }
 
+/**
+ * A distinct national identification number, unique across workers.
+ *
+ * `client_identities_nin_unique` is a real uniqueness constraint over one
+ * shared database, while `counter` is module state inside one worker process.
+ * Vitest runs this project's files across several workers, so a counter alone
+ * hands the same number to two of them and whichever inserts second fails on
+ * a constraint that has nothing to do with the test. The process id is mixed
+ * in to keep the numbers distinct per worker; the format is the one the
+ * `^C[MF][0-9A-Z]{12}$` check requires, twelve characters after the prefix.
+ */
 function nextNin(prefix: 'CM' | 'CF'): string {
   counter += 1;
-  return `${prefix}${String(90_000_000 + counter).padStart(8, '0')}ZZZZ`.slice(0, 14);
+  const worker = (process.pid % 60_466_176).toString(36).toUpperCase().padStart(5, '0');
+  const serial = (counter % 60_466_176).toString(36).toUpperCase().padStart(5, '0');
+  return `${prefix}${worker}${serial}ZZ`;
 }
 
 export interface LoanScenario {
@@ -322,12 +335,87 @@ export async function approveLoan(loanId: string, actors: LoanActors): Promise<v
 }
 
 /** Drive a loan to `active`. */
+
+/**
+ * Put capital in the branch's till, so that a disbursement has money to pay.
+ *
+ * Decision A (migration `20261120000400`): a payout is refused unless the
+ * account it leaves holds the funds as *available*. That is the rule working
+ * — a business cannot lend money it does not have — but it means a fixture
+ * that disburses has to do what a real business does first, which is put
+ * money in.
+ *
+ * Posted as an `opening_balance` entry, Dr the till / Cr `3000 Owner Capital`,
+ * which is the same shape `backfill_ledger_history` uses for the historical
+ * opening position and the same one `money-movement.test.ts` has always used
+ * to fund an account. It tops up only the shortfall, so calling it repeatedly
+ * does not inflate the books, and it is a no-op when the till already covers
+ * the amount.
+ */
+export async function fundBranchTill(branchId: string, amount: number): Promise<void> {
+  await fundBranchCash(branchId, 'cash_at_hand', amount);
+}
+
+/**
+ * The same thing for any one of the branch's spendable cash kinds.
+ *
+ * A benefit can be paid by Mobile Money and a withdrawal can be paid from the
+ * bank, and each account holds its own available balance — Owner instruction 3
+ * forbids pooling them — so a fixture that pays out of a wallet has to put
+ * money in *that* wallet. `agency_float` and `in_transit` are deliberately not
+ * fundable here: neither is spendable, and a fixture that funded one would be
+ * a fixture that disagreed with the rule.
+ */
+export async function fundBranchCash(
+  branchId: string,
+  cashKind: 'cash_at_hand' | 'mtn_mobile_money' | 'airtel_money' | 'bank',
+  amount: number,
+): Promise<void> {
+  const { query, queryOne } = await import('./db');
+
+  const account = await queryOne<{ id: string }>(
+    `select public.branch_cash_account($1, $2) as id`,
+    [branchId, cashKind],
+  );
+
+  const position = await queryOne<{ available: string }>(
+    `select coalesce(public.cash_account_available_balance($1), 0)::text as available`,
+    [account.id],
+  );
+
+  const shortfall = amount - Number(position.available);
+  if (shortfall <= 0) return;
+
+  await query(
+    `select public.post_journal(
+       $1, current_date, 'Fixture capital', 'opening_balance', null, null, null,
+       jsonb_build_array(
+         jsonb_build_object('account_id', $2::uuid, 'debit', $3::bigint, 'credit', 0),
+         jsonb_build_object('account_id', public.ledger_account_by_code('3000'),
+                            'debit', 0, 'credit', $3::bigint)
+       ))`,
+    [branchId, account.id, shortfall],
+  );
+}
+
+/** The branch a loan belongs to, and what it is about to pay out. */
+export async function fundForDisbursement(loanId: string): Promise<void> {
+  const { queryOne } = await import('./db');
+  const loan = await queryOne<{ branch_id: string; principal: string }>(
+    `select branch_id, principal_amount::text as principal
+       from public.loans where id = $1`,
+    [loanId],
+  );
+  await fundBranchTill(loan.branch_id, Number(loan.principal));
+}
+
 export async function disburseLoan(
   loanId: string,
   actors: LoanActors,
   fixtureInstant?: Date,
 ): Promise<void> {
   await approveLoan(loanId, actors);
+  await fundForDisbursement(loanId);
   await runAsCommitted(actors.owner, [
     { sql: `select public.disburse_loan($1)`, params: [loanId] },
   ]);
@@ -385,7 +473,12 @@ export async function disburseLoan(
 export async function disburseApprovedLoan(
   loanId: string,
   actors: LoanActors,
+  options?: { readonly fundTill?: boolean },
 ): Promise<void> {
+  // Funded by default, for the reason `fundBranchTill` gives. A test whose
+  // subject *is* the sufficiency rule passes `fundTill: false` and funds the
+  // till itself, or deliberately does not.
+  if (options?.fundTill !== false) await fundForDisbursement(loanId);
   await runAsCommitted(actors.owner, [
     { sql: `select public.disburse_loan($1)`, params: [loanId] },
   ]);
@@ -448,6 +541,17 @@ export async function deleteTestLoans(): Promise<void> {
     { table: 'expenses', trigger: 'expenses_no_delete' },
     { table: 'other_income', trigger: 'other_income_no_delete' },
     { table: 'account_reconciliations', trigger: 'account_reconciliations_no_delete' },
+    // Decision A. Both reference `journal_entries` with `on delete cascade` —
+    // a restriction and a deposit are *about* an entry and have no meaning
+    // without it — and a cascade is still a DELETE, so their append-only
+    // guards are suspended here for the same reason `journal_lines`' is. In
+    // production neither can fire: the ledger grants DELETE to nobody.
+    {
+      table: 'cash_receipt_confirmations',
+      trigger: 'cash_receipt_confirmations_no_delete',
+    },
+    { table: 'bank_deposits', trigger: 'bank_deposits_no_delete' },
+    { table: 'bank_deposits', trigger: 'bank_deposits_guard' },
     { table: 'journal_lines', trigger: 'journal_lines_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_no_delete' },
     { table: 'journal_entries', trigger: 'journal_entries_guard_update' },
@@ -515,6 +619,8 @@ export async function deleteTestLoans(): Promise<void> {
     await query(`delete from public.expenses`);
     await query(`delete from public.other_income`);
     await query(`delete from public.account_reconciliations`);
+    await query(`delete from public.bank_deposits`);
+    await query(`delete from public.cash_receipt_confirmations`);
     await query(`delete from public.journal_entries`);
     await query(`delete from public.payment_allocations`);
     await query(`delete from public.loan_payments`);

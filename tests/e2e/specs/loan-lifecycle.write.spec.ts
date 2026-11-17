@@ -1,6 +1,13 @@
 import type { Page } from '@playwright/test';
 
-import { expect, expectNoErrorBoundary, fixtures, stateFile, test } from './fixtures';
+import {
+  expect,
+  expectNoErrorBoundary,
+  fixtures,
+  fundTillForLoan,
+  stateFile,
+  test,
+} from './fixtures';
 
 /**
  * A loan from draft to disbursed, in a browser.
@@ -245,6 +252,15 @@ test.describe('a new loan', () => {
     // Two steps as well, and the most deliberate of the three: handing cash
     // over is not undoable, so the panel shows what is about to leave the
     // drawer and asks again.
+    //
+    // Decision A: the drawer has to hold the money first. This borrower was
+    // registered at whichever branch the form offered, which in a full run is
+    // one another spec opened and nobody has funded, so the till is given its
+    // opening capital before the money is released. Without it the panel
+    // refuses — correctly — and the refusal would be read as these buttons
+    // being unwired.
+    await fundTillForLoan(loanUrl.split('/').pop() ?? '');
+
     await page.goto(loanUrl);
     await expect(page.getByRole('heading', { name: /release the money/i })).toBeVisible();
 

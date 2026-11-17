@@ -41,8 +41,13 @@ import {
   reconciliationDecisionSchema,
   recordExpenseSchema,
   recordIncomeSchema,
+  confirmReceiptsSchema,
+  depositReasonSchema,
+  depositReturnSchema,
+  recordDepositSchema,
   recordTransferSchema,
   rejectReconciliationSchema,
+  verifyDepositSchema,
   submitReconciliationSchema,
   transferDecisionSchema,
 } from '@/lib/validation/finance';
@@ -596,4 +601,270 @@ export async function rejectReconciliationAction(
     ok: true,
     message: 'Rejected. The difference is still outstanding and the ledger is unchanged.',
   };
+}
+
+// ---------------------------------------------------------------------------
+// Decision A — confirming cash received, and banking it
+//
+// Nothing below decides whether money is available. `confirm_cash_receipt`,
+// `record_bank_deposit`, `verify_bank_deposit` and the rest read the balances
+// and apply the rules themselves, inside the transaction that writes the
+// document, under the account locks. An action that could pass an amount or
+// an account the database did not check would be an action that could pay out
+// money the business does not hold — which is the whole thing this module was
+// added to prevent.
+//
+// Nor does anything below decide *who* may confirm. The refusal of a person
+// confirming their own receipt is a CHECK constraint and a function raise, in
+// that order; the capability check here only decides whether the screen
+// should have offered the button.
+// ---------------------------------------------------------------------------
+
+export async function confirmCashReceiptsAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('receipts:confirm', 'finance.receipt_confirmation');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(confirmReceiptsSchema, {
+    confirmationIds: formData.getAll('confirmationIds'),
+    note: formData.get('note'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase.rpc('confirm_cash_receipts', {
+    p_confirmation_ids: input.confirmationIds,
+    p_note: input.note ?? null,
+  });
+
+  if (error !== null) {
+    logger.warn('Receipts could not be confirmed.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).message };
+  }
+
+  // The batch answers per receipt, because a drawer may hold one the
+  // confirmer recorded themselves. Saying "12 confirmed" when one was refused
+  // would be the kind of quiet half-success this module exists to avoid.
+  const rows = Array.isArray(data) ? data : [];
+  const confirmed = rows.filter((r) => r.outcome === 'confirmed').length;
+  const refused = rows.length - confirmed;
+
+  revalidateFinance();
+  revalidatePath(ROUTES.receipts);
+
+  if (refused > 0) {
+    const first = rows.find((r) => r.outcome === 'refused')?.detail ?? '';
+    return {
+      ok: confirmed > 0,
+      message:
+        `${String(confirmed)} confirmed, ${String(refused)} refused. ` +
+        (first === '' ? 'Somebody else must confirm those.' : first),
+    };
+  }
+
+  return {
+    ok: true,
+    message:
+      confirmed === 1
+        ? 'Receipt confirmed. The money is now available.'
+        : `${String(confirmed)} receipts confirmed. The money is now available.`,
+  };
+}
+
+export async function recordBankDepositAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('deposits:create', 'finance.deposit');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(recordDepositSchema, {
+    fromAccountId: formData.get('fromAccountId'),
+    bankAccountId: formData.get('bankAccountId'),
+    amount: formData.get('amount'),
+    description: formData.get('description'),
+    idempotencyKey: formData.get('idempotencyKey'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase.rpc('record_bank_deposit', {
+    p_from_account_id: input.fromAccountId,
+    p_bank_account_id: input.bankAccountId,
+    p_amount: input.amount,
+    p_description: input.description ?? null,
+    p_idempotency_key: input.idempotencyKey,
+  });
+
+  if (error !== null) {
+    logger.warn('A bank deposit could not be recorded.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).message };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.deposits);
+
+  return {
+    ok: true,
+    recordId: typeof data === 'string' ? data : undefined,
+    // Said plainly, because a cashier who believes the bank already has it
+    // will reconcile against the wrong figure.
+    message: 'Deposit recorded. The money is in transit and cannot be spent yet.',
+  };
+}
+
+export async function verifyBankDepositAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('deposits:verify', 'finance.deposit_decision');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(verifyDepositSchema, {
+    depositId: formData.get('depositId'),
+    bankReference: formData.get('bankReference'),
+    bankValueDate: formData.get('bankValueDate'),
+    notes: formData.get('notes'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc('verify_bank_deposit', {
+    p_deposit_id: input.depositId,
+    p_bank_reference: input.bankReference,
+    p_bank_value_date: input.bankValueDate,
+    p_deposit_slip_path: null,
+    p_notes: input.notes ?? null,
+  });
+
+  if (error !== null) {
+    logger.warn('A bank clearance could not be verified.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).message };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.deposits);
+
+  return { ok: true, message: 'Clearance verified. The money is now in the bank.' };
+}
+
+export async function openDepositInvestigationAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('deposits:verify', 'finance.deposit_decision');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(depositReasonSchema, {
+    depositId: formData.get('depositId'),
+    reason: formData.get('reason'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('open_deposit_investigation', {
+    p_deposit_id: parsed.data.depositId,
+    p_reason: parsed.data.reason,
+  });
+
+  if (error !== null) {
+    logger.warn('A deposit investigation could not be opened.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).message };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.deposits);
+
+  return {
+    ok: true,
+    // No journal was posted and the money has not moved. Saying so is the
+    // difference between an investigation and a pretended recovery.
+    message: 'Investigation opened. The money stays in transit until it is found.',
+  };
+}
+
+export async function confirmCashReturnAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('deposits:verify', 'finance.deposit_decision');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(depositReturnSchema, {
+    depositId: formData.get('depositId'),
+    evidenceNote: formData.get('evidenceNote'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('confirm_physical_cash_return', {
+    p_deposit_id: parsed.data.depositId,
+    p_evidence_note: parsed.data.evidenceNote,
+  });
+
+  if (error !== null) {
+    logger.warn('A physical cash return could not be confirmed.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).message };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.deposits);
+
+  return { ok: true, message: 'Return confirmed. The cash is back in the till.' };
+}
+
+export async function reverseBankClearanceAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('deposits:reverse', 'finance.deposit_decision');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(depositReasonSchema, {
+    depositId: formData.get('depositId'),
+    reason: formData.get('reason'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('reverse_bank_clearance', {
+    p_deposit_id: parsed.data.depositId,
+    p_reason: parsed.data.reason,
+  });
+
+  if (error !== null) {
+    logger.warn('A bank clearance could not be reversed.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).message };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.deposits);
+
+  return { ok: true, message: 'Clearance reversed. The money is back in transit.' };
 }

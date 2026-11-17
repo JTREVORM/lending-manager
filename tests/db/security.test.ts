@@ -155,6 +155,7 @@ describeDb('row level security', () => {
       // DELETE appears on nothing else in this phase. `member_beneficiaries`,
       // `benefit_claims` and `benefit_payments` all refuse it by trigger as
       // well, because each is evidence of a decision about money.
+      'bank_deposits:SELECT',
       'beneficiary_relationships:SELECT',
       'benefit_assessment_snapshots:SELECT',
       'benefit_claim_documents:DELETE',
@@ -174,6 +175,8 @@ describeDb('row level security', () => {
       // `client_remarks`, which gets no UPDATE because it is append-only.
       // DELETE still appears nowhere but `user_roles`: a client is archived,
       // never deleted, and the privilege simply is not there to be misused.
+      'cash_account_availability:SELECT',
+      'cash_receipt_confirmations:SELECT',
       'client_guarantors:INSERT',
       'client_guarantors:SELECT',
       'client_guarantors:UPDATE',
@@ -482,6 +485,7 @@ describeDb('row level security', () => {
       // and Phase 3 tables have none that write: every benefit and meeting
       // write is a definer function's. The two exceptions are the ones the
       // grant list above explains.
+      'bank_deposits:SELECT',
       'beneficiary_relationships:SELECT',
       'benefit_assessment_snapshots:SELECT',
       'benefit_claim_documents:DELETE',
@@ -493,6 +497,7 @@ describeDb('row level security', () => {
       'branches:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
+      'cash_receipt_confirmations:SELECT',
       'client_guarantors:INSERT',
       'client_guarantors:SELECT',
       'client_guarantors:UPDATE',
@@ -1004,6 +1009,10 @@ describeDb('views', () => {
         'benefit_claim_register',
         'benefit_payment_register',
         'branch_cash_position',
+        // Decision A. Booked, pending confirmation and available, per cash
+        // account. One row per account and no aggregate column, because a
+        // branch total is never a funding source.
+        'cash_account_availability',
         'collections_today',
         // Phase 9. The company's own identity, readable by every signed-in
         // user including borrowers. The only SECURITY DEFINER view in the
@@ -1153,7 +1162,10 @@ describeDb('views', () => {
     // function, for the same reason — it reads the posted transactions and
     // GL 1310, so the reader's own `ledger:view` and branch rule decide what
     // it returns.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(69);
+    // And one from Decision A: `cash_account_availability`, the per-account
+    // booked / pending / available figures. A view rather than a function for
+    // the same reason again — the reader's own `ledger:view` decides.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(70);
   });
 });
 
@@ -1283,6 +1295,7 @@ describeDb('privileged functions', () => {
       'assert_agency_settlement_account',
       'assert_cash_account',
       'assert_cash_available',
+      'assert_cash_funds_available',
       'assert_owner_admin_remains',
       'assert_postable_account',
       // Polytos Phase 3. The member-loan eligibility assessment a screen
@@ -1291,6 +1304,7 @@ describeDb('privileged functions', () => {
       // across; it restates the branch rule the policy on `memberships`
       // states, because the policies do not run for a definer function and
       // that is the whole privilege-escalation risk one carries.
+      'assert_spendable_account',
       'assess_benefit_claim',
       'assess_meeting_fine',
       'assess_meeting_fines',
@@ -1359,6 +1373,8 @@ describeDb('privileged functions', () => {
       // asserted in tests/db/agency-transaction-engine.test.ts.
       'authorise_agency_commission_exception',
       'backfill_ledger_history',
+      'bank_deposit_actor',
+      'bank_deposits_assign_number',
       'begin_benefit_verification',
       'begin_membership_policy_transition',
       'benefit_blocked_reason',
@@ -1393,6 +1409,8 @@ describeDb('privileged functions', () => {
       'cancel_savings_withdrawal',
       'capture_loan_product_snapshot',
       'carry_forward_unpaid_installments',
+      'cash_account_available_balance',
+      'cash_account_pending_amount',
       'certify_agency_commission_reconciliation',
       'client_guarantors_guard_detach',
       'client_has_live_loan',
@@ -1404,7 +1422,10 @@ describeDb('privileged functions', () => {
       'close_agency_agent_line',
       'complete_membership_policy_transition',
       'condolence_next_of_kin_status',
+      'confirm_cash_receipt',
+      'confirm_cash_receipts',
       'confirm_password_change',
+      'confirm_physical_cash_return',
       'consume_rate_limit',
       'create_agency_transaction',
       'current_profile_id',
@@ -1418,6 +1439,7 @@ describeDb('privileged functions', () => {
       'disburse_loan',
       'enrol_member',
       'ensure_agency_float_account',
+      'ensure_branch_transit_account',
       'ensure_penalty_applied',
       'finalise_meeting_minutes',
       'generate_loan_schedule',
@@ -1430,6 +1452,7 @@ describeDb('privileged functions', () => {
       'journal_entries_assert_balanced',
       'journal_entries_guard_update',
       'journal_lines_assert_balanced',
+      'journal_lines_assert_funded',
       'ledger_account_balance',
       'ledger_account_balance_as_of',
       'ledger_account_by_code',
@@ -1605,6 +1628,7 @@ describeDb('privileged functions', () => {
       'notify_reconciliation_variance',
       'notify_transfer_pending',
       'open_benefit_claim',
+      'open_deposit_investigation',
       'open_savings_account',
       'post_agency_payable_settlement',
       'post_agency_transaction',
@@ -1634,6 +1658,7 @@ describeDb('privileged functions', () => {
       'record_agency_commission_recovery',
       'record_agency_float_trade',
       'record_audit_event',
+      'record_bank_deposit',
       'record_commission_settlement',
       'record_death_confirmation',
       'record_draft_policy_timing',
@@ -1648,6 +1673,7 @@ describeDb('privileged functions', () => {
       'redeem_membership_consent_code',
       'register_agency_agent_line',
       'register_member_beneficiary',
+      'register_receipt_restrictions',
       'reject_agency_cash_banking',
       'reject_agency_float_trade',
       'reject_benefit_claim',
@@ -1658,6 +1684,7 @@ describeDb('privileged functions', () => {
       // Phase 14. Lets a guarantor out of a live loan, with a reason, provided
       // the loan keeps the number of guarantors its product requires.
       'release_loan_guarantor',
+      'release_or_assert_receipt_reversal',
       'repayment_frequencies_guard_identity',
       'request_benefit_information',
       'request_savings_withdrawal',
@@ -1672,6 +1699,7 @@ describeDb('privileged functions', () => {
       'reverse_agency_float_trade',
       'reverse_agency_payable_settlement',
       'reverse_agency_transaction',
+      'reverse_bank_clearance',
       'reverse_benefit_payment',
       'reverse_commission_settlement',
       'reverse_expense',
@@ -1744,8 +1772,10 @@ describeDb('privileged functions', () => {
       'verify_agency_cash_banking',
       'verify_agency_float_trade',
       'verify_agency_transaction',
+      'verify_bank_deposit',
       'verify_benefit_document',
       'verify_member_beneficiary',
+      'void_pending_cash_receipt',
     ]);
   });
 
@@ -1927,6 +1957,7 @@ describeDb('privileged functions', () => {
       'cancel_membership_meeting',
       'cancel_savings_withdrawal',
       'carry_forward_unpaid_installments',
+      'cash_account_available_balance',
       'certify_agency_commission_reconciliation',
       'client_has_live_loan',
       'client_has_outstanding_loan',
@@ -1934,6 +1965,9 @@ describeDb('privileged functions', () => {
       'close_agency_agent_line',
       'complete_membership_policy_transition',
       'condolence_next_of_kin_status',
+      'confirm_cash_receipt',
+      'confirm_cash_receipts',
+      'confirm_physical_cash_return',
       'consume_rate_limit',
       'create_agency_transaction',
       'current_profile_id',
@@ -2031,6 +2065,7 @@ describeDb('privileged functions', () => {
       // stated, so the preview and the generator cannot disagree about it.
       'monthly_collection_date',
       'open_benefit_claim',
+      'open_deposit_investigation',
       'open_savings_account',
       'payment_business_date',
       // Phase 10. Pure mapping from a payment method to the account it lands in. Immutable, takes no identity and reads nothing, so a signed-in caller may resolve it.
@@ -2059,6 +2094,7 @@ describeDb('privileged functions', () => {
       'record_agency_commission_payout',
       'record_agency_commission_recovery',
       'record_agency_float_trade',
+      'record_bank_deposit',
       'record_commission_settlement',
       'record_death_confirmation',
       'record_draft_policy_timing',
@@ -2089,6 +2125,7 @@ describeDb('privileged functions', () => {
       'reverse_agency_float_trade',
       'reverse_agency_payable_settlement',
       'reverse_agency_transaction',
+      'reverse_bank_clearance',
       'reverse_benefit_payment',
       'reverse_commission_settlement',
       'reverse_expense',
@@ -2155,6 +2192,7 @@ describeDb('privileged functions', () => {
       'verify_agency_cash_banking',
       'verify_agency_float_trade',
       'verify_agency_transaction',
+      'verify_bank_deposit',
       'verify_benefit_document',
       'verify_member_beneficiary',
     ]);
