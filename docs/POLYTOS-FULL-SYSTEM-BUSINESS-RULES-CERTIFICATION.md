@@ -1666,7 +1666,7 @@ run in CI: this is a local execution and is reported as one.
 | `npm run certify:financial` | **PASS** — **41 identities: 39 pass, 2 explained, 0 vacuous, 0 fail**, with `--require-complete` |
 | `node scripts/verify-membership-upgrade.mjs` | **PASS** — 99 existing migrations, a seeded book, then 130 new ones; **all 28 financial figures identical**, the four journal figures among them |
 | `node scripts/verify-policy-upgrade.mjs` | **PASS** — 26 existing financial/identity tables verified; all records, balances and historical approvals preserved; ledger debits = credits = 17,779,483 |
-| `npx playwright test` | **PASS** — **1,155 tests: 1,102 passed, 0 failed, 53 skipped**, in 20.3 minutes, single worker, no retries, against the production build on a stack rebuilt from zero. Four more than the audited commit: the two new screens in the accessibility sweep and in the sideways-scroll check |
+| `npx playwright test` | **PASS** — **1,161 tests: 1,108 passed, 0 failed, 53 skipped**, in 18.6 minutes, single worker, no retries, against the production build on a stack rebuilt from zero. Ten more than the audited commit: the two new screens in the accessibility and scroll sweeps, plus L5's six financial journeys (§H.8) |
 | `node scripts/certify-production-readonly.mjs` | **DELIBERATELY NOT RUN.** It issues GET requests to the hosted Vercel application. This audit did not contact production. |
 
 ### H.3 Database suite, project by project
@@ -1704,8 +1704,8 @@ rebuilt) so that the result measures one consistent state:
 
 | | |
 | --- | ---: |
-| Total tests | **1,155** |
-| **Passed** | **1,102** |
+| Total tests | **1,161** |
+| **Passed** | **1,108** |
 | **Failed** | **0** |
 | Skipped | **53** |
 | Duration | 22.5 minutes |
@@ -1900,6 +1900,21 @@ figure copied out of the thing under test.
 | The second officer | A Manager banks cash and tries to clear it themselves | Refused. A Manager holds *both* capabilities, so only separation of duties can stop them — and it does: status stays `submitted`, `verified_by` stays null, transit and bank do not move |
 | A deposit the bank has no record of | A Manager opens an investigation | **Not one journal entry was written** — counted before and after — and the money is still in transit. Blocker B-1's safe behaviour, measured |
 | Reversing a clearance | A Manager is offered no reversal; the Owner reverses one | `deposits:reverse` is the Owner's alone. The bank falls, transit rises, a journal is **added** rather than the original altered, and the clearance entry still exists — instruction 11, through the UI |
+
+**Measured in the full suite, once it was measured properly.** The first
+full-suite run after adding this file showed six `certification-responsive`
+failures at 0ms. They were operator error, not a defect: the financial
+certification and the two upgrade gates were running concurrently against the
+same checkout, and `scripts/certify-financial-book.sh` rewrites
+`tests/e2e/harness/fixtures.json` — the file every browser spec reads its
+record ids from. By the time the tablet project started, those ids named rows
+in the certification database. Re-run with nothing else touching the tree:
+**1,161 tests, 1,108 passed, 0 failed, 53 skipped.**
+
+That is the second time in this engagement that running something else against
+the checkout mid-suite produced failures that looked like defects — the first
+was applying a migration during a browser run. The lesson is cheap and worth
+writing down: **the browser suite owns the checkout while it runs.**
 
 **Discriminating power, measured rather than claimed.** The repository's own
 standard for a regression test is that it fails without the thing it guards.
