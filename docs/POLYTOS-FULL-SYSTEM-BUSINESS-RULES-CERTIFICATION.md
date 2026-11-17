@@ -40,8 +40,8 @@ and fixed on these branches:
 
 | | Finding | Severity | State |
 | --- | --- | --- | --- |
-| **DEFECT-001** | The guarantor concentration ceiling the business configured did not bind at all | High | found, reproduced, **fixed and regression-tested**, approved by the Owner on 2026-11-16, **not merged** — PR #35 |
-| **GAP-001** | Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists. A branch till reached **−345,000** during this audit's own test run, with `allow_negative_cash = false` | High | **already known and documented** by the project; **reproduced live here**; ruled on by the Owner as *"APPROVED: NO UNFUNDED PAYOUTS"*; **fixed in four additive migrations**, **not merged** — PR #36 |
+| **DEFECT-001** | The guarantor concentration ceiling the business configured did not bind at all | High | found, reproduced, **fixed and regression-tested**, approved by the Owner on 2026-11-16, **merged to `main` on 2026-11-17** as `dd5f581` — PR #35 |
+| **GAP-001** | Three money-out paths — loan disbursement, savings-withdrawal payout and benefit payment — never check that the cash exists. A branch till reached **−345,000** during this audit's own test run, with `allow_negative_cash = false` | High | **already known and documented** by the project; **reproduced live here**; ruled on by the Owner as *"APPROVED: NO UNFUNDED PAYOUTS"*; **fixed in four additive migrations**, **merged to `main` on 2026-11-17** as `32226b6` — PR #36 |
 
 Neither was an arithmetic error. Both were *control* failures: a configured
 credit limit that did nothing, and a cash-sufficiency check that three paths
@@ -183,8 +183,25 @@ configuration and the documents listed in the scope section. The tally:
 | `PASS` | **454** | measured and correct |
 | `BLOCKED` (correct) | **9** | the system correctly refuses because a business decision is outstanding — a pass for the software, an open item for the business |
 | `FAIL` | **0** | — |
-| `FAIL → FIXED` | **5** | DEFECT-001 (GUAR-006) and its concurrent form (CONC-008); and GAP-001 (FIN-018, FIN-019, the cash half of CONC-021). All five fixed on this branch, **not merged** |
+| `FAIL → FIXED` | **5** | DEFECT-001 (GUAR-006) and its concurrent form (CONC-008); and GAP-001 (FIN-018, FIN-019, the cash half of CONC-021). All five **merged to `main` on 2026-11-17**: `dd5f581` (PR #35) and `32226b6` (PR #36), each with all four CI gates green on its own head |
 | `NOT TESTED` | **1** | the real-Auth rehearsal, which needs a container image unavailable here |
+
+> **Merge record, 2026-11-17.** The inventory is unchanged at **469 rules**
+> and the five status counts are unchanged. What changed is that the five
+> `FAIL → FIXED` rules are now **merged to `main`** rather than pending on a
+> branch: `dd5f581` (PR #35, DEFECT-001) and `32226b6` (PR #36, GAP-001), each
+> with all four CI gates green on its own head and on `main` after the merge.
+> `main` carries **229 migrations**, 224 inherited plus the five added, none of
+> the pre-existing ones modified. The rule rows below were re-read and their
+> status and evidence columns updated; **no rule was added, removed or
+> re-identified**, which is why the tally is untouched.
+>
+> Recommendation **L5** — browser journeys for these financial workflows, as
+> opposed to page-rendering sweeps — is implemented in
+> `tests/e2e/specs/cash-sufficiency.write.spec.ts`. The `PW` evidence marker
+> on the cash rules now means a journey that presses the buttons, not a page
+> that rendered. §H.8 records what it measured and the one finding it
+> produced.
 
 The five counts sum to 469. They were re-derived from this document's own
 tables after the Decision A work, by parsing every rule row and tallying its
@@ -346,7 +363,7 @@ and compared period-by-period against `public.calculate_loan_breakdown`.
 | GUAR-003 | Eligible existing clients may act as guarantors | permitted | `allow_client_as_guarantor = true` | IND | PASS |
 | GUAR-004 | A non-active client cannot guarantee | refused | status must be `active` | SCHEMA | PASS |
 | GUAR-005 | An archived external guarantor cannot guarantee | refused | `archived_at` checked | SCHEMA | PASS |
-| GUAR-006 | **Maximum two active guaranteed loans per guarantor** | `guarantor_max_active_loans = 2` binds | **was not enforced — see DEFECT-001.** Fixed on this branch; now enforced at activation with a per-guarantor advisory lock | IND-5, DB:guarantor-concentration | **FAIL → FIXED** |
+| GUAR-006 | **Maximum two active guaranteed loans per guarantor** | `guarantor_max_active_loans = 2` binds | **was not enforced — see DEFECT-001.** Fixed and merged (`dd5f581`); enforced at activation with a per-guarantor advisory lock, re-verified on the merged tree | IND-5, DB:guarantor-concentration | **FAIL → FIXED** |
 | GUAR-007 | Quick Loans need no mandatory guarantor | `min_guarantors = 0` | `QL guarantor_required = false, min_guarantors = 0` | IND | PASS |
 | GUAR-008 | Individual Loans need no mandatory guarantor | `min_guarantors = 0` | `IL guarantor_required = false, min_guarantors = 0` | IND | PASS |
 | GUAR-009 | Salary Loans need at least one guarantor | `min_guarantors = 1` | `SL guarantor_required = true, min_guarantors = 1` | IND | PASS |
@@ -1174,7 +1191,7 @@ broken book to the suite.
 | --- | --- |
 | **Severity** | **High** — a credit-risk control the business had configured did not operate. Not a money-arithmetic error: no balance, ledger or report was wrong. |
 | **Rule violated** | GUAR-006. `business_settings.guarantor_max_active_loans`, configured at **2**, whose own column comment reads: *"How many active loans one person may guarantee at once. A guarantor standing behind six loans is a concentration nobody chose."* |
-| **Status** | Reproduced · root-caused · fixed on this branch · regression-tested · full suite re-run. **Not merged.** |
+| **Status** | Reproduced · root-caused · fixed · regression-tested · full suite re-run · **merged to `main` 2026-11-17** in `dd5f581`, with the guarantor suite and the enforcement objects re-verified on the merged tree. |
 
 #### Expected versus actual
 
@@ -1306,7 +1323,7 @@ re-running:
   test file edited is `security.test.ts`, and only to add the new privileged
   function to its exhaustive inventory — which is that test working as intended.
 - No database security was bypassed and no financial guard weakened.
-- **The fix was not merged**, because it changes what the business can disburse.
+- **The fix was held for the Owner's decision**, because it changes what the business can disburse. Approved 2026-11-16 and merged 2026-11-17.
 
 ### GAP-001 — Three money-out paths never check that the cash exists
 
@@ -1314,7 +1331,7 @@ re-running:
 | --- | --- |
 | **Severity** | **High.** A ledger that states a negative till is a false statement about where the company's money is, and the till is what a cash count is reconciled against. |
 | **Rules affected** | FIN-018, FIN-019, CONC-021 (cash) |
-| **Status** | **FIXED on this branch, 2026-11-16.** Known, documented and analysed before this audit (`docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` §1.2, §1.4); **reproduced live here**; and closed by the Owner's decision of 2026-11-16 in migrations `20261120000100`–`20261120000400`. See `docs/POLYTOS-DECISION-A-DELIVERY.md`. **Not merged.** |
+| **Status** | **FIXED on this branch, 2026-11-16.** Known, documented and analysed before this audit (`docs/POLYTOS-DECISION-A-GAP-ANALYSIS.md` §1.2, §1.4); **reproduced live here**; and closed by the Owner's decision of 2026-11-16 in migrations `20261120000100`–`20261120000400`. See `docs/POLYTOS-DECISION-A-DELIVERY.md`. **Merged to `main` 2026-11-17** in `32226b6`. |
 
 #### Reproduced, live, in the certified book
 
@@ -1550,7 +1567,7 @@ question gets recorded as a bug.
 
 | | |
 | --- | --- |
-| DEFECT-001 | The guarantor concentration ceiling did not bind. **Fixed on this branch, not merged.** Needs the Owner's sign-off because it changes what can be disbursed. |
+| DEFECT-001 | The guarantor concentration ceiling did not bind. **Fixed, approved by the Owner 2026-11-16 and merged 2026-11-17.** It changes what can be disbursed, which is why it needed the sign-off it got. |
 
 Those are the only two findings, and only one of them is a defect in the
 ordinary sense. **GAP-001 is not listed here**, and deliberately so: the
@@ -1861,6 +1878,61 @@ Two method notes, both about this audit rather than about the product:
    1,151-test suite passed without touching either of them. They are in those
    lists now. A suite that is green is not a suite that looked.
 
+### H.8 L5 delivered: the financial workflows, through the buttons
+
+Recommendation L5 said the quiet part out loud: the full browser suite passed
+without ever touching the two Decision A screens, and adding them to the
+accessibility, scroll and navigation sweeps proved only that they *render*.
+`tests/e2e/specs/cash-sufficiency.write.spec.ts` presses the buttons.
+
+**Six journeys, in a real browser, against the production build.** Every
+figure is checked twice and computed never: the number on screen is compared
+to `cash_account_availability`, and the *change* in it is compared to the sum
+of the receipt amounts in `cash_receipt_confirmations`. That second check is
+an independent identity — available rises by what was counted — rather than a
+figure copied out of the thing under test.
+
+| Journey | What it drives | What it proves |
+| --- | --- | --- |
+| Counting the drawer | A Manager selects two named receipts and submits the batch | Available rose by **exactly** those two amounts; booked did not move, because confirming money is not receiving money; the rows left the queue and the rest stayed; the card and the ledger agree |
+| Who may count it | A Secretary opens the same screen | `receipts:view` without `receipts:confirm`: the queue is visible, no button is offered, every checkbox is disabled, and nothing changed |
+| Banking the takings | A Secretary banks cash; a Manager clears it with the bank's reference and value date | The till falls by the amount, the bank does **not** rise yet, transit holds it; after clearance the bank rises, transit empties and the till does not move a second time — the money moved once, in two steps; the register names both officers and the bank's reference |
+| The second officer | A Manager banks cash and tries to clear it themselves | Refused. A Manager holds *both* capabilities, so only separation of duties can stop them — and it does: status stays `submitted`, `verified_by` stays null, transit and bank do not move |
+| A deposit the bank has no record of | A Manager opens an investigation | **Not one journal entry was written** — counted before and after — and the money is still in transit. Blocker B-1's safe behaviour, measured |
+| Reversing a clearance | A Manager is offered no reversal; the Owner reverses one | `deposits:reverse` is the Owner's alone. The bank falls, transit rises, a journal is **added** rather than the original altered, and the clearance entry still exists — instruction 11, through the UI |
+
+**Discriminating power, measured rather than claimed.** The repository's own
+standard for a regression test is that it fails without the thing it guards.
+Dropping `bank_deposits_verifier_not_recorder` from the live schema made **all
+six journeys fail**; rebuilding the database from the migrations made all six
+pass again. The suite is not vacuous.
+
+That standard also caught a mistake inside this very fix. The first draft of
+the maker-checker journey asserted `getByText(/cannot|recorded/i)` — which
+every register row satisfies with "recorded by …", so it passed in 776ms
+**without the refusal ever happening**. It is the exact error L5 was written
+about, made while fixing L5, and the comment in the file says so, because the
+next person to loosen that matcher should know what it costs.
+
+#### The one finding
+
+A Manager who banks cash and then tries to clear it themselves is told
+**"Privilege denied on record."** The database raised something better — *"You
+recorded this deposit, so you cannot verify its clearance. A different Manager
+or Owner must."* — and `mapDatabaseError` replaced it, deliberately: its own
+documentation says a database message is treated as developer-facing because
+it can carry table and column names.
+
+The control is sound; this is about what the officer is told. "Privilege
+denied" points at the wrong cause — the Manager *holds* `deposits:verify`;
+what stopped them is separation of duties — so the likely response is a
+support ticket rather than asking a colleague to verify. Both screens do carry
+the rule in their own words, so nobody is left without an explanation.
+
+Not changed here, because it is not a Decision A defect: it is a system-wide
+boundary working as designed, and narrowing it is a decision about every
+module's error messages, not this one's. Recorded as **L7** in §J.
+
 ### H.7 Not tested, and why
 
 | Item | Why |
@@ -1951,7 +2023,7 @@ Ranked as the brief asks.
 | ~~C1~~ | **DECIDED, 2026-11-16.** The Owner approved the guarantor ceiling as a mandatory control, enforced on the transition to active with correct locking. The fix in PR #35 stands, subject to code review and CI. The original item read: **Review and decide on DEFECT-001's fix** (migration `20261119000100`). The guarantor concentration ceiling the business configured does not currently bind: one guarantor can stand behind any number of active loans. The fix makes it bind at disbursement. It changes what can be disbursed, so it needs the Owner's decision — either accept the fix, or decide that the ceiling is advisory and change the column's documented meaning to match. **Leaving it as it is means the configured figure means nothing, which is the worst of the three outcomes.** |
 | C2 | **Approve a membership policy version, or accept that the membership programme cannot operate.** Both 1.0 and 2.0 are drafts. Nothing in the membership, savings, member-lending, benefits or meeting-fine modules can run until one is approved with an authorisation reference. |
 | C3 | **Merge PR #35, then PR #36, and only when every CI check on each is green.** #36 branches from #35, so the order is not a preference. Both change what happens at a counter — a disbursement can now be refused for a guarantor at the ceiling, and any payout can be refused for want of available cash — so each wants the Owner's explicit go-ahead rather than an auto-merge. |
-| C4 | **Complete the §11.4 cash cutover before Decision A's rule binds on live data.** The migrations take "no restriction recorded" to mean "available", which is what guarantees that no historical figure moved — and it is *not* evidence that legacy till cash is physically present. Signed per-account till counts, a bank confirmation for every bank account and an Owner-approved initial verified position are required, and no migration can establish them. Stated in `docs/POLYTOS-DECISION-A-DELIVERY.md` §4. |
+| C4 | **Complete the cash cutover before Decision A's rule binds on live data.** The checklist is now written: `docs/POLYTOS-CASH-CUTOVER-CHECKLIST.md`, prepared on the Owner's instruction of 2026-11-17 and **not started** — signed per-till counts with two signatures each, the bank's own confirmation for every bank account, transit at zero, every difference explained before sign-off, and an Owner-approved opening verified position. It also asks that at least two officers per branch hold `receipts:confirm` and `deposits:verify`, because a branch with one cannot clear its own deposits: the rule that the verifier may not be the recorder will stop it, correctly. The migrations take "no restriction recorded" to mean "available", which is what guarantees that no historical figure moved — and it is *not* evidence that legacy till cash is physically present. Signed per-account till counts, a bank confirmation for every bank account and an Owner-approved initial verified position are required, and no migration can establish them. Stated in `docs/POLYTOS-DECISION-A-DELIVERY.md` §4. |
 
 ### High — resolve before the affected service accepts financial transactions
 
@@ -1983,6 +2055,7 @@ Ranked as the brief asks.
 | L2 | Make `stack.sh`'s cleanup match on the executable rather than the command line, so a shell whose arguments merely mention `postgrest` is not killed. |
 | L3 | Consider surfacing a guarantor's current concentration on the approval screen. The fix added the failure code; showing the count before somebody commits to an application would turn a refusal into a decision. |
 | L4 | Make `tests/integration/bundle.test.ts` fail, rather than skip, when `.next` is older than the newest source file it would measure. It skips when there is no build, which is right; it also passes against a stale one, which is how a 441 KB regression survived three green local runs (§H.6.2). |
-| L5 | Add a browser spec for Cash Received and Bank Deposits beyond the sweeps they were just added to. The full 1,151-test suite passed without touching either screen, which is worth remembering: a suite that is green is not a suite that looked. The database suite proves the rules; what is missing is a journey that confirms a receipt and clears a deposit through the two buttons an officer presses. |
+| ~~L5~~ | **DONE, 2026-11-17.** `tests/e2e/specs/cash-sufficiency.write.spec.ts` — six journeys covering receipt confirmation, batch confirmation, bank-deposit clearance, maker-checker rejection, investigation and reversal, each asserting the resulting available balances against the ledger. Discriminating power measured: dropping the maker-checker CHECK fails all six. §H.8. The original item read: **Add a browser spec for Cash Received and Bank Deposits beyond the sweeps they were just added to.** The full 1,151-test suite passed without touching either screen, which is worth remembering: a suite that is green is not a suite that looked. |
+| L7 | **Decide whether a maker-checker refusal may say why.** A Manager who banks cash and then tries to clear it themselves is told "Privilege denied on record." — which points at the wrong cause, because they *hold* `deposits:verify` and what stopped them is separation of duties. `mapDatabaseError` generalises every database message by design, so this is a decision about the boundary rather than a defect in Decision A: either a small set of functions is allowed to pass a staff-facing sentence through, or the screens carry the explanation and the alert stays generic. Found by L5's own journeys; §H.8. |
 | L6 | Consider pinning the `database` CI job's PostgreSQL major version, or asserting it. The job takes the newest on the runner image, which is the stronger test and is how the `23001` change was caught at all (§H.6.1) — but it means the runner image can turn a green build red with no commit behind it, and the first symptom is three unrelated-looking test failures. |
 

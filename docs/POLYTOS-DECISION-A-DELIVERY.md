@@ -335,3 +335,26 @@ test.
 Plus the approval-controlled paths of §5.5, the inert switch, transit
 unspendability from three directions, investigation posting nothing, and the
 loan path end to end.
+
+### 5.7 And through the buttons, since 2026-11-17
+
+The fifteen scenarios above are proved in the database suite. They are now
+also driven through the two screens, which is a different claim and was a
+real gap: when this note was first written, the full browser suite passed
+without ever touching either screen.
+
+`tests/e2e/specs/cash-sufficiency.write.spec.ts` carries six journeys —
+counting a drawer as a batch, a Secretary who may see it but not count it,
+banking cash and clearing it as two different officers, a Manager refused the
+clearance of their own deposit, an investigation that posts nothing, and an
+Owner reversing a clearance by contra-entry. Each asserts the resulting
+available balance against `cash_account_availability`, and asserts the
+*change* against the receipt amounts the counter took in, so the screen and
+the ledger have to agree and the identity has to hold.
+
+Dropping `bank_deposits_verifier_not_recorder` from the schema fails all six;
+rebuilding from the migrations passes all six. §H.8 of the certification
+report records what they measured, and the one finding they produced: a
+maker-checker refusal currently reads "Privilege denied on record." rather
+than the sentence the database raised, which is the error boundary working as
+designed and is ranked as L7.
