@@ -215,6 +215,31 @@ describe('mapDatabaseError', () => {
       );
     });
 
+    it('says the same thing in `message`, because that is what reaches the screen', () => {
+      // The assertion that was missing, and the reason the first version of
+      // this fix shipped a wrong sentence to a real browser while every unit
+      // test here passed.
+      //
+      // `lib/finance/actions.ts` returns `mapDatabaseError(error).message`,
+      // not `userMessage`, from about a dozen handlers. So `message` is the
+      // user-facing field on these paths whatever this file's doc comment
+      // says, and the L5 journey read "Separation of duties refused this
+      // action on record." off the screen — the developer sentence, label and
+      // all. It is also why the original defect looked the way it did:
+      // `AuthorizationError`'s `message` is "Privilege denied on record."
+      const mapped = mapDatabaseError(raised, 'deposit');
+
+      expect(mapped.message).toBe(SeparationOfDutiesError.USER_MESSAGE);
+      expect(mapped.message).toBe(mapped.userMessage);
+      // And no resource label leaks into it, which "on record" did.
+      expect(mapped.message).not.toContain('deposit');
+      expect(mapped.message).not.toContain('record');
+    });
+
+    it('keeps the resource label for the log instead', () => {
+      expect(mapDatabaseError(raised, 'deposit').context?.resource).toBe('deposit');
+    });
+
     it('cannot have its message overridden by a caller', () => {
       // The class sets `userMessage` after the options spread precisely so
       // that a future caller cannot pass database text through. Every other

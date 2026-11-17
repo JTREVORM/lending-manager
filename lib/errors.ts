@@ -159,6 +159,30 @@ export class AuthorizationError extends AppError {
  * developers, and those sentences can carry a record number or a name — so
  * they stay in the log, where `cause` keeps them, and this is what a person
  * reads.
+ *
+ * ## Why `message` is the staff sentence too
+ *
+ * Like `BusinessRuleError` above, and unlike the rest of this file, this
+ * class puts the same words in `message` as in `userMessage`.
+ *
+ * That is not tidiness. `lib/finance/actions.ts` returns
+ * `mapDatabaseError(error).message` — the developer field — from roughly a
+ * dozen handlers, so `message` is what reaches the screen on these paths.
+ * It is also the whole explanation for the sentence L7 reported: staff were
+ * reading `AuthorizationError`'s developer message, which is literally
+ * "Privilege denied on record.", rather than its `userMessage`, which reads
+ * "You do not have permission to do this."
+ *
+ * Until those handlers are changed to project through `toPublicError`, a
+ * class whose `message` is developer-facing will have that message shown to
+ * an officer. So this one has no developer-facing message to show: the
+ * resource label and the SQLSTATE go to `context`, the database's own
+ * sentence stays in `cause`, and both fields say the thing it is safe and
+ * useful to say.
+ *
+ * Found by the browser journey, not by the unit test. The unit test asserted
+ * `userMessage` and `toPublic()`, which were right all along; the screen was
+ * showing the other field.
  */
 export class SeparationOfDutiesError extends AppError {
   /**
@@ -173,7 +197,7 @@ export class SeparationOfDutiesError extends AppError {
     'You cannot approve or verify your own work.';
 
   constructor(
-    message = 'Separation of duties refused this action.',
+    message = SeparationOfDutiesError.USER_MESSAGE,
     options: AppErrorOptions = {},
   ) {
     // `userMessage` is set *after* the spread, not before it, so no caller can

@@ -138,10 +138,13 @@ export function mapDatabaseError(error: unknown, resourceLabel = 'record'): AppE
       // beneficiary number into it — so it is kept as `cause`, for the log,
       // and never shown. `SeparationOfDutiesError` holds the sentence a
       // person reads and does not let it be overridden.
-      return new SeparationOfDutiesError(
-        `Separation of duties refused this action on ${resourceLabel}.`,
-        { cause: error, context },
-      );
+      //
+      // Deliberately no resource label in the message, unlike every other
+      // branch here. These handlers return `.message` to the screen, so a
+      // label would be read by an officer as part of the sentence — "on
+      // record" was half of what made the old one confusing. `context`
+      // carries the label for the log, which is where it is useful.
+      return new SeparationOfDutiesError(undefined, { cause: error, context });
 
     case SQLSTATE.INSUFFICIENT_PRIVILEGE:
       // Also what a Row Level Security denial on a write looks like.
