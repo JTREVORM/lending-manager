@@ -677,7 +677,7 @@ export async function previewMemberLoan(input: {
 
   if (error !== null) {
     logger.debug('A member loan could not be priced.', { code: error.code });
-    return { blockedReason: mapDatabaseError(error).message };
+    return { blockedReason: mapDatabaseError(error).userMessage };
   }
 
   const rows = data ?? [];

@@ -161,7 +161,7 @@ export async function createMemberLoanApplicationAction(
     logger.warn('A member loan eligibility assessment could not be read.', {
       code: assessmentError.code,
     });
-    return { ok: false, message: mapDatabaseError(assessmentError).message };
+    return { ok: false, message: mapDatabaseError(assessmentError).userMessage };
   }
 
   const eligibility = (assessment ?? [])[0];
@@ -208,7 +208,7 @@ export async function createMemberLoanApplicationAction(
     logger.warn('A member loan application could not be opened.', {
       code: insertError?.code,
     });
-    return { ok: false, message: mapDatabaseError(insertError, 'loan').message };
+    return { ok: false, message: mapDatabaseError(insertError, 'loan').userMessage };
   }
 
   revalidatePath(ROUTES.memberLoans);

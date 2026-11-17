@@ -151,7 +151,7 @@ export async function updateCompanyIdentityAction(
 
   if (error !== null) {
     logger.warn('The company record could not be updated.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateSettings();
@@ -215,7 +215,7 @@ export async function updateLendingRulesAction(
     // The refusal that matters here is the guard rail's, and it names the
     // product and what to do about it. It is passed through rather than
     // summarised.
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateSettings();
@@ -274,7 +274,7 @@ export async function updateFinanceSettingsAction(
 
   if (error !== null) {
     logger.warn('The finance settings could not be updated.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateSettings();

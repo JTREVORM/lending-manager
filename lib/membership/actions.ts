@@ -174,7 +174,7 @@ export async function enrolMemberAction(
       consentMethod: input.consentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const membershipId = typeof data === 'string' ? data : null;
@@ -261,7 +261,7 @@ export async function recordMembershipFeeAction(
       method: input.paymentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(`${ROUTES.membership}/${input.membershipId}`);
@@ -331,7 +331,7 @@ export async function reverseMembershipFeeAction(
       receiptId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.membership);
@@ -411,7 +411,7 @@ export async function recordConsentAction(
       consentMethod: input.consentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(`${ROUTES.membership}/${input.membershipId}`);
@@ -491,7 +491,7 @@ export async function issueConsentCodeAction(
       membershipId: parsed.data.membershipId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const row = (data ?? [])[0];
@@ -558,7 +558,7 @@ export async function redeemConsentCodeAction(
       challengeId: parsed.data.challengeId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   return { ok: true, message: 'Code confirmed.' };
@@ -617,7 +617,7 @@ export async function issueMembershipCardAction(
       reason,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(`${ROUTES.membership}/${membershipId}`);
