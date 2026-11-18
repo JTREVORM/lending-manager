@@ -181,6 +181,37 @@ async function accountId(accountName: string): Promise<string> {
 }
 
 /**
+ * The date the database recorded for a deposit, as `YYYY-MM-DD`.
+ *
+ * This is the one value date a clearance journey can always submit.
+ * `verify_bank_deposit` refuses a bank value date that precedes the deposit
+ * (`p_bank_value_date < d.deposit_date`) or that lies in the future, and
+ * `record_bank_deposit` stamps `deposit_date = public.business_date()`. A
+ * value date equal to the deposit's own date therefore satisfies both bounds
+ * on the day the deposit was banked and on every later day, including when
+ * midnight in the business timezone falls between recording and clearing.
+ *
+ * It replaces a literal `'2026-11-17'`. That was the business date on the day
+ * the journeys were written, so they passed that day and on every CI run
+ * before midnight in Kampala, and failed from the 18th onward with the
+ * database refusing — correctly — a value date before the deposit existed.
+ * The refusal reached the screen only as "That action is not permitted on
+ * this record.", so the browser saw nothing to tell it why.
+ *
+ * Read from the database rather than computed in the test: the test must not
+ * carry its own opinion of what "today" is, because the clock is exactly what
+ * went wrong.
+ */
+async function bankValueDateFor(depositNumber: string): Promise<string> {
+  const row = await queryHarnessOne<{ deposit_date: string }>(
+    `select to_char(deposit_date, 'YYYY-MM-DD') as deposit_date
+       from public.bank_deposits where deposit_number = $1`,
+    [depositNumber],
+  );
+  return row.deposit_date;
+}
+
+/**
  * Fill in the banking form.
  *
  * The two selects are driven by the account's id rather than by its label:
@@ -272,7 +303,41 @@ test.describe('counting the drawer', () => {
     await expect(button).toBeEnabled();
     await button.click();
 
-    await expect(page.getByText(/confirmed/i).first()).toBeVisible({ timeout: 20_000 });
+    // Wait for the batch to have **committed**, not for the page to contain a
+    // word.
+    //
+    // This read `page.getByText(/confirmed/i).first()`, and it could not
+    // fail. This screen renders the availability card, whose own copy reads
+    // "Available is the ledger balance less the receipts nobody has
+    // confirmed yet." — so `/confirmed/i` matched static text on every
+    // render, before the button was pressed, and the ledger read below raced
+    // the Server Action's commit.
+    //
+    // Losing that race reads a change of **exactly zero**, because the
+    // confirmation is one transaction: either all of it is visible or none of
+    // it is. That is the fingerprint, and it is what CI run 44088627144
+    // reported — expected 77,000, received 0 — on a stack it had seeded
+    // itself, so nothing about the seed explains it. The third instance of
+    // the mistake L5 was written about, in L5's own file.
+    //
+    // Two real waits instead, in order:
+    //
+    //   1. the action's own sentence, which names the count. A partial batch
+    //      — "1 confirmed, 1 refused", which is what a receipt the confirmer
+    //      recorded themselves produces — fails here, loudly, instead of
+    //      arriving below as an arithmetic mismatch nobody can read;
+    //   2. the chosen rows leaving the queue, which is the screen agreeing
+    //      the transaction committed rather than the test hoping it did.
+    await expect(
+      page.getByText(
+        `${String(chosen.length)} receipts confirmed. The money is now available.`,
+      ),
+    ).toBeVisible({ timeout: 20_000 });
+
+    for (const receipt of chosen) {
+      await expect(receiptRow(page, receipt.id)).toHaveCount(0, { timeout: 20_000 });
+    }
+
     await expectNoErrorBoundary(page);
 
     // --- the identity, two ways -------------------------------------------
@@ -413,7 +478,7 @@ test.describe('banking the takings', () => {
       has: manager.getByRole('button', { name: /Verify clearance/i }),
     });
     await verify.getByLabel('Bank reference').fill('STAN-CLR-70414');
-    await verify.getByLabel('Value date').fill('2026-11-17');
+    await verify.getByLabel('Value date').fill(await bankValueDateFor(reference));
     await verify.getByRole('button', { name: /Verify clearance/i }).click();
 
     await expect(
@@ -483,7 +548,7 @@ test.describe('the second officer', () => {
       has: page.getByRole('button', { name: /Verify clearance/i }),
     });
     await verify.getByLabel('Bank reference').fill('SELF-CLEARED-0001');
-    await verify.getByLabel('Value date').fill('2026-11-17');
+    await verify.getByLabel('Value date').fill(await bankValueDateFor(reference));
     await verify.getByRole('button', { name: /Verify clearance/i }).click();
 
     // Refused, and the refusal reaches the screen as an alert rather than
@@ -496,19 +561,43 @@ test.describe('the second officer', () => {
     // L5 exists to catch, made inside L5's own fix, and it is why the real
     // evidence below is the ledger rather than a sentence.
     //
-    // The sentence itself is generic. `verify_bank_deposit` raises "You
-    // recorded this deposit, so you cannot verify its clearance. A different
-    // Manager or Owner must." and `mapDatabaseError` replaces it with
-    // "Privilege denied on record." — deliberately, per its own comment: a
-    // database message is treated as developer-facing because it can carry
-    // table and column names. The cost is that a Manager who holds
-    // `deposits:verify` is told they lack privilege when what actually
-    // stopped them is separation of duties. Reported as a finding rather
-    // than changed here; the screen does carry the rule in its own words.
-    const refusal = page
-      .getByRole('alert')
-      .filter({ hasText: /denied|cannot|not permitted/i });
+    // The sentence, since L7 — this is the fix that recommendation read as a
+    // finding when this file was first written.
+    //
+    // It used to say "Privilege denied on record.", because
+    // `verify_bank_deposit` raised `42501` and that is also what a Row Level
+    // Security denial raises, so `mapDatabaseError` could not tell a
+    // maker-checker refusal from a missing capability. It now raises `SD001`,
+    // which means one thing, and the Manager is told the useful thing: find a
+    // colleague. Asserted on the alert and on the words, because the words
+    // are what L7 was about.
+    const refusal = page.getByRole('alert').filter({
+      hasText: /A different authorized officer must complete this action/i,
+    });
     await expect(refusal.first()).toBeVisible({ timeout: 20_000 });
+    await expect(refusal.first()).toContainText(
+      /You cannot approve or verify your own work/i,
+    );
+
+    // And it is not the old sentence, which named the wrong cause: this
+    // Manager holds `deposits:verify`.
+    await expect(page.getByText(/Privilege denied/i)).toHaveCount(0);
+
+    // Nor does the screen carry anything from the database. The raised
+    // sentence, the constraint behind it and the deposit's own number stay in
+    // the log; none of them is shown.
+    const alertText = (await refusal.first().textContent()) ?? '';
+    for (const leak of [
+      'bank_deposits',
+      'verifier_not_recorder',
+      'SD001',
+      'SQLSTATE',
+      'recorded_by',
+      'its clearance',
+    ]) {
+      expect(alertText, `the alert must not contain ${leak}`).not.toContain(leak);
+    }
+
     await expectNoErrorBoundary(page);
 
     // And nothing moved: the deposit is still in transit, the bank still
@@ -635,7 +724,7 @@ test.describe('reversing a clearance', () => {
       has: manager.getByRole('button', { name: /Verify clearance/i }),
     });
     await verify.getByLabel('Bank reference').fill('WRONG-SLIP-0001');
-    await verify.getByLabel('Value date').fill('2026-11-17');
+    await verify.getByLabel('Value date').fill(await bankValueDateFor(reference));
     await verify.getByRole('button', { name: /Verify clearance/i }).click();
     await expect(subject.getByText(/Cleared by the bank/i).first()).toBeVisible({
       timeout: 20_000,

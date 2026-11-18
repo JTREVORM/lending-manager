@@ -143,7 +143,7 @@ export async function scheduleMeetingAction(
       meetingType: input.meetingType,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes();
@@ -205,7 +205,7 @@ export async function rescheduleMeetingAction(
       meetingId: parsed.data.meetingId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes(parsed.data.meetingId);
@@ -265,7 +265,7 @@ export async function cancelMeetingAction(
       meetingId: parsed.data.meetingId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes(parsed.data.meetingId);
@@ -338,7 +338,7 @@ export async function markAttendanceAction(
       attendance: input.attendance,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes(input.meetingId);
@@ -403,7 +403,7 @@ export async function recordMinutesAction(
       meetingId: parsed.data.meetingId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes(parsed.data.meetingId);
@@ -453,7 +453,7 @@ export async function finaliseMinutesAction(
       meetingId: parsed.data.meetingId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes(parsed.data.meetingId);
@@ -513,7 +513,7 @@ export async function addActionItemAction(
       meetingId: parsed.data.meetingId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateMeetingRoutes(parsed.data.meetingId);
@@ -568,7 +568,7 @@ export async function updateActionItemAction(
       status: parsed.data.status,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.meetings);

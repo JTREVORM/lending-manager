@@ -80,9 +80,16 @@ jobs:
 
       - name: Dependency audit
         # Reject high-severity advisories in production and development tools.
+        #
+        # The production run is plain `npm audit` and reads no exception file:
+        # nothing that ships can be waived. The full-tree run goes through
+        # scripts/audit-gate.ts, which is the same `--audit-level=high` check
+        # plus the individually approved, expiring entries in
+        # security/audit-exceptions.json. See
+        # docs/POLYTOS-AUDIT-EXCEPTION-PICOMATCH.md.
         run: |
           npm audit --omit=dev --audit-level=high
-          npm audit --audit-level=high
+          npx tsx scripts/audit-gate.ts --scope full
 
       - name: Production build
         run: npm run build
@@ -405,16 +412,62 @@ jobs:
       # Infrastructure, not this phase. Changed here because this is one of
       # the four jobs that must pass before anything is certified, and a gate
       # that fails four times in five is not a gate.
+      # Bounded retries, and a failure that says which half failed.
+      #
+      # This step was `curl -fsSL <key> | sudo gpg --dearmor`, and it took
+      # down the whole rehearsal job twice on 2026-11-17 — two red CI runs
+      # with no commit behind either. Both times the release CDN closed the
+      # connection early:
+      #
+      #   curl: (55) OpenSSL SSL_read: ... unexpected eof while reading
+      #   gpg: no valid OpenPGP data found.
+      #   ##[error]Process completed with exit code 2.
+      #
+      # Three separate faults in four lines:
+      #
+      #   1. no `--retry`, so a transient refusal was fatal — while the
+      #      PostgREST download in the `browser` job above has carried
+      #      `--retry 5 --retry-all-errors` since 2026-11-09, for this exact
+      #      failure, and nobody brought the treatment over here;
+      #   2. the pipe. The job's shell is `bash -e` without `pipefail`, so the
+      #      exit status is `gpg`'s, not `curl`'s — and the reported error is
+      #      "no valid OpenPGP data found", a message about the key's
+      #      *contents* for a problem with its *download*. That sent the first
+      #      investigation to the wrong place;
+      #   3. nothing checked that the downloaded bytes were a key before they
+      #      were trusted. An HTTP error page dearmors into nothing useful
+      #      and fails later, somewhere less obvious.
+      #
+      # So the key goes to a file first, the file is checked, and `pipefail`
+      # is on. `apt-get` gets its own retries because it is the other network
+      # call here and the same CDN serves it.
       - name: Install PostgreSQL 17
         run: |
+          set -euo pipefail
           sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            | sudo gpg --dearmor --yes -o /etc/apt/keyrings/postgresql.gpg
+
+          key="$(mktemp)"
+          if ! curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+                 --connect-timeout 15 --max-time 120 \
+                 -o "$key" https://www.postgresql.org/media/keys/ACCC4CF8.asc; then
+            echo "::error::Could not download the PostgreSQL signing key after 5 attempts. This is the key server, not this commit."
+            exit 1
+          fi
+
+          if ! grep -q 'BEGIN PGP PUBLIC KEY BLOCK' "$key"; then
+            echo "::error::The PostgreSQL signing key downloaded, but is not a PGP public key block. First bytes follow."
+            head -c 200 "$key" || true
+            exit 1
+          fi
+
+          sudo gpg --dearmor --yes -o /etc/apt/keyrings/postgresql.gpg < "$key"
           sudo chmod 0644 /etc/apt/keyrings/postgresql.gpg
+          rm -f "$key"
+
           . /etc/os-release
           printf 'deb [signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
-          sudo apt-get update
-          sudo apt-get install -y postgresql-17 postgresql-client-17
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y postgresql-17 postgresql-client-17
           echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
       - name: Install pinned real Auth and PostgREST
         run: |

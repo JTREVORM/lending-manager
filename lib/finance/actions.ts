@@ -133,7 +133,7 @@ export async function recordTransferAction(
 
   if (error !== null) {
     logger.warn('A transfer could not be recorded.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -169,7 +169,7 @@ export async function approveTransferAction(
 
   if (error !== null) {
     logger.warn('A transfer could not be approved.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -200,7 +200,7 @@ export async function rejectTransferAction(
 
   if (error !== null) {
     logger.warn('A transfer could not be rejected.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -231,7 +231,7 @@ export async function reverseTransferAction(
 
   if (error !== null) {
     logger.warn('A transfer could not be reversed.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -284,7 +284,7 @@ export async function recordExpenseAction(
 
   if (error !== null) {
     logger.warn('An expense could not be recorded.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -318,7 +318,7 @@ export async function approveExpenseAction(
 
   if (error !== null) {
     logger.warn('An expense could not be approved.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -349,7 +349,7 @@ export async function rejectExpenseAction(
 
   if (error !== null) {
     logger.warn('An expense could not be rejected.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -380,7 +380,7 @@ export async function reverseExpenseAction(
 
   if (error !== null) {
     logger.warn('An expense could not be reversed.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -435,7 +435,7 @@ export async function recordIncomeAction(
 
   if (error !== null) {
     logger.warn('Income could not be recorded.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -471,7 +471,7 @@ export async function reverseIncomeAction(
 
   if (error !== null) {
     logger.warn('Income could not be reversed.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -515,7 +515,7 @@ export async function submitReconciliationAction(
 
   if (error !== null) {
     logger.warn('A reconciliation could not be recorded.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -556,7 +556,7 @@ export async function approveReconciliationAction(
 
   if (error !== null) {
     logger.warn('A reconciliation could not be approved.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -593,7 +593,7 @@ export async function rejectReconciliationAction(
 
   if (error !== null) {
     logger.warn('A reconciliation could not be rejected.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -646,7 +646,7 @@ export async function confirmCashReceiptsAction(
 
   if (error !== null) {
     logger.warn('Receipts could not be confirmed.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   // The batch answers per receipt, because a drawer may hold one the
@@ -710,7 +710,7 @@ export async function recordBankDepositAction(
 
   if (error !== null) {
     logger.warn('A bank deposit could not be recorded.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -756,7 +756,7 @@ export async function verifyBankDepositAction(
 
   if (error !== null) {
     logger.warn('A bank clearance could not be verified.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -789,7 +789,7 @@ export async function openDepositInvestigationAction(
 
   if (error !== null) {
     logger.warn('A deposit investigation could not be opened.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -827,7 +827,7 @@ export async function confirmCashReturnAction(
 
   if (error !== null) {
     logger.warn('A physical cash return could not be confirmed.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();
@@ -860,7 +860,7 @@ export async function reverseBankClearanceAction(
 
   if (error !== null) {
     logger.warn('A bank clearance could not be reversed.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateFinance();

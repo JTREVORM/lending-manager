@@ -210,7 +210,7 @@ async function replaceBranches(
     logger.warn("A product's branches could not be cleared.", {
       code: removal.error.code,
     });
-    return mapDatabaseError(removal.error).message;
+    return mapDatabaseError(removal.error).userMessage;
   }
 
   if (branchIds.length === 0) return null;
@@ -225,7 +225,7 @@ async function replaceBranches(
     logger.warn("A product's branches could not be written.", {
       code: insertion.error.code,
     });
-    return mapDatabaseError(insertion.error).message;
+    return mapDatabaseError(insertion.error).userMessage;
   }
 
   return null;
@@ -258,7 +258,7 @@ async function clearDefaultExcept(productId: string | null): Promise<string | nu
     logger.warn('The existing default product could not be cleared.', {
       code: error.code,
     });
-    return mapDatabaseError(error).message;
+    return mapDatabaseError(error).userMessage;
   }
 
   return null;
@@ -301,7 +301,7 @@ export async function createLoanProductAction(
 
   if (error !== null) {
     logger.warn('A loan product could not be created.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const branchFailure = await replaceBranches(data.id, input.branchIds);
@@ -352,7 +352,7 @@ export async function updateLoanProductAction(
 
   if (error !== null) {
     logger.warn('A loan product could not be updated.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const branchFailure = await replaceBranches(input.productId, input.branchIds);
@@ -403,7 +403,7 @@ export async function setLoanProductStatusAction(
 
   if (error !== null) {
     logger.warn("A loan product's status could not be changed.", { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateProducts();
@@ -451,7 +451,7 @@ export async function setDefaultLoanProductAction(
 
   if (error !== null) {
     logger.warn('The default loan product could not be set.', { code: error.code });
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateProducts();

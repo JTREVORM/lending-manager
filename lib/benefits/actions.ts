@@ -204,7 +204,7 @@ export async function registerBeneficiaryAction(
       isChange: (input.supersedesId ?? null) !== null,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.beneficiaries);
@@ -276,7 +276,7 @@ export async function verifyBeneficiaryAction(
       verified: input.verified,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.beneficiaries);
@@ -330,7 +330,7 @@ export async function revokeBeneficiaryAction(
       beneficiaryId: parsed.data.beneficiaryId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.beneficiaries);
@@ -389,7 +389,7 @@ async function openClaim(payload: {
       claimType: payload.claimType,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const claimId = typeof data === 'string' ? data : null;
@@ -572,7 +572,7 @@ export async function submitBenefitClaimAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -611,7 +611,7 @@ export async function beginVerificationAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -660,7 +660,7 @@ export async function requestInformationAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -720,7 +720,7 @@ export async function assessBenefitClaimAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -785,7 +785,7 @@ export async function approveBenefitClaimAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -844,7 +844,7 @@ export async function rejectBenefitClaimAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -899,7 +899,7 @@ export async function cancelBenefitClaimAction(
       claimId: parsed.data.claimId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes(parsed.data.claimId);
@@ -980,7 +980,7 @@ export async function attachBenefitDocumentAction(input: {
       kind: parsed.data.kind,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   if (input.claimId !== null) {
@@ -1076,7 +1076,7 @@ export async function uploadBenefitDocumentAction(
     logger.warn('Could not resolve the membership a benefit document belongs to.', {
       code: ownerError.code,
     });
-    return { ok: false, message: mapDatabaseError(ownerError).message };
+    return { ok: false, message: mapDatabaseError(ownerError).userMessage };
   }
 
   const membershipId = (owner as { readonly membership_id?: string } | null)
@@ -1164,7 +1164,7 @@ export async function verifyBenefitDocumentAction(
       verified: parsed.data.verified,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.benefitClaims);
@@ -1214,7 +1214,7 @@ export async function removeBenefitDocumentAction(
       documentId: parsed.data.documentId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.benefitClaims);
@@ -1287,7 +1287,7 @@ export async function payBenefitAction(
       method: input.paymentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const paymentId = typeof data === 'string' ? data : null;
@@ -1355,7 +1355,7 @@ export async function reverseBenefitPaymentAction(
       paymentId: parsed.data.paymentId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidateBenefitRoutes();

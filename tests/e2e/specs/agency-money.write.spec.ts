@@ -275,12 +275,28 @@ async function recordPurchase(
 async function verifyTrade(page: Page, reference: string): Promise<void> {
   const row = page.getByRole('row').filter({ hasText: reference });
   await row.getByRole('button', { name: /check and post/i }).click();
-  await expect(
-    page
-      .getByText(/posted|verified/i)
-      .filter({ visible: true })
-      .first(),
-  ).toBeVisible();
+
+  // Scoped to this trade's own row, and to the exact status word.
+  //
+  // What was here before was `page.getByText(/posted|verified/i).first()`,
+  // over the whole page. Measured against this screen it has **33 visible
+  // matches before anything is checked at all**, and `.first()` is the card's
+  // own copy: "A different Manager or the Owner has to check the figures
+  // before anything is posted." The reversal hint — "Both entries are kept
+  // and a contra is posted." — matches too, and so does a *pending* row's own
+  // badge, which reads "waiting — nothing posted".
+  //
+  // So it was satisfied by static text the instant the page rendered: it
+  // waited for nothing, and left `tradeByReference` below reading the
+  // database in a straight race with the Server Action. On 2026-11-17 that
+  // race was lost in CI and the helper reported `pending` where it expects
+  // `posted` — a failure that looked like a framework regression and was not.
+  //
+  // The rule L5 exists to enforce: assert the thing that changed, scoped to
+  // the record that changed it. The button going is the screen agreeing the
+  // trade is no longer pending; the badge is its status in its own words.
+  await expect(row.getByRole('button', { name: /check and post/i })).toHaveCount(0);
+  await expect(row.getByText('posted', { exact: true })).toBeVisible();
 }
 
 /** Funds a line through the screens: recorded by a cashier, checked by a Manager. */
@@ -750,12 +766,15 @@ async function earnCommission(
     await checker.page.goto(`/agency/history/${transactionId}`);
     await expectNoErrorBoundary(checker.page);
     await checker.page.getByRole('button', { name: /verify and post/i }).click();
-    await expect(
-      checker.page
-        .getByText(/posted/i)
-        .filter({ visible: true })
-        .first(),
-    ).toBeVisible();
+    // The same vacuity as in `verifyTrade`, for the same reason: this page's
+    // own copy contains the word "posted", so `/posted/i` resolved against
+    // static text and waited for nothing.
+    //
+    // The detail page prints the journal entry id, or the literal "Not
+    // posted" when there is none. Waiting for that to go is waiting for the
+    // journal to exist, which is the claim being made — and it is the idiom
+    // `agency.write.spec.ts` already uses for this exact transition.
+    await expect(checker.page.getByText('Not posted')).toHaveCount(0);
   } finally {
     await checker.context.close();
   }

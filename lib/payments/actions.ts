@@ -131,7 +131,7 @@ export async function recordPaymentAction(
       method: input.paymentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const paymentId = typeof data === 'string' ? data : null;
@@ -206,7 +206,7 @@ export async function reversePaymentAction(
       paymentId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.payments);
