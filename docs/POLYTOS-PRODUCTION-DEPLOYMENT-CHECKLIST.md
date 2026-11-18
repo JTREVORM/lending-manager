@@ -1,7 +1,8 @@
 # POLYTOS — production deployment checklist
 
-**Prepared** 2026-11-17. **Status: NOT STARTED.** No step below has been
-performed.
+**Prepared** 2026-11-17, **amended 2026-11-18**. **Status: NOT STARTED.** No
+step below has been performed. The amendments are marked *Status 2026-11-18* and
+record what has changed since; no box is ticked on anyone's behalf.
 
 Tailored to the hosted database and application as they actually are today,
 which is the point of it: a generic checklist would tell you to verify
@@ -87,10 +88,10 @@ schema changes and they will run.
 - [ ] **1.1** Both pull requests reviewed and explicitly approved by the
       Owner. #38 (Next.js 16.4.6, CVE-2026-119790) and #39 (L7
       separation-of-duties SQLSTATE). Neither has been merged.
-- [ ] **1.2** Merge **#38 first**, then #39. Not a preference: #39 is cut
+- [ ] **1.2** *Status 2026-11-18: done — #38 and #39 are both merged.* Merge **#38 first**, then #39. Not a preference: #39 is cut
       from `main` and so runs Next.js 16.4.1, whose advisory halts the first
       build attempt. Merging #38 first removes that from #39's CI.
-- [ ] **1.3** Four CI gates green on the merge commit on `main` itself, not
+- [ ] **1.3** *Status 2026-11-18: met on `2d5b04d` (run 44340371317), after `main` was red on `47330a0` and recovered; see the release assessment §0.* Four CI gates green on the merge commit on `main` itself, not
       only on each branch head. The merge commit is what gets deployed.
 - [ ] **1.4** `POLYTOS-CASH-CUTOVER-CHECKLIST.md` complete and signed off.
       **It is currently NOT STARTED.** Decision A's rule binds on live data
@@ -112,6 +113,14 @@ schema changes and they will run.
       versions are drafts, and nothing in membership, savings, member
       lending, benefits or meeting fines can run until one is approved with
       an authorisation reference. Deploying does not change this either way.
+- [ ] **1.8** *New 2026-11-18.* The dependency-audit exception for picomatch
+      GHSA-fc5q-39xc-vjpf **expires 2026-12-02**
+      (`security/audit-exceptions.json`). Deploy before that date, or have a
+      patched picomatch in the tree, or have the Owner approve a new date in
+      writing; otherwise `main`'s audit gate fails. Next 16.4.6's own vendored
+      picomatch is vulnerable and unreachable here: add no `images.remotePatterns`
+      or `images.localPatterns` entry containing a repeated extglob. See
+      `POLYTOS-AUDIT-EXCEPTION-PICOMATCH.md`.
 
 ## 2. Applying the migrations
 
