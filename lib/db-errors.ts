@@ -17,6 +17,7 @@ import {
   ConflictError,
   DatabaseError,
   NotFoundError,
+  SeparationOfDutiesError,
   ValidationError,
   type AppError,
 } from './errors';
@@ -45,6 +46,14 @@ const SQLSTATE = {
   CHECK_VIOLATION: '23514',
   EXCLUSION_VIOLATION: '23P01',
   INSUFFICIENT_PRIVILEGE: '42501',
+  /**
+   * This schema's own code for a separation-of-duties refusal: the caller
+   * holds the capability, and is refused because they are the one who
+   * recorded the work. Raised by the fourteen maker-checker guards, and by
+   * nothing else. Migration `20261121000100` explains why it is `SD001` and
+   * not `42501`, `P0001`, or anything in PostgREST's reserved `PT` class.
+   */
+  SEPARATION_OF_DUTIES: 'SD001',
   SERIALIZATION_FAILURE: '40001',
   DEADLOCK_DETECTED: '40P01',
   RAISE_EXCEPTION: 'P0001',
@@ -118,8 +127,33 @@ export function mapDatabaseError(error: unknown, resourceLabel = 'record'): AppE
         { cause: error, context },
       );
 
+    case SQLSTATE.SEPARATION_OF_DUTIES:
+      // The caller holds the capability. They are refused because they
+      // recorded the thing they are trying to check, and somebody else has
+      // to check it. Distinct from the case below, which is a capability or
+      // RLS denial and reads "you do not have permission".
+      //
+      // The database's own sentence is better written than most, but it can
+      // carry a record number — `verify_member_beneficiary` interpolates a
+      // beneficiary number into it — so it is kept as `cause`, for the log,
+      // and never shown. `SeparationOfDutiesError` holds the sentence a
+      // person reads and does not let it be overridden.
+      //
+      // Deliberately no resource label in the message, unlike every other
+      // branch here. These handlers return `.message` to the screen, so a
+      // label would be read by an officer as part of the sentence — "on
+      // record" was half of what made the old one confusing. `context`
+      // carries the label for the log, which is where it is useful.
+      return new SeparationOfDutiesError(undefined, { cause: error, context });
+
     case SQLSTATE.INSUFFICIENT_PRIVILEGE:
       // Also what a Row Level Security denial on a write looks like.
+      //
+      // Still means what it has always meant, and still says so. Before L7
+      // the maker-checker guards arrived here too, which is how a Manager who
+      // held `deposits:verify` came to be told they lacked privilege; they
+      // now raise `SD001` and are handled above. What reaches this branch is
+      // a genuine privilege or RLS denial.
       return new AuthorizationError(`Privilege denied on ${resourceLabel}.`, {
         cause: error,
         context,

@@ -359,6 +359,47 @@ describeDb('Decision A — no unfunded payouts', () => {
   describe('money on its way to the bank', () => {
     let deposit = '';
 
+    /** The date the database stamped on a deposit, as `YYYY-MM-DD`. */
+    const depositDateOf = async (depositId: string): Promise<string> =>
+      (
+        await queryOne<{ d: string }>(
+          `select to_char(deposit_date, 'YYYY-MM-DD') as d
+             from public.bank_deposits where id = $1`,
+          [depositId],
+        )
+      ).d;
+
+    /**
+     * Clears a deposit as a named officer, through the session the function
+     * reads its actor from, and returns the clearance's journal entry.
+     */
+    const clearAs = async (
+      authUserId: string,
+      depositId: string,
+      bankValueDate: string,
+    ): Promise<string> => {
+      const client = await getClient();
+      try {
+        await client.query('begin');
+        await client.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+          authUserId,
+        ]);
+        await client.query('set local role authenticated');
+        const result = await client.query(
+          `select public.verify_bank_deposit($1, 'BNKREF001', $2::date, null, null) as id`,
+          [depositId, bankValueDate],
+        );
+        await client.query('reset role');
+        await client.query('commit');
+        return String((result.rows[0] as { id: unknown }).id);
+      } catch (error) {
+        await client.query('rollback').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+
     beforeEach(async () => {
       await fundBranchTill(branch, 600_000);
       const row = await queryOne<{ id: string }>(
@@ -402,9 +443,13 @@ describeDb('Decision A — no unfunded payouts', () => {
           manager.authUserId,
         ]);
         await client.query('set local role authenticated');
+        // The deposit's own date, not `current_date`: the deposit is stamped
+        // with the business date (Kampala), which runs ahead of the server's
+        // clock for the last three hours of every UTC day, and a value date
+        // before the deposit is refused.
         await client.query(
-          `select public.verify_bank_deposit($1, 'BNKREF001', current_date, null, null)`,
-          [deposit],
+          `select public.verify_bank_deposit($1, 'BNKREF001', $2::date, null, null)`,
+          [deposit, await depositDateOf(deposit)],
         );
         await client.query('reset role');
         await client.query('commit');
@@ -414,6 +459,101 @@ describeDb('Decision A — no unfunded payouts', () => {
 
       expect((await availability(bank)).available).toBe(400_000);
       expect(await attemptCommitted(payoutOf(branch, bank, 400_000))).toBeNull();
+    });
+
+    it('refuses a bank value date before the deposit, and one in the future', async () => {
+      const manager = await createTestUser('manager');
+      const day = await depositDateOf(deposit);
+
+      await expect(
+        clearAs(
+          manager.authUserId,
+          deposit,
+          (
+            await queryOne<{ d: string }>(
+              `select to_char($1::date - 1, 'YYYY-MM-DD') as d`,
+              [day],
+            )
+          ).d,
+        ),
+      ).rejects.toThrow(/value date cannot precede the deposit/i);
+
+      await expect(
+        clearAs(
+          manager.authUserId,
+          deposit,
+          (
+            await queryOne<{ d: string }>(
+              `select to_char(public.business_date() + 1, 'YYYY-MM-DD') as d`,
+            )
+          ).d,
+        ),
+      ).rejects.toThrow(/value date cannot be in the future/i);
+
+      // Neither refusal cleared anything.
+      expect(
+        (
+          await queryOne<{ status: string }>(
+            `select status from public.bank_deposits where id = $1`,
+            [deposit],
+          )
+        ).status,
+      ).toBe('submitted');
+    });
+
+    it("accepts the deposit's own date as the value date after the business date has moved on", async () => {
+      // The regression behind the two browser journeys that failed on main on
+      // 2026-11-18: they submitted a literal value date, the literal went
+      // stale at midnight in Kampala, and the database correctly refused a
+      // value date before the deposit existed.
+      //
+      // Midnight is moved here rather than waited for. The business date is
+      // `now()` read in `company_settings.timezone`, so a deposit is recorded
+      // in Pacific/Pago_Pago (UTC-11) and cleared in Pacific/Kiritimati
+      // (UTC+14). Those two zones are 25 hours apart, so the date has moved
+      // on by at least one day whatever the real time is.
+      const manager = await createTestUser('manager');
+
+      try {
+        await query(
+          `update public.company_settings set timezone = 'Pacific/Pago_Pago' where id = 1`,
+        );
+        const recorded = await queryOne<{ id: string }>(
+          `select public.record_bank_deposit($1, $2, 50000, 'Banked before midnight', gen_random_uuid()) as id`,
+          [till, bank],
+        );
+        const own = recorded.id;
+        const banked = await depositDateOf(own);
+
+        await query(
+          `update public.company_settings set timezone = 'Pacific/Kiritimati' where id = 1`,
+        );
+        const cleared = await queryOne<{ today: string }>(
+          `select to_char(public.business_date(), 'YYYY-MM-DD') as today`,
+        );
+        expect(
+          cleared.today > banked,
+          'the business date must have moved on for this to test anything',
+        ).toBe(true);
+
+        // The deposit's own date is still a valid value date: it is neither
+        // before the deposit nor in the future.
+        const entry = await clearAs(manager.authUserId, own, banked);
+
+        // The clearance posts on the day it happens (A-6), never on the
+        // value date.
+        const posted = await queryOne<{ entry_date: string }>(
+          `select to_char(entry_date, 'YYYY-MM-DD') as entry_date
+             from public.journal_entries where id = $1`,
+          [entry],
+        );
+        expect(posted.entry_date).toBe(cleared.today);
+        expect(posted.entry_date).not.toBe(banked);
+      } finally {
+        await query(
+          `update public.company_settings set timezone = 'Africa/Kampala' where id = 1`,
+        );
+      }
     });
 
     it('refuses the officer who recorded it as the one who verifies it', async () => {
@@ -456,8 +596,8 @@ describeDb('Decision A — no unfunded payouts', () => {
 
       await expect(
         asOfficer(
-          `select public.verify_bank_deposit($1, 'SELFREF01', current_date, null, null)`,
-          [ownDeposit],
+          `select public.verify_bank_deposit($1, 'SELFREF01', $2::date, null, null)`,
+          [ownDeposit, await depositDateOf(ownDeposit)],
         ),
       ).rejects.toThrow(/cannot verify its clearance|different Manager or Owner/i);
 

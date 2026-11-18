@@ -207,6 +207,17 @@ const PHASE_PREFIXES = [
   // already disbursed, must not restate one shilling of any historical
   // journal, and must not change what any borrower owes.
   '20261120',
+  // L7 — the separation-of-duties SQLSTATE. In the list because it is not
+  // deployed, like everything above it.
+  //
+  // It is also the cheapest possible thing for this gate to prove, and worth
+  // proving anyway: it replaces fourteen functions, nine of which post or
+  // refuse money, and it is supposed to change only which five characters a
+  // refusal carries. If a single figure moves across this migration then the
+  // generated replacement bodies differ from the originals somewhere other
+  // than the SQLSTATE, and that is precisely the mistake a mechanical rewrite
+  // of fourteen function bodies is most likely to make.
+  '20261121',
 ];
 
 const isPhaseMigration = (name) =>
