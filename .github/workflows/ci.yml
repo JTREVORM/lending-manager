@@ -80,9 +80,16 @@ jobs:
 
       - name: Dependency audit
         # Reject high-severity advisories in production and development tools.
+        #
+        # The production run is plain `npm audit` and reads no exception file:
+        # nothing that ships can be waived. The full-tree run goes through
+        # scripts/audit-gate.ts, which is the same `--audit-level=high` check
+        # plus the individually approved, expiring entries in
+        # security/audit-exceptions.json. See
+        # docs/POLYTOS-AUDIT-EXCEPTION-PICOMATCH.md.
         run: |
           npm audit --omit=dev --audit-level=high
-          npm audit --audit-level=high
+          npx tsx scripts/audit-gate.ts --scope full
 
       - name: Production build
         run: npm run build
