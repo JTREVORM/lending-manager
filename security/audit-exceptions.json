@@ -1,0 +1,18 @@
+{
+  "$comment": "Temporary, individually approved exceptions to the full-tree dependency audit. Read by scripts/audit-gate.ts, which fails CI when an entry expires, when its advisory stops being reported, or when a patched version is published. Production dependencies are never excepted: the CI step `npm audit --omit=dev --audit-level=high` does not read this file. See docs/POLYTOS-AUDIT-EXCEPTION-PICOMATCH.md.",
+  "exceptions": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "cve": "CVE-2026-112366",
+      "severity": "high",
+      "vulnerableRange": "<=4.0.7",
+      "scope": "dev-only",
+      "approvedBy": "Owner",
+      "approvedOn": "2026-11-18",
+      "expires": "2026-12-02",
+      "removeWhen": "A picomatch release above 4.0.7 is published, or the date in `expires` is reached, whichever is first.",
+      "residualRisk": "docs/POLYTOS-AUDIT-EXCEPTION-PICOMATCH.md"
+    }
+  ]
+}
