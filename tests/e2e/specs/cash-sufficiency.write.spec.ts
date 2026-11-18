@@ -181,6 +181,37 @@ async function accountId(accountName: string): Promise<string> {
 }
 
 /**
+ * The date the database recorded for a deposit, as `YYYY-MM-DD`.
+ *
+ * This is the one value date a clearance journey can always submit.
+ * `verify_bank_deposit` refuses a bank value date that precedes the deposit
+ * (`p_bank_value_date < d.deposit_date`) or that lies in the future, and
+ * `record_bank_deposit` stamps `deposit_date = public.business_date()`. A
+ * value date equal to the deposit's own date therefore satisfies both bounds
+ * on the day the deposit was banked and on every later day, including when
+ * midnight in the business timezone falls between recording and clearing.
+ *
+ * It replaces a literal `'2026-11-17'`. That was the business date on the day
+ * the journeys were written, so they passed that day and on every CI run
+ * before midnight in Kampala, and failed from the 18th onward with the
+ * database refusing — correctly — a value date before the deposit existed.
+ * The refusal reached the screen only as "That action is not permitted on
+ * this record.", so the browser saw nothing to tell it why.
+ *
+ * Read from the database rather than computed in the test: the test must not
+ * carry its own opinion of what "today" is, because the clock is exactly what
+ * went wrong.
+ */
+async function bankValueDateFor(depositNumber: string): Promise<string> {
+  const row = await queryHarnessOne<{ deposit_date: string }>(
+    `select to_char(deposit_date, 'YYYY-MM-DD') as deposit_date
+       from public.bank_deposits where deposit_number = $1`,
+    [depositNumber],
+  );
+  return row.deposit_date;
+}
+
+/**
  * Fill in the banking form.
  *
  * The two selects are driven by the account's id rather than by its label:
@@ -447,7 +478,7 @@ test.describe('banking the takings', () => {
       has: manager.getByRole('button', { name: /Verify clearance/i }),
     });
     await verify.getByLabel('Bank reference').fill('STAN-CLR-70414');
-    await verify.getByLabel('Value date').fill('2026-11-17');
+    await verify.getByLabel('Value date').fill(await bankValueDateFor(reference));
     await verify.getByRole('button', { name: /Verify clearance/i }).click();
 
     await expect(
@@ -517,7 +548,7 @@ test.describe('the second officer', () => {
       has: page.getByRole('button', { name: /Verify clearance/i }),
     });
     await verify.getByLabel('Bank reference').fill('SELF-CLEARED-0001');
-    await verify.getByLabel('Value date').fill('2026-11-17');
+    await verify.getByLabel('Value date').fill(await bankValueDateFor(reference));
     await verify.getByRole('button', { name: /Verify clearance/i }).click();
 
     // Refused, and the refusal reaches the screen as an alert rather than
@@ -693,7 +724,7 @@ test.describe('reversing a clearance', () => {
       has: manager.getByRole('button', { name: /Verify clearance/i }),
     });
     await verify.getByLabel('Bank reference').fill('WRONG-SLIP-0001');
-    await verify.getByLabel('Value date').fill('2026-11-17');
+    await verify.getByLabel('Value date').fill(await bankValueDateFor(reference));
     await verify.getByRole('button', { name: /Verify clearance/i }).click();
     await expect(subject.getByText(/Cleared by the bank/i).first()).toBeVisible({
       timeout: 20_000,
