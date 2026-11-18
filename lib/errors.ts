@@ -165,20 +165,20 @@ export class AuthorizationError extends AppError {
  * Like `BusinessRuleError` above, and unlike the rest of this file, this
  * class puts the same words in `message` as in `userMessage`.
  *
- * That is not tidiness. `lib/finance/actions.ts` returns
- * `mapDatabaseError(error).message` — the developer field — from roughly a
- * dozen handlers, so `message` is what reaches the screen on these paths.
+ * That is not tidiness. `lib/finance/actions.ts` returned the developer
+ * field, `message`, of a mapped database error from roughly a dozen
+ * handlers, so `message` is what reached the screen on these paths.
  * It is also the whole explanation for the sentence L7 reported: staff were
  * reading `AuthorizationError`'s developer message, which is literally
  * "Privilege denied on record.", rather than its `userMessage`, which reads
  * "You do not have permission to do this."
  *
- * Until those handlers are changed to project through `toPublicError`, a
- * class whose `message` is developer-facing will have that message shown to
- * an officer. So this one has no developer-facing message to show: the
- * resource label and the SQLSTATE go to `context`, the database's own
- * sentence stays in `cause`, and both fields say the thing it is safe and
- * useful to say.
+ * Until those handlers were changed to return `userMessage`, a class whose
+ * `message` is developer-facing had that message shown to an officer. So this
+ * one has no developer-facing message to show: the resource label and the
+ * SQLSTATE go to `context`, the database's own sentence stays in `cause`, and
+ * both fields say the thing it is safe and useful to say. That is kept as
+ * defence in depth now that the handlers return `userMessage`.
  *
  * Found by the browser journey, not by the unit test. The unit test asserted
  * `userMessage` and `toPublic()`, which were right all along; the screen was
