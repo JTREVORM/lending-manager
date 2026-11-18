@@ -1081,7 +1081,14 @@ describeDb('Phase 4B — agency transaction engine', () => {
         [id],
       );
       expect(attempt.ok).toBe(false);
-      expect(attempt.code).toBe('42501');
+      // `SD001` since L7, not `42501`. The comment above already said the
+      // true thing — "the capability is present; the separation of duties is
+      // what refuses" — while the assertion named the code of a privilege
+      // denial, which is exactly the conflation L7 was written about: staff
+      // holding `agency:verify` were told they lacked privilege. The code now
+      // distinguishes the two, and the test above this one still asserts
+      // `42501` for a secretary who genuinely lacks the capability.
+      expect(attempt.code).toBe('SD001');
       expect(attempt.message).toMatch(
         /cannot be verified by the person who recorded it/i,
       );

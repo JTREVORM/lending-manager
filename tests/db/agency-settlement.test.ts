@@ -1254,7 +1254,12 @@ describeDb('Phase 4C — agency settlement and reconciliation', () => {
         [id],
       );
       expect(r.ok).toBe(false);
-      expect(r.code).toBe('42501');
+      // `SD001` since L7: this officer holds `agency:reconcile`, and what
+      // refuses them is that they recorded the count. The test below, which
+      // refuses an adjustment to somebody lacking
+      // `agency:variance_adjustment`, still asserts `42501` — that one is a
+      // genuine capability denial, and keeping the two apart is the point.
+      expect(r.code).toBe('SD001');
       expect(r.message).toMatch(/cannot approve it/i);
     });
 
