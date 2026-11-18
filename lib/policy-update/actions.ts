@@ -149,7 +149,7 @@ export async function policyUpdateAction(
         operation: input.operation,
         code: response.error.code,
       });
-      return { ok: false, message: mapDatabaseError(response.error).message };
+      return { ok: false, message: mapDatabaseError(response.error).userMessage };
     }
     revalidatePath('/membership', 'layout');
     revalidatePath('/meetings', 'layout');

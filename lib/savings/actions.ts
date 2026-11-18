@@ -134,7 +134,7 @@ export async function openSavingsAccountAction(
       membershipId: parsed.data.membershipId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.savings);
@@ -215,7 +215,7 @@ export async function recordSavingsDepositAction(
       method: input.paymentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   const transactionId = typeof data === 'string' ? data : null;
@@ -295,7 +295,7 @@ export async function requestWithdrawalAction(
       savingsAccountId: input.savingsAccountId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.savingsWithdrawals);
@@ -364,7 +364,7 @@ export async function decideWithdrawalAction(
       approve: input.approve,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.savingsWithdrawals);
@@ -434,7 +434,7 @@ export async function postWithdrawalAction(
       method: input.paymentMethod,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.savingsWithdrawals);
@@ -498,7 +498,7 @@ export async function cancelWithdrawalAction(
       requestId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.savingsWithdrawals);
@@ -565,7 +565,7 @@ export async function reverseSavingsTransactionAction(
       transactionId,
     });
 
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
 
   revalidatePath(ROUTES.savings);

@@ -162,7 +162,7 @@ function settle(
     if (error.code === 'P0001' && error.message.trim() !== '') {
       return { ok: false, message: error.message };
     }
-    return { ok: false, message: mapDatabaseError(error).message };
+    return { ok: false, message: mapDatabaseError(error).userMessage };
   }
   revalidateAgency();
   return {
