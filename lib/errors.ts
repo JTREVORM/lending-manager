@@ -19,6 +19,7 @@ export const ERROR_CODES = [
   'VALIDATION_FAILED',
   'NOT_AUTHENTICATED',
   'NOT_AUTHORIZED',
+  'SEPARATION_OF_DUTIES',
   'NOT_FOUND',
   'CONFLICT',
   'BUSINESS_RULE_VIOLATION',
@@ -134,6 +135,80 @@ export class AuthorizationError extends AppError {
     super('NOT_AUTHORIZED', 403, message, {
       userMessage: 'You do not have permission to do this.',
       ...options,
+    });
+  }
+}
+
+/**
+ * Refused because the actor is the one who recorded the work, not because
+ * they lack the capability for it.
+ *
+ * Its own class, rather than an `AuthorizationError`, because the two are
+ * different facts about the world and staff act on them differently. An
+ * `AuthorizationError` means "this is not yours to do" and the answer is to
+ * ask for the capability. This means "this is yours to do, but not twice" and
+ * the answer is to ask a colleague. Recommendation L7 exists because the
+ * first sentence was being shown for the second situation, to a Manager who
+ * held `deposits:verify` all along.
+ *
+ * `403` for the same reason as `AuthorizationError`: the server understood,
+ * refuses, and signing in again will not help.
+ *
+ * The message is fixed here and never comes from the database. The fourteen
+ * guards that raise `SD001` each raise a sentence of their own, written for
+ * developers, and those sentences can carry a record number or a name — so
+ * they stay in the log, where `cause` keeps them, and this is what a person
+ * reads.
+ *
+ * ## Why `message` is the staff sentence too
+ *
+ * Like `BusinessRuleError` above, and unlike the rest of this file, this
+ * class puts the same words in `message` as in `userMessage`.
+ *
+ * That is not tidiness. `lib/finance/actions.ts` returns
+ * `mapDatabaseError(error).message` — the developer field — from roughly a
+ * dozen handlers, so `message` is what reaches the screen on these paths.
+ * It is also the whole explanation for the sentence L7 reported: staff were
+ * reading `AuthorizationError`'s developer message, which is literally
+ * "Privilege denied on record.", rather than its `userMessage`, which reads
+ * "You do not have permission to do this."
+ *
+ * Until those handlers are changed to project through `toPublicError`, a
+ * class whose `message` is developer-facing will have that message shown to
+ * an officer. So this one has no developer-facing message to show: the
+ * resource label and the SQLSTATE go to `context`, the database's own
+ * sentence stays in `cause`, and both fields say the thing it is safe and
+ * useful to say.
+ *
+ * Found by the browser journey, not by the unit test. The unit test asserted
+ * `userMessage` and `toPublic()`, which were right all along; the screen was
+ * showing the other field.
+ */
+export class SeparationOfDutiesError extends AppError {
+  /**
+   * What staff read. One sentence, held here, the same everywhere.
+   *
+   * Exported so a test can assert the rendered message *is* this constant
+   * rather than re-typing it, and so a caller that wants to show it without
+   * raising has somewhere to take it from.
+   */
+  static readonly USER_MESSAGE =
+    'A different authorized officer must complete this action. ' +
+    'You cannot approve or verify your own work.';
+
+  constructor(
+    message = SeparationOfDutiesError.USER_MESSAGE,
+    options: AppErrorOptions = {},
+  ) {
+    // `userMessage` is set *after* the spread, not before it, so no caller can
+    // substitute one. Every other subclass here spreads last and lets a
+    // caller override the default, which is fine when the override is written
+    // by hand. This class is reached from `mapDatabaseError` with a
+    // `PostgrestError` in hand, and the whole point of L7 is that database
+    // text must not become user text — so here the sentence is not negotiable.
+    super('SEPARATION_OF_DUTIES', 403, message, {
+      ...options,
+      userMessage: SeparationOfDutiesError.USER_MESSAGE,
     });
   }
 }

@@ -11,6 +11,7 @@ import {
   DatabaseError,
   ERROR_CODES,
   NotFoundError,
+  SeparationOfDutiesError,
   UnexpectedError,
   ValidationError,
   isAppError,
@@ -26,6 +27,7 @@ describe('error taxonomy', () => {
       [new AuthorizationError(), 'NOT_AUTHORIZED', 403],
       [new NotFoundError(), 'NOT_FOUND', 404],
       [new ConflictError(), 'CONFLICT', 409],
+      [new SeparationOfDutiesError(), 'SEPARATION_OF_DUTIES', 403],
       [new BusinessRuleError('Below minimum.'), 'BUSINESS_RULE_VIOLATION', 422],
       [new DatabaseError(), 'DATABASE_ERROR', 500],
       [new ConfigurationError('missing'), 'CONFIGURATION_ERROR', 500],
@@ -162,6 +164,11 @@ describe('mapDatabaseError', () => {
       ['23514', BusinessRuleError, 'BUSINESS_RULE_VIOLATION'],
       ['23P01', BusinessRuleError, 'BUSINESS_RULE_VIOLATION'],
       ['42501', AuthorizationError, 'NOT_AUTHORIZED'],
+      // L7. This schema's own code, raised only by the fourteen
+      // maker-checker guards. Deliberately not 42501: the caller holds the
+      // capability, so "you do not have permission" would name the wrong
+      // cause.
+      ['SD001', SeparationOfDutiesError, 'SEPARATION_OF_DUTIES'],
       ['40001', DatabaseError, 'DATABASE_ERROR'],
       ['40P01', DatabaseError, 'DATABASE_ERROR'],
       ['P0001', BusinessRuleError, 'BUSINESS_RULE_VIOLATION'],
@@ -179,6 +186,106 @@ describe('mapDatabaseError', () => {
   it('treats a Row Level Security write denial as an authorization failure', () => {
     // 42501 is what an RLS denial on a write looks like from PostgREST.
     expect(mapDatabaseError({ code: '42501' }).code).toBe('NOT_AUTHORIZED');
+  });
+
+  describe('a separation-of-duties refusal (L7)', () => {
+    // `verify_bank_deposit` raises this sentence. It is well written and it
+    // still must not be shown: `verify_member_beneficiary` interpolates a
+    // beneficiary number into its own, and the rule here is about the class
+    // of message, not about whichever one happens to be safe today.
+    const raised = {
+      code: 'SD001',
+      message:
+        'You recorded this deposit, so you cannot verify its clearance. ' +
+        'A different Manager or Owner must.',
+      details: 'deposit_number=BD2601-0004, recorded_by=8f1c…',
+      hint: 'see bank_deposits_verifier_not_recorder',
+    };
+
+    it('tells staff that a different officer must do it', () => {
+      expect(mapDatabaseError(raised, 'deposit').toPublic().message).toBe(
+        'A different authorized officer must complete this action. ' +
+          'You cannot approve or verify your own work.',
+      );
+    });
+
+    it('is the message the error class holds, not one assembled here', () => {
+      expect(mapDatabaseError(raised, 'deposit').userMessage).toBe(
+        SeparationOfDutiesError.USER_MESSAGE,
+      );
+    });
+
+    it('says the same thing in `message`, because that is what reaches the screen', () => {
+      // The assertion that was missing, and the reason the first version of
+      // this fix shipped a wrong sentence to a real browser while every unit
+      // test here passed.
+      //
+      // `lib/finance/actions.ts` returns `mapDatabaseError(error).message`,
+      // not `userMessage`, from about a dozen handlers. So `message` is the
+      // user-facing field on these paths whatever this file's doc comment
+      // says, and the L5 journey read "Separation of duties refused this
+      // action on record." off the screen — the developer sentence, label and
+      // all. It is also why the original defect looked the way it did:
+      // `AuthorizationError`'s `message` is "Privilege denied on record."
+      const mapped = mapDatabaseError(raised, 'deposit');
+
+      expect(mapped.message).toBe(SeparationOfDutiesError.USER_MESSAGE);
+      expect(mapped.message).toBe(mapped.userMessage);
+      // And no resource label leaks into it, which "on record" did.
+      expect(mapped.message).not.toContain('deposit');
+      expect(mapped.message).not.toContain('record');
+    });
+
+    it('keeps the resource label for the log instead', () => {
+      expect(mapDatabaseError(raised, 'deposit').context?.resource).toBe('deposit');
+    });
+
+    it('cannot have its message overridden by a caller', () => {
+      // The class sets `userMessage` after the options spread precisely so
+      // that a future caller cannot pass database text through. Every other
+      // subclass lets a caller override; this one must not.
+      const forced = new SeparationOfDutiesError('internal detail', {
+        userMessage: 'constraint bank_deposits_verifier_not_recorder violated',
+      });
+
+      expect(forced.userMessage).toBe(SeparationOfDutiesError.USER_MESSAGE);
+      expect(forced.toPublic().message).not.toContain('constraint');
+    });
+
+    it('leaks no schema detail, row value or SQL text', () => {
+      const publicShape = JSON.stringify(mapDatabaseError(raised, 'deposit').toPublic());
+
+      expect(publicShape).not.toContain('bank_deposits_verifier_not_recorder');
+      expect(publicShape).not.toContain('BD2601-0004');
+      expect(publicShape).not.toContain('recorded_by');
+      expect(publicShape).not.toContain('8f1c');
+      // Nor the database's own sentence, however good it is.
+      expect(publicShape).not.toContain('its clearance');
+      expect(publicShape).not.toContain('SD001');
+    });
+
+    it('keeps the raised sentence for the log, as the cause', () => {
+      const mapped = mapDatabaseError(raised, 'deposit');
+
+      expect(mapped.context?.sqlstate).toBe('SD001');
+      expect(mapped.cause).toBe(raised);
+      expect(JSON.stringify(mapped.context)).not.toContain('BD2601-0004');
+    });
+
+    it('is a 403, and not the same error as a privilege denial', () => {
+      const duties = mapDatabaseError({ code: 'SD001' }, 'deposit');
+      const privilege = mapDatabaseError({ code: '42501' }, 'deposit');
+
+      expect(duties.httpStatus).toBe(403);
+      expect(privilege.httpStatus).toBe(403);
+
+      // Same status, different meaning — which is the whole point. A client
+      // that needs to tell them apart reads the code, and staff read two
+      // different sentences.
+      expect(duties.code).not.toBe(privilege.code);
+      expect(duties.toPublic().message).not.toBe(privilege.toPublic().message);
+      expect(privilege.toPublic().message).toBe('You do not have permission to do this.');
+    });
   });
 
   it('falls back to a generic database error for an unknown code', () => {
