@@ -74,8 +74,13 @@ UGX 5K meeting absence fine with existing controls.
 Nine registered external providers: MTN MoMo, Airtel Money, Stanbic Agency
 Banking, UEDCL Yaka, NWSC Water, DStv, GOtv, Lycamobile, School Fees.
 
-**Prepared (not live):** For these nine *provisional* records only,
-`commission_source = 'reported'`. Cashier enters the actual commission from
+**Proposed, not applied to provider rows:** The desired `commission_source = 'reported'`
+for these nine providers is listed in
+`config/policies/november-2026-agency-rollout.json`. The already existing
+Owner-authorised, audited `set_agency_provider_commission_source` RPC must
+apply each provider's decision as a separate, approved operational action.
+The migration deliberately does **not** edit an existing provider row, since
+that would alter the audit trail on upgrade. After rollout, cashier enters
 the provider confirmation (explicit 0 if none). Existing `commission_model`
 (immediate vs deferred) is **not** overwritten: it controls recognition timing,
 not commission source. Existing earnings, receipts, outstanding amounts, daily
@@ -113,10 +118,12 @@ arrangements, settlement accounts and limits have been approved.
 
 - [x] Stage draft membership cap and profit basis; no approval/activation
 - [x] Record month-end anchor with monthly option inactive
-- [x] Stage nine manual/reported commission sources; all providers inactive
+- [x] Record proposed reported commission sources for nine providers in non-operative rollout manifest
+- [ ] Apply source to each provisional provider via audited Owner RPC after approved rollout
 - [x] Add database regression coverage for those safeguards
 - [ ] Run complete PostgreSQL migration suite and affected CI jobs
-- [x] Stage partial medical payout code and cap concurrency regression tests\n- [ ] Certify partial medical payout migration and tests in PostgreSQL CI
+- [x] Stage partial medical payout code and cap concurrency regression tests
+- [ ] Certify partial medical payout migration and tests in PostgreSQL CI
 - [ ] Implement and test profit distribution and member payout elections
 - [ ] Certify monthly schedule generator and product eligibility; then enable
 - [ ] Implement and test agency per-type approval thresholds
