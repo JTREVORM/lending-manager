@@ -47,9 +47,7 @@ async function readyMedicalClaim(
   expect(submitted.ok, submitted.message).toBe(true);
 
   for (const kind of await requiredKindsFor('medical')) {
-    await attachVerifiedDocument(
-      claimId, member.membershipId, kind, secretary, assessor,
-    );
+    await attachVerifiedDocument(claimId, member.membershipId, kind, secretary, assessor);
   }
   return claimId;
 }
@@ -85,11 +83,17 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
   it('assesses only the remaining UGX 100,000 and stores the reduced amount', async () => {
     const member = await makeBenefitMember(policyId!, { activatedOn: '2024-06-01' });
     const first = await readyMedicalClaim(
-      member, 'Cap clinic A', '2025-02-03 08:00+03', '2025-02-08 08:00+03',
+      member,
+      'Cap clinic A',
+      '2025-02-03 08:00+03',
+      '2025-02-08 08:00+03',
       8_000_000, // 5% = 400,000
     );
     const second = await readyMedicalClaim(
-      member, 'Cap clinic B', '2025-05-03 08:00+03', '2025-05-08 08:00+03',
+      member,
+      'Cap clinic B',
+      '2025-05-03 08:00+03',
+      '2025-05-08 08:00+03',
       8_000_000, // 5% = 400,000, only 100,000 available
     );
 
@@ -106,7 +110,10 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
     expect((secondResult.rows[0] as { amount: string }).amount).toBe('100000');
 
     const approved = await asUserCommitted(owner, [
-      { sql: 'select public.approve_benefit_claim($1, null, null) as amount', params: [second] },
+      {
+        sql: 'select public.approve_benefit_claim($1, null, null) as amount',
+        params: [second],
+      },
     ]);
     expect(approved.ok, approved.message).toBe(true);
     expect((approved.rows[0] as { amount: string }).amount).toBe('100000');
@@ -116,28 +123,39 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
       annual_cap: string;
       remaining_cap_before: string;
       medical_benefit_excess_handling: string;
-    }>(`
+    }>(
+      `
       select assessed_amount::text, annual_cap::text, remaining_cap_before::text,
              medical_benefit_excess_handling
         from public.benefit_assessment_snapshots
        where claim_id = $1
-    `, [second]);
-    expect(rows).toEqual([{
-      assessed_amount: '100000',
-      annual_cap: '500000',
-      remaining_cap_before: '100000',
-      medical_benefit_excess_handling: 'pay_remaining',
-    }]);
+    `,
+      [second],
+    );
+    expect(rows).toEqual([
+      {
+        assessed_amount: '100000',
+        annual_cap: '500000',
+        remaining_cap_before: '100000',
+        medical_benefit_excess_handling: 'pay_remaining',
+      },
+    ]);
   });
 
   it('caps an oversized first claim and refuses another after exhaustion', async () => {
     const member = await makeBenefitMember(policyId!, { activatedOn: '2024-06-01' });
     const first = await readyMedicalClaim(
-      member, 'Cap clinic C', '2025-03-03 08:00+03', '2025-03-08 08:00+03',
+      member,
+      'Cap clinic C',
+      '2025-03-03 08:00+03',
+      '2025-03-08 08:00+03',
       12_000_000, // nominally 600,000 > 500,000 annual cap
     );
     const second = await readyMedicalClaim(
-      member, 'Cap clinic D', '2025-06-03 08:00+03', '2025-06-08 08:00+03',
+      member,
+      'Cap clinic D',
+      '2025-06-03 08:00+03',
+      '2025-06-08 08:00+03',
       1_000_000,
     );
 
@@ -157,11 +175,17 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
   it('serializes simultaneous assessments and never exceeds the ceiling', async () => {
     const member = await makeBenefitMember(policyId!, { activatedOn: '2024-06-01' });
     const a = await readyMedicalClaim(
-      member, 'Cap clinic E', '2025-07-03 08:00+03', '2025-07-08 08:00+03',
+      member,
+      'Cap clinic E',
+      '2025-07-03 08:00+03',
+      '2025-07-08 08:00+03',
       8_000_000,
     );
     const b = await readyMedicalClaim(
-      member, 'Cap clinic F', '2025-09-03 08:00+03', '2025-09-08 08:00+03',
+      member,
+      'Cap clinic F',
+      '2025-09-03 08:00+03',
+      '2025-09-08 08:00+03',
       8_000_000,
     );
 
@@ -173,7 +197,10 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
         { sql: 'select public.assess_benefit_claim($1, null) as amount', params: [b] },
       ]),
     ]);
-    expect(results.every((r) => r.ok), results.map((r) => r.message).join('; ')).toBe(true);
+    expect(
+      results.every((r) => r.ok),
+      results.map((r) => r.message).join('; '),
+    ).toBe(true);
     const amounts = results.map((r) => Number((r.rows[0] as { amount: string }).amount));
     expect(amounts.sort((x, y) => x - y)).toEqual([100_000, 400_000]);
     expect(amounts.reduce((sum, x) => sum + x, 0)).toBe(500_000);
