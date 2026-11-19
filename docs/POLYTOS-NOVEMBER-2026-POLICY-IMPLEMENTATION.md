@@ -50,8 +50,8 @@ UGX 5K meeting absence fine with existing controls.
   Leave monthly `is_active = false` until schedule generator/product
   eligibility tests and an explicit operational release.
 
-**Not implemented by that migration:**
-1. **Partial medical cap payout**: on a qualifying claim, pay min(5% of
+**Additional application work staged in the next migration (not released):**
+1. **Partial medical cap payout (code staged, CI pending)**: on a qualifying claim, pay min(5% of
    eligible bill, unused annual UGX 500K cap). Handle zero availability
    distinctly. Preserve two-claims-per-year and existing admission/evidence/
    independent approval gates. Prevent concurrent assessments from allocating
@@ -116,7 +116,7 @@ arrangements, settlement accounts and limits have been approved.
 - [x] Stage nine manual/reported commission sources; all providers inactive
 - [x] Add database regression coverage for those safeguards
 - [ ] Run complete PostgreSQL migration suite and affected CI jobs
-- [ ] Implement and test partial medical payouts with cap concurrency
+- [x] Stage partial medical payout code and cap concurrency regression tests\n- [ ] Certify partial medical payout migration and tests in PostgreSQL CI
 - [ ] Implement and test profit distribution and member payout elections
 - [ ] Certify monthly schedule generator and product eligibility; then enable
 - [ ] Implement and test agency per-type approval thresholds
