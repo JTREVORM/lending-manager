@@ -766,7 +766,7 @@ describeDb('Phase 4B — agency transaction engine', () => {
       // MTN now uses the provider-reported source by Owner policy. Prove the
       // original configured-rate guard on a separate provisional test row;
       // expectError rolls back the entire DO block.
-      const err = await expectError(`do $
+      const err = await expectError(`do $no_basis$
         declare p uuid;
         begin
           insert into public.agency_service_providers
@@ -777,7 +777,7 @@ describeDb('Phase 4B — agency transaction engine', () => {
                   'deferred', 'configured', true, false)
           returning id into p;
           perform public.agency_commission_for(p, 100000);
-        end $;`);
+        end $no_basis$;`);
       expect(err?.message).toMatch(/no commission basis/i);
     });
 
