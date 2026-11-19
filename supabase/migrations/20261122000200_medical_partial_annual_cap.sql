@@ -74,7 +74,18 @@ end;
 $decision$;
 
 -- Preserve the existing SECURITY DEFINER, search path, grants and scope of
--- both functions. Only the cap-excess branch and amount assignment differ.
+-- both functions. The cap-excess branch, amount assignment and snapshot differ.
+
+-- An assessment snapshot must say *why* a medical amount was clipped:
+-- the cap/remaining balance alone cannot distinguish a deliberately partial
+-- entitlement from an erroneous assessment.
+alter table public.benefit_assessment_snapshots
+  add column medical_benefit_excess_handling text;
+
+comment on column public.benefit_assessment_snapshots.medical_benefit_excess_handling is
+  'Excess-cap handling policy captured at assessment (pay_remaining / reject_claim / NULL legacy). Snapshotted alongside the cap and remaining amount.';
+
+
 
 CREATE OR REPLACE FUNCTION public.benefit_claim_eligibility(p_claim_id uuid)
  RETURNS TABLE(failure_code text, detail text)
@@ -672,7 +683,7 @@ begin
     savings_qualified,
     bill_amount, admission_nights, admission_inclusive_days, admission_elapsed_days,
     year_basis, period_from, period_to,
-    medical_cap_mode, annual_cap, claims_per_year,
+    medical_cap_mode, annual_cap, medical_benefit_excess_handling, claims_per_year,
     prior_claims_in_period, prior_amount_in_period, remaining_cap_before,
     deceased_relationship, relationship_eligible,
     deceased_beneficiary_id, deceased_beneficiary_number, deceased_listed_on,
@@ -709,6 +720,8 @@ begin
       then v_policy.medical_benefit_cap_mode end,
     case when v_claim.claim_type = 'medical'
       then v_policy.medical_benefit_annual_cap end,
+    case when v_claim.claim_type = 'medical'
+      then v_policy.medical_benefit_excess_handling end,
     case when v_claim.claim_type = 'medical'
       then v_policy.medical_benefit_claims_per_year end,
     case when v_claim.claim_type = 'medical' then v_count end,
