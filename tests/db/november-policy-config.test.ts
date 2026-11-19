@@ -57,7 +57,7 @@ describe.skipIf(!hasDatabase)(
       expect(row.is_active).toBe(false);
     });
 
-    it('prepares reported commission for nine real providers without activating them', async () => {
+    it('leaves nine provider records unchanged pending approved rollout', async () => {
       const providers = await query<{
         code: string;
         commission_source: string;
@@ -77,7 +77,7 @@ describe.skipIf(!hasDatabase)(
       `);
       expect(providers).toHaveLength(9);
       for (const provider of providers) {
-        expect(provider.commission_source, provider.code).toBe('reported');
+        expect(provider.commission_source, provider.code).toBe('configured');
         expect(provider.is_provisional, provider.code).toBe(true);
         expect(provider.is_active, provider.code).toBe(false);
         expect(provider.commission_rate_bps, provider.code).toBeNull();
