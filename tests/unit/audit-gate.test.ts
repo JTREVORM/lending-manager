@@ -206,16 +206,15 @@ describe('the committed exception file', () => {
     exceptions: AuditException[];
   };
 
-  it('contains exactly the one approved exception', () => {
-    expect(file.exceptions.map((e) => e.id)).toEqual([PICOMATCH]);
+  it('contains no remaining approved exceptions after the picomatch advisory disappeared', () => {
+    expect(file.exceptions).toEqual([]);
   });
 
-  it('is well formed, high-only, dev-only and expires on 2026-12-02', () => {
-    const [e] = file.exceptions;
-    if (e === undefined) throw new Error('security/audit-exceptions.json has no entry');
-    expect(invalidReason(e)).toBeNull();
-    expect(e.severity).toBe('high');
-    expect(e.scope).toBe('dev-only');
-    expect(e.expires).toBe('2026-12-02');
+  it('requires every committed exception to be valid, high-only and dev-only', () => {
+    for (const e of file.exceptions) {
+      expect(invalidReason(e)).toBeNull();
+      expect(e.severity).toBe('high');
+      expect(e.scope).toBe('dev-only');
+    }
   });
 });
