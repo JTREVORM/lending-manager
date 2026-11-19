@@ -919,7 +919,7 @@ describeDb('Phase 4E — Mobile Money foundation', () => {
       expect(afterConfirm.message).toMatch(/already confirmed/i);
     });
 
-    it('stages reported commissions for MTN and Airtel while leaving both provisional and inactive', async () => {
+    it('keeps actual MTN and Airtel source settings until the Owner rollout action', async () => {
       const rows = await query<{
         code: string;
         source: string;
@@ -933,7 +933,7 @@ describeDb('Phase 4E — Mobile Money foundation', () => {
       );
       expect(rows).toHaveLength(2);
       for (const r of rows) {
-        expect(r.source).toBe('reported');
+        expect(r.source).toBe('configured');
         expect(r.provisional).toBe(true);
         expect(r.active).toBe(false);
       }
