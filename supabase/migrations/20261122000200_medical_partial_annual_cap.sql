@@ -460,7 +460,7 @@ begin
 
   return;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.assess_benefit_claim(p_claim_id uuid, p_note text DEFAULT NULL::text)
@@ -743,7 +743,7 @@ begin
 
   return v_amount;
 end;
-$function$
+$function$;
 
 
 -- No benefit claim is modified by this migration. No payment is posted.
