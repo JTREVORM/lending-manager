@@ -115,8 +115,10 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
       assessed_amount: string;
       annual_cap: string;
       remaining_cap_before: string;
+      medical_benefit_excess_handling: string;
     }>(`
-      select assessed_amount::text, annual_cap::text, remaining_cap_before::text
+      select assessed_amount::text, annual_cap::text, remaining_cap_before::text,
+             medical_benefit_excess_handling
         from public.benefit_assessment_snapshots
        where claim_id = $1
     `, [second]);
@@ -124,6 +126,7 @@ describeDb('partial annual medical cap is a versioned, locked business decision'
       assessed_amount: '100000',
       annual_cap: '500000',
       remaining_cap_before: '100000',
+      medical_benefit_excess_handling: 'pay_remaining',
     }]);
   });
 
