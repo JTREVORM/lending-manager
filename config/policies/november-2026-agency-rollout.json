@@ -1,0 +1,82 @@
+{
+  "version": "2026-11-policy-proposal-1",
+  "status": "proposed_not_activated",
+  "approval_required": true,
+  "commercial_terms_required": true,
+  "requires_operator_action": true,
+  "note": "This file is a proposed Owner rollout plan, not live agency settings. Do not treat this manifest as proof of signed provider terms. Apply per provider only via the audited Owner RPC after independent verification and authorization.",
+  "providers": [
+    {
+      "code": "MTN_MOMO",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "AIRTEL_MONEY",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "STANBIC",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "UEDCL",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "NWSC",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "DSTV",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "GOTV",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "LYCAMOBILE",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    },
+    {
+      "code": "SCHOOL_FEES",
+      "desired_commission_source": "reported",
+      "activate": false,
+      "apply_via": "set_agency_provider_commission_source",
+      "requires_provider_agreement": true,
+      "require_confirmed_transaction_limits": true
+    }
+  ]
+}
