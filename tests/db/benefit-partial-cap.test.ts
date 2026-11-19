@@ -62,7 +62,7 @@ beforeAll(async () => {
   ]);
   policyId = await publishTestPolicy({
     version: '948.9',
-    effectiveDaysAgo: 900,
+    effectiveDaysAgo: 6107,
     medicalAnnualCap: 500_000,
     medicalClaimsPerYear: 2,
     medicalYearBasis: 'calendar_year',
