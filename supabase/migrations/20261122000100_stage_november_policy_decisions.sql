@@ -1,7 +1,7 @@
 -- POLYTOS November 2026 decisions: prepare configuration without activation.
 --
 -- This migration stages recorded Owner proposals on the *unapproved* policy
--- and *provisional* provider rows only. It is deliberately not an authorisation
+-- only. The nine provider choices are recorded in a separate rollout manifest. It is not an authorisation
 -- to run medical claims, distribute profits or post agency transactions.
 --
 -- Never update an approved/assigned membership policy or a live provider here.
@@ -67,6 +67,15 @@ begin
   -- frequency rules and release checks have been certified. The anchor alone
   -- is a safely staged contractual scheduling convention.
 
+  -- Readiness preflight ONLY: changing existing agency provider rows inside
+  -- a schema migration would create audited changes against an established
+  -- financial book. The upgrade-rehearsal gate correctly forbids that.
+  --
+  -- The desired commission_source='reported' for all nine external providers
+  -- is stored in config/policies/november-2026-agency-rollout.json. A separately
+  -- authorised Owner action must apply each one through the existing audited
+  -- set_agency_provider_commission_source RPC after contractual verification.
+  -- No provider status/terms/commission-source row is updated here.
   for v_provider in
     select id, code, is_provisional, is_active,
            commission_source, commission_rate_bps, commission_fixed
@@ -81,20 +90,11 @@ begin
     if not v_provider.is_provisional or v_provider.is_active
        or v_provider.commission_rate_bps is not null
        or v_provider.commission_fixed is not null then
-      raise exception 'Provider % is live or has commercial terms; refuse automatic commission-source change.',
+      raise exception 'Provider % differs from provisional zero-rate baseline; review commercial terms before release.',
         v_provider.code;
     end if;
     if v_provider.commission_source not in ('configured', 'reported') then
       raise exception 'Provider % has an unknown commission source.', v_provider.code;
-    end if;
-    if v_provider.commission_source = 'configured' then
-      -- Existing Owner-configured, audited RPC. It also enforces provisional
-      -- status and excludes conflicting calculated-rate terms.
-      perform public.set_agency_provider_commission_source(
-        v_provider.id,
-        'reported',
-        'November 2026 Owner decision: commission keyed from provider confirmation; provider remains provisional'
-      );
     end if;
   end loop;
 
@@ -104,7 +104,7 @@ begin
 end;
 $polytos_policy$;
 
--- Deliberately unchanged: provider readiness flags, Stanbic float model,
--- commission recognition timing, actual payments, transaction ceilings,
+-- Deliberately unchanged: provider records and readiness flags, Stanbic float model,
+-- commission source/recognition timing, actual payments, transaction ceilings,
 -- approval thresholds, float limits, membership status, effective dates,
 -- profit distributions, and posted accounting records.
