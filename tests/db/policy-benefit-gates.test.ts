@@ -38,7 +38,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!hasDatabase)('official policy benefit gates', () => {
-  it('preserves every recorded official financial decision without approval', async () => {
+  it('records proposed draft cap and profit decisions without approving the policy', async () => {
     const row = await queryOne(
       `select status, approved_at, effective_from,
         registration_fee::text, monthly_savings_minimum::text,
@@ -47,7 +47,7 @@ describe.skipIf(!hasDatabase)('official policy benefit gates', () => {
         member_loan_interest_rate_bps, interest_basis, interest_method,
         savings_to_loan_multiplier_bps, medical_benefit_rate_bps,
         medical_benefit_claims_per_year, medical_benefit_year_basis,
-        medical_benefit_cap_mode, medical_benefit_annual_cap,
+        medical_benefit_cap_mode, medical_benefit_annual_cap::text,
         benefit_qualification_basis, benefit_waiting_period_days,
         family_condolence_benefit::text, member_bereavement_benefit::text,
         death_confirmations_required, meeting_absence_fine::text,
@@ -71,18 +71,31 @@ describe.skipIf(!hasDatabase)('official policy benefit gates', () => {
       medical_benefit_rate_bps: 500,
       medical_benefit_claims_per_year: 2,
       medical_benefit_year_basis: 'enrolment_anniversary',
-      medical_benefit_cap_mode: null,
-      medical_benefit_annual_cap: null,
+      medical_benefit_cap_mode: 'amount',
+      medical_benefit_annual_cap: '500000',
       benefit_qualification_basis: 'savings_qualifying_months',
       benefit_waiting_period_days: null,
       family_condolence_benefit: '100000',
       member_bereavement_benefit: '200000',
       death_confirmations_required: 3,
       meeting_absence_fine: '5000',
-      profit_distribution_basis: null,
+      profit_distribution_basis: 'pro_rata_savings',
       is_medical_benefit_enabled: false,
       is_condolence_benefit_enabled: false,
       is_bereavement_benefit_enabled: false,
+    });
+  });
+
+
+  it('records the month-end repayment convention while keeping monthly inactive', async () => {
+    const row = await queryOne(
+      `select cadence_kind, month_anchor, is_active
+         from public.repayment_frequencies where key='monthly'`,
+    );
+    expect(row).toEqual({
+      cadence_kind: 'calendar_month',
+      month_anchor: 'clamp_to_month_end',
+      is_active: false,
     });
   });
 
