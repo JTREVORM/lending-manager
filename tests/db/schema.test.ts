@@ -1144,8 +1144,8 @@ describeDb('seeded reference data matches the application constants', () => {
       REPAYMENT_FREQUENCY_DEFAULTS.map((entry) => entry.isActive),
     );
 
-    // The monthly anchor is undecided, and seeded so. A value here would be a
-    // collection convention this system chose on the client's behalf.
+    // The Owner has now chosen a month-end clamp convention. This remains
+    // inactive until monthly schedule/product behavior is certified.
     expect(rows.filter((row) => row.cadence_kind === 'calendar_month')).not.toHaveLength(
       0,
     );
@@ -1153,7 +1153,7 @@ describeDb('seeded reference data matches the application constants', () => {
     for (const row of rows) {
       if (row.cadence_kind === 'calendar_month') {
         expect(row.interval_days).toBeNull();
-        expect(row.month_anchor).toBeNull();
+        expect(row.month_anchor).toBe('clamp_to_month_end');
       } else {
         expect(row.interval_days).not.toBeNull();
         expect(row.month_anchor).toBeNull();

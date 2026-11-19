@@ -387,7 +387,7 @@ describeDb('the annual cap and the claim count', () => {
     expect(secondResult.message).toContain('medical_cap_exceeded');
     // The refusal says what is left and why it is not simply paid.
     expect(secondResult.message).toContain('100000');
-    expect(secondResult.message).toContain('undecided');
+    expect(secondResult.message).toContain('does not authorize');
   });
 
   it('counts an assessed-but-unpaid claim against the cap', async () => {

@@ -762,14 +762,22 @@ describeDb('Phase 4B — agency transaction engine', () => {
       expect(err?.message).toMatch(/both a .* rate and a fixed commission/i);
     });
 
-    it('refuses a provider configuring neither', async () => {
-      const err = await expectError(`select public.agency_commission_for($1, 100000)`, [
-        (
-          await queryOne<{ id: string }>(
-            `select id from public.agency_service_providers where code = 'MTN_MOMO'`,
-          )
-        ).id,
-      ]);
+    it('refuses a configured-source provider with no commission basis', async () => {
+      // MTN now uses the provider-reported source by Owner policy. Prove the
+      // original configured-rate guard on a separate provisional test row;
+      // expectError rolls back the entire DO block.
+      const err = await expectError(`do $no_basis$
+        declare p uuid;
+        begin
+          insert into public.agency_service_providers
+            (code, name, category, float_model, income_account_id,
+             commission_model, commission_source, is_provisional, is_active)
+          values ('T_NO_BASIS', 'Unconfigured rate test', 'other', 'provider_float',
+                  (select id from public.ledger_accounts where code='4590'),
+                  'deferred', 'configured', true, false)
+          returning id into p;
+          perform public.agency_commission_for(p, 100000);
+        end $no_basis$;`);
       expect(err?.message).toMatch(/no commission basis/i);
     });
 

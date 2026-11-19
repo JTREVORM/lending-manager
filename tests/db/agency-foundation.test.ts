@@ -1079,18 +1079,24 @@ describeDb('Phase 4A — agency banking foundation', () => {
       expect(err?.message).toMatch(/no maximum single transaction/i);
     });
 
-    it('refuses to confirm a provider with no commission basis', async () => {
+    it('refuses to confirm a configured-rate provider with no commission basis', async () => {
+      // MTN is staged for provider-reported commission. Exercise the distinct
+      // configured-rate rule inside expectError's rollback-only transaction.
       const err = await expectError(
         `update public.agency_service_providers
-            set is_provisional = false where code = 'MTN_MOMO'`,
+            set commission_source = 'configured', is_provisional = false
+          where code = 'MTN_MOMO'`,
       );
       expect(err?.constraint).toBe('agency_providers_confirmed_states_commission');
     });
 
-    it('allows confirming a provider once its commission is stated', async () => {
+    it('allows confirming a configured-rate provider once its commission is stated', async () => {
+      // Verify the historical configured-rate branch, with no persistent
+      // provider change: expectError always rolls the statement back.
       const err = await expectError(
         `update public.agency_service_providers
-            set commission_rate_bps = 150, is_provisional = false, is_active = true
+            set commission_source = 'configured', commission_rate_bps = 150,
+                is_provisional = false, is_active = true
           where code = 'MTN_MOMO'`,
       );
       expect(err).toBeNull();

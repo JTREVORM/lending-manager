@@ -919,7 +919,7 @@ describeDb('Phase 4E — Mobile Money foundation', () => {
       expect(afterConfirm.message).toMatch(/already confirmed/i);
     });
 
-    it('leaves MTN and Airtel configured and provisional, deciding nothing for the business', async () => {
+    it('keeps actual MTN and Airtel source settings until the Owner rollout action', async () => {
       const rows = await query<{
         code: string;
         source: string;

@@ -167,6 +167,8 @@ export async function publishTestPolicy(options: {
    * both of these stay NULL and every benefit gate stays shut.
    */
   readonly medicalCapMode?: 'amount' | 'no_separate_cap' | null;
+  /** How an amount-capped medical policy handles a claim above its remaining cap. */
+  readonly medicalExcessHandling?: 'pay_remaining' | 'reject_claim' | null;
   readonly benefitQualificationBasis?:
     'waiting_period_days' | 'savings_qualifying_months' | null;
   /**
@@ -202,13 +204,14 @@ export async function publishTestPolicy(options: {
         medical_benefit_annual_cap, medical_benefit_claims_per_year,
         benefit_waiting_period_days, medical_benefit_year_basis,
         medical_benefit_cap_mode, benefit_qualification_basis,
-        death_confirmations_required, meeting_absence_fine)
+        death_confirmations_required, meeting_absence_fine,
+        medical_benefit_excess_handling)
      values ($1, $2, (public.business_date() - $3::int), $8,
              pg_catalog.now(), 'test fixture',
              $4, $5, 6, 500, 5, 2, 3, 500, 1, 100000, 200000, $6, $7,
              $9, $10, $11::int,
              $12::bigint, $13::smallint, $14::smallint, $15,
-             $16, $17, $18::smallint, $19::bigint)
+             $16, $17, $18::smallint, $19::bigint, $20)
      returning id`,
     [
       options.version,
@@ -240,6 +243,7 @@ export async function publishTestPolicy(options: {
         ? 3
         : options.deathConfirmationsRequired,
       options.meetingAbsenceFine === undefined ? 5000 : options.meetingAbsenceFine,
+      options.medicalExcessHandling ?? null,
     ],
   );
   return row.id;

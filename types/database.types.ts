@@ -600,6 +600,7 @@ export type Database = {
           savings_months_required: number | null;
           savings_qualified: boolean | null;
           medical_cap_mode: string | null;
+          medical_benefit_excess_handling: string | null;
           death_confirmations_required: number | null;
           death_confirmations_recorded: number | null;
           deceased_beneficiary_id: string | null;
@@ -661,6 +662,7 @@ export type Database = {
           savings_months_required?: number | null;
           savings_qualified?: boolean | null;
           medical_cap_mode?: string | null;
+          medical_benefit_excess_handling?: string | null;
           death_confirmations_required?: number | null;
           death_confirmations_recorded?: number | null;
           deceased_beneficiary_id?: string | null;
@@ -722,6 +724,7 @@ export type Database = {
           savings_months_required?: number | null;
           savings_qualified?: boolean | null;
           medical_cap_mode?: string | null;
+          medical_benefit_excess_handling?: string | null;
           death_confirmations_required?: number | null;
           death_confirmations_recorded?: number | null;
           deceased_beneficiary_id?: string | null;
@@ -3884,6 +3887,7 @@ export type Database = {
       membership_policy_versions: {
         Row: {
           medical_benefit_cap_mode: string | null;
+          medical_benefit_excess_handling: string | null;
           benefit_qualification_basis: string | null;
           medical_benefit_year_basis: string | null;
           death_confirmations_required: number | null;
@@ -3933,6 +3937,7 @@ export type Database = {
         };
         Insert: {
           medical_benefit_cap_mode?: string | null;
+          medical_benefit_excess_handling?: string | null;
           benefit_qualification_basis?: string | null;
           medical_benefit_year_basis?: string | null;
           death_confirmations_required?: number | null;
@@ -3982,6 +3987,7 @@ export type Database = {
         };
         Update: {
           medical_benefit_cap_mode?: string | null;
+          medical_benefit_excess_handling?: string | null;
           benefit_qualification_basis?: string | null;
           medical_benefit_year_basis?: string | null;
           death_confirmations_required?: number | null;
@@ -9699,6 +9705,11 @@ export type Database = {
       membership_policy_allows: {
         Args: { p_version_id: string; p_activity: string };
         Returns: boolean;
+      };
+      // Trigger-only policy guard. Never callable as a financial action.
+      membership_medical_excess_handling_guard: {
+        Args: Record<PropertyKey, never>;
+        Returns: unknown;
       };
       // Polytos Phase 1. Records a member's acceptance of a newly published
       // policy version and moves them onto it, in one transaction. The only

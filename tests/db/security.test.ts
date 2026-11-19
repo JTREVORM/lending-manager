@@ -1591,6 +1591,7 @@ describeDb('privileged functions', () => {
       'membership_fee_receipts_assign_number',
       'membership_fee_receipts_guard',
       'membership_governing_policy',
+      'membership_medical_excess_handling_guard',
       'membership_meetings_assign_number',
       'membership_meetings_guard',
       'membership_policy_allows',

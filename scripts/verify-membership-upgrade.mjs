@@ -218,6 +218,10 @@ const PHASE_PREFIXES = [
   // than the SQLSTATE, and that is precisely the mistake a mechanical rewrite
   // of fourteen function bodies is most likely to make.
   '20261121',
+  // November 2026 business-policy staging: draft medical cap/profit formula,
+  // reported agency commissions, and versioned partial-cap assessment.
+  // These are unreleased and must be applied AFTER the seeded financial book.
+  '20261122',
 ];
 
 const isPhaseMigration = (name) =>
