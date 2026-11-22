@@ -1311,4 +1311,407 @@ describeDb('registering a bank, and bringing it live', () => {
     );
     expect(rows).toEqual([]);
   });
+
+  // =========================================================================
+  // Operational task 4 — the two named banks, end to end
+  //
+  // Every control above is asserted one refusal at a time, against synthetic
+  // codes. The Owner asked for something narrower and more useful: that
+  // *Equity* and *Centenary* can actually be taken from nothing to live, in
+  // the order an operator would do it, and that the two float models behave
+  // differently at every step rather than only at registration.
+  //
+  // So these two walk the whole chain in one transaction each, asserting the
+  // state after every step. They duplicate coverage on purpose — a chain can
+  // be green link by link and still not join up, which is the failure mode a
+  // per-refusal suite cannot see.
+  // =========================================================================
+
+  describe('the two named banks, end to end', () => {
+    /** The cash drawer float is bought with. */
+    async function till(): Promise<{ readonly id: string; readonly code: string }> {
+      return queryOne<{ id: string; code: string }>(
+        `select id::text as id, code from public.ledger_accounts
+          where cash_kind = 'cash_at_hand' and branch_id = $1
+          order by code limit 1`,
+        [branch],
+      );
+    }
+
+    /** What the general ledger says a float account holds. */
+    async function floatBalance(accountId: string): Promise<string> {
+      const row = await queryOne<{ balance: string }>(
+        `select coalesce(sum(l.debit) - sum(l.credit), 0)::text as balance
+           from public.journal_lines l
+          where l.account_id = (
+            select ledger_account_id from public.agency_provider_float_accounts
+             where id = $1)`,
+        [accountId],
+      );
+      return row.balance;
+    }
+
+    it('takes Equity Bank from registration to live, as a float partner', async () => {
+      // --- 1. One Owner registers it. Provisional, inactive, no terms. ---
+      const providerId = await register({
+        code: code('EQUITY'),
+        category: 'agency_banking',
+        floatModel: 'provider_float',
+        rateBps: 120,
+      });
+      const registered = await queryOne<{
+        is_provisional: boolean;
+        is_active: boolean;
+        income: string;
+        payable: string | null;
+      }>(
+        `select p.is_provisional, p.is_active, i.code as income,
+                pa.code as payable
+           from public.agency_service_providers p
+           join public.ledger_accounts i on i.id = p.income_account_id
+           left join public.ledger_accounts pa on pa.id = p.payable_account_id
+          where p.id = $1`,
+        [providerId],
+      );
+      expect(registered.is_provisional).toBe(true);
+      expect(registered.is_active).toBe(false);
+      // Agency banking commission, not mobile money commission.
+      expect(registered.income).toBe('4520');
+      // A float partner is owed nothing: the float is ours, bought up front.
+      expect(registered.payable).toBeNull();
+
+      // --- 2. A second Owner approves the commercial terms. ---
+      const terms = await asUserCommitted(approver, [
+        {
+          sql: `select public.approve_agency_provider_terms($1, 'EQUITY-AGREEMENT-1',
+                  'Signed schedule of charges')`,
+          params: [providerId],
+        },
+      ]);
+      expect(terms.ok, terms.message).toBe(true);
+
+      const afterTerms = await queryOne<{
+        is_provisional: boolean;
+        is_active: boolean;
+        approved_by: string;
+      }>(
+        `select is_provisional, is_active, terms_approved_by::text as approved_by
+           from public.agency_service_providers where id = $1`,
+        [providerId],
+      );
+      expect(afterTerms.is_provisional).toBe(false);
+      // Approving terms is not switching a bank on.
+      expect(afterTerms.is_active).toBe(false);
+      expect(afterTerms.approved_by).toBe(approver.profileId);
+
+      // --- 3. The float facility, against a named instrument. ---
+      const facility = await asUserCommitted(approver, [
+        {
+          sql: `select public.set_agency_float_facility($1, 40000000::bigint,
+                  'EQUITY-FACILITY-1', 'Approved at the board')`,
+          params: [providerId],
+        },
+      ]);
+      expect(facility.ok, facility.message).toBe(true);
+
+      // --- 4. A service, its ceiling, and the threshold above which a
+      //        second pair of eyes is required. ---
+      const typeId = await queryOne<{ id: string }>(
+        `insert into public.agency_transaction_types
+           (provider_id, code, name, direction, is_active)
+         values ($1, 'WITHDRAWAL', 'Cash out at the counter', 'withdrawal', true)
+         returning id::text as id`,
+        [providerId],
+      ).then((r) => r.id);
+
+      const ceiling = await asUserCommitted(registrar, [
+        {
+          sql: `select public.set_agency_service_limit($1, 5000000::bigint,
+                  'per the signed schedule')`,
+          params: [typeId],
+        },
+      ]);
+      expect(ceiling.ok, ceiling.message).toBe(true);
+
+      const threshold = await asUserCommitted(registrar, [
+        {
+          sql: `select public.set_agency_service_threshold($1, 1000000::bigint,
+                  'second verification above a million')`,
+          params: [typeId],
+        },
+      ]);
+      expect(threshold.ok, threshold.message).toBe(true);
+
+      // --- 5. Two locations, each with its own float account. ---
+      const accounts: string[] = [];
+      for (const tillName of ['counter1', 'counter2'] as const) {
+        const made = await asUserCommitted(registrar, [
+          {
+            sql: `select public.register_agency_agent_line($1, $2, $3, $3, null, $4,
+                    current_date, null, null)::text as id`,
+            params: [providerId, branch, tillName, `AG-EQ-${tillName}`],
+          },
+        ]);
+        expect(made.ok, made.message).toBe(true);
+        accounts.push(String(made.rows[0]?.id));
+      }
+
+      const minted = await query<{ code: string; number: string | null }>(
+        `select a.code, f.bank_account_number as number
+           from public.agency_provider_float_accounts f
+           join public.ledger_accounts a on a.id = f.ledger_account_id
+          where f.provider_id = $1
+          order by f.till_name`,
+        [providerId],
+      );
+      expect(minted).toHaveLength(2);
+      // A float partner's account is a 1320 asset of ours, and needs no
+      // account number at the bank, because the float is not held there.
+      for (const row of minted) {
+        expect(row.code).toMatch(/^1320/);
+        expect(row.number).toBeNull();
+      }
+
+      // --- 6. Float funding, inside the approved facility. ---
+      const drawer = await till();
+      await fund(drawer.code, 50_000_000);
+      expect(await floatBalance(accounts[0]!)).toBe('0');
+
+      const bought = await asUserCommitted(approver, [
+        {
+          sql: `select public.post_float_replenishment($1, 8000000::bigint, $2,
+                  'EQUITY-RPL-1', current_date)`,
+          params: [accounts[0], drawer.id],
+        },
+      ]);
+      expect(bought.ok, bought.message).toBe(true);
+      expect(await floatBalance(accounts[0]!)).toBe('8000000');
+
+      // Beyond the facility it is refused, which is the point of approving one.
+      const over = await asUser(
+        approver,
+        `select public.post_float_replenishment($1, 33000000::bigint, $2,
+           'EQUITY-RPL-2', current_date)`,
+        [accounts[0], drawer.id],
+      );
+      expect(over.ok).toBe(false);
+      expect(over.message).toMatch(/facility/i);
+
+      // --- 7. Every precondition answered, then live. ---
+      const ready = await queryOne<{
+        terms_approved: boolean;
+        commission_decided: boolean;
+        facility_approved: boolean;
+        services_with_ceiling: string;
+        open_agent_accounts: string;
+        ready_to_activate: boolean;
+      }>(
+        `select terms_approved, commission_decided, facility_approved,
+                services_with_ceiling::text as services_with_ceiling,
+                open_agent_accounts::text as open_agent_accounts,
+                ready_to_activate
+           from public.agency_provider_readiness where provider_id = $1`,
+        [providerId],
+      );
+      expect(ready.terms_approved).toBe(true);
+      expect(ready.commission_decided).toBe(true);
+      expect(ready.facility_approved).toBe(true);
+      expect(ready.services_with_ceiling).toBe('1');
+      expect(ready.open_agent_accounts).toBe('2');
+      expect(ready.ready_to_activate).toBe(true);
+
+      const live = await asUserCommitted(approver, [
+        {
+          sql: `select public.activate_agency_provider($1, 'BOARD-MIN-EQUITY-01',
+                  'Approved at the board')`,
+          params: [providerId],
+        },
+      ]);
+      expect(live.ok, live.message).toBe(true);
+
+      const final = await queryOne<{
+        is_active: boolean;
+        reference: string;
+        activated_by: string;
+      }>(
+        `select is_active, activation_reference as reference,
+                activated_by::text as activated_by
+           from public.agency_service_providers where id = $1`,
+        [providerId],
+      );
+      expect(final.is_active).toBe(true);
+      expect(final.reference).toBe('BOARD-MIN-EQUITY-01');
+      // Not the Owner who registered it.
+      expect(final.activated_by).toBe(approver.profileId);
+      expect(final.activated_by).not.toBe(registrar.profileId);
+    });
+
+    it('takes Centenary Bank live as a cash-payable partner, inventing no float', async () => {
+      // --- 1. Registered against the bank's own settlement account. ---
+      const providerId = await register({
+        code: code('CENTENARY'),
+        category: 'agency_banking',
+        floatModel: 'cash_payable',
+        rateBps: 95,
+      });
+
+      const registered = await queryOne<{
+        income: string;
+        payable: string | null;
+        float_model: string;
+      }>(
+        `select i.code as income, pa.code as payable, p.float_model
+           from public.agency_service_providers p
+           join public.ledger_accounts i on i.id = p.income_account_id
+           left join public.ledger_accounts pa on pa.id = p.payable_account_id
+          where p.id = $1`,
+        [providerId],
+      );
+      expect(registered.float_model).toBe('cash_payable');
+      expect(registered.income).toBe('4520');
+      // The whole difference between the two models: cash taken over the
+      // counter for Centenary is money we owe Centenary, so it gets a
+      // payable account and no float asset.
+      expect(registered.payable).not.toBeNull();
+
+      // --- 2. Terms approved by the second Owner. ---
+      const terms = await asUserCommitted(approver, [
+        {
+          sql: `select public.approve_agency_provider_terms($1, 'CENTENARY-AGREEMENT-1',
+                  'Signed agency agreement')`,
+          params: [providerId],
+        },
+      ]);
+      expect(terms.ok, terms.message).toBe(true);
+
+      // --- 3. A service with a ceiling. No facility: there is no float to
+      //        advance, and asking for one is refused. ---
+      const typeId = await queryOne<{ id: string }>(
+        `insert into public.agency_transaction_types
+           (provider_id, code, name, direction, is_active)
+         values ($1, 'DEPOSIT', 'Deposit at the counter', 'deposit', true)
+         returning id::text as id`,
+        [providerId],
+      ).then((r) => r.id);
+      await asUserCommitted(registrar, [
+        {
+          sql: `select public.set_agency_service_limit($1, 3000000::bigint, 'per the agreement')`,
+          params: [typeId],
+        },
+      ]);
+
+      const pointless = await asUser(
+        approver,
+        `select public.set_agency_float_facility($1, 10000000::bigint, 'CENT-FAC-1')`,
+        [providerId],
+      );
+      expect(pointless.ok).toBe(false);
+
+      // --- 4. Two locations, each naming the Centenary account number the
+      //        takings are banked to. The number is required here, because
+      //        there is no float account to identify the line instead. ---
+      const missing = await asUser(
+        registrar,
+        `select public.register_agency_agent_line($1, $2, 'gate-a', 'Gate A')`,
+        [providerId, branch],
+      );
+      expect(missing.ok).toBe(false);
+      expect(missing.message).toMatch(/account number/i);
+
+      const numbers = ['3100200100417', '3100200100418'] as const;
+      const accounts: string[] = [];
+      for (const [index, tillName] of (['gate-a', 'gate-b'] as const).entries()) {
+        const made = await asUserCommitted(registrar, [
+          {
+            sql: `select public.register_agency_agent_line($1, $2, $3, $3, null, $4,
+                    current_date, null, $5)::text as id`,
+            params: [providerId, branch, tillName, `AG-CEN-${tillName}`, numbers[index]],
+          },
+        ]);
+        expect(made.ok, made.message).toBe(true);
+        accounts.push(String(made.rows[0]?.id));
+      }
+
+      const register_ = await query<{
+        till_name: string;
+        number: string;
+        ledger_account_id: string | null;
+      }>(
+        `select f.till_name, f.bank_account_number as number,
+                f.ledger_account_id::text as ledger_account_id
+           from public.agency_provider_float_accounts f
+          where f.provider_id = $1
+          order by f.till_name`,
+        [providerId],
+      );
+      expect(register_.map((r) => r.number)).toEqual([...numbers]);
+      // The claim operational task 2 was written for: a cash-payable
+      // partner's accounts exist without a float asset being conjured for
+      // them. Nothing in the ledger pretends we hold electronic value here.
+      for (const row of register_) {
+        expect(row.ledger_account_id).toBeNull();
+      }
+
+      // And the same number cannot be registered at a second location.
+      const duplicate = await asUser(
+        registrar,
+        `select public.register_agency_agent_line($1, $2, 'gate-c', 'Gate C', null, null,
+           current_date, null, $3)`,
+        [providerId, branch, numbers[0]],
+      );
+      expect(duplicate.ok).toBe(false);
+
+      // --- 5. Live, without a facility, authorized by somebody else. ---
+      const ready = await queryOne<{
+        facility_approved: boolean;
+        limit: string | null;
+        ready_to_activate: boolean;
+        open_agent_accounts: string;
+      }>(
+        `select facility_approved, float_facility_limit::text as limit,
+                ready_to_activate,
+                open_agent_accounts::text as open_agent_accounts
+           from public.agency_provider_readiness where provider_id = $1`,
+        [providerId],
+      );
+      // No facility was approved — and it is ready to go live anyway.
+      expect(ready.limit).toBeNull();
+      expect(ready.open_agent_accounts).toBe('2');
+      expect(ready.ready_to_activate).toBe(true);
+      // `facility_approved` is a *precondition* flag, not a record that a
+      // facility exists: the view defines it as
+      // `float_model <> 'provider_float' or limit is not null`, so for a
+      // cash-payable partner it reads true vacuously, because no facility is
+      // needed. Asserted rather than left implied, because reading the column
+      // as "a facility has been approved" is the obvious mistake to make with
+      // it, here and on the screen that lists it.
+      expect(ready.facility_approved).toBe(true);
+
+      const live = await asUserCommitted(approver, [
+        {
+          sql: `select public.activate_agency_provider($1, 'BOARD-MIN-CENTENARY-01',
+                  'Approved at the board')`,
+          params: [providerId],
+        },
+      ]);
+      expect(live.ok, live.message).toBe(true);
+
+      const final = await queryOne<{ is_active: boolean; reference: string }>(
+        `select is_active, activation_reference as reference
+           from public.agency_service_providers where id = $1`,
+        [providerId],
+      );
+      expect(final.is_active).toBe(true);
+      expect(final.reference).toBe('BOARD-MIN-CENTENARY-01');
+
+      // Still no float account anywhere for this provider, after going live.
+      const floats = await queryOne<{ count: string }>(
+        `select count(*)::text as count
+           from public.agency_provider_float_accounts
+          where provider_id = $1 and ledger_account_id is not null`,
+        [providerId],
+      );
+      expect(floats.count).toBe('0');
+    });
+  });
 });
