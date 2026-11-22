@@ -96,8 +96,14 @@ function Chooser({
 
 export function RegisterProviderForm({
   categories,
+  floatModels,
+  commissionModels,
+  commissionSources,
 }: {
   readonly categories: readonly CategoryOption[];
+  readonly floatModels: readonly FormOption[];
+  readonly commissionModels: readonly FormOption[];
+  readonly commissionSources: readonly FormOption[];
 }) {
   const [result, submit, pending] = useActionState<
     AgencyActionResult | undefined,
@@ -121,7 +127,7 @@ export function RegisterProviderForm({
           label="Short code"
           name="code"
           required
-          hint="2 to 32 letters, digits or underscores, such as EQUITY or CENTENARY. It becomes part of the float account’s code and cannot be changed later."
+          hint="2 to 32 letters, digits or underscores — EQUITY, CENTENARY. Cannot be changed later."
         />
         <Field label="Name" name="name" required />
 
@@ -163,12 +169,11 @@ export function RegisterProviderForm({
               );
             }}
           >
-            <option value="provider_float">
-              The partner advances electronic float to the agent
-            </option>
-            <option value="cash_payable">
-              The business holds the customer&rsquo;s cash and owes it onward
-            </option>
+            {floatModels.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -181,8 +186,11 @@ export function RegisterProviderForm({
             className={SELECT}
             defaultValue="deferred"
           >
-            <option value="deferred">When the partner remits it</option>
-            <option value="immediate">At the point of sale</option>
+            {commissionModels.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -198,8 +206,11 @@ export function RegisterProviderForm({
               setSource(event.target.value === 'reported' ? 'reported' : 'configured');
             }}
           >
-            <option value="configured">From the terms recorded here</option>
-            <option value="reported">Read off the partner&rsquo;s own statement</option>
+            {commissionSources.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -396,7 +407,7 @@ export function AgentAccountForm({
           label="Account name"
           name="tillName"
           required
-          hint="Lower case letters, digits, hyphens or underscores: main, gate1, counter-2. It becomes part of the ledger account’s code and cannot be renamed."
+          hint="Lower case letters, digits, hyphens or underscores: main, gate1. Cannot be renamed."
         />
         <Field label="Label" name="label" hint="What staff call it." />
 

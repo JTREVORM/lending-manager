@@ -41,6 +41,32 @@ const CATEGORIES: readonly CategoryOption[] = [
   { id: 'other', label: 'Something else', income: '4590' },
 ];
 
+/**
+ * The two models, the two recognition points and the two commission sources,
+ * described once, on the server.
+ *
+ * Every other select on this screen gets its option text from here; these
+ * three used to describe themselves in the browser, which put six sentences
+ * in the client chunk for no reason.
+ */
+const FLOAT_MODELS: readonly FormOption[] = [
+  { id: 'provider_float', label: 'The partner advances electronic float to the agent' },
+  {
+    id: 'cash_payable',
+    label: 'The business holds the customer’s cash and owes it onward',
+  },
+];
+
+const COMMISSION_MODELS: readonly FormOption[] = [
+  { id: 'deferred', label: 'When the partner remits it' },
+  { id: 'immediate', label: 'At the point of sale' },
+];
+
+const COMMISSION_SOURCES: readonly FormOption[] = [
+  { id: 'configured', label: 'From the terms recorded here' },
+  { id: 'reported', label: 'Read off the partner’s own statement' },
+];
+
 export interface ProviderProvisioningProps {
   readonly readiness: readonly AgencyProviderReadinessRow[];
   readonly agentAccounts: readonly AgencyAgentAccountRegisterRow[];
@@ -264,8 +290,15 @@ export function ProviderProvisioning({
             The category is not a free choice of ledger account: filing a bank&rsquo;s
             commission under mobile money passes every check in the schema and makes the
             two inseparable for the rest of time, so the category decides the accounts.
+            The short code becomes part of the float account&rsquo;s own code, which is
+            why neither it nor an agent account&rsquo;s name can be changed afterwards.
           </p>
-          <RegisterProviderForm categories={CATEGORIES} />
+          <RegisterProviderForm
+            categories={CATEGORIES}
+            floatModels={FLOAT_MODELS}
+            commissionModels={COMMISSION_MODELS}
+            commissionSources={COMMISSION_SOURCES}
+          />
         </Card>
       ) : null}
 
