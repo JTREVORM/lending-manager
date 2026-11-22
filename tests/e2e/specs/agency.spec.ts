@@ -277,7 +277,18 @@ test.describe('what the interface refuses to pretend', () => {
     // test and fail this one.
     await expect(page.getByRole('button', { name: /register provider/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /approve terms/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /make live/i })).toBeVisible();
+    // The panel, not the button. "Make live" only renders when some provider
+    // is actually ready to activate, and in the seeded preview none is: no
+    // provider has an approved float facility, so every provider_float one
+    // fails that precondition, and the two cash_payable ones are still
+    // provisional. The button's absence is the readiness gate doing its job,
+    // so asserting it would be asserting the seed rather than the screen.
+    await expect(
+      page
+        .getByText(/Make a provider live, or take it out of service/i)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
 
     for (const warning of [
       /cannot approve a provider you registered/i,
