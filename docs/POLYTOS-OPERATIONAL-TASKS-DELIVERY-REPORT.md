@@ -335,7 +335,7 @@ arbiter. The suites that own those scenarios are `agency-money-float`,
 ### 6.2 After this work
 
 ```
-npm run test:db   →   18 projects, 2,648 tests, 0 failures
+npm run test:db   →   18 projects, 2,649 tests, 0 failures
 npm run test:run  →   92 files, 2,811 tests, 0 failures
 npm run typecheck →   clean
 npm run lint      →   clean
@@ -343,8 +343,8 @@ npm run format:check → clean
 node scripts/check-database-security.mjs → no unreviewed privileged exposure
 ```
 
-The 66 new tests are the two suites added by this work. Every pre-existing
-float and reconciliation test passes unchanged.
+The 67 new tests are the two suites added by this work (39 + 28). Every
+pre-existing float and reconciliation test passes unchanged.
 
 ### 6.3 What the new float controls were measured against
 
