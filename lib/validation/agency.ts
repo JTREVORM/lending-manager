@@ -25,11 +25,13 @@
 import { z } from 'zod';
 
 import {
+  basisPointsSchema,
   businessDateSchema,
   nonEmptyString,
   optionalField,
   optionalString,
   ugxAmountFromText,
+  ugxAmountSchema,
   uuidSchema,
 } from './common';
 
@@ -508,4 +510,166 @@ export const agencyProviderFloatModelSchema = z.object({
 });
 export type AgencyProviderFloatModelInput = z.infer<
   typeof agencyProviderFloatModelSchema
+>;
+
+// ===========================================================================
+// Operational tasks 1, 2 and 5 — registering a partner and bringing it live
+//
+// Shape only, as everywhere else here. Whether a provider's terms are already
+// approved, whether a facility is smaller than the float held, whether the
+// person pressing the button is the one who registered the partner: all of
+// that is state the database re-reads under lock, and all of it can change
+// between this form rendering and the click.
+//
+// One thing did change in this file's own terms. Its header said no schema
+// here carries an approval threshold, because "Decision L — whether
+// `requires_approval_above` should gate verification — is unresolved". It is
+// resolved: operational task 5 enforces it, and `serviceThresholdSchema`
+// below is the form that sets it.
+// ===========================================================================
+
+/** The seven categories the chart of accounts is organised by. */
+export const agencyProviderCategorySchema = z.enum([
+  'mobile_money',
+  'agency_banking',
+  'utility',
+  'school_fees',
+  'tv_subscription',
+  'airtime_data',
+  'other',
+]);
+
+/**
+ * Registering a partner.
+ *
+ * No ledger account is offered. The category decides both accounts, because
+ * `agency_provider_accounts_guard()` can catch an income account of the wrong
+ * type but cannot catch 4510 Mobile Money Commission on a bank — and a
+ * dropdown offering seven valid-looking wrong answers is a defect waiting for
+ * a busy afternoon.
+ *
+ * `commissionRateBps` and `commissionFixed` are both optional because a
+ * partner may pay a percentage, a flat fee, both, or — where it reports its
+ * own commission — neither. The database refuses the combinations that are
+ * contradictory.
+ */
+export const agencyProviderRegistrationSchema = z
+  .object({
+    code: z
+      .string({ error: 'A short code is required.' })
+      .trim()
+      .min(2, 'Use at least 2 characters.')
+      .max(32, 'Use at most 32 characters.')
+      .regex(
+        /^[A-Za-z0-9_]+$/,
+        'Use letters, digits or underscores only, such as EQUITY or CENTENARY.',
+      )
+      .transform((value) => value.toUpperCase()),
+    name: nonEmptyString('Name', 120),
+    category: agencyProviderCategorySchema,
+    floatModel: z.enum(['provider_float', 'cash_payable']),
+    commissionModel: z.enum(['immediate', 'deferred']),
+    commissionSource: z.enum(['configured', 'reported']),
+    commissionRateBps: optionalField(basisPointsSchema),
+    commissionFixed: optionalField(ugxAmountSchema),
+    termsReference: optionalString(120),
+  })
+  .refine(
+    (value) =>
+      value.commissionSource !== 'reported' ||
+      (value.commissionRateBps === undefined && value.commissionFixed === undefined),
+    {
+      path: ['commissionRateBps'],
+      error:
+        'A partner that reports its own commission states no rate here. Clear the rate, or record the terms as configured.',
+    },
+  );
+export type AgencyProviderRegistrationInput = z.infer<
+  typeof agencyProviderRegistrationSchema
+>;
+
+/** Correcting the proposed terms of a partner nobody has approved yet. */
+export const agencyProviderTermsRevisionSchema = z.object({
+  providerId: uuidSchema,
+  commissionModel: optionalField(z.enum(['immediate', 'deferred'])),
+  commissionSource: optionalField(z.enum(['configured', 'reported'])),
+  commissionRateBps: optionalField(basisPointsSchema),
+  commissionFixed: optionalField(ugxAmountSchema),
+  termsReference: optionalString(120),
+  clearRate: optionalField(z.union([z.literal('true'), z.literal('false')])),
+  clearFixed: optionalField(z.union([z.literal('true'), z.literal('false')])),
+});
+export type AgencyProviderTermsRevisionInput = z.infer<
+  typeof agencyProviderTermsRevisionSchema
+>;
+
+/**
+ * Approving them.
+ *
+ * The reference is required here and not merely optional-with-a-default: it
+ * is the whole content of the approval. POLYTOS does not hold the signed
+ * agreement, so a record that does not say where it is has approved nothing.
+ */
+export const agencyProviderTermsApprovalSchema = z.object({
+  providerId: uuidSchema,
+  termsReference: nonEmptyString('Agreement reference', 120),
+  note: optionalString(500),
+});
+export type AgencyProviderTermsApprovalInput = z.infer<
+  typeof agencyProviderTermsApprovalSchema
+>;
+
+/** The most float a partner has agreed to advance, and the paper saying so. */
+export const agencyFloatFacilitySchema = z.object({
+  providerId: uuidSchema,
+  limit: amountSchema,
+  reference: nonEmptyString('Facility reference', 120),
+  note: optionalString(500),
+});
+export type AgencyFloatFacilityInput = z.infer<typeof agencyFloatFacilitySchema>;
+
+/**
+ * The amount above which the Owner must verify a service's transactions.
+ *
+ * Separate from `serviceLimitSchema`, which sets the ceiling above which
+ * nothing may be transacted at all. The two answer different questions and
+ * the database stores them in different columns.
+ */
+export const serviceThresholdSchema = z.object({
+  transactionTypeId: uuidSchema,
+  requiresApprovalAbove: amountSchema,
+  reason: optionalString(500),
+});
+export type ServiceThresholdInput = z.infer<typeof serviceThresholdSchema>;
+
+/** Registering an agent account, on either float model. */
+export const agencyAgentAccountSchema = z.object({
+  providerId: uuidSchema,
+  branchId: uuidSchema,
+  tillName: tillNameSchema,
+  label: optionalString(80),
+  lineMsisdn: msisdnSchema,
+  agentCode: optionalString(40),
+  bankAccountNumber: optionalString(40),
+  openedOn: optionalField(businessDateSchema),
+  notes: optionalString(500),
+});
+export type AgencyAgentAccountInput = z.infer<typeof agencyAgentAccountSchema>;
+
+/** Making a partner live, or taking it out of service. */
+export const agencyProviderActivationSchema = z.object({
+  providerId: uuidSchema,
+  authorizationReference: nonEmptyString('Authorization reference', 120),
+  note: optionalString(500),
+});
+export type AgencyProviderActivationInput = z.infer<
+  typeof agencyProviderActivationSchema
+>;
+
+export const agencyProviderDeactivationSchema = z.object({
+  providerId: uuidSchema,
+  reason: reasonSchema,
+});
+export type AgencyProviderDeactivationInput = z.infer<
+  typeof agencyProviderDeactivationSchema
 >;

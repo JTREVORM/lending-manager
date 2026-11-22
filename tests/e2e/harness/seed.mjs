@@ -2514,9 +2514,15 @@ async function seedAgency() {
     name: 'Cash out of a wallet',
     direction: 'withdrawal',
     max: 1_000_000,
-    // Configured, and not enforced: the posting engine does not read it.
-    // Seeded so the Providers screen has a figure to strike through and say
-    // so, rather than describing a column nobody can see.
+    // Operational task 5 made this a working control: a withdrawal above
+    // 500,000 on this type may be verified only by somebody holding
+    // `agency:verify_high_value`, which is the Owner's. The demo Manager
+    // holds `agency:verify` and will be refused, with SQLSTATE SD001 and a
+    // sentence naming the threshold — which is the point of seeding it.
+    //
+    // It was seeded before that, when the comment here said the posting
+    // engine did not read the column, so that the Providers screen had a
+    // figure to strike through. Nothing is struck through now.
     approvalAbove: 500_000,
   });
   const airtelDeposit = await addType(airtel, {

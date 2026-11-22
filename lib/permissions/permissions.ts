@@ -640,6 +640,56 @@ export const PERMISSIONS = [
   'agency:commission_exception',
   /** View agency transactions, balances, commission and settlement history. */
   'agency:reports',
+
+  // --- Operational tasks 1, 3 and 5 ---------------------------------------
+  /**
+   * Approve a registered provider's commercial terms, its float facility, and
+   * the decision to make it live.
+   *
+   * The Owner's alone, and separate from `agency:providers` on purpose.
+   * `agency:providers` registers a partner and proposes what it pays;
+   * this one confirms those terms against the signed agreement and authorizes
+   * the provider to transact. The database refuses the profile that registered
+   * the provider with SQLSTATE SD001, so bringing a partner live needs two
+   * Owner/Administrator accounts — which is the control, not an accident.
+   */
+  'agency:provider_approval',
+  /**
+   * Verify an agency transaction above its service's approval threshold.
+   *
+   * The Owner's alone. `agency:verify` is the Manager's and posts everything
+   * up to the threshold a service states in `requires_approval_above`; above
+   * it, the Owner has to look at the figure. Enforced twice in the database:
+   * once in `verify_agency_transaction()` for a clear refusal, and once by a
+   * trigger that reads the authority of the verifier recorded on the row.
+   */
+  'agency:verify_high_value',
+
+  /** Read the register of capital the business was started and funded with. */
+  'capital:view',
+  /**
+   * Record that capital has been introduced, with its evidence.
+   *
+   * Posts nothing. The journal is written by a second officer's verification,
+   * because an equity credit is the least self-correcting entry this business
+   * makes — a short till shows up at the next count, a wrong capital figure
+   * shows up nowhere.
+   */
+  'capital:record',
+  /**
+   * Verify capital against its evidence, which posts it.
+   *
+   * The Owner's alone, and never one's own record: the database refuses that
+   * with SQLSTATE SD001.
+   */
+  'capital:verify',
+  /**
+   * Reverse a posted capital funding.
+   *
+   * The Owner's alone, never the officer who verified it, and only while the
+   * money is still in the account it landed in.
+   */
+  'capital:reverse',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -993,6 +1043,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:reconcile',
     'agency:float_trade',
     'agency:reports',
+
+    // Operational task 3. A Manager records what the evidence says about
+    // capital arriving and can read the register. They verify none of it:
+    // `capital:verify` and `capital:reverse` are the Owner's, because the
+    // business's own capital structure is not front- or middle-office work.
+    'capital:view',
+    'capital:record',
   ],
 
   owner_admin: [
@@ -1144,9 +1201,17 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:float_trade',
     'agency:reconcile',
     'agency:providers',
+    'agency:provider_approval',
+    'agency:verify_high_value',
     'agency:commission_exception',
     'agency:variance_adjustment',
     'agency:reports',
+
+    // Operational task 3.
+    'capital:view',
+    'capital:record',
+    'capital:verify',
+    'capital:reverse',
   ],
 } as const;
 

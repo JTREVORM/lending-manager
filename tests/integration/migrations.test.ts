@@ -839,6 +839,30 @@ describe('types stay in step with the schema', () => {
       'audit_profile_change',
       'audit_user_role_change',
       'audit_settings_change',
+      // Operational tasks 1, 2 and 5. Six guards and one helper, all called by
+      // the database. Three of them are the reason ADR-072 exists: the
+      // authority to approve a provider's terms, to make it live, and to post
+      // above a service's approval threshold is enforced on the *transition*,
+      // by a trigger, rather than on the state by a CHECK. `profile_has_permission`
+      // answers whether a named profile holds a capability — as opposed to the
+      // current session — which the high-value guard needs because the
+      // authority that counts is the one recorded on the transaction. All
+      // seven fire or resolve as the table owner and are revoked from every
+      // exposed role.
+      'agency_provider_terms_approval_guard',
+      'agency_provider_activation_guard',
+      'agency_high_value_authority_guard',
+      'agency_float_facility_guard',
+      'agency_requires_float_account',
+      'profile_has_permission',
+      // Operational task 3. Four of the same kind on `capital_fundings`: the
+      // write-once guard, the document numberer, the accounts guard that holds
+      // a funding to its own half of the balance sheet, and the shared
+      // capability preamble the four capital RPCs call.
+      'capital_fundings_guard',
+      'capital_fundings_assign_number',
+      'capital_funding_accounts_guard',
+      'capital_funding_actor',
       // Called only by other SECURITY DEFINER functions, never over the API.
       'assert_owner_admin_remains',
       // Phase 10. Trigger functions on the journal tables.

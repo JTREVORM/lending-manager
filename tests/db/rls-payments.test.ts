@@ -592,6 +592,11 @@ describeDb('payment row level security', () => {
         // `security_invoker` over `agency_account_staff`, whose own
         // branch-scoped policy decides the rows.
         'agency_account_operators',
+        // Operational task 2. Every registered agent account on either
+        // float model, with the partner's own account number and agent
+        // identifier. `security_invoker`, so the register's own
+        // branch-scoped policy decides the rows.
+        'agency_agent_account_register',
         // The Agency redesign. Client Rule 5's register: `security_invoker`
         // over `agency_cash_bankings`, whose own branch-scoped policy decides
         // the rows, so the view adds names and nets the charge and grants
@@ -614,12 +619,20 @@ describeDb('payment row level security', () => {
         'agency_mobile_money_dashboard',
         'agency_payable_settlement_register',
         'agency_payable_summary',
+        // Operational task 5. Each activation precondition answered
+        // separately. `security_invoker` over the provider registry.
+        'agency_provider_readiness',
         'agency_transaction_history',
         'agency_variance_report',
         'benefit_claim_portal_view',
         'benefit_claim_register',
         'benefit_payment_register',
         'branch_cash_position',
+        // Operational task 3. Capital introduced, with its kind, its
+        // evidence, both ledger accounts and the whole maker-checker
+        // trail. `security_invoker` over `capital_fundings`, whose own
+        // branch-scoped policy decides the rows.
+        'capital_funding_register',
         // Decision A. `security_invoker` over `ledger_accounts` and
         // `journal_lines`, so the booked figure a user sees is still the one
         // their own policies allow — the view derives availability, it does

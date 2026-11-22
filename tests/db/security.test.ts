@@ -87,6 +87,10 @@ describeDb('row level security', () => {
       // writers, and a session holding INSERT could put itself on an account.
       'agency_account_operators:SELECT',
       'agency_account_staff:SELECT',
+      // Operational task 2. The agent-account register, on either float
+      // model. SELECT-only like every other agency view: it reads the
+      // register and writes nothing.
+      'agency_agent_account_register:SELECT',
       // The Agency redesign. Client Rule 5's table and its register, both
       // SELECT-only for the same reason as every other agency table: the four
       // RPCs are the only writers, and a session holding INSERT could record a
@@ -124,6 +128,10 @@ describeDb('row level security', () => {
       'agency_payable_settlements:SELECT',
       'agency_payable_summary:SELECT',
       'agency_provider_float_accounts:SELECT',
+      // Operational task 5. Each activation precondition answered, so a
+      // screen can list what is outstanding rather than offer a button that
+      // fails. SELECT-only: it decides nothing.
+      'agency_provider_readiness:SELECT',
       'agency_service_providers:SELECT',
       'agency_transaction_audit_log:SELECT',
       'agency_transaction_history:SELECT',
@@ -171,6 +179,12 @@ describeDb('row level security', () => {
       'branches:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
+      // Operational task 3. The capital register and the view over it,
+      // SELECT-only: the four capital RPCs are the only writers, and a
+      // session holding INSERT could record an equity credit with no
+      // journal behind it and nobody's verification on it.
+      'capital_funding_register:SELECT',
+      'capital_fundings:SELECT',
       // Phase 3. Every table gets SELECT, INSERT and UPDATE except
       // `client_remarks`, which gets no UPDATE because it is append-only.
       // DELETE still appears nowhere but `user_roles`: a client is archived,
@@ -497,6 +511,10 @@ describeDb('row level security', () => {
       'branches:SELECT',
       'business_settings:SELECT',
       'business_settings:UPDATE',
+      // Operational task 3. A read policy only, gated on capital:view and the
+      // branch, with the branch rule restated inline so PostgreSQL can hoist
+      // it — the form `rls-hoisting.test.ts` enforces.
+      'capital_fundings:SELECT',
       'cash_receipt_confirmations:SELECT',
       'client_guarantors:INSERT',
       'client_guarantors:SELECT',
@@ -975,6 +993,11 @@ describeDb('views', () => {
         // `security_invoker`, so the table's own branch-scoped policy
         // decides the rows.
         'agency_account_operators',
+        // Operational task 2. Every registered agent account on either
+        // float model, with the partner's own account number and agent
+        // identifier. `security_invoker`, so the register's own
+        // branch-scoped policy decides the rows.
+        'agency_agent_account_register',
         // The Agency redesign. Cash bankings with their branch, both
         // accounts and the people who banked, recorded, verified and
         // reversed them. `security_invoker`, so the table's own
@@ -1003,12 +1026,20 @@ describeDb('views', () => {
         'agency_mobile_money_dashboard',
         'agency_payable_settlement_register',
         'agency_payable_summary',
+        // Operational task 5. Each activation precondition answered
+        // separately. `security_invoker` over the provider registry.
+        'agency_provider_readiness',
         'agency_transaction_history',
         'agency_variance_report',
         'benefit_claim_portal_view',
         'benefit_claim_register',
         'benefit_payment_register',
         'branch_cash_position',
+        // Operational task 3. Capital introduced, with its kind, its
+        // evidence, both ledger accounts and the whole maker-checker
+        // trail. `security_invoker` over `capital_fundings`, whose own
+        // branch-scoped policy decides the rows.
+        'capital_funding_register',
         // Decision A. Booked, pending confirmation and available, per cash
         // account. One row per account and no aggregate column, because a
         // branch total is never a funding source.
@@ -1165,7 +1196,11 @@ describeDb('views', () => {
     // And one from Decision A: `cash_account_availability`, the per-account
     // booked / pending / available figures. A view rather than a function for
     // the same reason again — the reader's own `ledger:view` decides.
-    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(70);
+    // And three from the operational tasks: the agent-account register
+    // (task 2), the capital register (task 3) and the provider readiness
+    // view (task 5). Views rather than functions for the same reason — each
+    // reads tables whose own policies decide what the reader may see.
+    expect(rows.filter((row) => row.grantee === 'authenticated')).toHaveLength(73);
   });
 });
 
@@ -1194,6 +1229,8 @@ describeDb('privileged functions', () => {
       // the enrolment trigger enforces and the answer a screen reads are one
       // rule; it returns an id, and the row behind it stays behind the
       // select policy.
+      // Operational task 5. Makes a provider live once every precondition holds, records who authorized it and under what instrument, and refuses the registrant.
+      'activate_agency_provider',
       'active_membership_policy_id',
       // Polytos Phase 4. Every write path in the benefit and meeting modules
       // is a definer function, because every one of them enforces something a
@@ -1252,10 +1289,14 @@ describeDb('privileged functions', () => {
       // grant, so the default one is revoked.
       'agency_float_account_guard',
       'agency_float_account_immutable_identity',
+      // Operational task 5. Refuses float that would take a provider above the facility it approved. A trigger, so it holds however the row arrives.
+      'agency_float_facility_guard',
       'agency_float_reconciliation_guard',
       'agency_float_replenishment_guard',
       'agency_float_trade_operator_guard',
       'agency_float_trade_revision_guard',
+      // Operational task 5. Refuses a posting above its service's approval threshold unless the recorded verifier holds agency:verify_high_value.
+      'agency_high_value_authority_guard',
       'agency_locked_commission_settlement',
       'agency_locked_payable_settlement',
       // Phase 4B-S: branch authorization and per-account balance serialization
@@ -1267,6 +1308,15 @@ describeDb('privileged functions', () => {
       'agency_may_operate_account',
       'agency_payable_outstanding',
       'agency_provider_accounts_guard',
+      // Operational task 5. Governs the is_active transition, so going live is not something a bare UPDATE can do.
+      'agency_provider_activation_guard',
+      // Operational task 2. Refuses a float replenishment, reconciliation or trade against an agent account that owns no float.
+      // Operational task 1. Governs the transition out of provisional, so a
+      // provider's terms cannot be confirmed without naming who approved
+      // them and the agreement they were checked against — nor by the person
+      // who registered it.
+      'agency_provider_terms_approval_guard',
+      'agency_requires_float_account',
       'agency_staffing_actor',
       'agency_transaction_guard',
       // Phase 4A readiness gate: refuses any transaction past draft whose
@@ -1285,6 +1335,8 @@ describeDb('privileged functions', () => {
       'apply_eligible_penalties',
       'approve_agency_cash_reconciliation',
       'approve_agency_float_reconciliation',
+      // Operational task 1. A second person confirms a partner's commission terms against the signed agreement.
+      'approve_agency_provider_terms',
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
@@ -1407,6 +1459,12 @@ describeDb('privileged functions', () => {
       'cancel_meeting_fine',
       'cancel_membership_meeting',
       'cancel_savings_withdrawal',
+      // Operational task 3. Holds a capital funding to its kind: equity credits the 3000 series, a borrowing credits a 2300-series liability.
+      'capital_funding_accounts_guard',
+      // Operational task 3. The shared preamble: identity, then the capability.
+      'capital_funding_actor',
+      // Operational task 3. Mints the document number from the reference counter, which a caller may not reach.
+      'capital_fundings_assign_number',
       'capture_loan_product_snapshot',
       'carry_forward_unpaid_installments',
       'cash_account_available_balance',
@@ -1434,6 +1492,8 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      // Operational task 5. Takes a live provider out of service and clears its activation trail.
+      'deactivate_agency_provider',
       'death_confirmation_count',
       'decide_savings_withdrawal',
       'disburse_loan',
@@ -1645,6 +1705,8 @@ describeDb('privileged functions', () => {
       'post_savings_withdrawal',
       'post_transfer_journal',
       'preview_membership_policy_transition',
+      // Operational task 5. Whether a named profile holds a capability, as opposed to the current session. Reads user_roles, which a caller may not join freely.
+      'profile_has_permission',
       'profiles_assert_owner_remains',
       'profiles_guard_privileged_columns',
       'profiles_stamp_password_set_at',
@@ -1659,6 +1721,8 @@ describeDb('privileged functions', () => {
       'record_agency_float_trade',
       'record_audit_event',
       'record_bank_deposit',
+      // Operational task 3. Records capital with its evidence. Posts nothing.
+      'record_capital_funding',
       'record_commission_settlement',
       'record_death_confirmation',
       'record_draft_policy_timing',
@@ -1672,11 +1736,15 @@ describeDb('privileged functions', () => {
       'record_transfer',
       'redeem_membership_consent_code',
       'register_agency_agent_line',
+      // Operational task 1. Registers a partner as provisional and inactive, with its ledger accounts derived from its category.
+      'register_agency_provider',
       'register_member_beneficiary',
       'register_receipt_restrictions',
       'reject_agency_cash_banking',
       'reject_agency_float_trade',
       'reject_benefit_claim',
+      // Operational task 3.
+      'reject_capital_funding',
       'reject_expense',
       'reject_loan',
       'reject_reconciliation',
@@ -1701,6 +1769,8 @@ describeDb('privileged functions', () => {
       'reverse_agency_transaction',
       'reverse_bank_clearance',
       'reverse_benefit_payment',
+      // Operational task 3. Owner only, never the verifier, and only while the money is still there.
+      'reverse_capital_funding',
       'reverse_commission_settlement',
       'reverse_expense',
       'reverse_meeting_fine_payment',
@@ -1714,6 +1784,8 @@ describeDb('privileged functions', () => {
       // which stays default-deny to every session; it re-checks
       // `settings:view` inside, because the grant alone decides nothing.
       'review_meeting_absence_notice',
+      // Operational task 1. Corrects proposed terms nobody has approved yet.
+      'revise_agency_provider_terms',
       'revoke_agency_account_staff',
       'revoke_member_beneficiary',
       'savings_account_governing_policy',
@@ -1742,9 +1814,13 @@ describeDb('privileged functions', () => {
       'savings_withdrawal_requests_guard',
       'schedule_membership_meeting',
       'set_agency_agent_line_suspended',
+      // Operational task 5. Approves the most float a partner has agreed to advance.
+      'set_agency_float_facility',
       'set_agency_provider_commission_source',
       'set_agency_provider_float_model',
       'set_agency_service_limit',
+      // Operational task 5. Sets the amount above which only the Owner may verify a service’s transactions.
+      'set_agency_service_threshold',
       'settings_reference_sequences',
       'submit_agency_cash_reconciliation',
       'submit_agency_commission_reconciliation',
@@ -1774,6 +1850,8 @@ describeDb('privileged functions', () => {
       'verify_agency_transaction',
       'verify_bank_deposit',
       'verify_benefit_document',
+      // Operational task 3. This is what posts the capital journal.
+      'verify_capital_funding',
       'verify_member_beneficiary',
       'void_pending_cash_receipt',
     ]);
@@ -1873,6 +1951,8 @@ describeDb('privileged functions', () => {
       // enrolment trigger enforces and the answer a screen reads are the
       // same rule. It returns an id and nothing else; the row behind it is
       // still governed by `membership_policy_versions_select`.
+      // Operational tasks 1 and 5. The registration, terms-approval, facility, activation and deactivation RPCs an Owner's screen calls. Each refuses a caller without its capability with SQLSTATE 42501 before it reads its arguments, and each refuses the profile that registered the provider with SD001.
+      'activate_agency_provider',
       'active_membership_policy_id',
       // Polytos Phase 4. The lifecycle functions a screen calls, the two
       // reporting functions the dashboards read, and the pure helpers a
@@ -1890,9 +1970,12 @@ describeDb('privileged functions', () => {
       // agency_agent_line_obligations, which is advisory and tells the
       // Owner what stands in the way of closing a line.
       'agency_agent_line_obligations',
+      'agency_category_income_code',
+      'agency_category_payable_code',
       'approve_agency_cash_reconciliation',
       'approve_agency_float_reconciliation',
       // Phase 4B: the lifecycle RPCs, each gated on an agency capability
+      'approve_agency_provider_terms',
       'approve_benefit_claim',
       'approve_expense',
       'approve_loan',
@@ -1990,6 +2073,7 @@ describeDb('privileged functions', () => {
       'current_user_max_rank',
       'current_user_permissions',
       'current_user_role_keys',
+      'deactivate_agency_provider',
       'death_confirmation_count',
       'decide_savings_withdrawal',
       'disburse_loan',
@@ -2095,6 +2179,8 @@ describeDb('privileged functions', () => {
       'record_agency_commission_recovery',
       'record_agency_float_trade',
       'record_bank_deposit',
+      // Operational task 3. The four capital RPCs. Recording posts nothing; verifying is what writes the journal, and the Owner who recorded it may not be the one who verifies.
+      'record_capital_funding',
       'record_commission_settlement',
       'record_death_confirmation',
       'record_draft_policy_timing',
@@ -2108,10 +2194,12 @@ describeDb('privileged functions', () => {
       'record_transfer',
       'redeem_membership_consent_code',
       'register_agency_agent_line',
+      'register_agency_provider',
       'register_member_beneficiary',
       'reject_agency_cash_banking',
       'reject_agency_float_trade',
       'reject_benefit_claim',
+      'reject_capital_funding',
       'reject_expense',
       'reject_loan',
       'reject_reconciliation',
@@ -2127,6 +2215,7 @@ describeDb('privileged functions', () => {
       'reverse_agency_transaction',
       'reverse_bank_clearance',
       'reverse_benefit_payment',
+      'reverse_capital_funding',
       'reverse_commission_settlement',
       'reverse_expense',
       'reverse_meeting_fine_payment',
@@ -2143,6 +2232,7 @@ describeDb('privileged functions', () => {
       // has already named, and both are what the policy's live-loan rule is
       // written against — so they must give the same answer to every caller.
       'review_meeting_absence_notice',
+      'revise_agency_provider_terms',
       'revoke_agency_account_staff',
       'revoke_member_beneficiary',
       // Restored in 20261106000600 after 20261106000400 took it away. It is
@@ -2160,9 +2250,11 @@ describeDb('privileged functions', () => {
       'savings_withdrawable_amount',
       'schedule_membership_meeting',
       'set_agency_agent_line_suspended',
+      'set_agency_float_facility',
       'set_agency_provider_commission_source',
       'set_agency_provider_float_model',
       'set_agency_service_limit',
+      'set_agency_service_threshold',
       'settings_reference_sequences',
       'storage_path_claim_id',
       'storage_path_client_id',
@@ -2194,6 +2286,7 @@ describeDb('privileged functions', () => {
       'verify_agency_transaction',
       'verify_bank_deposit',
       'verify_benefit_document',
+      'verify_capital_funding',
       'verify_member_beneficiary',
     ]);
   });

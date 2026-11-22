@@ -953,6 +953,17 @@ export const NAV_MODULES: readonly NavModule[] = [
         phase: 11,
       },
       {
+        // Operational task 3. The money the business was started and funded
+        // with. Beside the ledger rather than in settings, because it is
+        // accounting: an equity contribution and a bank loan each post a
+        // journal entry, and the register is read beside the trial balance
+        // it explains.
+        href: ROUTES.capital,
+        label: 'Capital',
+        permission: 'capital:view',
+        phase: 11,
+      },
+      {
         href: ROUTES.ledger,
         label: 'General Ledger',
         permission: 'ledger:view',

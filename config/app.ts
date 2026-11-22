@@ -217,6 +217,15 @@ export const ROUTES = {
   /** Decision A. Cash taken to the bank, and what the bank did with it. */
   deposits: '/finance/deposits',
   newReconciliation: '/finance/reconciliation/new',
+  /**
+   * Operational task 3. The money the business was started and funded with.
+   *
+   * Under `/finance` rather than in settings, because it is accounting: an
+   * equity contribution and a bank loan each post a journal entry, and the
+   * register is read beside the trial balance it explains.
+   */
+  capital: '/finance/capital',
+  newCapitalFunding: '/finance/capital/new',
   ledger: '/finance/ledger',
 
   /**

@@ -628,7 +628,12 @@ describeDb('Agency redesign — correcting a provisional provider float model', 
     */
     const id = await provisionalBank('FLIPCONFIRMED');
     await query(
-      `update public.agency_service_providers set is_provisional = false where id = $1`,
+      `update public.agency_service_providers
+          set is_provisional = false,
+              terms_approved_by = (select id from public.profiles order by created_at limit 1),
+              terms_approved_at = now(),
+              terms_reference = 'fixture approval'
+        where id = $1`,
       [id],
     );
 

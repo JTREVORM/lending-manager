@@ -20,8 +20,10 @@
 import { z } from 'zod';
 
 import {
+  basisPointsSchema,
   businessDateSchema,
   nonEmptyString,
+  optionalField,
   optionalString,
   ugxAmountFromText,
   uuidSchema,
@@ -212,4 +214,76 @@ export const depositReturnSchema = z.object({
         'Record what was physically handed back, by whom and when. A return nobody described is not evidence.',
     },
   ),
+});
+
+// ===========================================================================
+// Operational task 3 — the money the business was started and funded with
+//
+// Shape only, as above. Whether the destination is a cash or bank account of
+// the right branch, whether the capital account is in the right half of the
+// balance sheet, whether the officer verifying is the one who recorded it:
+// `capital_funding_accounts_guard()` and `verify_capital_funding()` decide all
+// of it, under lock, in the transaction that writes the journal.
+// ===========================================================================
+
+/**
+ * Recording that capital arrived.
+ *
+ * `fundedOn` is the date the evidence bears and may be years old — that is
+ * how an opening balance is recorded. It may not be in the future, because
+ * capital cannot be recorded before it arrives. The journal is dated the day
+ * it is verified whatever this says; the database decides that, not the form.
+ *
+ * The borrowing terms are refused on an equity contribution here as well as
+ * in the database, because a form that accepted a repayment date and then
+ * lost it would be worse than one that explains why it cannot.
+ */
+export const recordCapitalFundingSchema = z
+  .object({
+    fundingKind: z.enum(['equity', 'borrowing']),
+    amount: movementAmountSchema,
+    destinationAccountId: uuidSchema,
+    capitalAccountId: uuidSchema,
+    funderName: nonEmptyString('Who provided it', 120),
+    fundedOn: businessDateSchema,
+    evidenceKind: z.enum([
+      'bank_transfer',
+      'cash_deposit',
+      'cheque',
+      'mobile_money',
+      'other',
+    ]),
+    evidenceReference: nonEmptyString('Evidence reference', 120).refine(
+      (value) => value.trim().length >= 2,
+      { message: 'Enter the reference on the slip, transfer or cheque.' },
+    ),
+    interestRateBps: optionalField(basisPointsSchema),
+    repaymentDueOn: optionalField(businessDateSchema),
+    description: optionalString(500),
+    idempotencyKey: uuidSchema,
+  })
+  .refine(
+    (value) =>
+      value.fundingKind !== 'equity' ||
+      (value.interestRateBps === undefined && value.repaymentDueOn === undefined),
+    {
+      path: ['interestRateBps'],
+      error:
+        'A contribution of the owner’s own money is not repayable and carries no interest. Record it as a borrowing if it is a loan to the business.',
+    },
+  )
+  .refine((value) => value.destinationAccountId !== value.capitalAccountId, {
+    path: ['capitalAccountId'],
+    error: 'The account the money landed in cannot also be its source.',
+  });
+export type RecordCapitalFundingInput = z.infer<typeof recordCapitalFundingSchema>;
+
+export const capitalFundingVerificationSchema = z.object({
+  fundingId: uuidSchema,
+  note: optionalString(500),
+});
+
+export const capitalFundingReasonSchema = z.object({
+  fundingId: uuidSchema,
+  reason: reasonSchema,
 });
