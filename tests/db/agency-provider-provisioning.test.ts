@@ -40,11 +40,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   asUser,
   asUserCommitted,
-  asUserScript,
   createTestUser,
   type TestUser,
 } from '../helpers/auth-fixtures';
-import { closePool, hasDatabase, query, queryOne, skipReason } from '../helpers/db';
+import {
+  closePool,
+  getClient,
+  hasDatabase,
+  query,
+  queryOne,
+  skipReason,
+} from '../helpers/db';
 
 const describeDb = hasDatabase ? describe : describe.skip;
 if (!hasDatabase) {
@@ -67,6 +73,14 @@ describeDb('registering a bank, and bringing it live', () => {
   let manager: TestUser;
   /** A front-office account, to prove the capability is the gate. */
   let clerk: TestUser;
+  /**
+   * A second front-office account that records nothing.
+   *
+   * Needed because the capability trigger and
+   * `agency_transactions_verifier_not_submitter` both refuse a bad verifier,
+   * and a test about the first must not be answered by the second.
+   */
+  let bystander: TestUser;
 
   let branch: string;
   let branchCode: string;
@@ -123,6 +137,7 @@ describeDb('registering a bank, and bringing it live', () => {
     approver = await createTestUser('owner_admin');
     manager = await createTestUser('manager');
     clerk = await createTestUser('secretary_treasurer');
+    bystander = await createTestUser('secretary_treasurer');
 
     const b = await queryOne<{ id: string; branch_code: string }>(
       `select id::text as id, branch_code from public.branches order by branch_code limit 1`,
@@ -134,7 +149,13 @@ describeDb('registering a bank, and bringing it live', () => {
     // refuses an officer with no branch rather than assuming one.
     await query(`update public.profiles set branch_id = $1 where id = any($2::uuid[])`, [
       branch,
-      [registrar.profileId, approver.profileId, manager.profileId, clerk.profileId],
+      [
+        registrar.profileId,
+        approver.profileId,
+        manager.profileId,
+        clerk.profileId,
+        bystander.profileId,
+      ],
     ]);
   });
 
@@ -1064,7 +1085,7 @@ describeDb('registering a bank, and bringing it live', () => {
       expect(providerId).toBeTruthy();
     });
 
-    it('lets a Manager verify below the threshold and refuses them above it', async () => {
+    it('lets an independent Manager or Owner verify above the threshold', async () => {
       const { providerId, typeId, accountId } = await bringLive('THRESH');
       const till = await queryOne<{ code: string; id: string }>(
         `select code, id::text as id from public.ledger_accounts
@@ -1189,15 +1210,44 @@ describeDb('registering a bank, and bringing it live', () => {
         for every other test. This is the assertion that would have been lost
         by simply deleting the old "Manager is refused" case.
       */
-      const withoutGrant = await asUserScript(manager, [
-        {
-          sql: `delete from public.role_permissions
-                 where role_key = 'manager' and permission_key = 'agency:verify_high_value'`,
-        },
-        { sql: `select public.verify_agency_transaction($1)`, params: [above] },
-      ]);
-      expect(withoutGrant.ok).toBe(false);
-      expect(withoutGrant.code).toBe('SD001');
+      const revoked = await draft(1_800_000, `REVOKED-${code('R')}`);
+
+      /*
+        Two things this probe has to get right, and the first version got both
+        wrong.
+
+        The DELETE is a privileged write that `authenticated` does not hold,
+        so running it as the Manager is refused with 42501 before the policy
+        is ever reached — which is what the first version measured. It
+        therefore runs with the pooled client's own rights, and only
+        `request.jwt.claim.sub` is set, so `auth.uid()` is the Manager while
+        the statement itself is the owner's. Rolled back either way.
+
+        And it needs a transaction that has *not* posted: an already-verified
+        one returns its journal from the idempotent branch at the top of
+        `verify_agency_transaction()` and never reaches the threshold check.
+      */
+      const probe = await getClient();
+      let revokedCode: string | undefined;
+      try {
+        await probe.query('begin');
+        await probe.query(`select set_config('request.jwt.claim.sub', $1, true)`, [
+          manager.authUserId,
+        ]);
+        await probe.query(
+          `delete from public.role_permissions
+            where role_key = 'manager' and permission_key = 'agency:verify_high_value'`,
+        );
+        await probe.query(`select public.verify_agency_transaction($1)`, [revoked]);
+      } catch (error) {
+        revokedCode = (error as { code?: string }).code;
+      } finally {
+        await probe.query('rollback').catch(() => undefined);
+        probe.release();
+      }
+      expect(revokedCode, 'the Manager must be refused once the grant is gone').toBe(
+        'SD001',
+      );
 
       const stillGranted = await queryOne<{ count: string }>(
         `select count(*)::text as count from public.role_permissions
@@ -1208,14 +1258,20 @@ describeDb('registering a bank, and bringing it live', () => {
       /*
         The guarantee, not the courtesy: the trigger reads the authority
         recorded on the row, so a route that stamps somebody without the
-        capability and posts directly is still refused. The clerk holds no
-        agency verification capability of any kind, which is what makes this
-        a real test now that the Manager holds one.
+        capability and posts directly is still refused.
+
+        The stamp has to be a *bystander* rather than the clerk. The clerk
+        records every draft here, and `agency_transactions_verifier_not_submitter`
+        refuses a row whose verifier is its submitter — so stamping the clerk
+        met that CHECK first and never reached the capability trigger. Both
+        controls are real; this test is about the second one, so it needs
+        somebody who neither recorded the transaction nor holds any agency
+        verification capability.
       */
       const direct = await draft(2_000_000, `DIRECT-${code('R')}`);
       await query(
         `update public.agency_transactions set verified_by = $2 where id = $1`,
-        [direct, clerk.profileId],
+        [direct, bystander.profileId],
       );
       const posted = await query(`select public.post_agency_transaction($1)`, [
         direct,
