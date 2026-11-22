@@ -372,10 +372,11 @@ a world rather than deciding anything. ADR-072 records the reasoning.
 
 ---
 
-## 7. Three defects found by this work, and fixed
+## 7. Four defects found by this work, and fixed
 
-All three were in the new code, found by writing the tests and by reading the
-functions the new guards sit beside rather than by reading the new guards:
+All four were in the new code, found by writing the tests, by reading the
+functions the new guards sit beside, and — for the fourth — by the full
+database sweep after the first commit:
 
 1. **A spent authorization could be reused.** `deactivate_agency_provider()`
    left `activated_by`, `activated_at` and `activation_reference` in place, and
@@ -398,7 +399,24 @@ functions the new guards sit beside rather than by reading the new guards:
    and the test added for it buys the whole facility in one trade, which is the
    only amount that distinguishes the two readings.
 
-3. **A view projected `numeric`.** `agency_provider_readiness.float_held` is a
+3. **The clean slate did not know about `capital_fundings`.** A new financial
+   table has to be classified in `scripts/lib/clean-slate.mjs`, and its
+   reference counter in the reset list; neither was. The tool **failed safe**
+   — it refuses to run at all while its table list is out of date, rather than
+   truncating what it knows and silently leaving the rest — so this was never
+   going to hand a client a book with somebody else's capital in it. What it
+   would have done is block the clean slate entirely. `capital_fundings` is
+   now truncated with the books, for the same structural reason as
+   `bank_deposits`: it references `journal_entries` twice, so leaving it out
+   makes the books untruncatable rather than merely stale. The 3000 and 2300
+   accounts are kept, because they are the chart and not the entries.
+
+   This one was in the first commit (`75d5af1`) and fixed in the next, because
+   I committed on a targeted test run rather than waiting for the full sweep.
+   The targeted run was the right set for the change it was checking; it was
+   the wrong set for the question "is the tree green".
+
+4. **A view projected `numeric`.** `agency_provider_readiness.float_held` is a
    `sum(bigint)`, which PostgreSQL types as `numeric` —
    and `tests/db/schema.test.ts` fails the build on a `numeric` column anywhere
    in `public`, including one a view projects. Cast to `bigint`. Shillings are
@@ -517,13 +535,13 @@ the same migration.
 `components/finance/capital-register.tsx`,
 `components/layout/nav-items.ts`, `config/app.ts`,
 `app/(app)/agency/providers/page.tsx`, `app/(app)/finance/capital/page.tsx`,
-`types/database.types.ts`.
+`types/database.types.ts`, `scripts/lib/clean-slate.mjs`.
 
 ### Tests
 
-`tests/db/agency-provider-provisioning.test.ts` (38),
+`tests/db/agency-provider-provisioning.test.ts` (39),
 `tests/db/capital-funding.test.ts` (28), plus registry updates to
-`tests/db/{schema,security,separation-of-duties,rls-payments}.test.ts`,
+`tests/db/{schema,security,separation-of-duties,rls-payments,clean-slate}.test.ts`,
 `tests/unit/permissions.test.ts` and
 `tests/integration/migrations.test.ts`.
 
