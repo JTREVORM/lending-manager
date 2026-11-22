@@ -258,7 +258,7 @@ export function ApproveTermsForm({
         <Chooser
           id="approve-provider"
           name="providerId"
-          label="Provider"
+          label="Provider whose terms to approve"
           placeholder="Choose a provider awaiting approval…"
           options={options}
         />
@@ -300,7 +300,7 @@ export function FacilityForm({ options }: { readonly options: readonly FormOptio
         <Chooser
           id="facility-provider"
           name="providerId"
-          label="Provider"
+          label="Provider to approve a facility for"
           placeholder="Choose a provider…"
           options={options}
         />
@@ -355,7 +355,7 @@ export function AgentAccountForm({
       <Result result={result} />
       <form action={submit} className="grid min-w-0 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
-          <Label htmlFor="agent-provider">Provider</Label>
+          <Label htmlFor="agent-provider">Provider for this agent account</Label>
           <select
             id="agent-provider"
             name="providerId"
@@ -493,7 +493,7 @@ export function ActivateForm({ options }: { readonly options: readonly FormOptio
         <Chooser
           id="activate-provider"
           name="providerId"
-          label="Provider"
+          label="Provider to make live"
           placeholder="Choose a provider…"
           options={options}
         />
