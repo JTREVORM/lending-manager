@@ -2515,14 +2515,16 @@ async function seedAgency() {
     direction: 'withdrawal',
     max: 1_000_000,
     // Operational task 5 made this a working control: a withdrawal above
-    // 500,000 on this type may be verified only by somebody holding
-    // `agency:verify_high_value`, which is the Owner's. The demo Manager
-    // holds `agency:verify` and will be refused, with SQLSTATE SD001 and a
-    // sentence naming the threshold — which is the point of seeding it.
+    // 500,000 on this type needs a verifier holding
+    // `agency:verify_high_value`, which under the approved policy is an
+    // independent Manager or Owner (migration 20261122000100 — it was
+    // Owner-only first, which was a guess at decision L). The demo Manager
+    // holds it, so the seeded figure exercises the threshold path rather
+    // than a refusal.
     //
-    // It was seeded before that, when the comment here said the posting
-    // engine did not read the column, so that the Providers screen had a
-    // figure to strike through. Nothing is struck through now.
+    // It was seeded before any of that, when the comment here said the
+    // posting engine did not read the column, so that the Providers screen
+    // had a figure to strike through. Nothing is struck through now.
     approvalAbove: 500_000,
   });
   const airtelDeposit = await addType(airtel, {

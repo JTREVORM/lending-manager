@@ -54,7 +54,7 @@ export const metadata = { title: 'Providers and services' };
  *   4. Agent accounts are opened — one per location, with the partner's own
  *      account number and agent identifier.
  *   5. Each service gets a ceiling and, where wanted, a threshold above which
- *      only the Owner may verify.
+ *      an independent Manager or Owner must verify.
  *   6. Somebody who did not register it authorizes it to go live, naming the
  *      instrument they were authorized under.
  *
@@ -244,7 +244,7 @@ export default async function AgencyProvidersPage() {
                   through.
                 */}
                 <TableHead align="numeric" width="money">
-                  Owner must verify above
+                  Second approval above
                 </TableHead>
                 <TableHead width="status">Active</TableHead>
               </tr>
@@ -290,13 +290,13 @@ export default async function AgencyProvidersPage() {
 
       <Alert tone="info">
         <strong>Two limits, and they do different things.</strong> The maximum is what may
-        be transacted at all, and the database refuses past it. The threshold is what may
-        be transacted without the Owner looking at it: above it, a Manager&rsquo;s
-        verification is refused and somebody holding the high-value capability has to post
-        it — enforced both in the verification path and by a trigger on the transition
-        into posted, so no route can skip it.{' '}
+        be transacted at all, and the database refuses past it. The threshold is the
+        amount above which verification needs the high-value capability, which the Manager
+        and the Owner hold and which is never the officer who recorded the transaction —
+        enforced both in the verification path and by a trigger on the transition into
+        posted, so no route can skip it.{' '}
         {thresholded.length === 0
-          ? 'No service carries a threshold yet, so every amount up to each maximum may be verified by a Manager.'
+          ? 'No service carries a threshold yet.'
           : thresholded.length === 1
             ? 'One service carries one.'
             : `${String(thresholded.length)} services carry one.`}

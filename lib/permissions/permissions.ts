@@ -657,11 +657,26 @@ export const PERMISSIONS = [
   /**
    * Verify an agency transaction above its service's approval threshold.
    *
-   * The Owner's alone. `agency:verify` is the Manager's and posts everything
-   * up to the threshold a service states in `requires_approval_above`; above
-   * it, the Owner has to look at the figure. Enforced twice in the database:
-   * once in `verify_agency_transaction()` for a clear refusal, and once by a
-   * trigger that reads the authority of the verifier recorded on the row.
+   * The Manager's and the Owner's. The approved policy is an **independent
+   * Manager or Owner** — the rule this business already approved for bank
+   * deposits as Decision A rule 8, "a different authorized Manager or Owner
+   * verifies clearance; no self-verification". It was implemented as
+   * Owner-only first, which was a guess at an unresolved decision and the
+   * wrong one: it leaves every large counter transaction waiting for one
+   * person, and a threshold that is routinely worked around by splitting an
+   * amount is not a control. Migration `20261122000100` corrected it.
+   *
+   * It stays a capability of its own rather than collapsing into
+   * `agency:verify`, which has the same holders today, for three reasons:
+   * the Owner can return to Owner-only by revoking one grant rather than
+   * changing a posting path; a future role granted `agency:verify` does not
+   * inherit above-threshold authority with it; and `verified_by` on an
+   * above-threshold transaction is then a profile the database checked
+   * against a named capability at the moment it posted.
+   *
+   * Enforced twice in the database: once in `verify_agency_transaction()`
+   * for a clear refusal, and once by a trigger that reads the authority of
+   * the verifier recorded on the row rather than the caller's.
    */
   'agency:verify_high_value',
 
@@ -1043,6 +1058,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly Permission[]>> 
     'agency:reconcile',
     'agency:float_trade',
     'agency:reports',
+
+    // The approved threshold policy: an independent Manager or Owner, never
+    // the officer who recorded the transaction. See the capability's note.
+    'agency:verify_high_value',
 
     // Operational task 3. A Manager records what the evidence says about
     // capital arriving and can read the register. They verify none of it:

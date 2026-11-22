@@ -1325,7 +1325,7 @@
     },
     "set_agency_service_threshold(p_transaction_type_id uuid, p_requires_approval_above bigint, p_reason text)": {
       "classification": "A",
-      "reason": "Operational task 5 agency RPC. Sets the amount above which a service's transactions may be verified only by a holder of agency:verify_high_value. Refuses a caller without agency:providers with SQLSTATE 42501 before it reads the service type. agency:providers rather than agency:provider_approval because a threshold is an internal operating limit on the business's own staff, not a term of the partner's agreement. Refuses a non-positive threshold and one at or above the service's own ceiling, which could never be reached. Audited by an explicit agency_service_type.threshold_set event.",
+      "reason": "Operational task 5 agency RPC. Sets the amount above which a service's transactions may be verified only by a holder of agency:verify_high_value, which under the approved policy is an independent Manager or Owner. Refuses a caller without agency:providers with SQLSTATE 42501 before it reads the service type. agency:providers rather than agency:provider_approval because a threshold is an internal operating limit on the business's own staff, not a term of the partner's agreement. Refuses a non-positive threshold and one at or above the service's own ceiling, which could never be reached. Audited by an explicit agency_service_type.threshold_set event.",
       "surface": {
         "anon": false,
         "authenticated": true,

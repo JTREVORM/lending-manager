@@ -1,22 +1,12 @@
-'use client';
-
-import { useActionState, useState } from 'react';
-
 import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Field } from '@/components/ui/field';
-import { Label } from '@/components/ui/label';
+import {
+  CapitalReasonForm,
+  RecordCapitalForm,
+  VerifyCapitalForm,
+} from '@/components/finance/capital-forms';
 import { Money } from '@/components/ui/money';
 import {
-  recordCapitalFundingAction,
-  rejectCapitalFundingAction,
-  reverseCapitalFundingAction,
-  verifyCapitalFundingAction,
-  type FinanceActionResult,
-} from '@/lib/finance/actions';
-import {
-  CAPITAL_EVIDENCE_KIND_LABELS,
   CAPITAL_FUNDING_KIND_LABELS,
   CAPITAL_FUNDING_STATUS_LABELS,
   type CapitalFundingRow,
@@ -24,9 +14,6 @@ import {
   type LedgerAccountOption,
 } from '@/lib/domain/finance';
 import { cn } from '@/lib/utils/cn';
-
-const SELECT =
-  'border-border bg-surface focus-visible:ring-brand mt-1 h-11 w-full min-w-0 rounded-lg border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none';
 
 export interface CapitalRegisterProps {
   readonly fundings: readonly CapitalFundingRow[];
@@ -41,28 +28,23 @@ export interface CapitalRegisterProps {
 }
 
 /**
- * A key the browser mints, so a double submission records one funding.
- *
- * `globalThis.crypto`, not `node:crypto`, for the reason the bank deposit
- * register gives at length: importing the Node module pulls its browser
- * polyfill into the route's first load.
- */
-function newKey(): string {
-  return globalThis.crypto.randomUUID();
-}
-
-/**
  * The money the business was started and funded with.
  *
- * ## Why the form asks for the kind first
+ * ## A Server Component, and why that is not an afterthought
  *
- * Equity and borrowing are different instruments, and the rest of the form
- * depends on which one this is: a borrowing names a lender, may carry a rate
- * and may have a due date, and credits a 2300-series liability. An equity
- * contribution has none of those and credits the 3000 series. Asking for the
- * account first and the kind afterwards is how somebody credits a bank loan
- * to the owner's capital, which the database refuses and which the form
- * should never have offered.
+ * This file ships **no JavaScript**. The position, the register's rows, every
+ * heading and every explanatory paragraph are rendered on the server; the
+ * three things that genuinely need the browser — the record form's dependent
+ * fields and each form's own result message — live in `capital-forms.tsx`
+ * behind `'use client'`.
+ *
+ * The first version of this screen was one 467-line client component, long
+ * prose included, and it cost 6 KB gzipped. `tests/integration/bundle.test.ts`
+ * caps the total of every chunk the application has, and that total is what
+ * caught it. The rule the codebase already follows is in the budget's own
+ * notes: the daily commission report "is the largest piece of work in this
+ * round by line count and it ships no JavaScript". Prose belongs on the
+ * server.
  *
  * ## Why "Posted" is not the first state
  *
@@ -90,20 +72,10 @@ export function CapitalRegister({
   canReverse,
   className,
 }: CapitalRegisterProps) {
-  const [key, setKey] = useState<string>(() => newKey());
-  const [kind, setKind] = useState<'equity' | 'borrowing'>('equity');
-
-  const [recordResult, record, recording] = useActionState<
-    FinanceActionResult | undefined,
-    FormData
-  >(recordCapitalFundingAction, undefined);
-  const [verifyResult, verify, verifying] = useActionState<
-    FinanceActionResult | undefined,
-    FormData
-  >(verifyCapitalFundingAction, undefined);
-
-  const capitalAccounts = kind === 'equity' ? equityAccounts : borrowingAccounts;
-  const canOfferForm = canRecord && destinations.length > 0 && capitalAccounts.length > 0;
+  const canOfferForm =
+    canRecord &&
+    destinations.length > 0 &&
+    (equityAccounts.length > 0 || borrowingAccounts.length > 0);
 
   return (
     <div className={cn('min-w-0 space-y-8', className)}>
@@ -160,147 +132,11 @@ export function CapitalRegister({
             what writes the journal entry.
           </p>
 
-          {recordResult?.message === undefined ? null : (
-            <Alert tone={recordResult.ok ? 'success' : 'danger'} className="mt-3">
-              {recordResult.message}
-            </Alert>
-          )}
-
-          <form
-            action={(formData) => {
-              record(formData);
-              // A new key for the next funding, so the one just submitted
-              // cannot be replayed by a second click.
-              setKey(newKey());
-            }}
-            className="mt-3"
-          >
-            <input type="hidden" name="idempotencyKey" value={key} />
-            <Card className="grid min-w-0 gap-4 p-4 sm:grid-cols-2">
-              <div className="min-w-0 sm:col-span-2">
-                <Label htmlFor="capital-kind">What kind of money is this</Label>
-                <select
-                  id="capital-kind"
-                  name="fundingKind"
-                  required
-                  className={SELECT}
-                  value={kind}
-                  onChange={(event) => {
-                    setKind(event.target.value === 'borrowing' ? 'borrowing' : 'equity');
-                  }}
-                >
-                  <option value="equity">
-                    The owner&rsquo;s own money — not repayable, no interest
-                  </option>
-                  <option value="borrowing">
-                    Borrowed — repayable, and it may carry interest
-                  </option>
-                </select>
-              </div>
-
-              <Field
-                label="Amount"
-                name="amount"
-                inputMode="numeric"
-                required
-                hint="Whole shillings."
-              />
-
-              <Field
-                label={kind === 'equity' ? 'Contributed by' : 'Lent by'}
-                name="funderName"
-                required
-              />
-
-              <div className="min-w-0">
-                <Label htmlFor="capital-destination">The money landed in</Label>
-                <select
-                  id="capital-destination"
-                  name="destinationAccountId"
-                  required
-                  className={SELECT}
-                >
-                  {destinations.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.code} — {account.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="min-w-0">
-                <Label htmlFor="capital-account">
-                  {kind === 'equity' ? 'Credited to equity' : 'Credited to the borrowing'}
-                </Label>
-                <select
-                  id="capital-account"
-                  name="capitalAccountId"
-                  required
-                  className={SELECT}
-                >
-                  {capitalAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.code} — {account.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Field
-                label="Evidence date"
-                name="fundedOn"
-                type="date"
-                required
-                hint="What the slip says. It may be years ago — that is how an opening balance is recorded. The journal entry is dated the day it is verified."
-              />
-
-              <div className="min-w-0">
-                <Label htmlFor="capital-evidence-kind">Evidence</Label>
-                <select
-                  id="capital-evidence-kind"
-                  name="evidenceKind"
-                  required
-                  className={SELECT}
-                  defaultValue="bank_transfer"
-                >
-                  {Object.entries(CAPITAL_EVIDENCE_KIND_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Field
-                label="Evidence reference"
-                name="evidenceReference"
-                required
-                hint="The number on the slip, transfer or cheque. It is what the second Owner checks against."
-              />
-
-              {kind === 'borrowing' ? (
-                <>
-                  <Field
-                    label="Interest rate"
-                    name="interestRateBps"
-                    inputMode="numeric"
-                    hint="In basis points: 1200 is 12%. Leave blank if none is agreed."
-                  />
-                  <Field label="Repayable by" name="repaymentDueOn" type="date" />
-                </>
-              ) : null}
-
-              <div className="sm:col-span-2">
-                <Field label="Note" name="description" />
-              </div>
-
-              <div className="sm:col-span-2">
-                <Button type="submit" disabled={recording}>
-                  {recording ? 'Recording…' : 'Record capital'}
-                </Button>
-              </div>
-            </Card>
-          </form>
+          <RecordCapitalForm
+            destinations={destinations}
+            equityAccounts={equityAccounts}
+            borrowingAccounts={borrowingAccounts}
+          />
         </section>
       ) : null}
 
@@ -308,12 +144,6 @@ export function CapitalRegister({
         <h2 id="capital-register-heading" className="text-text text-sm font-semibold">
           Register
         </h2>
-
-        {verifyResult?.message === undefined ? null : (
-          <Alert tone={verifyResult.ok ? 'success' : 'danger'} className="mt-3">
-            {verifyResult.message}
-          </Alert>
-        )}
 
         {fundings.length === 0 ? (
           <Card className="mt-3 p-4">
@@ -388,15 +218,9 @@ export function CapitalRegister({
                 )}
 
                 {canVerify && funding.status === 'submitted' ? (
-                  <div className="mt-3 min-w-0 space-y-2">
-                    <form action={verify} className="flex flex-wrap items-end gap-2">
-                      <input type="hidden" name="fundingId" value={funding.fundingId} />
-                      <Field label="What you checked" name="note" />
-                      <Button type="submit" disabled={verifying}>
-                        {verifying ? 'Verifying…' : 'Verify and post'}
-                      </Button>
-                    </form>
-                    <ReasonForm
+                  <div className="min-w-0 space-y-2">
+                    <VerifyCapitalForm fundingId={funding.fundingId} />
+                    <CapitalReasonForm
                       fundingId={funding.fundingId}
                       label="Reject"
                       hint="Posts nothing, and cannot be undone: record it again if the evidence turns up."
@@ -406,7 +230,7 @@ export function CapitalRegister({
                 ) : null}
 
                 {canReverse && funding.status === 'verified' ? (
-                  <ReasonForm
+                  <CapitalReasonForm
                     fundingId={funding.fundingId}
                     label="Reverse"
                     hint="Posts the contra. Refused if the money has already been lent out."
@@ -418,50 +242,14 @@ export function CapitalRegister({
           </div>
         )}
       </section>
-    </div>
-  );
-}
 
-/**
- * The two destructive acts, which differ only in which action they call.
- *
- * Both need a reason and the database requires one, so the field is required
- * here too — a form that submitted an empty reason would meet a refusal it
- * could have explained itself.
- */
-function ReasonForm({
-  fundingId,
-  label,
-  hint,
-  action,
-}: {
-  readonly fundingId: string;
-  readonly label: string;
-  readonly hint: string;
-  readonly action: 'reject' | 'reverse';
-}) {
-  const [result, submit, pending] = useActionState<
-    FinanceActionResult | undefined,
-    FormData
-  >(
-    action === 'reject' ? rejectCapitalFundingAction : reverseCapitalFundingAction,
-    undefined,
-  );
-
-  return (
-    <form action={submit} className="mt-3 min-w-0">
-      {result?.message === undefined ? null : (
-        <Alert tone={result.ok ? 'success' : 'danger'} className="mb-2">
-          {result.message}
+      {canRecord && !canOfferForm ? (
+        <Alert tone="info">
+          Capital arrives as money, so it lands in a cash or bank account and credits
+          either the 3000 series or a 2300-series borrowing. The chart of accounts is
+          missing one of those, so there is nothing to record against yet.
         </Alert>
-      )}
-      <input type="hidden" name="fundingId" value={fundingId} />
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label="Because" name="reason" required hint={hint} />
-        <Button type="submit" variant="secondary" disabled={pending}>
-          {pending ? 'Working…' : label}
-        </Button>
-      </div>
-    </form>
+      ) : null}
+    </div>
   );
 }

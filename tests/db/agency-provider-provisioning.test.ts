@@ -40,6 +40,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   asUser,
   asUserCommitted,
+  asUserScript,
   createTestUser,
   type TestUser,
 } from '../helpers/auth-fixtures';
@@ -57,7 +58,12 @@ describeDb('registering a bank, and bringing it live', () => {
   let registrar: TestUser;
   /** The second Owner. Approves terms, the facility, and going live. */
   let approver: TestUser;
-  /** A Manager: holds agency:verify, and not agency:verify_high_value. */
+  /**
+   * A Manager: holds `agency:verify` and, under the approved threshold
+   * policy, `agency:verify_high_value` too. The clerk below is the account
+   * that holds neither, which is what the capability refusals are measured
+   * against now.
+   */
   let manager: TestUser;
   /** A front-office account, to prove the capability is the gate. */
   let clerk: TestUser;
@@ -1112,27 +1118,104 @@ describeDb('registering a bank, and bringing it live', () => {
       ]);
       expect(byManager.ok, byManager.message).toBe(true);
 
-      const above = await draft(1_500_000, `ABOVE-${code('R')}`);
-      const refused = await asUser(
-        manager,
-        `select public.verify_agency_transaction($1)`,
-        [above],
-      );
-      expect(refused.ok).toBe(false);
-      expect(refused.code).toBe('SD001');
-      expect(refused.message).toMatch(/above the .* threshold/i);
+      /*
+        Above the threshold, a Manager may verify — and must not be the
+        officer who recorded it.
 
-      const byOwner = await asUserCommitted(approver, [
+        This asserted the opposite until migration 20261122000100. Operational
+        task 5 implemented the threshold as Owner-only, which was a guess at
+        decision L; the approved policy is an independent Manager or Owner,
+        the rule this business already approved for bank deposits as Decision
+        A rule 8. The test was wrong about the policy, not about the mechanism,
+        so what changes here is who is allowed and not what is enforced.
+      */
+      const above = await draft(1_500_000, `ABOVE-${code('R')}`);
+      const byManagerAbove = await asUserCommitted(manager, [
         { sql: `select public.verify_agency_transaction($1)`, params: [above] },
+      ]);
+      expect(byManagerAbove.ok, byManagerAbove.message).toBe(true);
+
+      // And the Owner may too, which is the other half of "Manager or Owner".
+      const ownerAbove = await draft(1_600_000, `OWNERABOVE-${code('R')}`);
+      const byOwner = await asUserCommitted(approver, [
+        { sql: `select public.verify_agency_transaction($1)`, params: [ownerAbove] },
       ]);
       expect(byOwner.ok, byOwner.message).toBe(true);
 
-      // The guarantee, not the courtesy: a route that stamps a Manager as the
-      // verifier and posts directly is refused by the trigger.
+      /*
+        Separation of duties is untouched by the policy change: the officer
+        who recorded an above-threshold transaction still cannot verify it,
+        whatever capabilities they hold. Recorded by the clerk and attempted
+        by the clerk — who holds no verification capability at all — and then
+        by a Manager who *is* the recorder, which is the case the policy could
+        have quietly opened.
+      */
+      const mine = await asUserCommitted(manager, [
+        {
+          sql: `select public.create_agency_transaction(
+                  p_transaction_type_id => $1,
+                  p_principal_amount => 1700000::bigint,
+                  p_float_account_id => $2,
+                  p_customer_identifier => $3,
+                  p_customer_name => 'Own Work',
+                  p_provider_reference => $3,
+                  p_customer_fee => 0::bigint,
+                  p_branch_id => $4)::text as id`,
+          params: [typeId, accountId, `OWN-${code('R')}`, branch],
+        },
+      ]);
+      const mineId = String(mine.rows[0]?.id);
+      await asUserCommitted(manager, [
+        { sql: `select public.submit_agency_transaction($1)`, params: [mineId] },
+      ]);
+      const ownWork = await asUser(
+        manager,
+        `select public.verify_agency_transaction($1)`,
+        [mineId],
+      );
+      expect(ownWork.ok).toBe(false);
+      expect(ownWork.code).toBe('SD001');
+      expect(ownWork.message).toMatch(
+        /cannot be verified by the person who recorded it/i,
+      );
+
+      /*
+        The capability gate itself still works, and the policy really is a
+        grant rather than a rule welded into a posting path.
+
+        Revoking the Manager's `agency:verify_high_value` — which is exactly
+        how the Owner would return to Owner-only — makes the same Manager be
+        refused above the threshold again. Rolled back, so the grant is intact
+        for every other test. This is the assertion that would have been lost
+        by simply deleting the old "Manager is refused" case.
+      */
+      const withoutGrant = await asUserScript(manager, [
+        {
+          sql: `delete from public.role_permissions
+                 where role_key = 'manager' and permission_key = 'agency:verify_high_value'`,
+        },
+        { sql: `select public.verify_agency_transaction($1)`, params: [above] },
+      ]);
+      expect(withoutGrant.ok).toBe(false);
+      expect(withoutGrant.code).toBe('SD001');
+
+      const stillGranted = await queryOne<{ count: string }>(
+        `select count(*)::text as count from public.role_permissions
+          where role_key = 'manager' and permission_key = 'agency:verify_high_value'`,
+      );
+      expect(stillGranted.count, 'the revoke must have rolled back').toBe('1');
+
+      /*
+        The guarantee, not the courtesy: the trigger reads the authority
+        recorded on the row, so a route that stamps somebody without the
+        capability and posts directly is still refused. The clerk holds no
+        agency verification capability of any kind, which is what makes this
+        a real test now that the Manager holds one.
+      */
       const direct = await draft(2_000_000, `DIRECT-${code('R')}`);
       await query(
         `update public.agency_transactions set verified_by = $2 where id = $1`,
-        [direct, manager.profileId],
+        [direct, clerk.profileId],
       );
       const posted = await query(`select public.post_agency_transaction($1)`, [
         direct,
@@ -1141,7 +1224,7 @@ describeDb('registering a bank, and bringing it live', () => {
         (error: Error) => error.message,
       );
       expect(posted).not.toBe('allowed');
-      expect(posted).toMatch(/authorized to approve amounts above it/i);
+      expect(posted).toMatch(/authorized Manager or Owner/i);
 
       expect(providerId).toBeTruthy();
     });
