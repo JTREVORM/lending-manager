@@ -39,7 +39,14 @@ import { parseSafely } from '@/lib/validation/validate';
 import {
   agencyAccountStaffRevocationSchema,
   agencyAccountStaffSchema,
+  agencyAgentAccountSchema,
+  agencyFloatFacilitySchema,
+  agencyProviderActivationSchema,
+  agencyProviderDeactivationSchema,
   agencyProviderFloatModelSchema,
+  agencyProviderRegistrationSchema,
+  agencyProviderTermsApprovalSchema,
+  agencyProviderTermsRevisionSchema,
   agencyTransactionIdSchema,
   agentLineClosureSchema,
   agentLineRegistrationSchema,
@@ -68,6 +75,7 @@ import {
   cashBankingSchema,
   cashBankingVerificationSchema,
   serviceLimitSchema,
+  serviceThresholdSchema,
   settlementReversalSchema,
 } from '@/lib/validation/agency';
 import type { ActionResult } from '@/lib/auth/actions';
@@ -1529,5 +1537,282 @@ export async function setAgencyProviderFloatModelAction(
       ? 'Corrected. This provider supplies electronic float, and float accounts can now be opened against it.'
       : 'Corrected. Customer money taken on this provider is now owed on the liability you named.',
     data,
+  );
+}
+
+// ===========================================================================
+// Operational tasks 1, 2 and 5 — registering a partner, and bringing it live
+//
+// Four of these end in the database refusing the *caller* for being the
+// person who registered the provider: SQLSTATE SD001, which `settle` maps
+// through `mapDatabaseError` to "A different authorized officer must complete
+// this action." Nothing here checks that rule itself. It depends on who
+// registered a row, which this module does not know and must not guess.
+// ===========================================================================
+
+export async function registerAgencyProviderAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderRegistrationSchema, {
+    code: formData.get('code'),
+    name: formData.get('name'),
+    category: formData.get('category'),
+    floatModel: formData.get('floatModel'),
+    commissionModel: formData.get('commissionModel'),
+    commissionSource: formData.get('commissionSource') ?? 'configured',
+    commissionRateBps: formData.get('commissionRateBps') ?? null,
+    commissionFixed: formData.get('commissionFixed') ?? null,
+    termsReference: formData.get('termsReference') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('register_agency_provider', {
+    p_code: input.code,
+    p_name: input.name,
+    p_category: input.category,
+    p_float_model: input.floatModel,
+    p_commission_model: input.commissionModel,
+    p_commission_source: input.commissionSource,
+    p_commission_rate_bps: input.commissionRateBps ?? null,
+    p_commission_fixed: input.commissionFixed ?? null,
+    p_terms_reference: input.termsReference ?? null,
+  });
+  return settle(
+    error,
+    'Registering a provider',
+    'Provider registered. Its terms are not approved and it is not live: a second Owner or Administrator must approve them, and going live is a separate authorization.',
+    data,
+  );
+}
+
+export async function reviseAgencyProviderTermsAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderTermsRevisionSchema, {
+    providerId: formData.get('providerId'),
+    commissionModel: formData.get('commissionModel') ?? null,
+    commissionSource: formData.get('commissionSource') ?? null,
+    commissionRateBps: formData.get('commissionRateBps') ?? null,
+    commissionFixed: formData.get('commissionFixed') ?? null,
+    termsReference: formData.get('termsReference') ?? null,
+    clearRate: formData.get('clearRate') ?? null,
+    clearFixed: formData.get('clearFixed') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('revise_agency_provider_terms', {
+    p_provider_id: input.providerId,
+    p_commission_model: input.commissionModel ?? null,
+    p_commission_source: input.commissionSource ?? null,
+    p_commission_rate_bps: input.commissionRateBps ?? null,
+    p_commission_fixed: input.commissionFixed ?? null,
+    p_terms_reference: input.termsReference ?? null,
+    p_clear_rate: input.clearRate === 'true',
+    p_clear_fixed: input.clearFixed === 'true',
+  });
+  return settle(error, 'Revising a provider’s terms', 'Proposed terms updated.');
+}
+
+export async function approveAgencyProviderTermsAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:provider_approval', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderTermsApprovalSchema, {
+    providerId: formData.get('providerId'),
+    termsReference: formData.get('termsReference'),
+    note: formData.get('note') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('approve_agency_provider_terms', {
+    p_provider_id: input.providerId,
+    p_terms_reference: input.termsReference,
+    p_note: input.note ?? null,
+  });
+  return settle(
+    error,
+    'Approving a provider’s terms',
+    'Commercial terms approved. The provider is still not live: that is a separate authorization.',
+  );
+}
+
+export async function setAgencyFloatFacilityAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:provider_approval', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyFloatFacilitySchema, {
+    providerId: formData.get('providerId'),
+    limit: formData.get('limit'),
+    reference: formData.get('reference'),
+    note: formData.get('note') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('set_agency_float_facility', {
+    p_provider_id: input.providerId,
+    p_limit: input.limit,
+    p_reference: input.reference,
+    p_note: input.note ?? null,
+  });
+  return settle(
+    error,
+    'Approving a float facility',
+    'Float facility approved. Float cannot be replenished or purchased above it.',
+  );
+}
+
+export async function setServiceThresholdAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(serviceThresholdSchema, {
+    transactionTypeId: formData.get('transactionTypeId'),
+    requiresApprovalAbove: formData.get('requiresApprovalAbove'),
+    reason: formData.get('reason') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('set_agency_service_threshold', {
+    p_transaction_type_id: input.transactionTypeId,
+    p_requires_approval_above: input.requiresApprovalAbove,
+    p_reason: input.reason ?? null,
+  });
+  return settle(
+    error,
+    'Setting an approval threshold',
+    'Approval threshold set. Above it, only the Owner may verify a transaction.',
+  );
+}
+
+export async function registerAgencyAgentAccountAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:providers', 'agency.configure');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyAgentAccountSchema, {
+    providerId: formData.get('providerId'),
+    branchId: formData.get('branchId'),
+    tillName: formData.get('tillName'),
+    label: formData.get('label') ?? null,
+    lineMsisdn: formData.get('lineMsisdn') ?? null,
+    agentCode: formData.get('agentCode') ?? null,
+    bankAccountNumber: formData.get('bankAccountNumber') ?? null,
+    openedOn: formData.get('openedOn') ?? null,
+    notes: formData.get('notes') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('register_agency_agent_line', {
+    p_provider_id: input.providerId,
+    p_branch_id: input.branchId,
+    p_till_name: input.tillName,
+    p_label: input.label ?? null,
+    p_line_msisdn: input.lineMsisdn ?? null,
+    p_agent_code: input.agentCode ?? null,
+    p_opened_on: input.openedOn ?? null,
+    p_notes: input.notes ?? null,
+    p_bank_account_number: input.bankAccountNumber ?? null,
+  });
+  return settle(error, 'Registering an agent account', 'Agent account registered.', data);
+}
+
+export async function activateAgencyProviderAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:provider_approval', 'agency.lifecycle');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderActivationSchema, {
+    providerId: formData.get('providerId'),
+    authorizationReference: formData.get('authorizationReference'),
+    note: formData.get('note') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('activate_agency_provider', {
+    p_provider_id: input.providerId,
+    p_authorization_reference: input.authorizationReference,
+    p_note: input.note ?? null,
+  });
+  return settle(
+    error,
+    'Making a provider live',
+    'Provider is live. Transactions may now be recorded and posted against it.',
+  );
+}
+
+export async function deactivateAgencyProviderAction(
+  _previous: AgencyActionResult | undefined,
+  formData: FormData,
+): Promise<AgencyActionResult> {
+  const allowed = await authorize('agency:provider_approval', 'agency.lifecycle');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(agencyProviderDeactivationSchema, {
+    providerId: formData.get('providerId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc('deactivate_agency_provider', {
+    p_provider_id: input.providerId,
+    p_reason: input.reason,
+  });
+  return settle(
+    error,
+    'Taking a provider out of service',
+    'Provider is out of service. Nothing further may be posted against it; corrections to what is already posted are still possible.',
   );
 }

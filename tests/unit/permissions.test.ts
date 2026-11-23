@@ -460,6 +460,22 @@ describe('authorization matrix', () => {
     'agency:commission_exception': ['owner_admin'],
     'agency:variance_adjustment': ['owner_admin'],
     'agency:reports': ['secretary_treasurer', 'manager', 'owner_admin'],
+
+    // Operational tasks 1 and 5. Both the Owner's alone, and both separate
+    // from `agency:providers`, which the Owner also holds: the separation of
+    // duties inside the database is between two *people* holding these, not
+    // between two roles.
+    'agency:provider_approval': ['owner_admin'],
+    // The approved policy: an independent Manager or Owner. Owner-only was a
+    // guess at decision L and migration 20261122000100 corrected it.
+    'agency:verify_high_value': ['manager', 'owner_admin'],
+
+    // Operational task 3. A Manager records capital and reads the register;
+    // only the Owner verifies it into the ledger or reverses it.
+    'capital:view': ['manager', 'owner_admin'],
+    'capital:record': ['manager', 'owner_admin'],
+    'capital:verify': ['owner_admin'],
+    'capital:reverse': ['owner_admin'],
   };
 
   it('covers every declared permission', () => {

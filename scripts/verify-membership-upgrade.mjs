@@ -218,6 +218,20 @@ const PHASE_PREFIXES = [
   // than the SQLSTATE, and that is precisely the mistake a mechanical rewrite
   // of fourteen function bodies is most likely to make.
   '20261121',
+  // The approved threshold policy (20261122000100). Unreleased, like
+  // everything above it.
+  //
+  // Cheap to prove and worth proving for the same reason L7 above is: it
+  // replaces `verify_agency_transaction()`, which posts money, and it is
+  // supposed to change only who may verify above a service's threshold and
+  // the wording of two refusals. The grant it adds moves nothing by itself.
+  //
+  // So if a single figure moves across this migration, the replacement body
+  // differs from the original somewhere other than the policy — which is
+  // precisely the mistake carrying a posting function's body across by hand
+  // invites, and precisely what the financial reconciliation either side of
+  // it is here to catch.
+  '20261122',
 ];
 
 const isPhaseMigration = (name) =>

@@ -5203,6 +5203,26 @@ export type Database = {
           is_active: boolean;
           created_at: string;
           updated_at: string;
+          // Operational task 1: the terms-approval trail.
+          registered_by: string | null;
+          registered_at: string | null;
+          terms_reference: string | null;
+          terms_approved_by: string | null;
+          terms_approved_at: string | null;
+          terms_approval_note: string | null;
+          // Operational task 5: the float facility and the activation trail.
+          float_facility_limit: number | null;
+          facility_reference: string | null;
+          facility_approved_by: string | null;
+          facility_approved_at: string | null;
+          facility_note: string | null;
+          activated_by: string | null;
+          activated_at: string | null;
+          activation_reference: string | null;
+          activation_note: string | null;
+          deactivated_by: string | null;
+          deactivated_at: string | null;
+          deactivation_reason: string | null;
         };
         Insert: {
           id?: string;
@@ -5291,7 +5311,12 @@ export type Database = {
           id: string;
           provider_id: string;
           branch_id: string;
-          ledger_account_id: string;
+          // Operational task 2: NULL for a cash_payable partner's agent
+          // account, which owns no electronic float because POLYTOS holds
+          // none for it. `holds_float` on the register view is derived from
+          // exactly this.
+          ledger_account_id: string | null;
+          bank_account_number: string | null;
           till_name: string;
           is_active: boolean;
           created_at: string;
@@ -5997,8 +6022,212 @@ export type Database = {
         };
         Relationships: [];
       };
+
+      // --- Operational task 3: capital introduced into the business -------
+      //
+      // Equity credits the 3000 series and is not repayable; a borrowing
+      // credits a 2300-series liability and is. Recording posts nothing; the
+      // journal is written by a second officer's verification.
+      capital_fundings: {
+        Row: {
+          id: string;
+          funding_number: string;
+          branch_id: string;
+          funding_kind: string;
+          amount: number;
+          destination_account_id: string;
+          capital_account_id: string;
+          funder_name: string;
+          interest_rate_bps: number | null;
+          repayment_due_on: string | null;
+          funded_on: string;
+          evidence_kind: string;
+          evidence_reference: string;
+          description: string | null;
+          status: string;
+          recorded_by: string | null;
+          recorded_by_label: string;
+          verified_by: string | null;
+          verified_by_label: string | null;
+          verified_at: string | null;
+          verification_note: string | null;
+          rejected_by: string | null;
+          rejected_by_label: string | null;
+          rejected_at: string | null;
+          rejection_reason: string | null;
+          reversed_by: string | null;
+          reversed_by_label: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+          journal_entry_id: string | null;
+          reversal_entry_id: string | null;
+          idempotency_key: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          funding_number?: string;
+          branch_id: string;
+          funding_kind: string;
+          amount: number;
+          destination_account_id: string;
+          capital_account_id: string;
+          funder_name: string;
+          interest_rate_bps?: number | null;
+          repayment_due_on?: string | null;
+          funded_on: string;
+          evidence_kind: string;
+          evidence_reference: string;
+          description?: string | null;
+          status?: string;
+          recorded_by?: string | null;
+          recorded_by_label: string;
+          idempotency_key: string;
+        };
+        Update: {
+          status?: string;
+          verified_by?: string | null;
+          verified_by_label?: string | null;
+          verified_at?: string | null;
+          verification_note?: string | null;
+          rejected_by?: string | null;
+          rejected_by_label?: string | null;
+          rejected_at?: string | null;
+          rejection_reason?: string | null;
+          reversed_by?: string | null;
+          reversed_by_label?: string | null;
+          reversed_at?: string | null;
+          reversal_reason?: string | null;
+          journal_entry_id?: string | null;
+          reversal_entry_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
+      // --- Operational task 2: the agent-account register -------------------
+      //
+      // Every registered agent account of every partner, on either float
+      // model, with the partner's own account number and agent identifier.
+      // `holds_float` is false for a cash_payable partner's account, which
+      // owns no float ledger account by design. `security_invoker`.
+      agency_agent_account_register: {
+        Row: {
+          agent_account_id: string | null;
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          provider_category: string | null;
+          float_model: string | null;
+          provider_is_provisional: boolean | null;
+          provider_is_active: boolean | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          till_name: string | null;
+          label: string | null;
+          agent_code: string | null;
+          bank_account_number: string | null;
+          line_msisdn: string | null;
+          ledger_account_id: string | null;
+          float_account_code: string | null;
+          holds_float: boolean | null;
+          status: string | null;
+          status_reason: string | null;
+          opened_on: string | null;
+          closed_on: string | null;
+          notes: string | null;
+          active_staff: number | null;
+        };
+        Relationships: [];
+      };
+
+      // --- Operational task 5: what has to be true before a provider is live
+      //
+      // Each precondition answered separately, and `ready_to_activate` for
+      // all of them together. `ready_to_activate` says the configuration is
+      // complete; it does not say the authorization has been given, which is
+      // a person's decision. `security_invoker`.
+      agency_provider_readiness: {
+        Row: {
+          provider_id: string | null;
+          provider_code: string | null;
+          provider_name: string | null;
+          category: string | null;
+          float_model: string | null;
+          commission_model: string | null;
+          commission_source: string | null;
+          commission_rate_bps: number | null;
+          commission_fixed: number | null;
+          is_provisional: boolean | null;
+          is_active: boolean | null;
+          terms_reference: string | null;
+          terms_approved_at: string | null;
+          float_facility_limit: number | null;
+          facility_reference: string | null;
+          facility_approved_at: string | null;
+          activation_reference: string | null;
+          activated_at: string | null;
+          deactivated_at: string | null;
+          deactivation_reason: string | null;
+          terms_approved: boolean | null;
+          commission_decided: boolean | null;
+          facility_approved: boolean | null;
+          services_with_ceiling: number | null;
+          services_with_threshold: number | null;
+          open_agent_accounts: number | null;
+          float_held: number | null;
+          ready_to_activate: boolean | null;
+        };
+        Relationships: [];
+      };
+
+      // --- Operational task 3: the capital register -------------------------
+      //
+      // Capital introduced, with its kind, its evidence, both ledger accounts
+      // and the whole maker-checker trail. `security_invoker`.
+      capital_funding_register: {
+        Row: {
+          funding_id: string | null;
+          funding_number: string | null;
+          branch_id: string | null;
+          branch_code: string | null;
+          branch_name: string | null;
+          funding_kind: string | null;
+          amount: number | null;
+          funder_name: string | null;
+          interest_rate_bps: number | null;
+          repayment_due_on: string | null;
+          funded_on: string | null;
+          evidence_kind: string | null;
+          evidence_reference: string | null;
+          description: string | null;
+          status: string | null;
+          destination_account_code: string | null;
+          destination_account_name: string | null;
+          capital_account_code: string | null;
+          capital_account_name: string | null;
+          recorded_by_label: string | null;
+          recorded_at: string | null;
+          verified_by_label: string | null;
+          verified_at: string | null;
+          verification_note: string | null;
+          rejected_by_label: string | null;
+          rejected_at: string | null;
+          rejection_reason: string | null;
+          reversed_by_label: string | null;
+          reversed_at: string | null;
+          reversal_reason: string | null;
+          journal_entry_id: string | null;
+          journal_entry_number: string | null;
+          journal_entry_date: string | null;
+          reversal_entry_id: string | null;
+        };
+        Relationships: [];
+      };
+
       // --- The Agency redesign: the roster, as a screen reads it ------------
       //
       // `security_invoker`, so the table's own branch-scoped policy decides
@@ -8143,6 +8372,110 @@ export type Database = {
     };
 
     Functions: {
+      // --- Operational tasks 1, 2 and 5 -----------------------------------
+      register_agency_provider: {
+        Args: {
+          p_code: string;
+          p_name: string;
+          p_category: string;
+          p_float_model: string;
+          p_commission_model: string;
+          p_commission_source?: string;
+          p_commission_rate_bps?: number | null;
+          p_commission_fixed?: number | null;
+          p_terms_reference?: string | null;
+        };
+        Returns: string;
+      };
+      revise_agency_provider_terms: {
+        Args: {
+          p_provider_id: string;
+          p_commission_model?: string | null;
+          p_commission_source?: string | null;
+          p_commission_rate_bps?: number | null;
+          p_commission_fixed?: number | null;
+          p_terms_reference?: string | null;
+          p_clear_rate?: boolean;
+          p_clear_fixed?: boolean;
+        };
+        Returns: undefined;
+      };
+      approve_agency_provider_terms: {
+        Args: {
+          p_provider_id: string;
+          p_terms_reference?: string | null;
+          p_note?: string | null;
+        };
+        Returns: undefined;
+      };
+      agency_category_income_code: {
+        Args: { p_category: string };
+        Returns: string | null;
+      };
+      agency_category_payable_code: {
+        Args: { p_category: string };
+        Returns: string | null;
+      };
+      set_agency_float_facility: {
+        Args: {
+          p_provider_id: string;
+          p_limit: number;
+          p_reference: string;
+          p_note?: string | null;
+        };
+        Returns: undefined;
+      };
+      set_agency_service_threshold: {
+        Args: {
+          p_transaction_type_id: string;
+          p_requires_approval_above: number;
+          p_reason?: string | null;
+        };
+        Returns: string;
+      };
+      activate_agency_provider: {
+        Args: {
+          p_provider_id: string;
+          p_authorization_reference: string;
+          p_note?: string | null;
+        };
+        Returns: undefined;
+      };
+      deactivate_agency_provider: {
+        Args: { p_provider_id: string; p_reason: string };
+        Returns: undefined;
+      };
+
+      // --- Operational task 3 ---------------------------------------------
+      record_capital_funding: {
+        Args: {
+          p_funding_kind: string;
+          p_amount: number;
+          p_destination_account_id: string;
+          p_capital_account_id: string;
+          p_funder_name: string;
+          p_funded_on: string;
+          p_evidence_kind: string;
+          p_evidence_reference: string;
+          p_idempotency_key: string;
+          p_interest_rate_bps?: number | null;
+          p_repayment_due_on?: string | null;
+          p_description?: string | null;
+        };
+        Returns: string;
+      };
+      verify_capital_funding: {
+        Args: { p_funding_id: string; p_note?: string | null };
+        Returns: string;
+      };
+      reject_capital_funding: {
+        Args: { p_funding_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      reverse_capital_funding: {
+        Args: { p_funding_id: string; p_reason: string };
+        Returns: string;
+      };
       // --- The Agency redesign: the roster and the float-model correction ---
       //
       // `agency_may_operate_account` is the rule every enforcing path reads:
@@ -8465,6 +8798,10 @@ export type Database = {
           p_agent_code?: string | null;
           p_opened_on?: string | null;
           p_notes?: string | null;
+          // Operational task 2. The number the partner identifies this
+          // account by, and the only identification a cash_payable account
+          // has — it owns no float ledger account.
+          p_bank_account_number?: string | null;
         };
         Returns: string;
       };
@@ -8514,6 +8851,7 @@ export type Database = {
           p_line_msisdn?: string | null;
           p_agent_code?: string | null;
           p_notes?: string | null;
+          p_bank_account_number?: string | null;
         };
         Returns: undefined;
       };

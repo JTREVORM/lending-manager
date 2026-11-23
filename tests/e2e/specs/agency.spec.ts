@@ -221,40 +221,93 @@ test.describe('what the interface refuses to pretend', () => {
     await expect(page.getByLabel(/commission/i)).toHaveCount(0);
   });
 
-  test('the approval threshold is shown and marked as not enforced', async ({ page }) => {
+  test('the approval threshold is presented as the control it now is', async ({
+    page,
+  }) => {
     await page.goto('/agency/providers');
 
+    // This test asserted the opposite until the operational tasks: the screen
+    // said "the approval threshold is not enforced", struck the figure
+    // through, and this looked for those words. Decision L was open and the
+    // posting engine genuinely did not read the column.
+    //
+    // It reads it now — `verify_agency_transaction()` refuses a verifier
+    // without `agency:verify_high_value`, and a trigger refuses the
+    // transition into `posted` whatever route stamped the verifier — so the
+    // honest assertion is that the screen says so. A test that still
+    // demanded the disclaimer would be holding the page to a limitation the
+    // product no longer has.
     await expect(
       page
-        .getByText(/approval threshold is not enforced/i)
+        .getByText(/needs a second, independent approval|second approval above/i)
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
+
+    // And it names who may give that approval, which is the part an officer
+    // acts on: the approved policy is an independent Manager or Owner.
+    await expect(
+      page
+        .getByText(/Manager and the Owner hold/i)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
+
+    // The figure is no longer struck through, because nothing about it is
+    // void. `line-through` on a money column was the old presentation of
+    // "configured and ignored".
+    await expect(page.locator('main .line-through')).toHaveCount(0);
   });
 
-  test('provider configuration says what cannot be changed here', async ({ page }) => {
+  test('provider configuration offers the workflow, and says who may not use it', async ({
+    page,
+  }) => {
     await page.goto('/agency/providers');
 
-    // This screen used to say "Read-only", and that assertion was right until
-    // the Owner's decision 1 added one writer: the correction that moves a
-    // *provisional* provider between the two float models. The page is no
-    // longer read-only, so the word had to go — and the assertion has to
-    // follow the page rather than the page follow the assertion.
+    // What this asserted before: that the screen said "approving its
+    // commercial terms or making it live is not a screen in this release",
+    // and that no register or activate button existed. Both were true and
+    // both were the gap the operational tasks were asked to close, so the
+    // assertion had to follow the product.
     //
-    // What must still hold is the part that matters: commercial terms cannot
-    // be changed and no provider can be activated from here, because the
-    // approval workflow for terms has not been decided.
+    // What replaces it is the part that still matters, and it is a stronger
+    // claim than the absence of a button: the screen offers the workflow
+    // *and* states the separation of duties the database enforces. A panel
+    // that let an Owner approve their own registration would pass the old
+    // test and fail this one.
+    await expect(page.getByRole('button', { name: /register provider/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /approve terms/i })).toBeVisible();
+    // The panel, not the button. "Make live" only renders when some provider
+    // is actually ready to activate, and in the seeded preview none is: no
+    // provider has an approved float facility, so every provider_float one
+    // fails that precondition, and the two cash_payable ones are still
+    // provisional. The button's absence is the readiness gate doing its job,
+    // so asserting it would be asserting the seed rather than the screen.
     await expect(
       page
-        .getByText(/approving its commercial terms or making it live is not a screen/i)
+        .getByText(/Make a provider live, or take it out of service/i)
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
 
-    // And there is no form pretending otherwise.
+    for (const warning of [
+      /cannot approve a provider you registered/i,
+      /cannot authorize a provider you registered/i,
+    ]) {
+      await expect(
+        page.getByText(warning).filter({ visible: true }).first(),
+        String(warning),
+      ).toBeVisible();
+    }
+
+    // And registering still does not make anything live, which is the claim
+    // the whole provisioning sequence rests on.
     await expect(
-      page.getByRole('button', { name: /register|activate|save/i }),
-    ).toHaveCount(0);
+      page
+        .getByText(/does not.{0,20}make it live|provisional and inactive/i)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
   });
 
   test('the one thing it can change is scoped to a provisional provider', async ({

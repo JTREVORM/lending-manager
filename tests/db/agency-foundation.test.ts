@@ -1079,10 +1079,38 @@ describeDb('Phase 4A — agency banking foundation', () => {
       expect(err?.message).toMatch(/no maximum single transaction/i);
     });
 
+    /*
+      Both of the next two carry an approval trail, and neither is about one.
+
+      Operational task 1 added `agency_provider_terms_approval_guard()`, a
+      BEFORE UPDATE trigger that refuses the transition out of provisional
+      unless the row names who approved the terms and the agreement they were
+      checked against. A BEFORE trigger runs ahead of the CHECK constraints,
+      so without the trail these two would be refused by the trigger and would
+      stop measuring what they exist to measure — the first would report no
+      constraint at all rather than the commission one.
+
+      So the trail is supplied, which leaves the commission constraint as the
+      only thing that can refuse the first statement and nothing to refuse the
+      second. The approval guard has its own coverage in
+      `agency-provider-provisioning.test.ts`.
+
+      The second statement also no longer sets `is_active`. It never needed
+      to — the subject is *confirming* a provider, `expectError` rolls back so
+      nothing downstream saw the flag, and operational task 5 made going live
+      an authorization with five preconditions of its own. Leaving it in would
+      have meant this test failing for a reason it is not about.
+    */
+    const APPROVAL_TRAIL = `
+      terms_approved_by = (select id from public.profiles order by created_at limit 1),
+      terms_approved_at = now(),
+      terms_reference = 'fixture approval'`;
+
     it('refuses to confirm a provider with no commission basis', async () => {
       const err = await expectError(
         `update public.agency_service_providers
-            set is_provisional = false where code = 'MTN_MOMO'`,
+            set is_provisional = false, ${APPROVAL_TRAIL}
+          where code = 'MTN_MOMO'`,
       );
       expect(err?.constraint).toBe('agency_providers_confirmed_states_commission');
     });
@@ -1090,7 +1118,8 @@ describeDb('Phase 4A — agency banking foundation', () => {
     it('allows confirming a provider once its commission is stated', async () => {
       const err = await expectError(
         `update public.agency_service_providers
-            set commission_rate_bps = 150, is_provisional = false, is_active = true
+            set commission_rate_bps = 150, is_provisional = false,
+                ${APPROVAL_TRAIL}
           where code = 'MTN_MOMO'`,
       );
       expect(err).toBeNull();

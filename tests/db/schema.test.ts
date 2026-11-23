@@ -87,6 +87,9 @@ describeDb('tables', () => {
     // Phase 10: the branch network and the double-entry ledger.
     'branches',
     'business_settings',
+    // Operational task 3: the money the business was started and funded with
+    // — the owner's own contributions, and what it has borrowed.
+    'capital_fundings',
     // Phase 3: the lending-business customer record, its sensitive half, the
     // guarantors who vouch for them, the association between the two, and the
     // append-only staff commentary.
@@ -455,8 +458,17 @@ describeDb('foreign keys', () => {
       'agency_provider_float_accounts.provider_id -> agency_service_providers (r)',
       'agency_provider_float_accounts.status_changed_by -> profiles (n)',
       'agency_provider_float_accounts.updated_by -> profiles (n)',
+      // Operational tasks 1 and 5. The approval, facility and activation
+      // trail. `n` on every one, as on provenance everywhere else here: an
+      // archived officer's row is worth less than NULL, and the audit log
+      // keeps the name and the instrument the decision was taken under.
+      'agency_service_providers.activated_by -> profiles (n)',
+      'agency_service_providers.deactivated_by -> profiles (n)',
+      'agency_service_providers.facility_approved_by -> profiles (n)',
       'agency_service_providers.income_account_id -> ledger_accounts (r)',
       'agency_service_providers.payable_account_id -> ledger_accounts (r)',
+      'agency_service_providers.registered_by -> profiles (n)',
+      'agency_service_providers.terms_approved_by -> profiles (n)',
       'agency_transaction_audit_log.actor_id -> profiles (r)',
       'agency_transaction_audit_log.transaction_id -> agency_transactions (r)',
       'agency_transaction_types.provider_id -> agency_service_providers (r)',
@@ -557,6 +569,19 @@ describeDb('foreign keys', () => {
       'branches.manager_profile_id -> profiles (n)',
       'business_settings.default_repayment_frequency -> repayment_frequencies (r)',
       'business_settings.updated_by -> profiles (r)',
+      // Operational task 3. RESTRICT on the branch, both ledger accounts and
+      // both journal entries: a posted capital entry is the opening of the
+      // books, and nothing it names may be deleted out from under it. `n` on
+      // the four officers, as on provenance everywhere else.
+      'capital_fundings.branch_id -> branches (r)',
+      'capital_fundings.capital_account_id -> ledger_accounts (r)',
+      'capital_fundings.destination_account_id -> ledger_accounts (r)',
+      'capital_fundings.journal_entry_id -> journal_entries (r)',
+      'capital_fundings.recorded_by -> profiles (n)',
+      'capital_fundings.rejected_by -> profiles (n)',
+      'capital_fundings.reversal_entry_id -> journal_entries (r)',
+      'capital_fundings.reversed_by -> profiles (n)',
+      'capital_fundings.verified_by -> profiles (n)',
       // Phase 3. `c` cascades: a client's identity row, remarks and guarantor
       // associations are parts of that client, not independent records.
       // `r` restricts: a guarantor with an association cannot be removed, and

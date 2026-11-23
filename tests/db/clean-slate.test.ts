@@ -241,6 +241,8 @@ describeDb('the clean slate', () => {
       transfer: 'account_transfers',
       reconciliation: 'account_reconciliations',
       bank_deposit: 'bank_deposits',
+      // Operational task 3.
+      capital_funding: 'capital_fundings',
       membership: 'memberships',
       membership_fee: 'membership_fee_receipts',
       membership_card: 'membership_cards',

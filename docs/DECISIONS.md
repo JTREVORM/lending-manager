@@ -3270,3 +3270,146 @@ which of the two lists it has.
 
 The empty-list branch is kept as the fallback it actually is, reworded from a
 claim about permissions to a statement about the read.
+
+---
+
+## ADR-072 — A control on the transition, not a constraint on the state
+
+**Status.** Accepted. Operational tasks 1 and 5.
+
+**Context.** Two facts about an agency provider had to become impossible to
+assert without authority: that its commercial terms are approved
+(`is_provisional = false`), and that it is live (`is_active = true`).
+
+The obvious instrument is a `CHECK`. It is the stronger statement — it holds
+over every row at every moment, including rows a migration writes — and it was
+written first:
+
+```sql
+check (is_provisional
+       or (terms_approved_by is not null
+           and terms_approved_at is not null
+           and btrim(coalesce(terms_reference, '')) <> ''))
+```
+
+It failed the database suite in ten files. Not because the control was wrong,
+but because dozens of fixtures insert a confirmed, active provider in a single
+statement — they are setting up a counter to test posting, commission or
+reconciliation against, and none of them has an opinion about approval. The
+same is true of the demo seeder and of the provisional catalogue itself.
+
+**Decision.** The authority is enforced on the **transition**, by a trigger,
+not on the **state**, by a constraint. `agency_provider_terms_approval_guard()`
+refuses an update that moves `is_provisional` from true to false without a
+complete approval trail, and refuses it with `SD001` where the approver is the
+registrant. `agency_provider_activation_guard()` does the same for
+`is_active`. The same reasoning governs `capital_fundings`, where the
+maker-checker rules *are* constraints — because that table has no fixtures that
+need to describe a world, only documents that record decisions.
+
+**Why.**
+
+1. **The reachable surface is identical.** `authenticated` holds nothing but
+   `SELECT` on `agency_service_providers`. Every route a user can take passes
+   through a `SECURITY DEFINER` function, and the trigger binds those functions
+   exactly as a constraint would — including a route that updates the column
+   directly, which is the case a function-level check would miss.
+
+2. **What the constraint additionally forbade is not a user action.** It
+   forbade the table *owner* from writing a confirmed provider in one
+   statement. The owner is a migration, a seeder or a fixture: reviewed code
+   describing a world, not somebody taking an approval decision.
+
+3. **A control that twenty unrelated suites must satisfy is a control those
+   suites now depend on.** Making `agency-cash-banking.test.ts` manufacture an
+   approval trail to test a cash banking does not make the product safer. It
+   makes a change to the approval rule break tests about something else, which
+   is how a rule gets relaxed to make a build pass.
+
+4. **The line it draws is the right one.** A fixture that *builds* a world
+   containing a confirmed provider is describing a state. A fixture that
+   *confirms* a provisional one is taking the decision, and the trigger refuses
+   it without the trail — which is why the three fixtures that did that were
+   changed rather than exempted.
+
+**Consequences.** A trusted path can still write an active, provisional
+provider directly, and the three fixtures that do are harmless because
+`agency_transaction_live_readiness_guard()` refuses every posting against a
+provisional provider regardless of `is_active`. Deactivation clears the
+activation trail, so a spent authorization cannot be reused by a later bare
+`UPDATE` — found by the test that asserts exactly that, after the first
+version of the guard let it through.
+
+`tests/db/agency-provider-provisioning.test.ts` asserts both directions: the
+bare update is refused, the forged trail naming the registrant is refused, and
+a fixture's direct insert of a confirmed provider is allowed and inert.
+
+---
+
+## ADR-073 — An agent account owns a float account only where float exists
+
+**Status.** Accepted. Operational task 2.
+
+**Context.** `agency_provider_float_accounts` is the register of agent
+accounts, and `ledger_account_id` was `NOT NULL`: every row owned exactly one
+`1320` ledger account holding electronic float, minted by
+`ensure_agency_float_account()` as part of registering the line.
+
+For a partner on the `cash_payable` model — the business holds the customer's
+cash and owes it onward — that function refuses outright:
+
+> % settles through a payable account, not float, so it has no till.
+
+So such a partner could not have an agent account **at all**: no location, no
+account number, no agent identifier, no staff roster. `SCHOOL_FEES` shipped in
+the Phase 4A catalogue with nowhere to record which of its collection points
+was which, and a bank genuinely operating collect-and-remit would have the same
+problem.
+
+**Decision.** `ledger_account_id` is nullable, and whether it is populated is
+decided by the provider's `float_model`, enforced by trigger for any **open**
+agent account:
+
+- `provider_float` ⟺ exactly one branch-matched, postable `1320` float
+  account;
+- `cash_payable` ⟺ **no** ledger account, and the partner's own
+  `bank_account_number` instead.
+
+A **closed** account is exempt: it is history, its ledger account holds posted
+entries that must stay reachable, and the provider's model may legitimately
+have changed since. `set_agency_provider_float_model()` is tightened to refuse
+a model change while any account is open, so the two sides cannot drift.
+
+**Why not a second table.**
+
+1. **It is one concept.** "Every agent account of every partner, with its
+   location, its identifiers and its staff" is one question. Two registers
+   would mean two status workflows, two rosters — `agency_account_staff`
+   references this table — two sets of RLS policies and two screens, kept in
+   step by hand.
+
+2. **The float-specific machinery excludes the new rows correctly, for free.**
+   `agency_float_balances`, `agency_commission_by_line` and
+   `agency_float_reconciliation_register` all join `ledger_accounts` through
+   `ledger_account_id`, so a cash-payable account is absent from each — which
+   is right, because it has no float balance to report. `agency_account_operators`
+   does not touch `ledger_accounts`, so its staff appear. Measured, not
+   assumed: all twelve views that reference the register were checked.
+
+3. **The alternative was worse than invasive, it was wrong.** Giving such a
+   partner a `1320` account to hang its identity on would put an asset on the
+   balance sheet that does not exist. It would start at zero, never move, and
+   reconcile to nothing.
+
+**Consequences.** Three float-only child tables — replenishments,
+reconciliations and trades — gain a trigger refusing an account that owns no
+float, so widening the register cannot widen what can be done to a float that
+is not there. `ensure_agency_float_account()` is **unchanged** and still
+refuses a `cash_payable` provider: minting a float account is a float
+operation and has no business becoming polymorphic.
+`register_agency_agent_line()` is what learns the difference.
+
+`bank_account_number` is required for an open cash-payable account, because
+with no float account it is the only record of where the money is owed. It is
+optional everywhere else, so no existing row and no existing fixture had to
+change.

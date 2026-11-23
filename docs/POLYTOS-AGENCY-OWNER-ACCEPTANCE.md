@@ -248,18 +248,35 @@ With (1) alone, the correction on the Providers screen can be applied and the
 bank will post correctly. It still cannot be **activated** until (2)–(5) are
 recorded and approved.
 
-### 3.3 Two things deliberately not built
+### 3.3 Two things deliberately not built — both built since
 
-Named so they are decisions rather than omissions.
+Named here as decisions rather than omissions, and both were taken in
+operational task 5. This section is kept, amended, because the reasoning it
+records is why each was built the way it was.
 
-- **Float facility limits are not enforced.** No column holds one and no
-  posting path checks one. Building it means deciding what happens at the
-  limit — refuse, warn, or require authorisation — which is a commercial
-  decision, and a limit that is recorded but unenforced is worse than none: it
-  reads as a protection that does not exist.
+- **Float facility limits are not enforced.** *Closed.*
+  `agency_service_providers.float_facility_limit` holds one, approved by a
+  holder of `agency:provider_approval` against a named instrument and never by
+  the person who registered the provider. What happens at the limit is the
+  commercial decision this paragraph asked for, and it was taken the strict
+  way: a replenishment or float purchase that would exceed the facility is
+  **refused**, by a trigger on both document tables, so it holds however the
+  row arrives. There is no warn and no override. A provider with no approved
+  facility is not refused float — it cannot go live at all, which is the
+  earlier and better place to stop it.
 - **The approval threshold on a transaction type is recorded and not
-  enforced.** The Providers screen strikes it through and says so. Whether a
-  threshold should gate verification is an open decision.
+  enforced.** *Closed.* Above `requires_approval_above`, verification requires
+  `agency:verify_high_value`, which is the Owner's. Enforced twice: in
+  `verify_agency_transaction()` for a refusal that names the figure and the
+  authority, and by a trigger on the transition into `posted` that reads the
+  authority of the verifier recorded on the row rather than the caller's — so
+  a route that stamps a verifier and posts directly is refused too. The
+  Providers screen no longer strikes the column through, because there is
+  nothing left to disclaim.
+
+The sequencing in §3.2 above still holds and is now machinery rather than
+prose: `agency_provider_readiness` answers each of (1)–(5) separately, and
+`activate_agency_provider()` refuses until they are met.
 
 ---
 

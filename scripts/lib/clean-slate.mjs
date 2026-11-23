@@ -197,6 +197,19 @@ export const TRUNCATE_TABLES = [
   // fire.
   'cash_receipt_confirmations',
   'bank_deposits',
+  // Operational task 3. The money the business was started and funded with.
+  // Truncated with the books for the same structural reason as the two above:
+  // it references `journal_entries` twice — the posting and its reversal — so
+  // leaving it out would make the books untruncatable rather than merely
+  // leave stale rows. Its append-only protection is `capital_fundings_no_delete`,
+  // a row-level DELETE trigger, which TRUNCATE does not fire.
+  //
+  // Truncating it is right rather than merely convenient. A clean slate hands
+  // the client an empty book, and the owner's capital in that book has to be
+  // the capital *they* introduce and a second Owner verifies — not a figure
+  // carried over from a demonstration. The 3000 and 2300 accounts themselves
+  // are kept: they are the chart, not the entries.
+  'capital_fundings',
   // --- membership, savings, benefits, meetings ---------------------------
   'memberships',
   'membership_status_history',
@@ -335,6 +348,9 @@ export const RESET_SEQUENCES = [
   // Decision A. `bank_deposits` is truncated above, so its counter resets
   // with the rest: the client's first banking is BD2600001.
   'bank_deposit',
+  // Operational task 3. Likewise: the client's first recorded capital is
+  // CF2600001.
+  'capital_funding',
   // membership, savings, benefits, meetings
   'membership',
   'membership_fee',

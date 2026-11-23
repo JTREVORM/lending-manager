@@ -55,6 +55,8 @@ import {
   isAgencyCashBankingStatus,
   isAgencyProviderCategory,
   type AgencyAgentAccountRow,
+  type AgencyAgentAccountRegisterRow,
+  type AgencyProviderReadinessRow,
   type AgencyCashBankingRow,
   type AgencyCashBankingStatus,
   type AgencyProviderCategory,
@@ -1731,6 +1733,127 @@ export async function getAgencyCommissionDaily(options?: {
       atPointOfSale: ugx(r.commission_at_point_of_sale),
       settled: ugx(r.commission_settled),
       movement: ugx(r.commission_movement),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Operational tasks 2 and 5: the agent-account register, and readiness
+//
+// Both read a `security_invoker` view, so the capability and the branch rule
+// are the reader's own. Neither computes anything: `holdsFloat` is derived in
+// the view from whether a float ledger account exists, and every readiness
+// flag is the database's answer to the same question
+// `activate_agency_provider()` asks.
+// ---------------------------------------------------------------------------
+
+function mapAgentAccountRegister(
+  r: Record<string, unknown>,
+): AgencyAgentAccountRegisterRow {
+  return {
+    agentAccountId: str(r.agent_account_id),
+    providerId: str(r.provider_id),
+    providerCode: str(r.provider_code),
+    providerName: str(r.provider_name),
+    providerCategory: str(r.provider_category),
+    floatModel: r.float_model === 'cash_payable' ? 'cash_payable' : 'provider_float',
+    providerIsProvisional: r.provider_is_provisional === true,
+    providerIsActive: r.provider_is_active === true,
+    branchId: str(r.branch_id),
+    branchCode: str(r.branch_code),
+    branchName: str(r.branch_name),
+    tillName: str(r.till_name),
+    label: str(r.label),
+    agentCode: strOrNull(r.agent_code),
+    bankAccountNumber: strOrNull(r.bank_account_number),
+    lineMsisdn: strOrNull(r.line_msisdn),
+    floatAccountCode: strOrNull(r.float_account_code),
+    holdsFloat: r.holds_float === true,
+    status: str(r.status),
+    statusReason: strOrNull(r.status_reason),
+    openedOn: typeof r.opened_on === 'string' ? toBusinessDate(r.opened_on) : null,
+    closedOn: typeof r.closed_on === 'string' ? toBusinessDate(r.closed_on) : null,
+    notes: strOrNull(r.notes),
+    activeStaff: num(r.active_staff),
+  };
+}
+
+export async function getAgencyAgentAccountRegister(options?: {
+  readonly providerId?: string;
+  readonly category?: AgencyProviderCategory;
+  /** Closed accounts are history; a configuration screen hides them by default. */
+  readonly includeClosed?: boolean;
+}): Promise<AgencyRows<AgencyAgentAccountRegisterRow>> {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from('agency_agent_account_register')
+    .select('*')
+    .order('provider_name')
+    .order('branch_code')
+    .order('till_name');
+
+  if (options?.providerId !== undefined) {
+    query = query.eq('provider_id', options.providerId);
+  }
+  if (options?.category !== undefined) {
+    query = query.eq('provider_category', options.category);
+  }
+  if (options?.includeClosed !== true) {
+    query = query.neq('status', 'closed');
+  }
+
+  const { data, error } = await query;
+  if (error !== null || data === null) {
+    return failed('the registered agent accounts', error);
+  }
+  return { ok: true, rows: data.map(mapAgentAccountRegister) };
+}
+
+export async function getAgencyProviderReadiness(): Promise<
+  AgencyRows<AgencyProviderReadinessRow>
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('agency_provider_readiness')
+    .select('*')
+    .order('provider_name');
+
+  if (error !== null || data === null) {
+    return failed('what each provider still needs before it can go live', error);
+  }
+
+  return {
+    ok: true,
+    rows: data.map((r) => ({
+      providerId: str(r.provider_id),
+      providerCode: str(r.provider_code),
+      providerName: str(r.provider_name),
+      category: str(r.category),
+      floatModel: r.float_model === 'cash_payable' ? 'cash_payable' : 'provider_float',
+      commissionModel: r.commission_model === 'immediate' ? 'immediate' : 'deferred',
+      commissionSource: r.commission_source === 'reported' ? 'reported' : 'configured',
+      commissionRateBps:
+        typeof r.commission_rate_bps === 'number' ? r.commission_rate_bps : null,
+      commissionFixed: ugxOrNull(r.commission_fixed),
+      isProvisional: r.is_provisional === true,
+      isActive: r.is_active === true,
+      termsReference: strOrNull(r.terms_reference),
+      termsApprovedAt: strOrNull(r.terms_approved_at),
+      floatFacilityLimit: ugxOrNull(r.float_facility_limit),
+      facilityReference: strOrNull(r.facility_reference),
+      facilityApprovedAt: strOrNull(r.facility_approved_at),
+      activationReference: strOrNull(r.activation_reference),
+      activatedAt: strOrNull(r.activated_at),
+      deactivatedAt: strOrNull(r.deactivated_at),
+      deactivationReason: strOrNull(r.deactivation_reason),
+      termsApproved: r.terms_approved === true,
+      commissionDecided: r.commission_decided === true,
+      facilityApproved: r.facility_approved === true,
+      servicesWithCeiling: num(r.services_with_ceiling),
+      servicesWithThreshold: num(r.services_with_threshold),
+      openAgentAccounts: num(r.open_agent_accounts),
+      floatHeld: ugx(r.float_held),
+      readyToActivate: r.ready_to_activate === true,
     })),
   };
 }

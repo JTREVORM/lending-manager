@@ -169,6 +169,10 @@ const ROUTE_PERMISSIONS: readonly {
   // holding `ledger:view`, and must reach their own screens.
   { prefix: ROUTES.receipts, permission: 'receipts:view' },
   { prefix: ROUTES.deposits, permission: 'deposits:view' },
+  // Operational task 3. Also under /finance, and before the /finance rule
+  // for the same reason: a Manager holds `capital:view` without holding
+  // `ledger:view`, and must reach the register they record into.
+  { prefix: ROUTES.capital, permission: 'capital:view' },
   { prefix: ROUTES.finance, permission: 'ledger:view' },
   // Phase 4D. Agency banking. Listed longest-prefix first, as everywhere in
   // this table, so `/agency/record` is not swallowed by `/agency`. The four

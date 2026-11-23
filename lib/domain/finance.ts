@@ -437,3 +437,151 @@ export interface BankDepositRow {
   readonly verifiedByLabel: string | null;
   readonly investigationReason: string | null;
 }
+
+// ===========================================================================
+// Operational task 3 — the money the business was started and funded with
+// ===========================================================================
+
+/**
+ * Equity or borrowing, and why the distinction is the whole table.
+ *
+ * Equity is the owner's own money: not repayable, carrying no interest, and
+ * crediting the 3000 series. The business's net worth rises by the whole
+ * amount.
+ *
+ * Borrowing is somebody else's money: repayable, possibly interest-bearing,
+ * and crediting a 2300-series liability. Net worth does not change at all —
+ * an asset and a liability arrive together.
+ */
+export type CapitalFundingKind = 'equity' | 'borrowing';
+
+export const CAPITAL_FUNDING_KIND_LABELS: Readonly<Record<CapitalFundingKind, string>> = {
+  equity: 'Owner’s capital',
+  borrowing: 'Borrowed',
+};
+
+export type CapitalFundingStatus = 'submitted' | 'verified' | 'rejected' | 'reversed';
+
+/**
+ * Labels that say what has happened to the money, not how the form feels.
+ *
+ * "Awaiting verification" rather than "pending", because nothing has posted:
+ * the figure is a claim about evidence until a second officer has checked it
+ * against the slip, and a reader who sees "pending" reasonably assumes the
+ * ledger already carries it.
+ */
+export const CAPITAL_FUNDING_STATUS_LABELS: Readonly<
+  Record<CapitalFundingStatus, string>
+> = {
+  submitted: 'Awaiting verification',
+  verified: 'Posted',
+  rejected: 'Rejected',
+  reversed: 'Reversed',
+};
+
+export type CapitalEvidenceKind =
+  'bank_transfer' | 'cash_deposit' | 'cheque' | 'mobile_money' | 'other';
+
+export const CAPITAL_EVIDENCE_KIND_LABELS: Readonly<Record<CapitalEvidenceKind, string>> =
+  {
+    bank_transfer: 'Bank transfer',
+    cash_deposit: 'Cash deposit',
+    cheque: 'Cheque',
+    mobile_money: 'Mobile money',
+    other: 'Other',
+  };
+
+export function isCapitalFundingKind(value: unknown): value is CapitalFundingKind {
+  return value === 'equity' || value === 'borrowing';
+}
+
+export function isCapitalFundingStatus(value: unknown): value is CapitalFundingStatus {
+  return (
+    value === 'submitted' ||
+    value === 'verified' ||
+    value === 'rejected' ||
+    value === 'reversed'
+  );
+}
+
+export function isCapitalEvidenceKind(value: unknown): value is CapitalEvidenceKind {
+  return (
+    value === 'bank_transfer' ||
+    value === 'cash_deposit' ||
+    value === 'cheque' ||
+    value === 'mobile_money' ||
+    value === 'other'
+  );
+}
+
+/**
+ * One row of `capital_funding_register`.
+ *
+ * `fundedOn` is the date the evidence bears and may be years old — that is
+ * how an opening balance is recorded. `journalEntryDate` is the accounting
+ * date, which is always the day the funding was verified. Both are carried
+ * because they answer different questions and conflating them is how a
+ * prior-year balance sheet stops reconciling.
+ */
+export interface CapitalFundingRow {
+  readonly fundingId: string;
+  readonly fundingNumber: string;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly fundingKind: CapitalFundingKind;
+  readonly amount: UgxAmount;
+  readonly funderName: string;
+  readonly interestRateBps: number | null;
+  readonly repaymentDueOn: string | null;
+  readonly fundedOn: string;
+  readonly evidenceKind: CapitalEvidenceKind;
+  readonly evidenceReference: string;
+  readonly description: string | null;
+  readonly status: CapitalFundingStatus;
+  readonly destinationAccountCode: string;
+  readonly destinationAccountName: string;
+  readonly capitalAccountCode: string;
+  readonly capitalAccountName: string;
+  readonly recordedByLabel: string;
+  readonly recordedAt: string | null;
+  readonly verifiedByLabel: string | null;
+  readonly verifiedAt: string | null;
+  readonly verificationNote: string | null;
+  readonly rejectedByLabel: string | null;
+  readonly rejectionReason: string | null;
+  readonly reversedByLabel: string | null;
+  readonly reversalReason: string | null;
+  readonly journalEntryNumber: string | null;
+  readonly journalEntryDate: string | null;
+}
+
+/**
+ * What the register adds up to, split the way a balance sheet reads it.
+ *
+ * Only `verified` rows count. A submitted funding has posted nothing and a
+ * rejected or reversed one is not capital the business holds, so including
+ * either would make this total disagree with the ledger — which is the one
+ * thing a figure like this must never do.
+ */
+export interface CapitalPosition {
+  readonly equity: UgxAmount;
+  readonly borrowings: UgxAmount;
+  readonly total: UgxAmount;
+  readonly awaitingVerification: number;
+}
+
+/**
+ * One ledger account a form may offer, with nothing a form does not need.
+ *
+ * No balance and no branch: a picker that showed a balance would be showing a
+ * figure read at render time and acted on later, and the account's branch is
+ * decided by the account itself — `capital_funding_accounts_guard()` refuses
+ * a destination belonging to another branch, under lock, at the moment of
+ * recording.
+ */
+export interface LedgerAccountOption {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+}

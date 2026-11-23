@@ -14,7 +14,7 @@
  *
  * What this file proves, in the four shapes the brief asks for:
  *
- *   1. **Coverage** — all fourteen guards raise `SD001`, and nothing else in
+ *   1. **Coverage** — every guard raises `SD001`, and nothing else in
  *      the schema does. Measured against the live definitions, so a future
  *      `create or replace` that drops the code fails here.
  *   2. **The authorised action still works** — a second officer clears the
@@ -52,8 +52,69 @@ if (!hasDatabase) {
   });
 }
 
-/** The fourteen guards, as the L7 migration names them. */
+/**
+ * Every guard that raises `SD001`.
+ *
+ * The fourteen the L7 migration named, and the eight the operational tasks
+ * added. Each new one is the same kind of refusal the code was created for —
+ * somebody else has to do this — and not a permission denial:
+ *
+ *   * `approve_agency_provider_terms`, `set_agency_float_facility` and
+ *     `activate_agency_provider` refuse the person who registered the
+ *     partner. They *hold* the capability; what stops them is that approving
+ *     one's own registration is not an approval (operational tasks 1 and 5).
+ *   * `agency_provider_activation_guard` and
+ *     `agency_provider_terms_approval_guard` refuse the same thing at the
+ *     data layer, for any route that writes `is_active` or `is_provisional`
+ *     directly.
+ *   * `agency_high_value_authority_guard` refuses a posting above a service's
+ *     approval threshold whose recorded verifier is not authorized for
+ *     amounts above it (operational task 5).
+ *   * `verify_capital_funding`, `reject_capital_funding` and
+ *     `reverse_capital_funding` refuse the officer who recorded the funding,
+ *     and the reversal additionally refuses the one who verified it
+ *     (operational task 3).
+ */
 const GUARDED = [
+  'activate_agency_provider',
+  'agency_high_value_authority_guard',
+  'agency_provider_activation_guard',
+  'agency_provider_terms_approval_guard',
+  'approve_agency_cash_reconciliation',
+  'approve_agency_float_reconciliation',
+  'approve_agency_provider_terms',
+  'approve_expense',
+  'approve_transfer',
+  'certify_agency_commission_reconciliation',
+  'confirm_cash_receipt',
+  'confirm_physical_cash_return',
+  'decide_savings_withdrawal',
+  'reject_agency_cash_banking',
+  'reject_capital_funding',
+  'reverse_capital_funding',
+  'set_agency_float_facility',
+  'verify_agency_cash_banking',
+  'verify_agency_float_trade',
+  'verify_agency_transaction',
+  'verify_bank_deposit',
+  'verify_capital_funding',
+  'verify_member_beneficiary',
+] as const;
+
+/**
+ * The fourteen the L7 migration converted, as it named them.
+ *
+ * Separate from `GUARDED` because only these ever carried another code. The
+ * test that asserts none of them still does is a statement about that
+ * migration's work; a guard written after it had nothing to convert, and
+ * folding the two lists together would make that assertion read as though it
+ * covered something it cannot — the shape of each new guard's condition
+ * differs, and `agency_high_value_authority_guard` is not an
+ * "actor = recorder" comparison at all. Coverage of the new guards is the
+ * first test in this block, which asserts every name in `GUARDED` raises
+ * `SD001`, and the one after it, which asserts nothing else does.
+ */
+const L7_CONVERTED = [
   'approve_agency_cash_reconciliation',
   'approve_agency_float_reconciliation',
   'approve_expense',
@@ -123,7 +184,7 @@ describeDb('separation of duties has its own SQLSTATE (L7)', () => {
   });
 
   describe('coverage, against the live definitions', () => {
-    it('every one of the fourteen guards raises SD001', async () => {
+    it('every one of the guards raises SD001', async () => {
       const rows = await query<{ proname: string }>(
         `select p.proname
            from pg_proc p
@@ -173,7 +234,7 @@ describeDb('separation of duties has its own SQLSTATE (L7)', () => {
            join pg_namespace n on n.oid = p.pronamespace
           where n.nspname = 'public' and p.prokind = 'f' and p.proname = any($1::text[])
           order by p.proname`,
-        [[...GUARDED]],
+        [[...L7_CONVERTED]],
       );
 
       const guardOf = (definition: string): string => {
@@ -185,7 +246,7 @@ describeDb('separation of duties has its own SQLSTATE (L7)', () => {
         return match[0];
       };
 
-      expect(rows).toHaveLength(GUARDED.length);
+      expect(rows).toHaveLength(L7_CONVERTED.length);
       for (const row of rows) {
         const guard = guardOf(row.definition);
         expect(guard, row.proname).toContain('SD001');

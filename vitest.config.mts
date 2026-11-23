@@ -105,6 +105,8 @@ export default defineConfig({
             'tests/db/agency-account-staff.test.ts',
             'tests/db/agency-banking-float.test.ts',
             'tests/db/agency-commission-daily.test.ts',
+            'tests/db/agency-provider-provisioning.test.ts',
+            'tests/db/capital-funding.test.ts',
           ],
         },
       },
@@ -255,6 +257,45 @@ export default defineConfig({
           // and a provider-level settlement, and it asserts commission totals
           // to the shilling — which anything else posting an agency
           // transaction in the same database would move.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'agency-provisioning',
+          environment: 'node',
+          include: ['tests/db/agency-provider-provisioning.test.ts'],
+          // Its own database, like every other agency project, and for the
+          // strongest version of their reason: this suite registers roughly
+          // thirty providers, approves some of their terms, opens agent
+          // accounts, approves float facilities and brings providers live.
+          // A provider that is live is global state — the readiness gate and
+          // the posting engine both read it — so any suite asserting that
+          // the catalogue is provisional, or that a provider cannot post,
+          // would pass or fail on file ordering if it shared this database.
+          //
+          // It also funds a till and posts real withdrawals, to measure the
+          // approval threshold against the ledger rather than against the
+          // column.
+          globalSetup: ['./tests/helpers/db-global-setup.ts'],
+          fileParallelism: false,
+          testTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'capital-funding',
+          environment: 'node',
+          include: ['tests/db/capital-funding.test.ts'],
+          // Its own database: this suite credits equity and borrowings and
+          // debits the branch bank account and till by tens of millions, and
+          // it asserts the whole book's trial balance. Every suite that reads
+          // a cash position, an equity figure or a trial balance would be
+          // reading a book this one wrote to.
           globalSetup: ['./tests/helpers/db-global-setup.ts'],
           fileParallelism: false,
           testTimeout: 120_000,

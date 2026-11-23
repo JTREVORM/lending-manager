@@ -948,3 +948,126 @@ export interface AgencyCommissionDailyRow {
    */
   readonly movement: UgxAmount;
 }
+
+// ===========================================================================
+// Operational tasks 2 and 5 — the agent-account register, and readiness
+// ===========================================================================
+
+/**
+ * One row of `agency_agent_account_register`.
+ *
+ * Named for the view rather than for the thing, because
+ * `AgencyAgentAccountRow` already means a row of the Phase 4E money views —
+ * an agent *line* with its balances and today's figures. This is the register
+ * entry: who the partner is, where the account is, what the partner calls it,
+ * and whether it holds float at all.
+ *
+ * `holdsFloat` is the distinction operational task 2 exists to make. A
+ * partner that advances electronic float has one `1320` ledger account per
+ * agent account, and `floatAccountCode` names it. A partner that holds the
+ * customer's cash and owes it onward has none — giving it one would put an
+ * asset on the balance sheet that does not exist — so `floatAccountCode` is
+ * null and `bankAccountNumber` is what identifies where the money is owed.
+ */
+export interface AgencyAgentAccountRegisterRow {
+  readonly agentAccountId: string;
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly providerCategory: string;
+  readonly floatModel: FloatModel;
+  readonly providerIsProvisional: boolean;
+  readonly providerIsActive: boolean;
+  readonly branchId: string;
+  readonly branchCode: string;
+  readonly branchName: string;
+  readonly tillName: string;
+  readonly label: string;
+  readonly agentCode: string | null;
+  readonly bankAccountNumber: string | null;
+  readonly lineMsisdn: string | null;
+  readonly floatAccountCode: string | null;
+  readonly holdsFloat: boolean;
+  readonly status: string;
+  readonly statusReason: string | null;
+  readonly openedOn: BusinessDate | null;
+  readonly closedOn: BusinessDate | null;
+  readonly notes: string | null;
+  readonly activeStaff: number;
+}
+
+/**
+ * Whether a provider's configuration is complete enough to go live.
+ *
+ * `readyToActivate` is every precondition at once. It says the configuration
+ * is complete; it does **not** say the authorization has been given, which is
+ * a person's decision recorded by `activate_agency_provider()`. A screen
+ * showing this is telling the Owner what is outstanding, not offering to
+ * decide for them.
+ */
+export interface AgencyProviderReadinessRow {
+  readonly providerId: string;
+  readonly providerCode: string;
+  readonly providerName: string;
+  readonly category: string;
+  readonly floatModel: FloatModel;
+  readonly commissionModel: CommissionModel;
+  readonly commissionSource: 'configured' | 'reported';
+  readonly commissionRateBps: number | null;
+  readonly commissionFixed: UgxAmount | null;
+  readonly isProvisional: boolean;
+  readonly isActive: boolean;
+  readonly termsReference: string | null;
+  readonly termsApprovedAt: string | null;
+  readonly floatFacilityLimit: UgxAmount | null;
+  readonly facilityReference: string | null;
+  readonly facilityApprovedAt: string | null;
+  readonly activationReference: string | null;
+  readonly activatedAt: string | null;
+  readonly deactivatedAt: string | null;
+  readonly deactivationReason: string | null;
+  readonly termsApproved: boolean;
+  readonly commissionDecided: boolean;
+  readonly facilityApproved: boolean;
+  readonly servicesWithCeiling: number;
+  readonly servicesWithThreshold: number;
+  readonly openAgentAccounts: number;
+  readonly floatHeld: UgxAmount;
+  readonly readyToActivate: boolean;
+}
+
+/**
+ * What is still outstanding before a provider may go live, in words.
+ *
+ * Derived from the readiness row rather than restated in the database,
+ * because the sentences are for a person and the refusals are for a caller.
+ * The order matches the order `activate_agency_provider()` checks them in, so
+ * the first item here is the first refusal somebody would meet.
+ */
+export function activationBlockers(row: AgencyProviderReadinessRow): readonly string[] {
+  const blockers: string[] = [];
+  if (!row.termsApproved) {
+    blockers.push(
+      'Its commercial terms are not approved. A second Owner or Administrator must approve them against the signed agreement.',
+    );
+  }
+  if (!row.commissionDecided) {
+    blockers.push(
+      'It records no commission rate and no fixed commission, so what it earns is undecided.',
+    );
+  }
+  if (!row.facilityApproved) {
+    blockers.push(
+      'It advances electronic float and no facility has been approved, so there is no agreed limit on how much of its money the business may hold.',
+    );
+  }
+  if (row.servicesWithCeiling === 0) {
+    blockers.push(
+      'No active service states a ceiling, so there is nothing it could be asked to do.',
+    );
+  }
+  if (row.openAgentAccounts === 0) {
+    blockers.push('No agent account is open, so there is nothing to transact through.');
+  }
+  return blockers;
+}

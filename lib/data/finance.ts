@@ -29,6 +29,12 @@ import {
   type TrialBalanceSummary,
 } from '@/lib/domain/trial-balance';
 import {
+  isCapitalEvidenceKind,
+  isCapitalFundingKind,
+  isCapitalFundingStatus,
+  type CapitalFundingRow,
+  type CapitalPosition,
+  type LedgerAccountOption,
   type BankDepositRow,
   type BankDepositStatus,
   type CashAccountAvailability,
@@ -747,4 +753,149 @@ export async function getBankDeposits(
       investigationReason: nullableText(raw.investigation_reason),
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Operational task 3: capital introduced into the business
+//
+// Reads `capital_funding_register`, a `security_invoker` view, so the
+// `capital:view` capability and the branch rule are the reader's own.
+// ---------------------------------------------------------------------------
+
+export async function getCapitalFundings(
+  limit = FINANCE_PAGE_SIZE,
+): Promise<readonly CapitalFundingRow[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('capital_funding_register')
+    .select('*')
+    .order('funded_on', { ascending: false })
+    .order('funding_number', { ascending: false })
+    .limit(limit);
+
+  if (error !== null) {
+    logger.warn('Could not read capital fundings.', { code: error.code });
+    return [];
+  }
+
+  return (data ?? []).map((row): CapitalFundingRow => {
+    const raw = row as Raw;
+    return {
+      fundingId: text(raw.funding_id),
+      fundingNumber: text(raw.funding_number),
+      branchId: text(raw.branch_id),
+      branchCode: text(raw.branch_code),
+      branchName: text(raw.branch_name),
+      fundingKind: isCapitalFundingKind(raw.funding_kind) ? raw.funding_kind : 'equity',
+      amount: money(raw.amount),
+      funderName: text(raw.funder_name),
+      interestRateBps:
+        typeof raw.interest_rate_bps === 'number' ? raw.interest_rate_bps : null,
+      repaymentDueOn: nullableText(raw.repayment_due_on),
+      fundedOn: text(raw.funded_on),
+      evidenceKind: isCapitalEvidenceKind(raw.evidence_kind)
+        ? raw.evidence_kind
+        : 'other',
+      evidenceReference: text(raw.evidence_reference),
+      description: nullableText(raw.description),
+      status: isCapitalFundingStatus(raw.status) ? raw.status : 'submitted',
+      destinationAccountCode: text(raw.destination_account_code),
+      destinationAccountName: text(raw.destination_account_name),
+      capitalAccountCode: text(raw.capital_account_code),
+      capitalAccountName: text(raw.capital_account_name),
+      recordedByLabel: text(raw.recorded_by_label),
+      recordedAt: nullableText(raw.recorded_at),
+      verifiedByLabel: nullableText(raw.verified_by_label),
+      verifiedAt: nullableText(raw.verified_at),
+      verificationNote: nullableText(raw.verification_note),
+      rejectedByLabel: nullableText(raw.rejected_by_label),
+      rejectionReason: nullableText(raw.rejection_reason),
+      reversedByLabel: nullableText(raw.reversed_by_label),
+      reversalReason: nullableText(raw.reversal_reason),
+      journalEntryNumber: nullableText(raw.journal_entry_number),
+      journalEntryDate: nullableText(raw.journal_entry_date),
+    };
+  });
+}
+
+/**
+ * The position, from the rows that actually posted.
+ *
+ * Summed here rather than by the database, which is the one exception this
+ * module's header allows itself and needs justifying. The alternative is a
+ * second view whose only job is two `sum`s over a table the caller has just
+ * read in full; the rows are already in hand, bounded by the page size, and
+ * the arithmetic is integral.
+ *
+ * What makes it safe is the filter: only `verified` rows count. A submitted
+ * funding has posted nothing and a rejected or reversed one is not capital
+ * the business holds, so including either would make this figure disagree
+ * with the ledger. If the register is ever paged, this has to move into the
+ * database — a total over one page is not a total.
+ */
+export function summariseCapital(rows: readonly CapitalFundingRow[]): CapitalPosition {
+  let equity = 0;
+  let borrowings = 0;
+  let awaiting = 0;
+
+  for (const row of rows) {
+    if (row.status === 'submitted') awaiting += 1;
+    if (row.status !== 'verified') continue;
+    if (row.fundingKind === 'equity') equity += row.amount;
+    else borrowings += row.amount;
+  }
+
+  return {
+    equity: toUgx(equity),
+    borrowings: toUgx(borrowings),
+    total: toUgx(equity + borrowings),
+    awaitingVerification: awaiting,
+  };
+}
+
+/**
+ * The accounts capital may be credited to, split by what they mean.
+ *
+ * Read from `ledger_accounts` rather than hard-coded, because the business
+ * may add a second owner's capital account or a third borrowing line without
+ * a code change — `capital_funding_accounts_guard()` validates the series,
+ * not the specific code.
+ */
+export async function getCapitalAccountOptions(): Promise<{
+  readonly equity: readonly LedgerAccountOption[];
+  readonly borrowings: readonly LedgerAccountOption[];
+}> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from('ledger_accounts')
+    .select('id, code, name, account_type')
+    .eq('is_postable', true)
+    .eq('status', 'active')
+    .order('code');
+
+  if (error !== null) {
+    logger.warn('Could not read the capital accounts.', { code: error.code });
+    return { equity: [], borrowings: [] };
+  }
+
+  const equity: LedgerAccountOption[] = [];
+  const borrowings: LedgerAccountOption[] = [];
+
+  for (const row of data ?? []) {
+    const raw = row as Raw;
+    const code = text(raw.code);
+    const option: LedgerAccountOption = {
+      id: text(raw.id),
+      code,
+      name: text(raw.name),
+    };
+    if (raw.account_type === 'equity' && code.startsWith('3')) equity.push(option);
+    if (raw.account_type === 'liability' && code.startsWith('23')) {
+      borrowings.push(option);
+    }
+  }
+
+  return { equity, borrowings };
 }

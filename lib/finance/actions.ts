@@ -41,9 +41,12 @@ import {
   reconciliationDecisionSchema,
   recordExpenseSchema,
   recordIncomeSchema,
+  capitalFundingReasonSchema,
+  capitalFundingVerificationSchema,
   confirmReceiptsSchema,
   depositReasonSchema,
   depositReturnSchema,
+  recordCapitalFundingSchema,
   recordDepositSchema,
   recordTransferSchema,
   rejectReconciliationSchema,
@@ -867,4 +870,187 @@ export async function reverseBankClearanceAction(
   revalidatePath(ROUTES.deposits);
 
   return { ok: true, message: 'Clearance reversed. The money is back in transit.' };
+}
+
+// ---------------------------------------------------------------------------
+// Operational task 3 — capital introduced into the business
+//
+// Recording posts nothing. `verify_capital_funding()` writes the journal, and
+// the database refuses the officer who recorded it with SQLSTATE SD001, which
+// `mapDatabaseError` renders as "A different authorized officer must complete
+// this action." Nothing here checks that: it depends on who recorded the row,
+// which this module does not know.
+// ---------------------------------------------------------------------------
+
+export async function recordCapitalFundingAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('capital:record', 'finance.deposit');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(recordCapitalFundingSchema, {
+    fundingKind: formData.get('fundingKind'),
+    amount: formData.get('amount'),
+    destinationAccountId: formData.get('destinationAccountId'),
+    capitalAccountId: formData.get('capitalAccountId'),
+    funderName: formData.get('funderName'),
+    fundedOn: formData.get('fundedOn'),
+    evidenceKind: formData.get('evidenceKind'),
+    evidenceReference: formData.get('evidenceReference'),
+    interestRateBps: formData.get('interestRateBps') ?? null,
+    repaymentDueOn: formData.get('repaymentDueOn') ?? null,
+    description: formData.get('description') ?? null,
+    idempotencyKey: formData.get('idempotencyKey'),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase.rpc('record_capital_funding', {
+    p_funding_kind: input.fundingKind,
+    p_amount: input.amount,
+    p_destination_account_id: input.destinationAccountId,
+    p_capital_account_id: input.capitalAccountId,
+    p_funder_name: input.funderName,
+    p_funded_on: input.fundedOn,
+    p_evidence_kind: input.evidenceKind,
+    p_evidence_reference: input.evidenceReference,
+    p_idempotency_key: input.idempotencyKey,
+    p_interest_rate_bps: input.interestRateBps ?? null,
+    p_repayment_due_on: input.repaymentDueOn ?? null,
+    p_description: input.description ?? null,
+  });
+
+  if (error !== null) {
+    logger.warn('A capital funding could not be recorded.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).userMessage };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.capital);
+
+  return {
+    ok: true,
+    recordId: typeof data === 'string' ? data : undefined,
+    // Said plainly: an Owner who believes the balance sheet already carries
+    // this will reconcile against a figure that is not there.
+    message:
+      'Capital recorded. Nothing has posted yet: a second Owner must check it against the evidence.',
+  };
+}
+
+export async function verifyCapitalFundingAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('capital:verify', 'finance.deposit');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(capitalFundingVerificationSchema, {
+    fundingId: formData.get('fundingId'),
+    note: formData.get('note') ?? null,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc('verify_capital_funding', {
+    p_funding_id: input.fundingId,
+    p_note: input.note ?? null,
+  });
+
+  if (error !== null) {
+    logger.warn('A capital funding could not be verified.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).userMessage };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.capital);
+  revalidatePath(ROUTES.ledger);
+
+  return {
+    ok: true,
+    message:
+      'Capital verified and posted. The entry is dated today; the evidence date is kept beside it.',
+  };
+}
+
+export async function rejectCapitalFundingAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('capital:verify', 'finance.deposit');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(capitalFundingReasonSchema, {
+    fundingId: formData.get('fundingId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc('reject_capital_funding', {
+    p_funding_id: input.fundingId,
+    p_reason: input.reason,
+  });
+
+  if (error !== null) {
+    logger.warn('A capital funding could not be rejected.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).userMessage };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.capital);
+
+  return {
+    ok: true,
+    message: 'Capital funding rejected. Nothing posted, and it cannot be revived.',
+  };
+}
+
+export async function reverseCapitalFundingAction(
+  _previous: FinanceActionResult | undefined,
+  formData: FormData,
+): Promise<FinanceActionResult> {
+  const allowed = await authorize('capital:reverse', 'finance.deposit');
+  if (!allowed.ok) return { ok: false, message: allowed.message };
+
+  const parsed = parseSafely(capitalFundingReasonSchema, {
+    fundingId: formData.get('fundingId'),
+    reason: formData.get('reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: INVALID, fieldErrors: parsed.error.fieldErrors };
+  }
+
+  const input = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc('reverse_capital_funding', {
+    p_funding_id: input.fundingId,
+    p_reason: input.reason,
+  });
+
+  if (error !== null) {
+    logger.warn('A capital funding could not be reversed.', { code: error.code });
+    return { ok: false, message: mapDatabaseError(error).userMessage };
+  }
+
+  revalidateFinance();
+  revalidatePath(ROUTES.capital);
+  revalidatePath(ROUTES.ledger);
+
+  return { ok: true, message: 'Capital funding reversed by contra entry.' };
 }
