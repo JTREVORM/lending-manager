@@ -1,0 +1,211 @@
+{
+  "ranAt": "2026-11-23T09:09:30.263Z",
+  "before": {
+    "3000": 24328414,
+    "1010-BR2602": 20000000,
+    "1040-BR2602": 0,
+    "1320.MTN_MOMO.BR2602": 0,
+    "1320.AIRTEL_MONEY.BR2602": 0,
+    "1320.CENTENARY.BR2602": 0
+  },
+  "afterCapital": {
+    "3000": 24328414,
+    "1010-BR2602": 20000000,
+    "1040-BR2602": 0,
+    "1320.MTN_MOMO.BR2602": 0,
+    "1320.AIRTEL_MONEY.BR2602": 0,
+    "1320.CENTENARY.BR2602": 0
+  },
+  "providerState": [
+    {
+      "code": "AIRTEL_MONEY",
+      "name": "Airtel Money",
+      "is_provisional": false,
+      "is_active": true,
+      "float_model": "provider_float",
+      "commission_model": "deferred",
+      "commission_rate_bps": 120,
+      "float_facility_limit": "4000000"
+    },
+    {
+      "code": "MTN_MOMO",
+      "name": "MTN Mobile Money",
+      "is_provisional": false,
+      "is_active": true,
+      "float_model": "provider_float",
+      "commission_model": "deferred",
+      "commission_rate_bps": 150,
+      "float_facility_limit": "6000000"
+    }
+  ],
+  "steps": [
+    {
+      "id": "S1",
+      "what": "Register a second Owner / Administrator",
+      "status": "done",
+      "detail": "Ssekandi Joseph Mukasa"
+    },
+    {
+      "id": "S2",
+      "what": "First sign-in forces a password change",
+      "status": "done",
+      "detail": "performed and photographed on the first run of this script"
+    },
+    {
+      "id": "S3",
+      "what": "The second Owner can sign in",
+      "status": "done",
+      "detail": "Ssekandi Joseph Mukasa"
+    },
+    {
+      "id": "S4",
+      "what": "Record UGX 20,000,000 equity",
+      "status": "done",
+      "detail": "CF2600001 already recorded on an earlier run"
+    },
+    {
+      "id": "S5",
+      "what": "A second Owner verifies the capital, which posts it",
+      "status": "done",
+      "detail": "already verified on an earlier run"
+    },
+    {
+      "id": "S6-rate",
+      "what": "Register a provider with an agreed commission rate",
+      "status": "blocked",
+      "detail": "the Rate box rejects every value — defect F-09"
+    },
+    {
+      "id": "S6",
+      "what": "Register a brand-new partner bank on the Providers screen",
+      "status": "blocked",
+      "detail": "the registration panel could not be completed — see F-09; the demonstration therefore brings the catalogue's Stanbic Bank Agency row live instead"
+    },
+    {
+      "id": "S7-MTN_MOMO",
+      "what": "Record the provider’s commission terms",
+      "status": "done",
+      "detail": "already recorded on an earlier run"
+    },
+    {
+      "id": "S7-AIRTEL_MONEY",
+      "what": "Record the provider’s commission terms",
+      "status": "done",
+      "detail": "already recorded on an earlier run"
+    },
+    {
+      "id": "S7-STANBIC",
+      "what": "Record the provider’s commission terms",
+      "status": "done-without-screen",
+      "detail": "0.9% — revise_agency_provider_terms; no screen adds terms to a provider already in the catalogue (F-05)"
+    },
+    {
+      "id": "S8-STANBIC",
+      "what": "Approve the commercial terms",
+      "status": "done",
+      "detail": "confirmed; the provider is no longer provisional"
+    },
+    {
+      "id": "S8-MTN_MOMO",
+      "what": "Approve the commercial terms",
+      "status": "done",
+      "detail": "already approved"
+    },
+    {
+      "id": "S8-AIRTEL_MONEY",
+      "what": "Approve the commercial terms",
+      "status": "done",
+      "detail": "already approved"
+    },
+    {
+      "id": "S9-STANBIC",
+      "what": "Approve the float facility",
+      "status": "done",
+      "detail": "5,000,000"
+    },
+    {
+      "id": "S9-MTN_MOMO",
+      "what": "Approve the float facility",
+      "status": "done",
+      "detail": "already approved"
+    },
+    {
+      "id": "S9-AIRTEL_MONEY",
+      "what": "Approve the float facility",
+      "status": "done",
+      "detail": "already approved"
+    },
+    {
+      "id": "S10-MTN_MOMO-2000000",
+      "what": "Set the service ceiling",
+      "status": "done",
+      "detail": "MTN Mobile Money — MoMo Deposit (2,000,000) → 2,000,000"
+    },
+    {
+      "id": "S10-MTN_MOMO-1000000",
+      "what": "Set the service ceiling",
+      "status": "done",
+      "detail": "MTN Mobile Money — MoMo Withdrawal (1,000,000) → 1,000,000"
+    },
+    {
+      "id": "S10-AIRTEL_MONEY-2000000",
+      "what": "Set the service ceiling",
+      "status": "done",
+      "detail": "Airtel Money — Airtel Money Deposit (2,000,000) → 2,000,000"
+    },
+    {
+      "id": "S10-AIRTEL_MONEY-1000000",
+      "what": "Set the service ceiling",
+      "status": "done",
+      "detail": "Airtel Money — Airtel Money Withdrawal (1,000,000) → 1,000,000"
+    },
+    {
+      "id": "S10-STANBIC-3000000",
+      "what": "Set the service ceiling",
+      "status": "done",
+      "detail": "Stanbic Bank Agency — Bank Agency Deposit (no ceiling) → 3,000,000"
+    },
+    {
+      "id": "S10-STANBIC-1500000",
+      "what": "Set the service ceiling",
+      "status": "done",
+      "detail": "Stanbic Bank Agency — Bank Agency Withdrawal (no ceiling) → 1,500,000"
+    },
+    {
+      "id": "S11-MTN_MOMO",
+      "what": "Register the agent line / account",
+      "status": "done",
+      "detail": "already registered"
+    },
+    {
+      "id": "S11-AIRTEL_MONEY",
+      "what": "Register the agent line / account",
+      "status": "done",
+      "detail": "already registered"
+    },
+    {
+      "id": "S11-STANBIC",
+      "what": "Register the agent line / account",
+      "status": "done",
+      "detail": "mbarara-stanbic-1 → 1320.STANBIC.BR2602.T1"
+    },
+    {
+      "id": "S12-STANBIC",
+      "what": "Authorise the provider to go live",
+      "status": "done-without-screen",
+      "detail": "activate_agency_provider"
+    },
+    {
+      "id": "S12-MTN_MOMO",
+      "what": "Authorise the provider to go live",
+      "status": "done",
+      "detail": "already live"
+    },
+    {
+      "id": "S12-AIRTEL_MONEY",
+      "what": "Authorise the provider to go live",
+      "status": "done",
+      "detail": "already live"
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+{
+  "ranAt": "2026-11-23T09:35:35.857Z",
+  "ledger": [
+    {
+      "label": "start",
+      "cash": 8000000,
+      "bank": 5000000,
+      "mtn": 3000000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 20250,
+      "momoCommission": 27850,
+      "bankCommission": 0
+    },
+    {
+      "label": "before banking",
+      "cash": 8000000,
+      "bank": 5000000,
+      "mtn": 3000000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 20250,
+      "momoCommission": 27850,
+      "bankCommission": 0
+    },
+    {
+      "label": "after banking",
+      "cash": 8000000,
+      "bank": 5000000,
+      "mtn": 3000000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 20250,
+      "momoCommission": 27850,
+      "bankCommission": 0
+    },
+    {
+      "label": "after allocation",
+      "cash": 8000000,
+      "bank": 5000000,
+      "mtn": 3000000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 20250,
+      "momoCommission": 27850,
+      "bankCommission": 0
+    },
+    {
+      "label": "before D1",
+      "cash": 8000000,
+      "bank": 5000000,
+      "mtn": 3000000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 20250,
+      "momoCommission": 27850,
+      "bankCommission": 0
+    },
+    {
+      "label": "after D1",
+      "cash": 8200000,
+      "bank": 5000000,
+      "mtn": 2800000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 23250,
+      "momoCommission": 30850,
+      "bankCommission": 0
+    },
+    {
+      "label": "before W1",
+      "cash": 8200000,
+      "bank": 5000000,
+      "mtn": 2800000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 23250,
+      "momoCommission": 30850,
+      "bankCommission": 0
+    },
+    {
+      "label": "after W1",
+      "cash": 8050000,
+      "bank": 5000000,
+      "mtn": 2950000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 25500,
+      "momoCommission": 33100,
+      "bankCommission": 0
+    },
+    {
+      "label": "before A1",
+      "cash": 8050000,
+      "bank": 5000000,
+      "mtn": 2950000,
+      "airtel": 2000000,
+      "stanbic": 2000000,
+      "equity": 24328414,
+      "commissionReceivable": 25500,
+      "momoCommission": 33100,
+      "bankCommission": 0
+    },
+    {
+      "label": "after A1",
+      "cash": 8450000,
+      "bank": 5000000,
+      "mtn": 2950000,
+      "airtel": 2000000,
+      "stanbic": 1600000,
+      "equity": 24328414,
+      "commissionReceivable": 29100,
+      "momoCommission": 33100,
+      "bankCommission": 3600
+    },
+    {
+      "label": "final",
+      "cash": 8450000,
+      "bank": 5000000,
+      "mtn": 2950000,
+      "airtel": 2000000,
+      "stanbic": 1600000,
+      "equity": 24328414,
+      "commissionReceivable": 29100,
+      "momoCommission": 33100,
+      "bankCommission": 3600
+    }
+  ],
+  "steps": [
+    {
+      "id": "T-MTN_MOMO",
+      "what": "Authorise staff on the till",
+      "status": "done",
+      "detail": "2 authorised on mbarara-mtn-1"
+    },
+    {
+      "id": "T-AIRTEL_MONEY",
+      "what": "Authorise staff on the till",
+      "status": "done",
+      "detail": "2 authorised on mbarara-airtel-1"
+    },
+    {
+      "id": "T-STANBIC",
+      "what": "Authorise staff on the till",
+      "status": "done",
+      "detail": "2 authorised on mbarara-stanbic-1"
+    },
+    {
+      "id": "M1",
+      "what": "Bank UGX 5,000,000 of the opening cash",
+      "status": "done",
+      "detail": "already banked on an earlier run"
+    },
+    {
+      "id": "M3-mtn",
+      "what": "Fund the float out of cash",
+      "status": "done",
+      "detail": "already funded"
+    },
+    {
+      "id": "M3-airtel",
+      "what": "Fund the float out of cash",
+      "status": "done",
+      "detail": "already funded"
+    },
+    {
+      "id": "M3-stanbic",
+      "what": "Fund the float out of cash",
+      "status": "done",
+      "detail": "already funded"
+    },
+    {
+      "id": "D1",
+      "what": "Record and verify a counter transaction",
+      "status": "done",
+      "detail": "MP2602031001 · posted · principal 200,000 · cash 8,000,000 → 8,200,000 · float 3,000,000 → 2,800,000"
+    },
+    {
+      "id": "W1",
+      "what": "Record and verify a counter transaction",
+      "status": "done",
+      "detail": "MP2602031002 · posted · principal 150,000 · cash 8,200,000 → 8,050,000 · float 2,800,000 → 2,950,000"
+    },
+    {
+      "id": "A1",
+      "what": "Record and verify a counter transaction",
+      "status": "done",
+      "detail": "STB2602031003 · posted · principal 400,000 · cash 8,050,000 → 8,450,000 · float 2,000,000 → 1,600,000"
+    },
+    {
+      "id": "TB",
+      "what": "Debits equal credits across the whole book",
+      "status": "done",
+      "detail": "debits 26,862,251 · credits 26,862,251"
+    }
+  ],
+  "trialBalance": {
+    "debits": "26862251",
+    "credits": "26862251"
+  }
+}
